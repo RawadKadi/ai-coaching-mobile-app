@@ -48,11 +48,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCoach(coachData);
         setClient(null);
       } else if (profileData?.role === 'client') {
-        const { data: clientData } = await supabase
+        const { data: clientData, error: clientError } = await supabase
           .from('clients')
           .select('*')
           .eq('user_id', userId)
           .maybeSingle();
+
+        if (clientError) {
+          console.error('Error fetching client profile:', clientError);
+        }
+
+        // If client profile doesn't exist yet (should be created by trigger/signup), handle gracefully
+        if (!clientData) {
+           console.log('Client profile missing for user:', userId);
+           // Optional: Try to create it if missing?
+           // For now, just leave as null or handle in UI
+        }
 
         setClient(clientData);
         setCoach(null);
@@ -154,6 +165,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    
+    // Clear all state
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setCoach(null);
+    setClient(null);
   };
 
   const refreshProfile = async () => {

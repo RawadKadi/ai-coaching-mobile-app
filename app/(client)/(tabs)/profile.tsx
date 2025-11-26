@@ -8,21 +8,12 @@ export default function ProfileScreen() {
   const { profile, signOut } = useAuth();
 
   const handleSignOut = async () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await signOut();
-            router.replace('/(auth)/login');
-          } catch (error) {
-            Alert.alert('Error', 'Failed to sign out');
-          }
-        },
-      },
-    ]);
+    try {
+      await signOut();
+      router.replace('/(auth)/login');
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
   };
 
   return (

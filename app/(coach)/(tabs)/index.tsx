@@ -23,6 +23,9 @@ export default function CoachDashboard() {
   useEffect(() => {
     if (coach) {
       loadDashboardData();
+    } else {
+      // If coach is null, stop loading
+      setLoading(false);
     }
   }, [coach]);
 
@@ -30,18 +33,13 @@ export default function CoachDashboard() {
     if (!coach) return;
 
     try {
-      const { data: clientLinks } = await supabase
-        .from('coach_client_links')
-        .select('*, clients(*)')
-        .eq('coach_id', coach.id);
+      const { data, error } = await supabase.rpc('get_coach_stats');
 
-      const activeClients = clientLinks?.filter(
-        (link) => link.status === 'active'
-      );
+      if (error) throw error;
 
       setStats({
-        totalClients: clientLinks?.length || 0,
-        activeClients: activeClients?.length || 0,
+        totalClients: data?.totalClients || 0,
+        activeClients: data?.activeClients || 0,
         pendingCheckIns: 0,
         unreadMessages: 0,
       });

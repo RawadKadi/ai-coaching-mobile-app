@@ -1,7 +1,10 @@
-import { Tabs } from 'expo-router';
-import { Home, Activity, MessageCircle, User } from 'lucide-react-native';
+import { Tabs, useRouter } from 'expo-router';
+import { Home, Activity, MessageCircle, User, Camera } from 'lucide-react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 
 export default function ClientTabLayout() {
+  const router = useRouter();
+
   return (
     <Tabs
       screenOptions={{
@@ -34,6 +37,24 @@ export default function ClientTabLayout() {
           ),
         }}
       />
+      
+      <Tabs.Screen
+        name="log-meal-button" // Dummy route name
+        options={{
+          title: '',
+          tabBarButton: (props) => (
+            <TouchableOpacity
+              style={styles.cameraButtonContainer}
+              onPress={() => router.push('/(client)/log-meal')}
+            >
+              <View style={styles.cameraButton}>
+                <Camera size={28} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="messages"
         options={{
@@ -53,3 +74,27 @@ export default function ClientTabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  cameraButtonContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    // Removed top: -20 to prevent clipping
+  },
+  cameraButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#3B82F6',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+});

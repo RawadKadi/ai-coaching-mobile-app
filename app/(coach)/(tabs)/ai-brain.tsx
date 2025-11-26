@@ -26,6 +26,8 @@ export default function AIBrainScreen() {
   useEffect(() => {
     if (coach) {
       loadBrainConfig();
+    } else {
+      setLoading(false);
     }
   }, [coach]);
 

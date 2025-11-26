@@ -7,13 +7,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { CheckIn, Habit, HabitLog } from '@/types/database';
 import { Calendar, TrendingUp, Target, Heart } from 'lucide-react-native';
 
 export default function ClientDashboard() {
-  const { profile, client } = useAuth();
+  const router = useRouter();
+  const { profile, client, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [todayCheckIn, setTodayCheckIn] = useState<CheckIn | null>(null);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -22,8 +24,11 @@ export default function ClientDashboard() {
   useEffect(() => {
     if (client) {
       loadDashboardData();
+    } else if (!authLoading) {
+      // If auth is done but no client, stop local loading to show empty state or error
+      setLoading(false);
     }
-  }, [client]);
+  }, [client, authLoading]);
 
   const loadDashboardData = async () => {
     if (!client) return;
@@ -146,11 +151,17 @@ export default function ClientDashboard() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionGrid}>
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/(client)/log-meal')}
+          >
             <Text style={styles.actionCardText}>Log Meal</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <Text style={styles.actionCardText}>Log Workout</Text>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/(client)/challenges')}
+          >
+            <Text style={styles.actionCardText}>View Challenges</Text>
           </TouchableOpacity>
         </View>
       </View>
