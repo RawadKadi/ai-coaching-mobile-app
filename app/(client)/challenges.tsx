@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,6 +52,57 @@ export default function ChallengesScreen() {
     }
   };
 
+  const timeoutRefs = useRef<{ [key: string]: any }>({});
+
+  useEffect(() => {
+    return () => {
+      // Clear all timeouts on unmount
+      Object.values(timeoutRefs.current).forEach((timeout) => clearTimeout(timeout));
+    };
+  }, []);
+
+  const sendCompletionMessage = async (habitName: string) => {
+    try {
+      // Get the coach ID for this client
+      // We need to find the active coach link first
+      const { data: linkData, error: linkError } = await supabase
+        .from('coach_client_links')
+        .select('coach_id')
+        .eq('client_id', client?.id)
+        .eq('status', 'active')
+        .single();
+
+      if (linkError || !linkData) {
+        console.log('No active coach found to message');
+        return;
+      }
+
+      // Get coach's user_id (profile id) to send message to
+      const { data: coachData, error: coachError } = await supabase
+        .from('coaches')
+        .select('user_id')
+        .eq('id', linkData.coach_id)
+        .single();
+
+      if (coachError || !coachData) return;
+
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: client?.user_id, // client's profile id
+          recipient_id: coachData.user_id,
+          content: `Finished this task: ${habitName}`,
+          read: false,
+          ai_generated: false,
+        });
+
+      if (error) throw error;
+      console.log('Automated message sent for:', habitName);
+    } catch (error) {
+      console.error('Error sending automated message:', error);
+    }
+  };
+
   const toggleChallenge = async (habit: Habit) => {
     try {
       if (habit.verification_type === 'camera') {
@@ -63,19 +114,34 @@ export default function ChallengesScreen() {
       const today = new Date().toISOString().split('T')[0];
       const existingLog = todayLogs.find((log) => log.habit_id === habit.id);
 
+      // Clear existing timeout if any
+      if (timeoutRefs.current[habit.id]) {
+        clearTimeout(timeoutRefs.current[habit.id]);
+        delete timeoutRefs.current[habit.id];
+      }
+
       if (existingLog) {
         // Toggle completion
+        const newCompleted = !existingLog.completed;
         const { data, error } = await supabase
           .from('habit_logs')
-          .update({ completed: !existingLog.completed })
+          .update({ completed: newCompleted })
           .eq('id', existingLog.id)
           .select()
           .single();
 
         if (error) throw error;
         setTodayLogs(todayLogs.map((log) => (log.id === existingLog.id ? data : log)));
+
+        // If marked as completed, schedule message
+        if (newCompleted) {
+          timeoutRefs.current[habit.id] = setTimeout(() => {
+            sendCompletionMessage(habit.name);
+            delete timeoutRefs.current[habit.id];
+          }, 10000); // 10 seconds
+        }
       } else {
-        // Create new log
+        // Create new log (completed by default)
         const { data, error } = await supabase
           .from('habit_logs')
           .insert({
@@ -89,6 +155,12 @@ export default function ChallengesScreen() {
 
         if (error) throw error;
         setTodayLogs([...todayLogs, data]);
+
+        // Schedule message
+        timeoutRefs.current[habit.id] = setTimeout(() => {
+          sendCompletionMessage(habit.name);
+          delete timeoutRefs.current[habit.id];
+        }, 10000); // 10 seconds
       }
     } catch (error) {
       console.error('Error toggling challenge:', error);

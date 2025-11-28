@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Send } from 'lucide-react-native';
+import { Send, ArrowLeft } from 'lucide-react-native';
 
 type Message = {
   id: string;
@@ -12,31 +13,68 @@ type Message = {
   created_at: string;
 };
 
-export default function MessagesScreen() {
+export default function CoachChatScreen() {
+  const { id } = useLocalSearchParams(); // client id
+  const router = useRouter();
   const { profile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [clientProfile, setClientProfile] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    if (profile) {
-      loadMessages();
-      
-      // Subscribe to new messages
+    if (profile && id) {
+      loadChatData();
+    }
+  }, [profile, id]);
+
+  const loadChatData = async () => {
+    try {
+      setLoading(true);
+
+      // 1. Get client's profile info
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('user_id, profiles:user_id(full_name)')
+        .eq('id', id)
+        .single();
+
+      if (clientError) throw clientError;
+      setClientProfile(clientData);
+
+      const clientUserId = clientData.user_id;
+
+      // 2. Load messages
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${clientUserId}),and(sender_id.eq.${clientUserId},recipient_id.eq.${profile?.id})`)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setMessages(data || []);
+
+      // 3. Subscribe to new messages
       const channel = supabase
-        .channel('messages')
+        .channel(`chat:${id}`)
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
             schema: 'public',
             table: 'messages',
-            filter: `recipient_id=eq.${profile.id}`,
+            filter: `recipient_id=eq.${profile?.id}`, 
+            // Ideally filter by sender too, but RLS handles security. 
+            // We'll filter in callback to be sure it's from this client.
           },
           (payload) => {
-            setMessages((current) => [...current, payload.new as Message]);
+            if (payload.new.sender_id === clientUserId) {
+              setMessages((current) => [...current, payload.new as Message]);
+              // Mark as read
+              markAsRead(payload.new.id);
+            }
           }
         )
         .subscribe();
@@ -44,75 +82,27 @@ export default function MessagesScreen() {
       return () => {
         supabase.removeChannel(channel);
       };
-    }
-  }, [profile]);
 
-  const loadMessages = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .or(`sender_id.eq.${profile?.id},recipient_id.eq.${profile?.id}`)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error('Error loading chat:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  const markAsRead = async (messageId: string) => {
+    await supabase.from('messages').update({ read: true }).eq('id', messageId);
+  };
+
   const sendMessage = async () => {
-    if (!newMessage.trim() || !profile) return;
+    if (!newMessage.trim() || !profile || !clientProfile) return;
 
     try {
       setSending(true);
-      
-      // Find the coach to send to
-      // 1. Get client record for this user
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('user_id', profile.id)
-        .single();
-        
-      if (clientError || !clientData) {
-        console.error('Client record not found for user:', profile.id);
-        return;
-      }
-
-      // 2. Get active coach link
-      const { data: coachLink, error: linkError } = await supabase
-        .from('coach_client_links')
-        .select('coach_id')
-        .eq('client_id', clientData.id)
-        .eq('status', 'active')
-        .single();
-
-      if (linkError || !coachLink) {
-        console.error('No active coach found for client:', clientData.id);
-        return;
-      }
-
-      if (!coachLink) {
-        console.error('No active coach');
-        return;
-      }
-
-      const { data: coach } = await supabase
-        .from('coaches')
-        .select('user_id')
-        .eq('id', coachLink.coach_id)
-        .single();
-
-      if (!coach) return;
 
       const message = {
         sender_id: profile.id,
-        recipient_id: coach.user_id,
+        recipient_id: clientProfile.user_id,
         content: newMessage.trim(),
         read: false,
         ai_generated: false,
@@ -152,7 +142,12 @@ export default function MessagesScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ArrowLeft size={24} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.title}>
+          {clientProfile?.profiles?.full_name || 'Chat'}
+        </Text>
       </View>
 
       {loading ? (
@@ -205,14 +200,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     padding: 24,
     paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
+  backButton: {
+    marginRight: 16,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '700',
     color: '#111827',
   },
