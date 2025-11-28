@@ -1,9 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager } from 'react-native';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Send, ArrowLeft } from 'lucide-react-native';
+import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft } from 'lucide-react-native';
+
+if (Platform.OS === 'android') {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+}
 
 type Message = {
   id: string;
@@ -11,6 +17,60 @@ type Message = {
   recipient_id: string;
   content: string;
   created_at: string;
+  read: boolean;
+};
+
+const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolean }) => {
+  const [expanded, setExpanded] = useState(false);
+  const data = typeof content === 'string' ? JSON.parse(content) : content;
+
+  const toggleExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded(!expanded);
+  };
+
+  if (!data.isCompletion) {
+    // Render undo message differently or as simple text
+    return (
+      <View style={[styles.messageBubble, isOwn ? styles.sentBubble : styles.receivedBubble]}>
+        <Text style={[styles.messageText, isOwn ? styles.sentText : styles.receivedText]}>
+          {data.isCompletion === false ? `⚠️ Undid task: ${data.taskName}` : content}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.taskMessageContainer, { alignSelf: isOwn ? 'flex-end' : 'flex-start' }]}>
+      <View style={styles.taskHeader}>
+        <Text style={styles.taskTitle}>
+          {data.clientName} finished this task
+        </Text>
+      </View>
+      
+      <View style={styles.taskContent}>
+        <Text style={styles.taskName}>{data.taskName}</Text>
+        <Text style={styles.taskTime}>Completed at: {new Date(data.timestamp).toLocaleTimeString()}</Text>
+        <View style={styles.divider} />
+        
+        <TouchableOpacity onPress={toggleExpand} style={styles.toggleButton}>
+          <Text style={styles.toggleText}>{expanded ? 'Hide Details' : 'View Details'}</Text>
+          {expanded ? <ChevronUp size={16} color="#059669" /> : <ChevronDown size={16} color="#059669" />}
+        </TouchableOpacity>
+
+        {expanded && (
+          <View style={styles.taskDetails}>
+            {data.description && (
+              <Text style={styles.detailText}>Description: {data.description}</Text>
+            )}
+            {data.imageUrl && (
+              <Text style={styles.detailText}>Image attached (View in logs)</Text>
+            )}
+          </View>
+        )}
+      </View>
+    </View>
+  );
 };
 
 export default function CoachChatScreen() {
@@ -126,15 +186,40 @@ export default function CoachChatScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.sender_id === profile?.id;
+    const isOwn = item.sender_id === profile?.id;
+    
+    let isTaskMessage = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'task_completion') {
+        isTaskMessage = true;
+      }
+    } catch (e) {
+      // Not JSON
+    }
+
+    if (isTaskMessage) {
+      return <TaskCompletionMessage content={item.content} isOwn={isOwn} />;
+    }
+
     return (
-      <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
-        <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.theirMessageText]}>
+      <View
+        style={[
+          styles.messageBubble,
+          isOwn ? styles.sentBubble : styles.receivedBubble,
+        ]}
+      >
+        <Text style={[styles.messageText, isOwn ? styles.sentText : styles.receivedText]}>
           {item.content}
         </Text>
-        <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.theirTimestamp]}>
-          {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+        <View style={styles.messageFooter}>
+          <Text style={[styles.timestamp, isOwn ? styles.sentTimestamp : styles.receivedTimestamp]}>
+            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          {isOwn && (
+            item.read ? <CheckCheck size={12} color="#E0E7FF" /> : <Check size={12} color="#E0E7FF" />
+          )}
+        </View>
       </View>
     );
   };
@@ -143,7 +228,7 @@ export default function CoachChatScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.title}>
           {clientProfile?.profiles?.full_name || 'Chat'}
@@ -292,5 +377,103 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#93C5FD',
+  },
+  messageBubble: {
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 4,
+  },
+  sentBubble: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#3B82F6',
+    borderBottomRightRadius: 4,
+  },
+  receivedBubble: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sentText: {
+    color: '#FFFFFF',
+  },
+  receivedText: {
+    color: '#111827',
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 4,
+  },
+  sentTimestamp: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  receivedTimestamp: {
+    color: '#9CA3AF',
+  },
+  taskMessageContainer: {
+    maxWidth: '90%',
+    marginVertical: 4,
+    backgroundColor: '#ECFDF5', // Light green
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#10B981', // Green border
+    overflow: 'hidden',
+  },
+  taskHeader: {
+    padding: 12,
+    backgroundColor: '#D1FAE5',
+    borderBottomWidth: 1,
+    borderBottomColor: '#10B981',
+  },
+  taskTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#065F46',
+  },
+  taskContent: {
+    padding: 12,
+  },
+  taskName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#064E3B',
+    marginBottom: 4,
+  },
+  taskTime: {
+    fontSize: 12,
+    color: '#047857',
+    marginBottom: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#10B981',
+    opacity: 0.3,
+    marginBottom: 8,
+  },
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toggleText: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: '500',
+  },
+  taskDetails: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  detailText: {
+    fontSize: 12,
+    color: '#047857',
+    marginBottom: 4,
   },
 });

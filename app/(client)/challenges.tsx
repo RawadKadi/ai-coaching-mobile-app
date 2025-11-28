@@ -4,7 +4,9 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Habit, HabitLog } from '@/types/database';
-import { CheckCircle, Circle, ArrowLeft, Trophy } from 'lucide-react-native';
+import { CheckCircle, Circle, ArrowLeft, Trophy, Camera } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
 
 export default function ChallengesScreen() {
   const router = useRouter();
@@ -44,7 +46,13 @@ export default function ChallengesScreen() {
       if (logsResult.error) throw logsResult.error;
 
       setHabits(habitsResult.data || []);
-      setTodayLogs(logsResult.data || []);
+      const logs = logsResult.data || [];
+      setTodayLogs(logs);
+
+      // Initialize last reported status
+      logs.forEach(log => {
+        lastReportedStatus.current[log.habit_id] = log.completed;
+      });
     } catch (error) {
       console.error('Error loading challenges:', error);
     } finally {
@@ -53,6 +61,7 @@ export default function ChallengesScreen() {
   };
 
   const timeoutRefs = useRef<{ [key: string]: any }>({});
+  const lastReportedStatus = useRef<{ [key: string]: boolean }>({});
 
   useEffect(() => {
     return () => {
@@ -61,10 +70,11 @@ export default function ChallengesScreen() {
     };
   }, []);
 
-  const sendCompletionMessage = async (habitName: string) => {
+
+
+  const sendCompletionMessage = async (habitName: string, isCompletion: boolean, imageUrl?: string, description?: string) => {
     try {
       // Get the coach ID for this client
-      // We need to find the active coach link first
       const { data: linkData, error: linkError } = await supabase
         .from('coach_client_links')
         .select('coach_id')
@@ -72,12 +82,8 @@ export default function ChallengesScreen() {
         .eq('status', 'active')
         .single();
 
-      if (linkError || !linkData) {
-        console.log('No active coach found to message');
-        return;
-      }
+      if (linkError || !linkData) return;
 
-      // Get coach's user_id (profile id) to send message to
       const { data: coachData, error: coachError } = await supabase
         .from('coaches')
         .select('user_id')
@@ -86,29 +92,110 @@ export default function ChallengesScreen() {
 
       if (coachError || !coachData) return;
 
-      const { error } = await supabase
+      const messageContent = JSON.stringify({
+        type: 'task_completion',
+        taskName: habitName,
+        isCompletion: isCompletion,
+        clientName: (client as any)?.profiles?.full_name || 'Client',
+        imageUrl: imageUrl || null,
+        description: description || '',
+        timestamp: new Date().toISOString(),
+      });
+
+      const { data, error } = await supabase
         .from('messages')
         .insert({
-          sender_id: client?.user_id, // client's profile id
+          sender_id: client?.user_id,
           recipient_id: coachData.user_id,
-          content: `Finished this task: ${habitName}`,
+          content: messageContent,
           read: false,
           ai_generated: false,
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
-      console.log('Automated message sent for:', habitName);
+      console.log('[Challenges] Task completion message sent:', data);
+      return data;
     } catch (error) {
       console.error('Error sending automated message:', error);
+      return null;
+    }
+  };
+
+  const handleCameraVerification = async (habit: Habit) => {
+    try {
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Permission Required', 'You need to allow camera access to verify this challenge.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0].base64) {
+        const fileExt = 'jpg';
+        const fileName = `${client?.id}/${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('habit-verifications')
+          .upload(filePath, decode(result.assets[0].base64), {
+            contentType: 'image/jpeg',
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('habit-verifications')
+          .getPublicUrl(filePath);
+
+        // Log completion with image
+        const today = new Date().toISOString().split('T')[0];
+        const { data, error } = await supabase
+          .from('habit_logs')
+          .insert({
+            client_id: client?.id,
+            habit_id: habit.id,
+            date: today,
+            completed: true,
+            image_url: publicUrl,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        setTodayLogs([...todayLogs, data]);
+
+        // Send message immediately for camera verification
+        sendCompletionMessage(habit.name, true, publicUrl, habit.description);
+      }
+    } catch (error) {
+      console.error('Error in camera verification:', error);
+      Alert.alert('Error', 'Failed to verify challenge with camera');
     }
   };
 
   const toggleChallenge = async (habit: Habit) => {
     try {
       if (habit.verification_type === 'camera') {
-        // TODO: Implement Camera Logic
-        Alert.alert('Photo Required', 'This challenge requires a photo verification. Camera feature coming soon!');
-        return;
+        const today = new Date().toISOString().split('T')[0];
+        const existingLog = todayLogs.find((log) => log.habit_id === habit.id);
+        
+        if (existingLog && existingLog.completed) {
+           // If already completed, allow undoing without camera
+           // Fall through to normal toggle logic
+        } else {
+           // If not completed, require camera
+           await handleCameraVerification(habit);
+           return;
+        }
       }
 
       const today = new Date().toISOString().split('T')[0];
@@ -120,9 +207,11 @@ export default function ChallengesScreen() {
         delete timeoutRefs.current[habit.id];
       }
 
+      let newCompleted = true;
+
       if (existingLog) {
         // Toggle completion
-        const newCompleted = !existingLog.completed;
+        newCompleted = !existingLog.completed;
         const { data, error } = await supabase
           .from('habit_logs')
           .update({ completed: newCompleted })
@@ -132,14 +221,6 @@ export default function ChallengesScreen() {
 
         if (error) throw error;
         setTodayLogs(todayLogs.map((log) => (log.id === existingLog.id ? data : log)));
-
-        // If marked as completed, schedule message
-        if (newCompleted) {
-          timeoutRefs.current[habit.id] = setTimeout(() => {
-            sendCompletionMessage(habit.name);
-            delete timeoutRefs.current[habit.id];
-          }, 10000); // 10 seconds
-        }
       } else {
         // Create new log (completed by default)
         const { data, error } = await supabase
@@ -155,13 +236,21 @@ export default function ChallengesScreen() {
 
         if (error) throw error;
         setTodayLogs([...todayLogs, data]);
-
-        // Schedule message
-        timeoutRefs.current[habit.id] = setTimeout(() => {
-          sendCompletionMessage(habit.name);
-          delete timeoutRefs.current[habit.id];
-        }, 10000); // 10 seconds
       }
+
+      // Schedule message check
+      timeoutRefs.current[habit.id] = setTimeout(() => {
+        // Check if the current status is different from the last reported status
+        const lastStatus = lastReportedStatus.current[habit.id] ?? false; 
+        
+        if (newCompleted !== lastStatus) {
+          sendCompletionMessage(habit.name, newCompleted, undefined, habit.description);
+          lastReportedStatus.current[habit.id] = newCompleted;
+        }
+        
+        delete timeoutRefs.current[habit.id];
+      }, 5000); // 5 seconds
+
     } catch (error) {
       console.error('Error toggling challenge:', error);
     }
