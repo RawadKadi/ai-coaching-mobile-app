@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, Users, Brain, User } from 'lucide-react-native';
+import { Home, Users, Brain, User, Calendar } from 'lucide-react-native';
 
 export default function CoachTabLayout() {
   return (
@@ -23,6 +23,13 @@ export default function CoachTabLayout() {
         options={{
           title: 'Dashboard',
           tabBarIcon: ({ size, color }) => <Home size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="calendar"
+        options={{
+          title: 'Schedule',
+          tabBarIcon: ({ size, color }) => <Calendar size={size} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -25,9 +25,10 @@ export interface Coach {
     specialty?: string;
     bio?: string;
     brand_color: string;
-    logo_url?: string;
+    logo_url?: string | null;
     is_active: boolean;
     subscription_tier: string;
+    meeting_link?: string | null;
     created_at: string;
     updated_at: string;
 }

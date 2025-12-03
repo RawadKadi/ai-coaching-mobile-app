@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image, Modal, Pressable, Dimensions, Linking, Alert, Animated } from 'react-native';
+import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Send, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown } from 'lucide-react-native';
 import { useFocusEffect } from 'expo-router';
 
 if (Platform.OS === 'android') {
@@ -17,10 +18,114 @@ type Message = {
   recipient_id: string;
   content: string;
   created_at: string;
+  read: boolean;
+  client_id: string;
+};
+
+const ZoomableImage = ({ imageUrl, onClose, onLoadStart, onLoadEnd }: {
+  imageUrl: string;
+  onClose: () => void;
+  onLoadStart: () => void;
+  onLoadEnd: () => void;
+}) => {
+  const scale = React.useRef(new Animated.Value(1)).current;
+  const translateY = React.useRef(new Animated.Value(0)).current;
+  const lastScale = React.useRef(1);
+  const lastTranslateY = React.useRef(0);
+
+  const pinchRef = React.useRef<any>(null);
+  const panRef = React.useRef<any>(null);
+
+  const onPinchEvent = Animated.event(
+    [{ nativeEvent: { scale } }],
+    { useNativeDriver: true }
+  );
+
+  const onPinchStateChange = (event: any) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) { // 4 = ACTIVE
+      lastScale.current *= event.nativeEvent.scale;
+      scale.setValue(lastScale.current);
+    }
+  };
+
+  const onPanEvent = Animated.event(
+    [{ nativeEvent: { translationY: translateY } }],
+    { useNativeDriver: true }
+  );
+
+  const onPanStateChange = (event: any) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) { // ACTIVE
+      const { translationY } = event.nativeEvent;
+      
+      // If swiped down/up more than 150px, close modal
+      if (Math.abs(translationY) > 150) {
+        onClose();
+      } else {
+        // Reset position
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      }
+      lastTranslateY.current = 0;
+    }
+  };
+
+  const resetZoom = () => {
+    Animated.parallel([
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    lastScale.current = 1;
+    lastTranslateY.current = 0;
+  };
+
+  return (
+    <PanGestureHandler
+      ref={panRef}
+      onGestureEvent={onPanEvent}
+      onHandlerStateChange={onPanStateChange}
+      enabled={lastScale.current <= 1} // Only allow pan when not zoomed
+      simultaneousHandlers={pinchRef}
+    >
+      <Animated.View style={{ flex: 1 }}>
+        <PinchGestureHandler
+          ref={pinchRef}
+          onGestureEvent={onPinchEvent}
+          onHandlerStateChange={onPinchStateChange}
+          simultaneousHandlers={panRef}
+        >
+          <Animated.View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Animated.Image
+              source={{ uri: imageUrl }}
+              style={{
+                width: '100%',
+                height: '100%',
+                transform: [{ scale }, { translateY }],
+              }}
+              resizeMode="contain"
+              onLoadStart={onLoadStart}
+              onLoadEnd={onLoadEnd}
+            />
+          </Animated.View>
+        </PinchGestureHandler>
+      </Animated.View>
+    </PanGestureHandler>
+  );
 };
 
 const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolean }) => {
   const [expanded, setExpanded] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [modalImageLoading, setModalImageLoading] = useState(true);
+  
   const data = typeof content === 'string' ? JSON.parse(content) : content;
 
   const toggleExpand = () => {
@@ -28,47 +133,287 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
     setExpanded(!expanded);
   };
 
-  if (!data.isCompletion) {
-    // Render undo message differently or as simple text
-    return (
-      <View style={[styles.messageBubble, isOwn ? styles.sentBubble : styles.receivedBubble]}>
-        <Text style={[styles.messageText, isOwn ? styles.sentText : styles.receivedText]}>
-          {data.isCompletion === false ? `⚠️ Undid task: ${data.taskName}` : content}
-        </Text>
-      </View>
-    );
-  }
+  const isCompletion = data.isCompletion !== false; // Default to true if undefined
+  const isUndo = !isCompletion;
+
+  // Colors based on type
+  const containerStyle = isUndo 
+    ? { backgroundColor: '#FFFBEB', borderColor: '#F59E0B' } 
+    : { backgroundColor: '#ECFDF5', borderColor: '#10B981' };
+    
+  const headerStyle = isUndo
+    ? { backgroundColor: '#FEF3C7', borderBottomColor: '#F59E0B' }
+    : { backgroundColor: '#D1FAE5', borderBottomColor: '#10B981' };
+    
+  const titleColor = isUndo ? '#92400E' : '#065F46';
+  const nameColor = isUndo ? '#92400E' : '#064E3B';
+  const timeColor = isUndo ? '#B45309' : '#047857';
+  const dividerColor = isUndo ? '#F59E0B' : '#10B981';
+  const toggleColor = isUndo ? '#D97706' : '#059669';
 
   return (
-    <View style={[styles.taskMessageContainer, { alignSelf: isOwn ? 'flex-end' : 'flex-start' }]}>
-      <View style={styles.taskHeader}>
-        <Text style={styles.taskTitle}>
-          {data.clientName} finished this task
+    <View style={[styles.taskMessageContainer, containerStyle, { alignSelf: isOwn ? 'flex-end' : 'flex-start' }]}>
+      <View style={[styles.taskHeader, headerStyle]}>
+        <Text style={[styles.taskTitle, { color: titleColor }]}>
+          {isUndo ? `${data.clientName} undid this task` : `${data.clientName} finished this task`}
         </Text>
       </View>
       
+      {/* Image Banner */}
+      {data.imageUrl && !isUndo && (
+        <View style={styles.bannerContainer}>
+          <Pressable 
+            onPress={() => !imageLoading && setShowImageModal(true)}
+            style={styles.bannerPressable}
+          >
+            {imageLoading && (
+              <View style={styles.bannerLoading}>
+                <ActivityIndicator size="small" color={toggleColor} />
+              </View>
+            )}
+            <Image 
+              source={{ uri: data.imageUrl }} 
+              style={styles.bannerImage} 
+              resizeMode="cover"
+              onLoadStart={() => setImageLoading(true)}
+              onLoadEnd={() => setImageLoading(false)}
+            />
+            {!imageLoading && (
+              <View style={styles.bannerOverlay}>
+                <Text style={styles.bannerText}>Tap to view proof attached</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+      )}
+      
       <View style={styles.taskContent}>
-        <Text style={styles.taskName}>{data.taskName}</Text>
-        <Text style={styles.taskTime}>Completed at: {new Date(data.timestamp).toLocaleTimeString()}</Text>
-        <View style={styles.divider} />
+        <Text style={[styles.taskName, { color: nameColor }]}>{data.taskName}</Text>
+        <Text style={[styles.taskTime, { color: timeColor }]}>
+          {isUndo ? 'Undone at: ' : 'Completed at: '}
+          {new Date(data.timestamp).toLocaleTimeString()}
+        </Text>
+        <View style={[styles.divider, { backgroundColor: dividerColor }]} />
         
         <TouchableOpacity onPress={toggleExpand} style={styles.toggleButton}>
-          <Text style={styles.toggleText}>{expanded ? 'Hide Details' : 'View Details'}</Text>
-          {expanded ? <ChevronUp size={16} color="#059669" /> : <ChevronDown size={16} color="#059669" />}
+          <Text style={[styles.toggleText, { color: toggleColor }]}>{expanded ? 'Hide Details' : 'View Details'}</Text>
+          {expanded ? <ChevronUp size={16} color={toggleColor} /> : <ChevronDown size={16} color={toggleColor} />}
         </TouchableOpacity>
 
         {expanded && (
-          <View style={styles.taskDetails}>
+          <View style={[styles.taskDetails, { borderTopColor: isUndo ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)' }]}>
             {data.description && (
-              <Text style={styles.detailText}>Description: {data.description}</Text>
+              <Text style={[styles.detailText, { color: timeColor }]}>Description: {data.description}</Text>
             )}
             {data.imageUrl && (
-              <Text style={styles.detailText}>Image attached (View in logs)</Text>
+              <Text style={[styles.detailText, { color: timeColor }]}>
+                Proof attached (See banner above)
+              </Text>
             )}
           </View>
         )}
       </View>
+
+      {/* Full Screen Image Modal with Zoom and Swipe to Close */}
+      <Modal
+        visible={showImageModal}
+        transparent={true}
+        onRequestClose={() => setShowImageModal(false)}
+        animationType="fade"
+      >
+        <View style={styles.modalContainer}>
+          <Pressable style={styles.closeButton} onPress={() => setShowImageModal(false)}>
+            <X size={30} color="#FFFFFF" />
+          </Pressable>
+          
+          {modalImageLoading && (
+            <ActivityIndicator size="large" color="#FFFFFF" style={styles.modalLoader} />
+          )}
+          
+          <ZoomableImage 
+            imageUrl={data.imageUrl}
+            onClose={() => setShowImageModal(false)}
+            onLoadStart={() => setModalImageLoading(true)}
+            onLoadEnd={() => setModalImageLoading(false)}
+          />
+        </View>
+      </Modal>
     </View>
+  );
+};
+
+const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPostpone }: { 
+  content: any, 
+  isOwn: boolean, 
+  status?: string, 
+  isClient?: boolean,
+  onJoin: () => void, 
+  onPostpone: () => void 
+}) => {
+  const data = typeof content === 'string' ? JSON.parse(content) : content;
+  const isCancelled = status === 'cancelled';
+  const isPostponed = isCancelled && !!data.cancellationReason;
+  
+  return (
+    <View style={[
+      styles.inviteContainer, 
+      { alignSelf: isOwn ? 'flex-end' : 'flex-start' },
+      isPostponed ? styles.invitePostponed : (isCancelled ? styles.inviteCancelled : null)
+    ]}>
+      <View style={styles.inviteHeader}>
+        <Image 
+          source={{ uri: 'https://jitsi.org/wp-content/uploads/2020/03/favicon.png' }} 
+          style={styles.meetLogo}
+          resizeMode="contain"
+        />
+        <Text style={styles.inviteTitle}>Coaching Session</Text>
+        {isCancelled && (
+          <View style={isPostponed ? styles.postponedTag : styles.cancelledTag}>
+            <Text style={styles.cancelledTagText}>{isPostponed ? 'Postponed' : 'Cancelled'}</Text>
+          </View>
+        )}
+      </View>
+      
+      <View style={styles.inviteBody}>
+        <Text style={styles.inviteDescription}>
+          {data.description || 'Instant Meeting'}
+        </Text>
+        <Text style={styles.inviteTime}>
+          {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+        {isCancelled && data.cancellationReason && (
+          <View style={styles.cancellationReasonContainer}>
+            <Text style={styles.cancellationReasonLabel}>Reason:</Text>
+            <Text style={styles.cancellationReasonText}>{data.cancellationReason}</Text>
+          </View>
+        )}
+      </View>
+
+      {!isCancelled && (
+        <View style={styles.inviteActions}>
+          {isClient && (
+            <TouchableOpacity style={styles.invitePostponeButton} onPress={onPostpone}>
+              <Text style={styles.invitePostponeText}>Postpone</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.inviteJoinButton} onPress={onJoin}>
+            <Text style={styles.inviteJoinText}>Join Now</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+};
+
+const SessionInviteMessageWrapper = ({ 
+  item, 
+  parsed, 
+  isOwn,
+  handlePostpone 
+}: { 
+  item: Message, 
+  parsed: any, 
+  isOwn: boolean,
+  handlePostpone: (sessionData: any, messageId: string, reason: string) => void
+}) => {
+  // Fetch real-time session status from sessions table
+  const [sessionStatus, setSessionStatus] = React.useState(parsed.status);
+  const [cancellationReason, setCancellationReason] = React.useState(parsed.cancellationReason);
+  
+  // Sync state with props when they change (e.g. after local update)
+  React.useEffect(() => {
+    if (parsed.status) {
+      setSessionStatus(parsed.status);
+    }
+    if (parsed.cancellationReason) {
+      setCancellationReason(parsed.cancellationReason);
+    }
+  }, [parsed.status, parsed.cancellationReason]);
+
+  React.useEffect(() => {
+    const fetchSessionStatus = async () => {
+      // Only fetch if we don't already have status from props
+      if (!parsed.status) {
+        const { data: session } = await supabase
+          .from('sessions')
+          .select('status, cancellation_reason')
+          .eq('id', parsed.sessionId)
+          .single();
+        
+        if (session) {
+          setSessionStatus(session.status);
+          setCancellationReason(session.cancellation_reason);
+        }
+      }
+    };
+    
+    fetchSessionStatus();
+    
+    // Subscribe to session updates for real-time changes
+    const subscription = supabase
+      .channel(`session-updates-${parsed.sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sessions',
+          filter: `id=eq.${parsed.sessionId}`
+        },
+        (payload) => {
+          const updatedSession = payload.new as any;
+          if (updatedSession) {
+            setSessionStatus(updatedSession.status);
+            setCancellationReason(updatedSession.cancellation_reason || null);
+          }
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [parsed.sessionId, parsed.status]);
+  
+  return (
+    <SessionInviteMessage 
+      content={{ ...parsed, cancellationReason }}
+      isOwn={isOwn}
+      status={sessionStatus}
+      isClient={true}
+      onJoin={() => {
+        Linking.openURL(parsed.link);
+      }}
+      onPostpone={() => {
+        Alert.alert(
+          'Postpone Session',
+          'Please select a reason:',
+          [
+            { 
+              text: 'Sickness', 
+              onPress: () => handlePostpone(parsed, item.id, 'Sickness')
+            },
+            { 
+              text: 'Family Emergency', 
+              onPress: () => handlePostpone(parsed, item.id, 'Family Emergency')
+            },
+            { 
+              text: 'Schedule Conflict', 
+              onPress: () => handlePostpone(parsed, item.id, 'Schedule Conflict')
+            },
+            { 
+              text: 'Personal Emergency', 
+              onPress: () => handlePostpone(parsed, item.id, 'Personal Emergency')
+            },
+            { 
+              text: 'Other', 
+              onPress: () => handlePostpone(parsed, item.id, 'Other')
+            },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      }}
+    />
   );
 };
 
@@ -78,74 +423,128 @@ export default function MessagesScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [nextSession, setNextSession] = useState<any>(null);
+  const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(null);
+  const [firstUnreadIndex, setFirstUnreadIndex] = useState<number>(-1);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    if (client) {
+    if (client?.user_id) {
       loadMessages();
+      loadNextSession();
       const cleanup = subscribeToMessages();
       return cleanup;
     }
-  }, [client]);
+  }, [client?.user_id]);
 
   // Reload messages when screen comes into focus (fallback if realtime doesn't work)
   useFocusEffect(
     React.useCallback(() => {
-      if (client) {
+      if (client?.user_id) {
         console.log('[Messages] Screen focused, reloading messages');
         loadMessages();
+        loadNextSession();
       }
-    }, [client])
+    }, [client?.user_id])
   );
 
+  const loadNextSession = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('client_id', client?.id)
+        .eq('status', 'scheduled')
+        .gt('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading next session:', error);
+      }
+      
+      setNextSession(data);
+    } catch (error) {
+      console.error('Error loading next session:', error);
+    }
+  };
+
   const subscribeToMessages = () => {
-    console.log('[Messages] Setting up subscription for user_id:', client?.user_id);
+    if (!client?.user_id) return;
     
-    const subscription = supabase
-      .channel('client-messages-' + client?.user_id)
+    // Messages Subscription
+    const messageChannel = supabase
+      .channel(`messages-${client.user_id}-${Date.now()}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `recipient_id=eq.${client?.user_id}`,
         },
         (payload) => {
-          console.log('[Messages] Received message:', payload.new);
-          setMessages((current) => [...current, payload.new as Message]);
+          const newMessage = payload.new as Message;
+          if (newMessage.recipient_id === client.user_id || newMessage.sender_id === client.user_id) {
+            setMessages((current) => {
+              if (current.find(m => m.id === newMessage.id)) return current;
+              return [...current, newMessage];
+            });
+          }
         }
       )
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: 'UPDATE',
           schema: 'public',
           table: 'messages',
-          filter: `sender_id=eq.${client?.user_id}`,
         },
         (payload) => {
-          console.log('[Messages] Sent message:', payload.new);
-          // Check if we already have this message (optimistic update might have added it)
-          setMessages((current) => {
-            if (current.find(m => m.id === payload.new.id)) return current;
-            return [...current, payload.new as Message];
-          });
+          const updatedMessage = payload.new as Message;
+          if (updatedMessage.recipient_id === client.user_id || updatedMessage.sender_id === client.user_id) {
+            setMessages((current) => 
+              current.map(msg => 
+                msg.id === updatedMessage.id ? updatedMessage : msg
+              )
+            );
+          }
         }
       )
       .subscribe((status) => {
-        console.log('[Messages] Subscription status:', status);
+        if (status === 'CHANNEL_ERROR') {
+          // Silently reload messages on error
+          loadMessages();
+        }
       });
 
+    // Sessions Subscription (for "Wait for Coach")
+    const sessionChannel = supabase
+      .channel(`sessions:${client.user_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sessions',
+          filter: `client_id=eq.${client?.id}`
+        },
+        () => {
+          console.log('[Messages] Session update received, reloading...');
+          loadNextSession();
+        }
+      )
+      .subscribe();
+
     return () => {
-      console.log('[Messages] Cleaning up subscription');
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(messageChannel);
+      supabase.removeChannel(sessionChannel);
     };
   };
 
   const loadMessages = async () => {
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from('messages')
         .select('*')
@@ -154,11 +553,82 @@ export default function MessagesScreen() {
 
       if (error) throw error;
       setMessages(data || []);
+      
+      // Calculate first unread message
+      if (data && data.length > 0) {
+        const lastRead = lastReadMessageId;
+        if (lastRead) {
+          const lastReadIdx = data.findIndex(m => m.id === lastRead);
+          const firstUnread = lastReadIdx + 1;
+          if (firstUnread < data.length && !data[firstUnread].read) {
+            setFirstUnreadIndex(firstUnread);
+            // Auto-scroll to first unread on load
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({
+                index: firstUnread,
+                animated: true,
+                viewPosition: 0.1 // Show near top
+              });
+            }, 300);
+          } else {
+            setFirstUnreadIndex(-1);
+          }
+        } else {
+          // Find first unread message
+          const firstUnreadIdx = data.findIndex(m => !m.read && m.sender_id !== client?.user_id);
+          setFirstUnreadIndex(firstUnreadIdx);
+          if (firstUnreadIdx >= 0) {
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({
+                index: firstUnreadIdx,
+                animated: true,
+                viewPosition: 0.1
+              });
+            }, 300);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading messages:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+ const markMessagesAsRead = async () => {
+    if (!messages.length || !client?.user_id) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    setLastReadMessageId(lastMessage.id);
+    setFirstUnreadIndex(-1);
+    
+    // Mark all unread messages as read in database
+    const unreadIds = messages
+      .filter(m => !m.read && m.recipient_id === client.user_id)
+      .map(m => m.id);
+    
+    if (unreadIds.length > 0) {
+      await supabase
+        .from('messages')
+        .update({ read: true })
+        .in('id', unreadIds);
+    }
+  };
+
+  const handleScroll = (event: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const isAtBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 50;
+    setShowScrollButton(!isAtBottom);
+    
+    // Mark as read when scrolled to bottom
+    if (isAtBottom && messages.length > 0) {
+      markMessagesAsRead();
+    }
+  };
+
+  const scrollToBottom = () => {
+    flatListRef.current?.scrollToEnd({ animated: true });
+    markMessagesAsRead();
   };
 
   const sendMessage = async () => {
@@ -213,34 +683,117 @@ export default function MessagesScreen() {
     }
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
+  const renderMessage = ({ item, index }: { item: Message, index: number }) => {
     const isMe = item.sender_id === client?.user_id;
+    const showUnreadSeparator = index === firstUnreadIndex;
     
-    // Check if this is a task completion message
-    let isTaskMessage = false;
-    try {
-      const parsed = JSON.parse(item.content);
-      if (parsed && parsed.type === 'task_completion') {
-        isTaskMessage = true;
+    const renderContent = () => {
+      // Check if this is a task completion message
+      let isTaskMessage = false;
+      try {
+        const parsed = JSON.parse(item.content);
+        if (parsed && parsed.type === 'task_completion') {
+          isTaskMessage = true;
+        }
+      } catch (e) {
+        // Not JSON, render normally
       }
-    } catch (e) {
-      // Not JSON, render normally
-    }
 
-    if (isTaskMessage) {
-      return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
-    }
+      if (isTaskMessage) {
+        return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
+      }
+
+      // Check if this is a session invite message
+      let isSessionInvite = false;
+      try {
+        const parsed = JSON.parse(item.content);
+        if (parsed && parsed.type === 'session_invite') {
+          isSessionInvite = true;
+        }
+      } catch (e) {
+        // Not JSON
+      }
+
+      if (isSessionInvite) {
+        const parsed = JSON.parse(item.content);
+        return (
+          <SessionInviteMessageWrapper 
+            item={item}
+            parsed={parsed}
+            isOwn={isMe}
+            handlePostpone={handlePostpone}
+          />
+        );
+      }
+
+      return (
+        <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
+          <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.theirMessageText]}>
+            {item.content}
+          </Text>
+          <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.theirTimestamp]}>
+            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
+      );
+    };
 
     return (
-      <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
-        <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.theirMessageText]}>
-          {item.content}
-        </Text>
-        <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.theirTimestamp]}>
-          {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+      <View>
+        {showUnreadSeparator && (
+          <View style={styles.unreadSeparator}>
+            <View style={styles.unreadSeparatorLine} />
+            <View style={styles.unreadSeparatorBadge}>
+              <Text style={styles.unreadSeparatorText}>{messages.length - index} NEW MESSAGES</Text>
+            </View>
+            <View style={styles.unreadSeparatorLine} />
+          </View>
+        )}
+        {renderContent()}
       </View>
     );
+  };
+
+  const handlePostpone = async (sessionData: any, messageId: string, reason: string) => {
+    try {
+      // Update session status in database
+      await supabase
+        .from('sessions')
+        .update({ 
+          status: 'cancelled', 
+          cancelled_at: new Date().toISOString(),
+          cancellation_reason: reason
+        })
+        .eq('id', sessionData.sessionId);
+      
+      // Update the message content to reflect cancelled status
+      const updatedContent = { 
+        ...sessionData, 
+        status: 'cancelled',
+        cancellationReason: reason
+      };
+      
+      // Update in database
+      await supabase
+        .from('messages')
+        .update({ content: JSON.stringify(updatedContent) })
+        .eq('id', messageId);
+      
+      // IMMEDIATELY update local state for real-time UI update
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, content: JSON.stringify(updatedContent) }
+            : msg
+        )
+      );
+
+      loadNextSession();
+      Alert.alert('Session Postponed', 'Your coach has been notified.');
+    } catch (error) {
+      console.error('Error postponing session:', error);
+      Alert.alert('Error', 'Failed to postpone session');
+    }
   };
 
   return (
@@ -248,6 +801,37 @@ export default function MessagesScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Messages</Text>
       </View>
+
+      {nextSession && (
+        <View style={[styles.sessionBanner, nextSession.coach_joined_at && styles.sessionBannerActive]}>
+          <View style={styles.sessionInfo}>
+            <Video size={20} color="#FFFFFF" />
+            <View>
+              <Text style={styles.sessionTitle}>
+                {nextSession.coach_joined_at ? 'Coach has joined!' : 'Next Session'}
+              </Text>
+              <Text style={styles.sessionTime}>
+                {new Date(nextSession.scheduled_at).toLocaleDateString()} at {new Date(nextSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={[styles.joinButton, !nextSession.coach_joined_at && styles.joinButtonDisabled]} 
+            onPress={() => {
+              if (nextSession.meet_link && nextSession.coach_joined_at) {
+                Linking.openURL(nextSession.meet_link);
+              } else {
+                alert('Please wait for your coach to join the call first.');
+              }
+            }}
+            disabled={!nextSession.coach_joined_at}
+          >
+            <Text style={[styles.joinButtonText, !nextSession.coach_joined_at && styles.joinButtonTextDisabled]}>
+              {nextSession.coach_joined_at ? 'Join Call' : 'Waiting...'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -260,9 +844,37 @@ export default function MessagesScreen() {
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messageList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          onScrollToIndexFailed={(info) => {
+            // Handle scroll failure gracefully by scrolling to end
+            const wait = new Promise(resolve => setTimeout(resolve, 500));
+            wait.then(() => {
+              flatListRef.current?.scrollToIndex({ 
+                index: info.index, 
+                animated: true,
+                viewPosition: 0.1
+              });
+            });
+          }}
         />
+      )}
+
+      {showScrollButton && (
+        <TouchableOpacity 
+          style={styles.scrollButton} 
+          onPress={scrollToBottom}
+          activeOpacity={0.8}
+        >
+          <ArrowDown size={20} color="#3B82F6" />
+          {firstUnreadIndex !== -1 && (
+            <View style={styles.scrollButtonBadge}>
+              <Text style={styles.scrollButtonBadgeText}>
+                {messages.length - firstUnreadIndex}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       )}
 
       <KeyboardAvoidingView
@@ -412,7 +1024,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   taskMessageContainer: {
-    maxWidth: '90%',
+    width: '100%',
     marginVertical: 4,
     backgroundColor: '#ECFDF5', // Light green
     borderRadius: 12,
@@ -471,5 +1083,287 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#047857',
     marginBottom: 4,
+  },
+  bannerContainer: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#F3F4F6',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  bannerPressable: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerLoading: {
+    position: 'absolute',
+    zIndex: 1,
+  },
+  bannerOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 8,
+    alignItems: 'center',
+  },
+  bannerText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.8,
+  },
+  modalLoader: {
+    position: 'absolute',
+    zIndex: 1,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 10,
+  },
+  sessionBanner: {
+    backgroundColor: '#3B82F6',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sessionBannerActive: {
+    backgroundColor: '#10B981', // Green when active
+    borderBottomWidth: 2,
+    borderBottomColor: '#059669',
+  },
+  sessionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sessionTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.9,
+  },
+  sessionTime: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  joinButton: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  joinButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  joinButtonText: {
+    color: '#3B82F6',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  joinButtonTextDisabled: {
+    color: '#FFFFFF',
+  },
+  inviteContainer: {
+    width: 280,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+    marginVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  inviteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    gap: 8,
+  },
+  meetLogo: {
+    width: 24,
+    height: 24,
+  },
+  inviteTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  inviteBody: {
+    padding: 16,
+  },
+  inviteDescription: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  inviteTime: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  inviteActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  invitePostponeButton: {
+    flex: 1,
+    padding: 12,
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#F3F4F6',
+  },
+  invitePostponeText: {
+    color: '#F59E0B',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  inviteJoinButton: {
+    flex: 1,
+    padding: 12,
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+  },
+  inviteJoinText: {
+    color: '#0284C7',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  inviteCancelled: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    opacity: 0.8,
+  },
+  invitePostponed: {
+    borderColor: '#EAB308', // Yellow-500
+    backgroundColor: '#FEFCE8', // Yellow-50
+    borderWidth: 1,
+    opacity: 1,
+  },
+  cancelledTag: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 'auto',
+  },
+  postponedTag: {
+    backgroundColor: '#EAB308', // Yellow-500
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 'auto',
+  },
+  cancelledTagText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  cancellationReasonContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#FDE047', // Yellow-300
+  },
+  cancellationReasonLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#854D0E', // Yellow-800
+    marginBottom: 2,
+  },
+  cancellationReasonText: {
+    fontSize: 12,
+    color: '#A16207', // Yellow-700
+    fontStyle: 'italic',
+  },
+  unreadSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    marginHorizontal: 16,
+  },
+  unreadSeparatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  unreadSeparatorBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  unreadSeparatorText: {
+    color: '#3B82F6',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  scrollButton: {
+    position: 'absolute',
+    bottom: 80,
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  scrollButtonBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#EF4444',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  scrollButtonBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
