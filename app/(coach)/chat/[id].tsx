@@ -957,11 +957,11 @@ const SessionInviteMessageWrapper = ({
 
 
 export default function CoachChat() {
-  const { id } = useLocalSearchParams();
+  const { id, suggestedMessage } = useLocalSearchParams();
   const router = useRouter();
   const { user: profile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
+  const [newMessage, setNewMessage] = useState(suggestedMessage as string || '');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [clientProfile, setClientProfile] = useState<any>(null);
@@ -977,6 +977,12 @@ export default function CoachChat() {
   const [firstUnreadIndex, setFirstUnreadIndex] = useState<number>(-1);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (suggestedMessage) {
+      setNewMessage(suggestedMessage as string);
+    }
+  }, [suggestedMessage]);
 
   useEffect(() => {
     if (profile && id) {

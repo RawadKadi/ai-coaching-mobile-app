@@ -1,9 +1,13 @@
 import { Stack } from 'expo-router';
+import SessionMonitor from '@/components/SessionMonitor';
 
 export default function CoachLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <>
+      <SessionMonitor />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+    </>
   );
 }
