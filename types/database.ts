@@ -90,7 +90,7 @@ export interface CheckIn {
 export interface Meal {
     id: string;
     client_id: string;
-    date: string;
+    meal_date: string;
     meal_type: MealType;
     name: string;
     description?: string;
@@ -117,6 +117,21 @@ export interface MealPlan {
     ai_generated: boolean;
     created_at: string;
     updated_at: string;
+}
+
+export interface Session {
+    id: string;
+    client_id: string;
+    coach_id: string;
+    scheduled_at: string;
+    duration_minutes: number;
+    status: 'proposed' | 'scheduled' | 'completed' | 'cancelled';
+    session_type: 'training' | 'nutrition' | 'check_in' | 'consultation' | 'other';
+    notes?: string;
+    meet_link?: string;
+    is_locked: boolean;
+    ai_generated: boolean;
+    created_at: string;
 }
 
 export interface Workout {
@@ -229,3 +244,127 @@ export interface AIRequest {
     error_message?: string;
     created_at: string;
 }
+
+// =====================================================
+// AI-Powered Nutrition Tracking Types
+// =====================================================
+
+export interface MealEntry {
+    id: string;
+    client_id: string;
+
+    // Meal Metadata
+    meal_date: string;
+    meal_time: string;
+    meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+    meal_name: string;
+    description?: string;
+
+    // Image Data
+    photo_url?: string;
+
+    // Macronutrients
+    calories?: number;
+    protein_g?: number;
+    carbs_g?: number;
+    fat_g?: number;
+    fiber_g?: number;
+    sugar_g?: number;
+
+    // Micronutrients
+    sodium_mg?: number;
+    potassium_mg?: number;
+    calcium_mg?: number;
+    iron_mg?: number;
+    vitamin_a_ug?: number;
+    vitamin_c_mg?: number;
+    vitamin_d_ug?: number;
+
+    // Cooking Details
+    cooking_method?: string;
+    portion_size?: string;
+
+    // AI Analysis
+    ai_analyzed: boolean;
+    ai_confidence?: number;
+    ai_notes?: string;
+
+    // User Modifications
+    user_modified: boolean;
+
+    // Sharing
+    shared_with_coach: boolean;
+    shared_at?: string;
+
+    // Timestamps
+    created_at: string;
+    updated_at: string;
+}
+
+export interface MealIngredient {
+    id: string;
+    meal_id: string;
+
+    // Ingredient Details
+    ingredient_name: string;
+    quantity?: number;
+    unit?: string;
+
+    // Nutritional Contribution
+    calories?: number;
+    protein_g?: number;
+    carbs_g?: number;
+    fat_g?: number;
+
+    // AI Detection
+    ai_detected: boolean;
+    confidence?: number;
+
+    created_at: string;
+}
+
+export interface DailyNutritionSummary {
+    id: string;
+    client_id: string;
+    summary_date: string;
+
+    // Daily Totals
+    total_calories: number;
+    total_protein_g: number;
+    total_carbs_g: number;
+    total_fat_g: number;
+    total_fiber_g: number;
+
+    // Meal Counts
+    meals_logged: number;
+
+    // Activity
+    active_minutes: number;
+    calories_burned: number;
+
+    // Net Calculations
+    net_calories: number;
+
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ClientSettings {
+    id: string;
+    client_id: string;
+
+    // AI Challenge Settings
+    auto_generate_challenges: boolean;
+    challenge_difficulty: 'easy' | 'moderate' | 'hard';
+
+    // Nutrition Preferences
+    default_cuisine_type: string;
+    meal_photo_required: boolean;
+
+    // Privacy
+    auto_share_meals: boolean;
+
+    created_at: string;
+    updated_at: string;
+}
+

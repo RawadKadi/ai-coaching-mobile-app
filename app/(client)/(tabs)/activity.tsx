@@ -31,7 +31,7 @@ export default function ActivityScreen() {
           .from('meals')
           .select('*')
           .eq('client_id', client?.id)
-          .eq('date', selectedDate)
+          .eq('meal_date', selectedDate)
           .order('created_at', { ascending: false }),
         supabase
           .from('workouts')

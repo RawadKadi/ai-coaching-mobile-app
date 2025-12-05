@@ -14,7 +14,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Client, Habit } from '@/types/database';
-import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react-native';
+import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon } from 'lucide-react-native';
+import SchedulerModal from '@/components/SchedulerModal';
+import { ProposedSession } from '@/lib/ai-scheduling-service';
 
 export default function ClientDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -24,6 +26,7 @@ export default function ClientDetailsScreen() {
   const [client, setClient] = useState<Client | null>(null);
   const [challenges, setChallenges] = useState<Habit[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [schedulerVisible, setSchedulerVisible] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Habit | null>(null);
 
   // Form state
@@ -61,6 +64,64 @@ export default function ClientDetailsScreen() {
       Alert.alert('Error', 'Failed to load client data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveSessions = async (proposedSessions: ProposedSession[]) => {
+    if (!coach || !client) return;
+
+    try {
+      // Expand recurring sessions
+      const sessionsToInsert: any[] = [];
+      const WEEKS_TO_SCHEDULE = 4;
+
+      proposedSessions.forEach(session => {
+        if (session.recurrence === 'weekly') {
+          // Generate 4 weeks of sessions
+          const startDate = new Date(session.scheduled_at);
+          for (let i = 0; i < WEEKS_TO_SCHEDULE; i++) {
+            const nextDate = new Date(startDate);
+            nextDate.setDate(startDate.getDate() + (i * 7));
+            
+            sessionsToInsert.push({
+              coach_id: coach.id,
+              client_id: client.id,
+              scheduled_at: nextDate.toISOString(),
+              duration_minutes: session.duration_minutes,
+              session_type: session.session_type,
+              notes: session.notes,
+              status: 'scheduled',
+              is_locked: true,
+              ai_generated: true,
+              meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}-${i}`,
+            });
+          }
+        } else {
+          // Single session
+          sessionsToInsert.push({
+            coach_id: coach.id,
+            client_id: client.id,
+            scheduled_at: session.scheduled_at,
+            duration_minutes: session.duration_minutes,
+            session_type: session.session_type,
+            notes: session.notes,
+            status: 'scheduled',
+            is_locked: true,
+            ai_generated: true,
+            meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}`,
+          });
+        }
+      });
+
+      const { error } = await supabase
+        .from('sessions')
+        .insert(sessionsToInsert);
+
+      if (error) throw error;
+      Alert.alert('Success', 'Sessions scheduled successfully');
+    } catch (error) {
+      console.error('Error saving sessions:', error);
+      Alert.alert('Error', 'Failed to save sessions');
     }
   };
 
@@ -193,6 +254,9 @@ export default function ClientDetailsScreen() {
           <ArrowLeft size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.title}>{(client as any).profiles?.full_name || 'Client'}</Text>
+        <TouchableOpacity style={styles.headerButton} onPress={() => setSchedulerVisible(true)}>
+          <CalendarIcon size={24} color="#3B82F6" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
@@ -337,6 +401,20 @@ export default function ClientDetailsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Scheduler Modal */}
+      {client && (
+        <SchedulerModal
+          visible={schedulerVisible}
+          onClose={() => setSchedulerVisible(false)}
+          onConfirm={handleSaveSessions}
+          clientContext={{
+            name: (client as any).profiles?.full_name || 'Client',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }}
+          existingSessions={[]} // We could fetch existing sessions if needed for conflict detection
+        />
+      )}
     </View>
   );
 }
@@ -355,6 +433,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     padding: 24,
     paddingTop: 60,
@@ -364,10 +443,14 @@ const styles = StyleSheet.create({
   backButton: {
     marginRight: 16,
   },
+  headerButton: {
+    padding: 8,
+  },
   title: {
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
+    flex: 1,
   },
   content: {
     flex: 1,

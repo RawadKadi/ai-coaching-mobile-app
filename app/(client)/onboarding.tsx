@@ -53,7 +53,7 @@ export default function OnboardingScreen() {
       const { error: clientError } = await supabase
         .from('clients')
         .update({
-          date_of_birth: formData.date_of_birth,
+          date_of_birth: formData.date_of_birth || null,
           gender: formData.gender,
           height_cm: parseFloat(formData.height_cm) || null,
           goal: formData.goal,

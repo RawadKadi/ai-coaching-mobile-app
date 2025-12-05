@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image, Modal, Pressable, Dimensions, Linking, Alert, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Modal, Pressable, Dimensions, Linking, Alert, Animated } from 'react-native';
+import { Image } from 'expo-image';
 import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown } from 'lucide-react-native';
+import MealMessageCard from '@/components/MealMessageCard';
 import { useFocusEffect } from 'expo-router';
 
 if (Platform.OS === 'android') {
@@ -174,9 +176,10 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
             <Image 
               source={{ uri: data.imageUrl }} 
               style={styles.bannerImage} 
-              resizeMode="cover"
+              contentFit="cover"
+              transition={200}
               onLoadStart={() => setImageLoading(true)}
-              onLoadEnd={() => setImageLoading(false)}
+              onLoad={() => setImageLoading(false)}
             />
             {!imageLoading && (
               <View style={styles.bannerOverlay}>
@@ -264,7 +267,8 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
         <Image 
           source={{ uri: 'https://jitsi.org/wp-content/uploads/2020/03/favicon.png' }} 
           style={styles.meetLogo}
-          resizeMode="contain"
+          contentFit="contain"
+          transition={200}
         />
         <Text style={styles.inviteTitle}>Coaching Session</Text>
         {isCancelled && (
@@ -724,6 +728,21 @@ export default function MessagesScreen() {
             handlePostpone={handlePostpone}
           />
         );
+      }
+
+      // Check if this is a meal log message
+      let isMealLog = false;
+      try {
+        const parsed = JSON.parse(item.content);
+        if (parsed && parsed.type === 'meal_log') {
+          isMealLog = true;
+        }
+      } catch (e) {
+        // Not JSON
+      }
+
+      if (isMealLog) {
+        return <MealMessageCard content={item.content} isOwn={isMe} />;
       }
 
       return (

@@ -2,8 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Platform, UIManager, LayoutAnimation } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User } from 'lucide-react-native';
+import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import SchedulerModal from '@/components/SchedulerModal';
+import { ProposedSession } from '@/lib/ai-scheduling-service';
+import { Session as SessionType } from '@/types/database';
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -14,11 +17,17 @@ if (Platform.OS === 'android') {
 type Session = {
   id: string;
   client_id: string;
+  coach_id: string;
   scheduled_at: string;
   duration_minutes: number;
-  meet_link: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
-  client: {
+  meet_link?: string;
+  status: 'proposed' | 'scheduled' | 'completed' | 'cancelled';
+  session_type: 'training' | 'nutrition' | 'check_in' | 'consultation' | 'other';
+  notes?: string;
+  is_locked: boolean;
+  ai_generated: boolean;
+  created_at: string;
+  client?: {
     profiles: {
       full_name: string;
       avatar_url: string | null;
@@ -27,11 +36,13 @@ type Session = {
 };
 
 export default function CalendarScreen() {
-  const { profile } = useAuth();
+  const { profile, coach } = useAuth();
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<{id: string, name: string, timezone: string} | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,8 +66,7 @@ export default function CalendarScreen() {
             )
           )
         `)
-        .eq('coach_id', profile?.id)
-        .neq('status', 'cancelled')
+        .eq('coach_id', coach?.id)
         .order('scheduled_at', { ascending: true });
 
       if (error) throw error;
@@ -65,6 +75,66 @@ export default function CalendarScreen() {
       console.error('Error loading sessions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmSessions = async (proposedSessions: ProposedSession[]) => {
+    if (!coach || !selectedClient) return;
+
+    try {
+      // Insert sessions as locked
+      const sessionsToInsert = proposedSessions.map(session => ({
+        coach_id: coach.id,
+        client_id: selectedClient.id,
+        scheduled_at: session.scheduled_at,
+        duration_minutes: session.duration_minutes,
+        session_type: session.session_type,
+        notes: session.notes,
+        status: 'scheduled',
+        is_locked: true,
+        ai_generated: true,
+        meet_link: `https://meet.jit.si/${coach.id}-${selectedClient.id}-${Date.now()}`,
+      }));
+
+      const { data: insertedSessions, error } = await supabase
+        .from('sessions')
+        .insert(sessionsToInsert)
+        .select();
+
+      if (error) throw error;
+
+      // Send notification message to client
+      const { data: clientUser } = await supabase
+        .from('clients')
+        .select('user_id')
+        .eq('id', selectedClient.id)
+        .single();
+
+      if (clientUser) {
+        for (const session of insertedSessions) {
+          const messageContent = JSON.stringify({
+            type: 'session_invite',
+            sessionId: session.id,
+            link: session.meet_link,
+            timestamp: session.scheduled_at,
+            description: `${session.session_type} session`,
+            status: 'scheduled',
+          });
+
+          await supabase.from('messages').insert({
+            sender_id: profile?.id,
+            recipient_id: clientUser.user_id,
+            content: messageContent,
+            ai_generated: false,
+          });
+        }
+      }
+
+      // Reload sessions
+      loadSessions();
+    } catch (error) {
+      console.error('Error confirming sessions:', error);
+      throw error;
     }
   };
 
@@ -196,6 +266,33 @@ export default function CalendarScreen() {
           />
         )}
       </View>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => {
+          // For now, open modal without client selection
+          // TODO: Add client selector before opening modal
+          setSelectedClient({ id: 'temp-id', name: 'Client', timezone: 'UTC' });
+          setShowScheduler(true);
+        }}
+      >
+        <Plus size={24} color="#FFF" />
+      </TouchableOpacity>
+
+      {/* Scheduler Modal */}
+      {selectedClient && (
+        <SchedulerModal
+          visible={showScheduler}
+          onClose={() => {
+            setShowScheduler(false);
+            setSelectedClient(null);
+          }}
+          onConfirm={handleConfirmSessions}
+          clientContext={selectedClient}
+          existingSessions={sessions}
+        />
+      )}
     </View>
   );
 }
@@ -365,5 +462,21 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#9CA3AF',
     fontSize: 16,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
   },
 });

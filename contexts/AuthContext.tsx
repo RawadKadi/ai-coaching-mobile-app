@@ -119,13 +119,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fullName: string,
     role: 'client' | 'coach'
   ) => {
+    console.log('[SignUp] Starting signup process for:', email, 'Role:', role);
+    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
-    if (error) throw error;
-    if (!data.user) throw new Error('No user returned');
+    if (error) {
+      console.error('[SignUp] Auth signup error:', error);
+      throw error;
+    }
+    if (!data.user) {
+      console.error('[SignUp] No user returned from signup');
+      throw new Error('No user returned');
+    }
+    
+    console.log('[SignUp] Auth user created:', data.user.id);
 
     const { error: profileError } = await supabase.from('profiles').insert({
       id: data.user.id,
@@ -134,9 +144,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       onboarding_completed: false,
     });
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      console.error('[SignUp] Profile insert error:', profileError);
+      throw profileError;
+    }
+    
+    console.log('[SignUp] Profile created successfully');
 
     if (role === 'coach') {
+      console.log('[SignUp] Creating coach record...');
       const { data: coachData, error: coachError } = await supabase
         .from('coaches')
         .insert({
@@ -146,20 +162,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select()
         .single();
 
-      if (coachError) throw coachError;
+      if (coachError) {
+        console.error('[SignUp] Coach insert error:', coachError);
+        throw coachError;
+      }
+      
+      console.log('[SignUp] Coach created:', coachData.id);
 
       await supabase.from('ai_coach_brains').insert({
         coach_id: coachData.id,
         tone: 'professional and motivating',
         style: 'supportive and educational',
       });
+      
+      console.log('[SignUp] AI brain created');
     } else {
+      console.log('[SignUp] Creating client record for user:', data.user.id);
       const { error: clientError } = await supabase.from('clients').insert({
         user_id: data.user.id,
       });
 
-      if (clientError) throw clientError;
+      if (clientError) {
+        console.error('[SignUp] ❌ CLIENT INSERT FAILED:', clientError);
+        console.error('[SignUp] Error details:', JSON.stringify(clientError, null, 2));
+        throw clientError;
+      }
+      
+      console.log('[SignUp] ✅ Client record created successfully');
     }
+    
+    console.log('[SignUp] Signup process completed successfully');
   };
 
   const signOut = async () => {

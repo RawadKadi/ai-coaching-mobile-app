@@ -32,6 +32,29 @@ export default function ClientsScreen() {
   useEffect(() => {
     if (coach) {
       loadClients();
+
+      // Set up real-time subscription for new client linkings
+      const subscription = supabase
+        .channel('coach_client_links_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'coach_client_links',
+            filter: `coach_id=eq.${coach.id}`,
+          },
+          (payload) => {
+            console.log('[Real-time] New client linked!', payload);
+            // Reload clients when a new link is created
+            loadClients();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        subscription.unsubscribe();
+      };
     } else {
       setLoading(false);
     }

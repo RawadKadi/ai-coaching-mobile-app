@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft, X, Calendar, Video, ArrowDown } from 'lucide-react-native';
+import MealMessageCard from '@/components/MealMessageCard';
 import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 
 if (Platform.OS === 'android') {
@@ -1421,6 +1422,21 @@ export default function CoachChat() {
         );
       }
 
+      // Check if this is a meal log message
+      let isMealLog = false;
+      try {
+        const parsed = JSON.parse(item.content);
+        if (parsed && parsed.type === 'meal_log') {
+          isMealLog = true;
+        }
+      } catch (e) {
+        // Not JSON
+      }
+
+      if (isMealLog) {
+        return <MealMessageCard content={item.content} isOwn={isOwn} />;
+      }
+
       return (
         <View style={[styles.messageContainer, isOwn ? styles.myMessage : styles.theirMessage]}>
           <Text style={[styles.messageText, isOwn ? styles.myMessageText : styles.theirMessageText]}>
@@ -1505,6 +1521,12 @@ export default function CoachChat() {
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          onScrollToIndexFailed={(info) => {
+            const wait = new Promise(resolve => setTimeout(resolve, 500));
+            wait.then(() => {
+              flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+            });
+          }}
         />
       )}
 

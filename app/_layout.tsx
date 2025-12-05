@@ -14,6 +14,7 @@ function RootLayoutNav() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboarding = segments.includes('onboarding');
 
     if (!session && !inAuthGroup) {
       // Redirect to the sign-in page.
@@ -22,9 +23,12 @@ function RootLayoutNav() {
       // Redirect to dashboard if in auth group or root
       if (inAuthGroup || segments.length === 0 || (segments.length === 1 && segments[0] === 'index')) {
         if (profile.role === 'client') {
-          if (!profile.onboarding_completed) {
+          // STRICT CHECK: Force onboarding if not completed
+          if (profile.onboarding_completed !== true) {
+            console.log('[Routing] Client onboarding not completed, redirecting to onboarding');
             router.replace('/(client)/onboarding');
           } else {
+            console.log('[Routing] Client onboarding completed, going to dashboard');
             router.replace('/(client)/(tabs)');
           }
         } else if (profile.role === 'coach') {
@@ -32,6 +36,10 @@ function RootLayoutNav() {
         } else if (profile.role === 'admin') {
           router.replace('/(admin)/(tabs)');
         }
+      } else if (profile.role === 'client' && profile.onboarding_completed !== true && !inOnboarding) {
+        // Additional safeguard: if client is anywhere except onboarding and hasn't completed it, redirect
+        console.log('[Routing] Client accessed non-onboarding route without completing onboarding');
+        router.replace('/(client)/onboarding');
       }
     }
   }, [session, loading, segments, profile]);
