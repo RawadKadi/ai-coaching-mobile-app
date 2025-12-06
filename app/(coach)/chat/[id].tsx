@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ProposedSession } from '@/lib/ai-scheduling-service';
+import SchedulerModal from '@/components/SchedulerModal';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image, Modal, Pressable, Dimensions, Linking, Alert, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -967,8 +969,9 @@ export default function CoachChat() {
   const [clientProfile, setClientProfile] = useState<any>(null);
   const [coach, setCoach] = useState<any>(null);
   const [nextSession, setNextSession] = useState<any>(null);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [meetLink, setMeetLink] = useState('');
+  const [showScheduleModal, setShowScheduleModal] = useState(false); // Kept for backward compat if needed, but we'll use schedulerVisible
+  const [schedulerVisible, setSchedulerVisible] = useState(false);
+  const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
   const [scheduling, setScheduling] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -1002,6 +1005,19 @@ export default function CoachChat() {
     }, [profile, id])
   );
 
+  const loadAllCoachSessions = async () => {
+      if (!coach) return;
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('coach_id', coach.id)
+        .gte('scheduled_at', new Date().toISOString());
+        
+      if (!error && data) {
+          setAllCoachSessions(data);
+      }
+  };
+
   const loadNextSession = async () => {
     try {
       if (!coach?.id) return;
@@ -1025,91 +1041,6 @@ export default function CoachChat() {
     } catch (error) {
       console.error('Error loading next session:', error);
     }
-  };
-
-  const scheduleSession = async () => {
-    if (!coach?.id) {
-      alert('Coach profile not loaded');
-      return;
-    }
-
-    try {
-      setScheduling(true);
-      
-      // Always use Jitsi for instant sessions
-      const jitsiLink = `https://meet.jit.si/AiCoaching-${Math.random().toString(36).substring(7)}`;
-      
-      await createSession(jitsiLink);
-
-    } catch (error: any) {
-      console.error('Error scheduling session:', error);
-      alert('Failed to schedule session: ' + (error.message || 'Unknown error'));
-    } finally {
-      setScheduling(false);
-    }
-  };
-
-  const createSession = async (link: string) => {
-      // Instant session
-      const scheduledAt = new Date(); // Now
-
-      const { data: session, error } = await supabase
-        .from('sessions')
-        .insert({
-          coach_id: coach.id,
-          client_id: id,
-          scheduled_at: scheduledAt.toISOString(),
-          meet_link: link || '',
-          status: 'scheduled'
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Send system message with special type
-      const messageContent = JSON.stringify({
-        type: 'session_invite',
-        description: 'Instant Video Session',
-        timestamp: scheduledAt.toISOString(),
-        link: link,
-        sessionId: session.id
-      });
-
-      await supabase.from('messages').insert({
-        sender_id: profile?.id,
-        recipient_id: clientProfile.user_id,
-        content: messageContent,
-        read: false,
-        ai_generated: false
-      });
-
-      setShowScheduleModal(false);
-      setMeetLink('');
-      loadNextSession();
-      
-      // Optional: Automatically join or ask to join
-      Alert.alert(
-        'Session Created',
-        'Session created! Join now?',
-        [
-          {
-            text: 'No',
-            style: 'cancel',
-          },
-          {
-            text: 'Yes',
-            onPress: async () => {
-              Linking.openURL(link);
-              // Update coach_joined_at
-              await supabase
-                .from('sessions')
-                .update({ coach_joined_at: new Date().toISOString() })
-                .eq('id', session.id);
-            },
-          },
-        ]
-      );
   };
 
   const joinSession = async () => {
@@ -1158,6 +1089,87 @@ export default function CoachChat() {
     } catch (error) {
       console.error('Error cancelling session:', error);
     }
+  };
+
+  const handleSaveSessions = async (proposedSessions: ProposedSession[]) => {
+    if (!coach || !clientProfile) return;
+
+    try {
+      // Expand recurring sessions
+      const sessionsToInsert: any[] = [];
+      const WEEKS_TO_SCHEDULE = 4;
+
+      proposedSessions.forEach(session => {
+        if (session.recurrence === 'weekly') {
+          // Generate 4 weeks of sessions
+          const startDate = new Date(session.scheduled_at);
+          for (let i = 0; i < WEEKS_TO_SCHEDULE; i++) {
+            const nextDate = new Date(startDate);
+            nextDate.setDate(startDate.getDate() + (i * 7));
+            
+            sessionsToInsert.push({
+              coach_id: coach.id,
+              client_id: clientProfile.id, // Use clientProfile.id here
+              scheduled_at: nextDate.toISOString(),
+              duration_minutes: session.duration_minutes,
+              session_type: session.session_type,
+              notes: session.notes,
+              status: 'scheduled',
+              is_locked: true,
+              ai_generated: true,
+              meet_link: `https://meet.jit.si/${coach.id}-${clientProfile.id}-${Date.now()}-${i}`,
+            });
+          }
+        } else {
+          // Single session
+          sessionsToInsert.push({
+            coach_id: coach.id,
+            client_id: clientProfile.id, // Use clientProfile.id here
+            scheduled_at: session.scheduled_at,
+            duration_minutes: session.duration_minutes,
+            session_type: session.session_type,
+            notes: session.notes,
+            status: 'scheduled',
+            is_locked: true,
+            ai_generated: true,
+            meet_link: `https://meet.jit.si/${coach.id}-${clientProfile.id}-${Date.now()}`,
+          });
+        }
+      });
+
+      const { data: insertedSessions, error } = await supabase
+        .from('sessions')
+        .insert(sessionsToInsert)
+        .select();
+
+      if (error) throw error;
+      
+      // Send invite messages for the first session(s)
+      // For simplicity, let's send for all created sessions or just the first one?
+      // User said "replace instant schedule", so maybe just the first one is enough notification?
+      // But if multiple are created, we should probably notify.
+      // Let's send a message for each inserted session.
+      
+      if (insertedSessions) {
+          for (const session of insertedSessions) {
+              // Only send message for sessions in the near future (e.g. next 24h) or all?
+              // User said "no need to send an instant message... only when it's time".
+              // So I will NOT send a message here.
+          }
+      }
+
+      Alert.alert('Success', 'Sessions scheduled successfully');
+      loadNextSession();
+      loadAllCoachSessions();
+      setSchedulerVisible(false); // Close the scheduler modal
+    } catch (error) {
+      console.error('Error saving sessions:', error);
+      Alert.alert('Error', 'Failed to save sessions');
+    }
+  };
+
+  const scheduleSession = () => {
+      setSchedulerVisible(true);
   };
 
   const loadChatData = async () => {
@@ -1243,9 +1255,11 @@ export default function CoachChat() {
       console.log('[CoachChat] Setting up subscription for coach:', profile?.id);
       
       // Use unique channel ID
-      const channelId = `chat:${id}:${Date.now()}`;
+      loadNextSession();
+      loadAllCoachSessions();
+      
       const channel = supabase
-        .channel(channelId)
+        .channel(`chat:${id}`)
         .on(
           'postgres_changes',
           {
@@ -1300,11 +1314,11 @@ export default function CoachChat() {
           }
         )
         .subscribe((status) => {
-          console.log(`[CoachChat] Subscription status (${channelId}):`, status);
+          console.log(`[CoachChat] Subscription status (chat:${id}):`, status);
         });
 
       return () => {
-        console.log(`[CoachChat] Cleaning up subscription (${channelId})`);
+        console.log(`[CoachChat] Cleaning up subscription (chat:${id})`);
         supabase.removeChannel(channel);
       };
 
@@ -1578,39 +1592,20 @@ export default function CoachChat() {
         </TouchableOpacity>
       </KeyboardAvoidingView>
 
-      <Modal
-        visible={showScheduleModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowScheduleModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Start Instant Session</Text>
-              <TouchableOpacity onPress={() => setShowScheduleModal(false)}>
-                <X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalDescription}>
-              This will create a new session immediately and send a meeting link to the client.
-            </Text>
-
-            <TouchableOpacity 
-              style={[styles.submitButton, scheduling && styles.submitButtonDisabled]}
-              onPress={scheduleSession}
-              disabled={scheduling}
-            >
-              {scheduling ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.submitButtonText}>Start Session Now</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Scheduler Modal */}
+      {clientProfile && (
+        <SchedulerModal
+          visible={schedulerVisible}
+          onClose={() => setSchedulerVisible(false)}
+          onConfirm={handleSaveSessions}
+          clientContext={{
+            name: clientProfile.profiles?.full_name || 'Client',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }}
+          existingSessions={allCoachSessions}
+          targetClientId={clientProfile.id}
+        />
+      )}
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
-import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save } from 'lucide-react-native';
+import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat } from 'lucide-react-native';
 import { parseScheduleRequest, ProposedSession } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
 
@@ -13,14 +13,15 @@ interface SchedulerModalProps {
         timezone: string;
     };
     existingSessions: Session[];
+    targetClientId: string;
 }
 
-export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions }: SchedulerModalProps) {
+export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId }: SchedulerModalProps) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [proposedSessions, setProposedSessions] = useState<ProposedSession[]>([]);
-    const [clarifyingQuestion, setClarifyingQuestion] = useState<string | null>(null);
-    const [step, setStep] = useState<'input' | 'review'>('input');
+    const [clarification, setClarification] = useState<{ type: string; message: string } | null>(null);
+    const [step, setStep] = useState<'input' | 'review' | 'clarification'>('input');
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<ProposedSession | null>(null);
 
@@ -33,16 +34,29 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 coachInput: input,
                 currentDate: new Date().toISOString(),
                 clientContext,
-                currentProposedSessions: proposedSessions, // Pass current state
+                currentProposedSessions: proposedSessions,
+                existingSessions: existingSessions, // Pass existing sessions for context
             });
 
-            if (result.clarifying_question) {
-                setClarifyingQuestion(result.clarifying_question);
+            if (result.clarification) {
+                if (result.clarification.type === 'duration_invalid') {
+                    Alert.alert('Invalid Duration', result.clarification.message);
+                    return; // Stay on input step
+                }
+                
+                if (result.clarification.type === 'recurrence_ambiguity') {
+                    setClarification(result.clarification);
+                    setStep('clarification');
+                    return;
+                }
+
+                // General clarification (missing info)
+                setClarification(result.clarification);
                 setInput((prev) => prev + '\n\nAnswer: '); 
             } else {
                 setProposedSessions(result.sessions);
                 setStep('review');
-                setClarifyingQuestion(null);
+                setClarification(null);
             }
         } catch (error) {
             Alert.alert('Error', 'Failed to understand request. Please try again.');
@@ -67,14 +81,31 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     };
 
     const checkConflict = (session: ProposedSession) => {
-        const newStart = new Date(session.scheduled_at).getTime();
-        const newEnd = newStart + session.duration_minutes * 60000;
+        const newStart = new Date(session.scheduled_at);
+        const newEnd = new Date(newStart.getTime() + session.duration_minutes * 60000);
 
-        return existingSessions.some(existing => {
-            const start = new Date(existing.scheduled_at).getTime();
-            const end = start + existing.duration_minutes * 60000;
+        // 1. Check for Overlaps (Coach Availability)
+        const overlap = existingSessions.find(existing => {
+            const start = new Date(existing.scheduled_at);
+            const end = new Date(start.getTime() + existing.duration_minutes * 60000);
             return (newStart < end && newEnd > start);
         });
+
+        if (overlap) return { type: 'overlap', message: 'Overlaps with another session' };
+
+        // 2. Check for One Session Per Day (Client Limit)
+        const sameDaySession = existingSessions.find(existing => {
+            if (existing.client_id !== targetClientId) return false;
+            
+            const existingDate = new Date(existing.scheduled_at);
+            return existingDate.getDate() === newStart.getDate() &&
+                   existingDate.getMonth() === newStart.getMonth() &&
+                   existingDate.getFullYear() === newStart.getFullYear();
+        });
+
+        if (sameDaySession) return { type: 'limit', message: 'Client already has a session this day' };
+
+        return null;
     };
 
     const startEditing = (index: number) => {
@@ -97,9 +128,26 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         setProposedSessions(updated);
     };
 
+    const handleClarificationResponse = (response: string) => {
+        // Append response to input and re-analyze
+        setInput((prev) => prev + `\n\nContext: ${response}`);
+        setStep('input');
+        // Trigger analysis immediately? Or let user review?
+        // Let's trigger immediately for smoother flow
+        setTimeout(() => handleAnalyze(), 100);
+    };
+
     const handleMicPress = () => {
         Alert.alert('Coming Soon', 'Voice input is currently under development. Please type your request for now.');
     };
+
+    const toggleRecurrence = (index: number) => {
+        const updated = [...proposedSessions];
+        updated[index].recurrence = updated[index].recurrence === 'weekly' ? 'once' : 'weekly';
+        setProposedSessions(updated);
+    };
+
+    const hasAnyConflict = proposedSessions.some(s => checkConflict(s) !== null);
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
@@ -114,7 +162,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 {step === 'input' ? (
                     <View style={styles.content}>
                         <Text style={styles.label}>
-                            {clarifyingQuestion || `Tell me when you want to schedule sessions with ${clientContext.name}...`}
+                            {clarification?.type === 'general' ? clarification.message : `Tell me when you want to schedule sessions with ${clientContext.name}...`}
                         </Text>
                         
                         <View style={styles.inputContainer}>
@@ -143,12 +191,36 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             )}
                         </TouchableOpacity>
                     </View>
+                ) : step === 'clarification' && clarification ? (
+                    <View style={styles.content}>
+                        <Text style={styles.label}>{clarification.message}</Text>
+                        
+                        {clarification.type === 'recurrence_ambiguity' && (
+                            <View style={styles.clarificationOptions}>
+                                <TouchableOpacity 
+                                    style={styles.optionButton} 
+                                    onPress={() => handleClarificationResponse("This specific date only")}
+                                >
+                                    <Calendar size={20} color="#3B82F6" />
+                                    <Text style={styles.optionButtonText}>Just this date</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity 
+                                    style={styles.optionButton} 
+                                    onPress={() => handleClarificationResponse("Every week on this weekday")}
+                                >
+                                    <Repeat size={20} color="#3B82F6" />
+                                    <Text style={styles.optionButtonText}>Every week</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
                 ) : (
                     <View style={styles.content}>
                         <Text style={styles.label}>Review Proposed Sessions</Text>
                         <ScrollView style={styles.list}>
                             {proposedSessions.map((session, index) => {
-                                const hasConflict = checkConflict(session);
+                                const conflict = checkConflict(session);
                                 const isEditing = editingIndex === index;
 
                                 if (isEditing && editForm) {
@@ -174,7 +246,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 }
 
                                 return (
-                                    <View key={index} style={[styles.card, hasConflict && styles.cardConflict]}>
+                                    <View key={index} style={[styles.card, conflict && styles.cardConflict]}>
                                         <View style={styles.cardHeader}>
                                             <View style={styles.row}>
                                                 <Calendar size={16} color="#4B5563" />
@@ -195,10 +267,10 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                             </View>
                                         </View>
                                         
-                                        {hasConflict && (
+                                        {conflict && (
                                             <View style={styles.conflictBadge}>
                                                 <AlertTriangle size={12} color="#B91C1C" />
-                                                <Text style={styles.conflictText}>Conflict</Text>
+                                                <Text style={styles.conflictText}>{conflict.message}</Text>
                                             </View>
                                         )}
 
@@ -211,6 +283,17 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                         </View>
                                         <Text style={styles.type}>{session.session_type.toUpperCase()}</Text>
                                         {session.notes && <Text style={styles.notes}>{session.notes}</Text>}
+
+                                        {/* Recurrence Toggle */}
+                                        <TouchableOpacity 
+                                            style={[styles.recurrenceToggle, session.recurrence === 'weekly' && styles.recurrenceActive]} 
+                                            onPress={() => toggleRecurrence(index)}
+                                        >
+                                            <Repeat size={14} color={session.recurrence === 'weekly' ? '#2563EB' : '#6B7280'} />
+                                            <Text style={[styles.recurrenceText, session.recurrence === 'weekly' && styles.recurrenceTextActive]}>
+                                                {session.recurrence === 'weekly' ? 'Recurring (Weekly)' : 'One-time Session'}
+                                            </Text>
+                                        </TouchableOpacity>
                                     </View>
                                 );
                             })}
@@ -220,11 +303,17 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('input')}>
                                 <Text style={styles.secondaryButtonText}>Back</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.button} onPress={handleConfirm} disabled={loading}>
+                            <TouchableOpacity 
+                                style={[styles.button, (loading || hasAnyConflict) && styles.buttonDisabled]} 
+                                onPress={handleConfirm} 
+                                disabled={loading || hasAnyConflict}
+                            >
                                 {loading ? <ActivityIndicator color="#FFF" /> : (
                                     <>
-                                        <Text style={styles.buttonText}>Confirm & Lock</Text>
-                                        <Check size={20} color="#FFF" />
+                                        <Text style={styles.buttonText}>
+                                            {hasAnyConflict ? 'Resolve Conflicts' : 'Confirm & Lock'}
+                                        </Text>
+                                        {!hasAnyConflict && <Check size={20} color="#FFF" />}
                                     </>
                                 )}
                             </TouchableOpacity>
@@ -407,5 +496,50 @@ const styles = StyleSheet.create({
     },
     iconButton: {
         padding: 8,
+    },
+    recurrenceToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 12,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        backgroundColor: '#F3F4F6',
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    recurrenceActive: {
+        backgroundColor: '#EFF6FF',
+        borderColor: '#BFDBFE',
+    },
+    recurrenceText: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '500',
+    },
+    recurrenceTextActive: {
+        color: '#2563EB',
+        fontWeight: '600',
+    },
+    clarificationOptions: {
+        gap: 12,
+        marginTop: 20,
+    },
+    optionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: '#EFF6FF',
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    optionButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#2563EB',
     },
 });

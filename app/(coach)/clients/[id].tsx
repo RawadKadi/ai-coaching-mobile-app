@@ -28,6 +28,7 @@ export default function ClientDetailsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [schedulerVisible, setSchedulerVisible] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Habit | null>(null);
+  const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
 
   // Form state
   const [name, setName] = useState('');
@@ -59,6 +60,18 @@ export default function ClientDetailsScreen() {
 
       if (habitsError) throw habitsError;
       setChallenges(habitsData || []);
+
+      // Fetch ALL future sessions for the coach (for conflict detection)
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('coach_id', coach?.id)
+        .gte('scheduled_at', new Date().toISOString());
+        
+      if (!sessionsError && sessionsData) {
+          setAllCoachSessions(sessionsData);
+      }
+
     } catch (error) {
       console.error('Error loading client:', error);
       Alert.alert('Error', 'Failed to load client data');
@@ -412,7 +425,8 @@ export default function ClientDetailsScreen() {
             name: (client as any).profiles?.full_name || 'Client',
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }}
-          existingSessions={[]} // We could fetch existing sessions if needed for conflict detection
+          existingSessions={allCoachSessions} // Pass ALL coach sessions for conflict check
+          targetClientId={id as string}
         />
       )}
     </View>

@@ -14,6 +14,18 @@ export default function SessionMonitor() {
   const [toastType, setToastType] = useState<'join' | 'cancelled' | 'postponed'>('join');
   const slideAnim = useRef(new Animated.Value(-150)).current;
 
+  // Refs to track state inside intervals/callbacks without stale closures
+  const currentSessionRef = useRef<any>(null);
+  const toastTypeRef = useRef<'join' | 'cancelled' | 'postponed'>('join');
+  const isToastVisibleRef = useRef(false);
+
+  // Sync refs with state
+  useEffect(() => {
+    currentSessionRef.current = currentSession;
+    toastTypeRef.current = toastType;
+    isToastVisibleRef.current = toastVisible;
+  }, [currentSession, toastType, toastVisible]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -53,6 +65,16 @@ export default function SessionMonitor() {
 
         if (sessions && sessions.length > 0) {
           for (const session of sessions) {
+            // Skip if session is cancelled (should be filtered by query, but double check)
+            if (session.status === 'cancelled') continue;
+
+            // Skip if we are already showing a cancelled/postponed toast for this session
+            // USE REFS TO CHECK CURRENT STATE
+            if (currentSessionRef.current?.id === session.id && (toastTypeRef.current === 'cancelled' || toastTypeRef.current === 'postponed')) {
+              console.log('[SessionMonitor] Skipping join toast because session is already cancelled/postponed (Ref Check)');
+              continue;
+            }
+
             if (coach && !session.invite_sent) {
               await sendInvite(session);
             }
@@ -60,8 +82,27 @@ export default function SessionMonitor() {
             const sessionTime = new Date(session.scheduled_at).getTime();
             const timeDiff = Math.abs(now.getTime() - sessionTime);
             
-            // Double check status just in case
-            if (session.status === 'scheduled' && timeDiff < 45000) {
+            // CRITICAL: Re-fetch the specific session to ensure we have the absolute latest status
+            const { data: freshSession, error: freshError } = await supabase
+              .from('sessions')
+              .select('status, cancellation_reason')
+              .eq('id', session.id)
+              .single();
+
+            if (freshError || !freshSession) {
+               console.log('[SessionMonitor] Failed to verify session status, skipping toast to be safe.');
+               continue;
+            }
+
+            if (freshSession.status === 'cancelled') {
+               console.log('[SessionMonitor] Detected cancelled session in poller, switching to cancel toast');
+               handleSessionUpdate({ ...session, ...freshSession });
+               continue;
+            }
+
+            if (freshSession.status !== 'scheduled') continue;
+
+            if (timeDiff < 45000) {
                const otherName = coach 
                  ? (session.clients?.profiles?.full_name || 'Client')
                  : (session.coaches?.profiles?.full_name || 'Coach');
@@ -89,36 +130,25 @@ export default function SessionMonitor() {
           table: 'sessions',
         },
         async (payload) => {
+          console.log('[SessionMonitor] Realtime UPDATE received:', payload.new);
           const updatedSession = payload.new as any;
-          
-          // Check if this session is relevant to us
-          // We need to fetch the names again since payload doesn't have relations
-          // But first, simple check if we are involved
-          // Note: We can't easily check coach_id/client_id against ours without fetching our IDs first or storing them.
-          // 'coach' object has 'id'. 'user' has 'id'.
           
           let isRelevant = false;
           if (coach && updatedSession.coach_id === coach.id) isRelevant = true;
           if (!coach) {
-             // For client, we need to know our client_id. 
-             // We could store it in state, but for now let's just fetch if we don't have it.
-             // Optimization: Fetch client_id once in useEffect.
-             // For now, let's assume if we are showing a toast for this session, it's relevant.
-             if (currentSession && currentSession.id === updatedSession.id) isRelevant = true;
+             // Use Ref to check current session ID
+             if (currentSessionRef.current && currentSessionRef.current.id === updatedSession.id) isRelevant = true;
           }
 
-          if (!isRelevant && !currentSession) return; // Skip if not relevant and no active toast
+          if (!isRelevant && !currentSessionRef.current) return;
 
           // If we have an active toast for this session, update it
-          if (currentSession && currentSession.id === updatedSession.id) {
+          if (currentSessionRef.current && currentSessionRef.current.id === updatedSession.id) {
              handleSessionUpdate(updatedSession);
           } else if (isRelevant) {
-             // If it's a relevant session but no toast is showing, 
-             // maybe we should show one if it was JUST cancelled/postponed and it was scheduled for "now"?
-             // For simplicity, let's only update if toast is visible OR if it's a very recent session.
              const now = new Date();
              const sessionTime = new Date(updatedSession.scheduled_at).getTime();
-             if (Math.abs(now.getTime() - sessionTime) < 5 * 60 * 1000) { // Within 5 mins
+             if (Math.abs(now.getTime() - sessionTime) < 5 * 60 * 1000) {
                 handleSessionUpdate(updatedSession);
              }
           }
@@ -130,26 +160,30 @@ export default function SessionMonitor() {
       clearInterval(interval);
       supabase.removeChannel(channel);
     };
-  }, [user, coach, currentSession]);
+  }, [user, coach]); // Minimal dependencies
 
   // 3. Fast polling for ACTIVE session status (Fallback for realtime)
   useEffect(() => {
-    if (!currentSession) return;
-
     const checkActiveSession = async () => {
+      const activeSession = currentSessionRef.current;
+      if (!activeSession) return;
+
       try {
         const { data: session, error } = await supabase
           .from('sessions')
           .select('*, clients(profiles(full_name)), coaches(profiles(full_name))')
-          .eq('id', currentSession.id)
+          .eq('id', activeSession.id)
           .single();
 
         if (error || !session) return;
 
         // If status changed to cancelled, update UI immediately
         if (session.status === 'cancelled') {
-           console.log('[SessionMonitor] Active session cancelled/postponed:', session);
-           handleSessionUpdate(session);
+           // Only update if we aren't already showing it as cancelled/postponed
+           if (toastTypeRef.current === 'join') {
+              console.log('[SessionMonitor] Active session cancelled/postponed (Fast Poll):', session);
+              handleSessionUpdate(session);
+           }
         }
       } catch (e) {
         console.error('Error checking active session:', e);
@@ -158,7 +192,7 @@ export default function SessionMonitor() {
 
     const activeInterval = setInterval(checkActiveSession, 3000); // Check every 3 seconds
     return () => clearInterval(activeInterval);
-  }, [currentSession, toastType]);
+  }, []); // Empty dependency array - uses refs!
 
   const handleSessionUpdate = async (session: any) => {
     // Fetch names if needed
@@ -170,10 +204,6 @@ export default function SessionMonitor() {
       
     if (!fullSession) return;
 
-    const otherName = coach 
-      ? (fullSession.clients?.profiles?.full_name || 'Client')
-      : (fullSession.coaches?.profiles?.full_name || 'Coach');
-
     if (session.status === 'cancelled') {
       console.log('[SessionMonitor] Handling cancellation. Reason:', session.cancellation_reason);
       if (session.cancellation_reason) {
@@ -181,7 +211,7 @@ export default function SessionMonitor() {
         if (coach) {
           // Coach View: Client postponed
           const clientName = fullSession.clients?.profiles?.full_name || 'Client';
-          showToast(`${clientName} postponed: ${session.cancellation_reason}`, fullSession, 'postponed');
+          showToast(`${clientName} ${session.cancellation_reason}`, fullSession, 'postponed');
         } else {
           // Client View: You postponed
           showToast(`You postponed this session. Your coach will be notified.`, fullSession, 'postponed');
@@ -228,14 +258,21 @@ export default function SessionMonitor() {
   };
 
   const showToast = (message: string, session: any, type: 'join' | 'cancelled' | 'postponed') => {
+    // SAFEGUARD: Don't overwrite a cancelled/postponed toast with a 'join' toast for the same session
+    // Use REFS for check
+    if (type === 'join' && currentSessionRef.current?.id === session.id && (toastTypeRef.current === 'cancelled' || toastTypeRef.current === 'postponed')) {
+      console.log('[SessionMonitor] Blocking join toast because session is already cancelled/postponed');
+      return;
+    }
+
     // Always update state to reflect new status/message
     setToastMessage(message);
     setCurrentSession(session);
     setToastType(type);
     setToastVisible(true);
     
-    // Only animate if not already visible (or maybe just ensure it stays visible)
-    if (!toastVisible) {
+    // Only animate if not already visible
+    if (!isToastVisibleRef.current) {
         Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,

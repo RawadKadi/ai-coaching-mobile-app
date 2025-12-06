@@ -23,7 +23,10 @@ export interface ScheduleRequest {
 export interface ScheduleResponse {
     sessions: ProposedSession[];
     missing_info: string[];
-    clarifying_question?: string;
+    clarification?: {
+        type: 'recurrence_ambiguity' | 'duration_invalid' | 'general';
+        message: string;
+    };
 }
 
 const MAX_RETRIES = 3;
@@ -61,42 +64,46 @@ CONTEXT:
 - Client Timezone: ${request.clientContext.timezone}
 - Input: "${request.coachInput}"
 ${request.currentProposedSessions && request.currentProposedSessions.length > 0 ? `- Current Proposed Schedule: ${JSON.stringify(request.currentProposedSessions)}` : ''}
+${request.existingSessions && request.existingSessions.length > 0 ? `- Existing Sessions (for context): ${JSON.stringify(request.existingSessions.map(s => ({ start: s.scheduled_at, duration: s.duration_minutes, client_id: s.client_id })))}` : ''}
 
 REQUIREMENTS:
 1. Extract session details: date/day, time, duration, and type.
-2. Resolve relative dates (e.g., "next Tuesday" based on Current Date).
-3. Detect RECURRENCE: If input says "every Monday" or "weekly", set "recurrence" to "weekly".
-4. TIMEZONE HANDLING: The input time is in **${request.clientContext.timezone}**. You MUST convert it to UTC for the "scheduled_at" field.
-   - Example: If timezone is "Europe/Beirut" (UTC+2) and input is 20:00, output 18:00Z.
-   - Example: If timezone is "America/New_York" (UTC-5) and input is 10:00, output 15:00Z.
-5. Default duration is 60 minutes if not specified.
+2. **DURATION CONSTRAINT**: Sessions MUST be exactly 60 minutes.
+   - If the user requests a duration longer than 60 minutes (e.g., "4-7pm", "3 hours"), DO NOT schedule it.
+   - Return "clarification": { "type": "duration_invalid", "message": "Sessions must be exactly 1 hour. Please adjust your request." }
+3. Resolve relative dates (e.g., "next Tuesday" based on Current Date).
+4. **RECURRENCE AMBIGUITY (CRITICAL)**:
+   - **VAGUE REQUESTS**: If the user says "Change schedule to 4-5 PM", "Move time one hour later", "Shift the session", or "Make it 6 PM" WITHOUT explicitly mentioning a specific date (e.g., "March 12") or "every week"/"all Tuesdays", you **MUST** ask for clarification.
+     - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to apply this change to just this date or every week?" }
+   - **EXPLICIT REQUESTS**:
+     - "Change all Tuesdays..." -> recurrence: "weekly"
+     - "Change Tuesday 12 March..." -> recurrence: "once"
+     - "This week only..." -> recurrence: "once"
+5. TIMEZONE HANDLING: The input time is in **${request.clientContext.timezone}**. You MUST convert it to UTC for the "scheduled_at" field.
 6. Default type is 'training' if not specified.
-7. If CRITICAL info is missing (specifically: day/date or time), ask a clarifying question.
+7. If CRITICAL info is missing (day/date or time), ask a clarifying question.
+   - Return "clarification": { "type": "general", "message": "Please specify the day and time." }
 8. Return dates in ISO 8601 format (UTC).
 
 MODIFICATION RULES:
 - If "Current Proposed Schedule" is provided:
-  - "Change Monday to Tuesday" -> Update the recurring session.
-  - "Change THIS Friday to 8pm" -> If it's a recurring session, this might imply a one-time exception. However, for simplicity, if the user specifies a specific date, treat it as a one-time session (recurrence: "once") replacing the recurring instance for that week? 
-  - BETTER RULE: If the user says "Change [Day] to [Time]", assume it updates the RECURRING rule if the original was recurring.
-  - If the user says "Just for this week" or "Only this Friday", set "recurrence" to "once" for that specific session.
-- If the input adds new sessions, append them to the list.
-- If the input is a completely new request that contradicts the old one, replace the list.
+  - If the user answers the clarifying question with "1" or "This date only", update ONLY the specific session (recurrence: "once").
+  - If the user answers "2" or "Every week", update the session and set recurrence: "weekly".
 
 RESPONSE FORMAT (JSON ONLY):
 {
   "sessions": [
     {
-      "scheduled_at": "ISO_STRING", // Next occurrence
+      "scheduled_at": "ISO_STRING",
       "duration_minutes": 60,
       "session_type": "training",
       "notes": "Context from input",
       "recurrence": "weekly", // or "once"
-      "day_of_week": "Monday" // Optional, for display
+      "day_of_week": "Monday" // Optional
     }
   ],
   "missing_info": [],
-  "clarifying_question": null
+  "clarification": null // or { "type": "...", "message": "..." }
 }
 `;
 

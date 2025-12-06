@@ -66,3 +66,16 @@ export const fileToGenerativePart = async (uri: string, mimeType: string) => {
         throw new Error('Failed to read image file');
     }
 };
+/**
+ * Generate text from a prompt using Gemini
+ */
+export const generateText = async (prompt: string): Promise<string> => {
+    try {
+        const result = await textModel.generateContent(prompt);
+        const response = await result.response;
+        return response.text();
+    } catch (error) {
+        console.error('Error generating text:', error);
+        throw new Error('Failed to generate text');
+    }
+};

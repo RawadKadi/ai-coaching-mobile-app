@@ -32,7 +32,7 @@ export default function CoachProfileScreen() {
         </View>
 
         <View style={styles.menuSection}>
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/settings')}>
             <Settings size={20} color="#6B7280" />
             <Text style={styles.menuItemText}>Settings</Text>
           </TouchableOpacity>
