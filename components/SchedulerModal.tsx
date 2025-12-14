@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat } from 'lucide-react-native';
 import { parseScheduleRequest, ProposedSession, RateLimitError } from '@/lib/ai-scheduling-service';
+import { parseSchedulingInput } from '@/lib/scheduling-parser';
 import { Session } from '@/types/database';
 
 interface SchedulerModalProps {
@@ -20,56 +21,87 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [proposedSessions, setProposedSessions] = useState<ProposedSession[]>([]);
-    const [clarification, setClarification] = useState<{ type: string; message: string } | null>(null);
-    const [step, setStep] = useState<'input' | 'review' | 'clarification'>('input');
+    const [step, setStep] = useState<'input' | 'form' | 'review'>('input');
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<ProposedSession | null>(null);
-    const [lastContext, setLastContext] = useState<string>('');
+    
+    // Form state for structured input
+    const [formTime, setFormTime] = useState('');
+    const [formDate, setFormDate] = useState('');
+    const [formRecurrence, setFormRecurrence] = useState<'once' | 'weekly' | null>(null);
+
 
     const handleAnalyze = async () => {
         if (!input.trim()) return;
 
+        // Parse the input client-side
+        const parsed = parseSchedulingInput(input);
+        
+        // Check what we have and what we need
+        const needsDate = !parsed.hasDate && !formDate;
+        const needsTime = !parsed.hasTime && !formTime;
+        const needsRecurrence = parsed.recurrence === null && formRecurrence === null;
+
+        // If we're missing date or time, show the form
+        if (needsDate || needsTime) {
+            setFormTime(parsed.time || formTime || '');
+            setFormDate(parsed.date || formDate || '');
+            setStep('form');
+            return;
+        }
+
+        // If we have both date and time but recurrence is unclear, ask
+        if (needsRecurrence) {
+            setFormTime(parsed.time || formTime);
+            setFormDate(parsed.date || formDate);
+            setStep('form');
+            return;
+        }
+
+        // We have everything, proceed to AI validation
+        await finalizeWithAI(
+            parsed.time || formTime,
+            parsed.date || formDate,
+            parsed.recurrence || formRecurrence || 'once'
+        );
+    };
+
+    const finalizeWithAI = async (time: string, date: string, recurrence: 'once' | 'weekly') => {
         setLoading(true);
         try {
             const result = await parseScheduleRequest({
-                coachInput: input,
+                coachInput: `Schedule on ${date} at ${time} ${recurrence === 'weekly' ? 'every week' : 'one time'}`,
                 currentDate: new Date().toISOString(),
                 clientContext,
                 currentProposedSessions: proposedSessions,
-                existingSessions: existingSessions, // Pass existing sessions for context
+                existingSessions: existingSessions,
             });
 
-            if (result.clarification) {
-                if (result.clarification.type === 'duration_invalid') {
-                    Alert.alert('Invalid Duration', result.clarification.message);
-                    return; // Stay on input step
-                }
-                
-                if (result.clarification.type === 'recurrence_ambiguity') {
-                    setClarification(result.clarification);
-                    setStep('clarification');
-                    return;
-                }
-
-                // General clarification (missing info)
-                setClarification(result.clarification);
-                setStep('clarification');
-                setLastContext(input); // Save what the user asked
-                setInput(''); // Clear input for the user's answer 
-            } else {
+            if (result.sessions && result.sessions.length > 0) {
                 setProposedSessions(result.sessions);
                 setStep('review');
-                setClarification(null);
+            } else if (result.clarification) {
+                Alert.alert('Validation Error', result.clarification.message);
             }
         } catch (error: any) {
             if (error instanceof RateLimitError || error.name === 'RateLimitError') {
                 Alert.alert('AI Usage Limit', error.message);
             } else {
-                Alert.alert('Error', 'Failed to understand request. Please try again.');
+                Alert.alert('Error', 'Failed to create session. Please try again.');
             }
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleFormSubmit = () => {
+        // Validate form
+        if (!formTime || !formDate || !formRecurrence) {
+            Alert.alert('Missing Information', 'Please fill in all fields.');
+            return;
+        }
+        
+        finalizeWithAI(formTime, formDate, formRecurrence);
     };
 
     const handleConfirm = async () => {
@@ -79,6 +111,9 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             onClose();
             setStep('input');
             setInput('');
+            setFormTime('');
+            setFormDate('');
+            setFormRecurrence(null);
             setProposedSessions([]);
         } catch (error) {
             Alert.alert('Error', 'Failed to save sessions.');
@@ -135,17 +170,6 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         setProposedSessions(updated);
     };
 
-    const handleClarificationResponse = (response: string) => {
-        // Send the NEW response as the main input, but keep context of what was asked
-        // Use the saved context from the previous turn
-        const fullContext = `Original Request: "${lastContext}"\nClarification Answer: "${response}"`;
-        setInput(fullContext);
-        setStep('input');
-        // Trigger analysis immediately? Or let user review?
-        // Let's trigger immediately for smoother flow
-        setTimeout(() => handleAnalyze(), 100);
-    };
-
     const handleMicPress = () => {
         Alert.alert('Coming Soon', 'Voice input is currently under development. Please type your request for now.');
     };
@@ -171,7 +195,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 {step === 'input' ? (
                     <View style={styles.content}>
                         <Text style={styles.label}>
-                            {clarification?.type === 'general' ? clarification.message : `Tell me when you want to schedule sessions with ${clientContext.name}...`}
+                            Tell me when you want to schedule sessions with {clientContext.name}...
                         </Text>
                         
                         <View style={styles.inputContainer}>
@@ -200,47 +224,85 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             )}
                         </TouchableOpacity>
                     </View>
-                ) : step === 'clarification' && clarification ? (
+                ) : step === 'form' ? (
                     <View style={styles.content}>
-                        <Text style={styles.label}>{clarification.message}</Text>
+                        <Text style={styles.label}>Complete the schedule details</Text>
                         
-                        {clarification.type === 'recurrence_ambiguity' ? (
-                            <View style={styles.clarificationOptions}>
-                                <TouchableOpacity 
-                                    style={styles.optionButton} 
-                                    onPress={() => handleClarificationResponse("This specific date only")}
-                                >
-                                    <Calendar size={20} color="#3B82F6" />
-                                    <Text style={styles.optionButtonText}>Just this date</Text>
-                                </TouchableOpacity>
+                        {/* Time Input */}
+                        <View style={styles.formGroup}>
+                            <Text style={styles.formLabel}>Time {formTime && '✓'}</Text>
+                            <TextInput
+                                style={styles.formInput}
+                                placeholder="e.g., 7:25pm"
+                                value={formTime}
+                                onChangeText={(text) => {
+                                    const parsed = parseSchedulingInput(`at ${text}`);
+                                    setFormTime(parsed.time || text);
+                                }}
+                            />
+                        </View>
 
-                                <TouchableOpacity 
-                                    style={styles.optionButton} 
-                                    onPress={() => handleClarificationResponse("Every week on this weekday")}
-                                >
-                                    <Repeat size={20} color="#3B82F6" />
-                                    <Text style={styles.optionButtonText}>Every week</Text>
-                                </TouchableOpacity>
+                        {/* Date Input */}
+                        <View style={styles.formGroup}>
+                            <Text style={styles.formLabel}>Date {formDate && '✓'}</Text>
+                            <View style={styles.dateButtons}>
+                                {['today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
+                                    <TouchableOpacity
+                                        key={day}
+                                        style={[styles.dayButton, formDate === day && styles.dayButtonActive]}
+                                        onPress={() => setFormDate(day)}
+                                    >
+                                        <Text style={[styles.dayButtonText, formDate === day && styles.dayButtonTextActive]}>
+                                            {day.charAt(0).toUpperCase() + day.slice(1)}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
-                        ) : (
-                             <View style={styles.inputContainer}>
-                                <TextInput
-                                    style={styles.textInput}
-                                    multiline
-                                    placeholder="Type your answer..."
-                                    value={input} // Bind to state to capture text
-                                    onChangeText={setInput} // Update state as user types
-                                    onSubmitEditing={() => handleClarificationResponse(input)}
-                                    returnKeyType="send"
-                                />
-                                <TouchableOpacity 
-                                    style={styles.micButton} 
-                                    onPress={() => handleClarificationResponse(input)}
-                                >
-                                    <Send size={24} color="#3B82F6" />
-                                </TouchableOpacity>
+                        </View>
+
+                        {/* Recurrence */}
+                        {formTime && formDate && (
+                            <View style={styles.formGroup}>
+                                <Text style={styles.formLabel}>Recurrence {formRecurrence && '✓'}</Text>
+                                <View style={styles.recurrenceButtons}>
+                                    <TouchableOpacity
+                                        style={[styles.optionButton, formRecurrence === 'once' && styles.optionButtonActive]}
+                                        onPress={() => setFormRecurrence('once')}
+                                    >
+                                        <Calendar size={20} color={formRecurrence === 'once' ? '#3B82F6' : '#6B7280'} />
+                                        <Text style={[styles.optionButtonText, formRecurrence === 'once' && styles.optionButtonTextActive]}>
+                                            Just this date
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.optionButton, formRecurrence === 'weekly' && styles.optionButtonActive]}
+                                        onPress={() => setFormRecurrence('weekly')}
+                                    >
+                                        <Repeat size={20} color={formRecurrence === 'weekly' ? '#3B82F6' : '#6B7280'} />
+                                        <Text style={[styles.optionButtonText, formRecurrence === 'weekly' && styles.optionButtonTextActive]}>
+                                            Every week
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         )}
+
+                        <TouchableOpacity
+                            style={[styles.button, (!formTime || !formDate || !formRecurrence || loading) && styles.buttonDisabled]}
+                            onPress={handleFormSubmit}
+                            disabled={!formTime || !formDate || !formRecurrence || loading}
+                        >
+                            {loading ? <ActivityIndicator color="#FFF" /> : (
+                                <>
+                                    <Text style={styles.buttonText}>Create Schedule</Text>
+                                    <Check size={20} color="#FFF" />
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('input')}>
+                            <Text style={styles.secondaryButtonText}>Back</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     <View style={styles.content}>
@@ -568,5 +630,60 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: '#2563EB',
+    },
+    formGroup: {
+        marginBottom: 24,
+    },
+    formLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
+    },
+    formInput: {
+        backgroundColor: '#FFF',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#D1D5DB',
+        padding: 12,
+        fontSize: 16,
+        color: '#111827',
+    },
+    dateButtons: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    dayButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    dayButtonActive: {
+        backgroundColor: '#EFF6FF',
+        borderColor: '#3B82F6',
+    },
+    dayButtonText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#6B7280',
+    },
+    dayButtonTextActive: {
+        color: '#3B82F6',
+        fontWeight: '600',
+    },
+    recurrenceButtons: {
+        gap: 12,
+    },
+    optionButtonActive: {
+        backgroundColor: '#DBEAFE',
+        borderColor: '#3B82F6',
+    },
+    optionButtonTextActive: {
+        color: '#1E40AF',
+        fontWeight: '700',
     },
 });

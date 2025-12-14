@@ -90,51 +90,51 @@ CONTEXT:
 ${request.currentProposedSessions && request.currentProposedSessions.length > 0 ? `- Current Proposed Schedule: ${JSON.stringify(request.currentProposedSessions)}` : ''}
 ${request.existingSessions && request.existingSessions.length > 0 ? `- Existing Sessions (for context): ${JSON.stringify(request.existingSessions.map(s => ({ start: s.scheduled_at, duration: s.duration_minutes, client_id: s.client_id })))}` : ''}
 
-OBJECTIVE:
-Turn the coach's input into a structured JSON response. Minimize friction by inferring context where safe, but ask for clarification when critical info is missing or ambiguous.
+*** PRIMARY DIRECTIVE: MERGE CONTEXT ***
+The input will often look like this:
+Original Request: "Schedule at 7:11pm"
+Clarification Answer: "Today"
+OR merged as: "Schedule at 7:11pm for Today"
 
-IMPORTANT: The input might be a combination of an "Original Request" and a "Clarification Answer". You MUST combine these to form the full context. Do not lose information from the Original Request (e.g., time) when processing the Answer (e.g., date).
+YOU MUST MERGE THESE.
+- Time comes from "Original Request" (7:11pm).
+- Date comes from "Clarification Answer" (Today).
+- RESULT: Schedule for Today at 7:11pm.
+- **DO NOT ASK FOR TIME AGAIN.** You already have it.
 
 RULES & LOGIC:
 
 1. **DURATION**: Sessions are ALWAYS 60 minutes.
-   - If user asks for > 60 mins, return "clarification": { "type": "duration_invalid", "message": "Sessions must be exactly 1 hour. Please adjust." }
 
-2. **MISSING INFO HANDLING (Consolidated)**:
-   - If multiple pieces of info are missing (Date, Time), ask for them together.
-   - Example: "Schedule session" -> Ask "For which day and time?" (and recurrence if needed).
+2. **SCENARIO: COMBINED INPUT (Original + Answer)**:
+   - **Scenario E: Clarification Answer Provided** (Input contains "Original Request:" and "Clarification Answer:")
+     - **MANDATORY**: You MUST combine the info.
+     - If Original Request has TIME ("at 6:59pm") and Answer has DATE ("Today"), then you HAVE both.
+     - **DO NOT ASK FOR TIME AGAIN**.
+     - Proceed to schedule. Check recurrence if ambiguous (unless Answer says "Today only" -> recurrence: once).
 
-3. **RECURRENCE & AMBIGUITY (The "Smart" Part)**:
-   - **Scenario A: Time Only Provided** (e.g., "Schedule at 2am")
-     - **DO NOT ASSUME THE DATE**. Do not assume "today" or "next Sunday".
-     - **Action**: Ask for the date.
-     - Return "clarification": { "type": "general", "message": "For which day would you like to schedule this session at 2am?" }
+   - **Scenario F: Merged Input** (e.g., "Schedule at 7:19pm for Today")
+     - You HAVE both Date (Today) and Time (7:19pm).
+     - **DO NOT ASK FOR TIME AGAIN**.
+     - Proceed to schedule. Check recurrence if ambiguous.
+       - **STOP ASKING**. Return the session.
+     - **IF Answer says just "Today" or a date**:
+       - You have Date + Time.
+       - Check recurrence ambiguity: "Just this date or every week?" (unless explicitly "once").
+       - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to schedule this for just this specific date, or every week?" }
 
-   - **Scenario B: Explicit Date & Time** (e.g., "Schedule today at 2am", "Monday at 4pm")
-     - The date and time are known.
-     - **CRITICAL AMBIGUITY CHECK**: Unless the user explicitly said "Just this one" or "One time only", you **MUST** verify recurrence.
-     - **Action**: Ask if it's for just this specific date or every week.
-     - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to schedule this for just this specific date, or every week?" }
+3. **SCENARIO: TIME ONLY (Single input)**:
+   - Input: "Schedule at 7:11pm"
+   - **Action**: Ask for date.
+   - Return "clarification": { "type": "general", "message": "For which day would you like to schedule this session at 7:11pm?" }
 
-   - **Scenario C: Vague Change** (e.g., "Change time to 2am", "Move to 4pm")
-     - If NO date is specified, it implies a modification to an existing or implied session.
-     - **CRITICAL**: You MUST ask: "Apply this change to just this specific session, or every week?"
-     - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to apply this change to just this date or every week?" }
+4. **SCENARIO: EXPLICIT DATE & TIME**:
+   - Input: "Schedule today at 7:11pm"
+   - **Action**: Ask recurrence (unless "only" is used).
+   - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to schedule this for just this specific date, or every week?" }
 
-   - **Scenario D: Explicit Recurrence** (e.g., "Every Monday", "Weekly", "All Tuesdays")
-     - Set recurrence: "weekly". DO NOT ask for clarification.
-
-4. **HANDLING CLARIFICATION RESPONSES (Loop Prevention)**:
-   - If the input contains "Just this date", "This specific date only", "1", or "Only today":
-     - UPDATE the session.
-     - Set recurrence: "once".
-     - **STOP ASKING**. Return the session.
-   - If the input contains "Every week", "Every week on this weekday", "2", or "All days":
-     - UPDATE the session.
-     - Set recurrence: "weekly".
-     - **STOP ASKING**. Return the session.
-
-5. **TIMEZONE**: Input is in ${request.clientContext.timezone}. Convert to UTC for 'scheduled_at'.
+5. **LOOP PREVENTION**:
+   - If input contains "Just this date", "Every week", "1", "2": APPLY IT AND RETURN.
 
 RESPONSE FORMAT (JSON ONLY):
 {
