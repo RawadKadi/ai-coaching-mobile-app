@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat } from 'lucide-react-native';
-import { parseScheduleRequest, ProposedSession } from '@/lib/ai-scheduling-service';
+import { parseScheduleRequest, ProposedSession, RateLimitError } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
 
 interface SchedulerModalProps {
@@ -24,6 +24,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     const [step, setStep] = useState<'input' | 'review' | 'clarification'>('input');
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<ProposedSession | null>(null);
+    const [lastContext, setLastContext] = useState<string>('');
 
     const handleAnalyze = async () => {
         if (!input.trim()) return;
@@ -52,14 +53,20 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                 // General clarification (missing info)
                 setClarification(result.clarification);
-                setInput((prev) => prev + '\n\nAnswer: '); 
+                setStep('clarification');
+                setLastContext(input); // Save what the user asked
+                setInput(''); // Clear input for the user's answer 
             } else {
                 setProposedSessions(result.sessions);
                 setStep('review');
                 setClarification(null);
             }
-        } catch (error) {
-            Alert.alert('Error', 'Failed to understand request. Please try again.');
+        } catch (error: any) {
+            if (error instanceof RateLimitError || error.name === 'RateLimitError') {
+                Alert.alert('AI Usage Limit', error.message);
+            } else {
+                Alert.alert('Error', 'Failed to understand request. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -129,8 +136,10 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     };
 
     const handleClarificationResponse = (response: string) => {
-        // Append response to input and re-analyze
-        setInput((prev) => prev + `\n\nContext: ${response}`);
+        // Send the NEW response as the main input, but keep context of what was asked
+        // Use the saved context from the previous turn
+        const fullContext = `Original Request: "${lastContext}"\nClarification Answer: "${response}"`;
+        setInput(fullContext);
         setStep('input');
         // Trigger analysis immediately? Or let user review?
         // Let's trigger immediately for smoother flow
@@ -195,7 +204,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     <View style={styles.content}>
                         <Text style={styles.label}>{clarification.message}</Text>
                         
-                        {clarification.type === 'recurrence_ambiguity' && (
+                        {clarification.type === 'recurrence_ambiguity' ? (
                             <View style={styles.clarificationOptions}>
                                 <TouchableOpacity 
                                     style={styles.optionButton} 
@@ -211,6 +220,24 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 >
                                     <Repeat size={20} color="#3B82F6" />
                                     <Text style={styles.optionButtonText}>Every week</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                             <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.textInput}
+                                    multiline
+                                    placeholder="Type your answer..."
+                                    value={input} // Bind to state to capture text
+                                    onChangeText={setInput} // Update state as user types
+                                    onSubmitEditing={() => handleClarificationResponse(input)}
+                                    returnKeyType="send"
+                                />
+                                <TouchableOpacity 
+                                    style={styles.micButton} 
+                                    onPress={() => handleClarificationResponse(input)}
+                                >
+                                    <Send size={24} color="#3B82F6" />
                                 </TouchableOpacity>
                             </View>
                         )}

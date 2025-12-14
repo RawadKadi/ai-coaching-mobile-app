@@ -18,7 +18,7 @@ export const genAI = new GoogleGenerativeAI(API_KEY || '');
 
 // Gemini 1.5 Flash model for vision tasks (meal analysis)
 export const visionModel = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-flash-latest',
     generationConfig: {
         temperature: 0.4,  // Lower for more consistent nutritional data
         topK: 32,
@@ -29,7 +29,7 @@ export const visionModel = genAI.getGenerativeModel({
 
 // Gemini 1.5 Flash model for text tasks (challenge generation)
 export const textModel = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-flash-latest',
     generationConfig: {
         temperature: 0.7,  // Higher for creative challenge generation
         topK: 40,

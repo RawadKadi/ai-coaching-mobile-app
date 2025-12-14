@@ -29,6 +29,15 @@ export interface ScheduleResponse {
     };
 }
 
+export class RateLimitError extends Error {
+    retryAfter: number;
+    constructor(retryAfter: number) {
+        super(`Rate limit exceeded. Please retry in ${Math.ceil(retryAfter)} seconds.`);
+        this.retryAfter = retryAfter;
+        this.name = 'RateLimitError';
+    }
+}
+
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF = 2000;
 
@@ -40,6 +49,21 @@ const callWithRetry = async <T>(
     try {
         return await fn();
     } catch (error: any) {
+        // Handle explicit retry delay from Gemini API
+        if (error.message?.includes('429') || error.message?.includes('Resource exhausted')) {
+            const match = error.message?.match(/Please retry in ([0-9.]+)s/);
+            if (match) {
+                const delaySeconds = parseFloat(match[1]);
+                // If delay is significant (> 5s), let the UI handle it
+                if (delaySeconds > 5) {
+                    throw new RateLimitError(delaySeconds);
+                }
+                // Otherwise wait and retry
+                await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000 + 500));
+                return callWithRetry(fn, retries - 1, backoff);
+            }
+        }
+
         if (retries > 0 && (
             error.message?.includes('429') ||
             error.message?.includes('Resource exhausted') ||
@@ -66,35 +90,57 @@ CONTEXT:
 ${request.currentProposedSessions && request.currentProposedSessions.length > 0 ? `- Current Proposed Schedule: ${JSON.stringify(request.currentProposedSessions)}` : ''}
 ${request.existingSessions && request.existingSessions.length > 0 ? `- Existing Sessions (for context): ${JSON.stringify(request.existingSessions.map(s => ({ start: s.scheduled_at, duration: s.duration_minutes, client_id: s.client_id })))}` : ''}
 
-REQUIREMENTS:
-1. Extract session details: date/day, time, duration, and type.
-2. **DURATION CONSTRAINT**: Sessions MUST be exactly 60 minutes.
-   - If the user requests a duration longer than 60 minutes (e.g., "4-7pm", "3 hours"), DO NOT schedule it.
-   - Return "clarification": { "type": "duration_invalid", "message": "Sessions must be exactly 1 hour. Please adjust your request." }
-3. Resolve relative dates (e.g., "next Tuesday" based on Current Date).
-4. **RECURRENCE AMBIGUITY (CRITICAL)**:
-   - **VAGUE REQUESTS**: If the user says "Change schedule to 4-5 PM", "Move time one hour later", "Shift the session", or "Make it 6 PM" WITHOUT explicitly mentioning a specific date (e.g., "March 12") or "every week"/"all Tuesdays", you **MUST** ask for clarification.
-     - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to apply this change to just this date or every week?" }
-   - **EXPLICIT REQUESTS**:
-     - "Change all Tuesdays..." -> recurrence: "weekly"
-     - "Change Tuesday 12 March..." -> recurrence: "once"
-     - "This week only..." -> recurrence: "once"
-5. TIMEZONE HANDLING: The input time is in **${request.clientContext.timezone}**. You MUST convert it to UTC for the "scheduled_at" field.
-6. Default type is 'training' if not specified.
-7. If CRITICAL info is missing (day/date or time), ask a clarifying question.
-   - Return "clarification": { "type": "general", "message": "Please specify the day and time." }
-8. Return dates in ISO 8601 format (UTC).
+OBJECTIVE:
+Turn the coach's input into a structured JSON response. Minimize friction by inferring context where safe, but ask for clarification when critical info is missing or ambiguous.
 
-MODIFICATION RULES:
-- If "Current Proposed Schedule" is provided:
-  - If the user answers the clarifying question with "1" or "This date only", update ONLY the specific session (recurrence: "once").
-  - If the user answers "2" or "Every week", update the session and set recurrence: "weekly".
+IMPORTANT: The input might be a combination of an "Original Request" and a "Clarification Answer". You MUST combine these to form the full context. Do not lose information from the Original Request (e.g., time) when processing the Answer (e.g., date).
+
+RULES & LOGIC:
+
+1. **DURATION**: Sessions are ALWAYS 60 minutes.
+   - If user asks for > 60 mins, return "clarification": { "type": "duration_invalid", "message": "Sessions must be exactly 1 hour. Please adjust." }
+
+2. **MISSING INFO HANDLING (Consolidated)**:
+   - If multiple pieces of info are missing (Date, Time), ask for them together.
+   - Example: "Schedule session" -> Ask "For which day and time?" (and recurrence if needed).
+
+3. **RECURRENCE & AMBIGUITY (The "Smart" Part)**:
+   - **Scenario A: Time Only Provided** (e.g., "Schedule at 2am")
+     - **DO NOT ASSUME THE DATE**. Do not assume "today" or "next Sunday".
+     - **Action**: Ask for the date.
+     - Return "clarification": { "type": "general", "message": "For which day would you like to schedule this session at 2am?" }
+
+   - **Scenario B: Explicit Date & Time** (e.g., "Schedule today at 2am", "Monday at 4pm")
+     - The date and time are known.
+     - **CRITICAL AMBIGUITY CHECK**: Unless the user explicitly said "Just this one" or "One time only", you **MUST** verify recurrence.
+     - **Action**: Ask if it's for just this specific date or every week.
+     - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to schedule this for just this specific date, or every week?" }
+
+   - **Scenario C: Vague Change** (e.g., "Change time to 2am", "Move to 4pm")
+     - If NO date is specified, it implies a modification to an existing or implied session.
+     - **CRITICAL**: You MUST ask: "Apply this change to just this specific session, or every week?"
+     - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to apply this change to just this date or every week?" }
+
+   - **Scenario D: Explicit Recurrence** (e.g., "Every Monday", "Weekly", "All Tuesdays")
+     - Set recurrence: "weekly". DO NOT ask for clarification.
+
+4. **HANDLING CLARIFICATION RESPONSES (Loop Prevention)**:
+   - If the input contains "Just this date", "This specific date only", "1", or "Only today":
+     - UPDATE the session.
+     - Set recurrence: "once".
+     - **STOP ASKING**. Return the session.
+   - If the input contains "Every week", "Every week on this weekday", "2", or "All days":
+     - UPDATE the session.
+     - Set recurrence: "weekly".
+     - **STOP ASKING**. Return the session.
+
+5. **TIMEZONE**: Input is in ${request.clientContext.timezone}. Convert to UTC for 'scheduled_at'.
 
 RESPONSE FORMAT (JSON ONLY):
 {
   "sessions": [
     {
-      "scheduled_at": "ISO_STRING",
+      "scheduled_at": "ISO_STRING", // UTC
       "duration_minutes": 60,
       "session_type": "training",
       "notes": "Context from input",
