@@ -27,9 +27,20 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     
     // Form state for structured input
     const [formTime, setFormTime] = useState('');
-    const [formDate, setFormDate] = useState('');
+    const [formDates, setFormDates] = useState<string[]>([]); // Changed to array for multiple dates
     const [formRecurrence, setFormRecurrence] = useState<'once' | 'weekly' | null>(null);
 
+    
+    const resetForm = () => {
+        setStep('input');
+        setInput('');
+        setFormTime('');
+        setFormDates([]);
+        setFormRecurrence(null);
+        setProposedSessions([]);
+        setEditingIndex(null);
+        setEditForm(null);
+    };
 
     const handleAnalyze = async () => {
         if (!input.trim()) return;
@@ -38,14 +49,14 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         const parsed = parseSchedulingInput(input);
         
         // Check what we have and what we need
-        const needsDate = !parsed.hasDate && !formDate;
+        const needsDates = !parsed.hasDate && formDates.length === 0;
         const needsTime = !parsed.hasTime && !formTime;
         const needsRecurrence = parsed.recurrence === null && formRecurrence === null;
 
         // If we're missing date or time, show the form
-        if (needsDate || needsTime) {
+        if (needsDates || needsTime) {
             setFormTime(parsed.time || formTime || '');
-            setFormDate(parsed.date || formDate || '');
+            setFormDates(parsed.dates || formDates);
             setStep('form');
             return;
         }
@@ -53,7 +64,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         // If we have both date and time but recurrence is unclear, ask
         if (needsRecurrence) {
             setFormTime(parsed.time || formTime);
-            setFormDate(parsed.date || formDate);
+            setFormDates(parsed.dates || formDates);
             setStep('form');
             return;
         }
@@ -61,31 +72,85 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         // We have everything, proceed to AI validation
         await finalizeWithAI(
             parsed.time || formTime,
-            parsed.date || formDate,
+            parsed.dates || formDates,
             parsed.recurrence || formRecurrence || 'once'
         );
     };
 
-    const finalizeWithAI = async (time: string, date: string, recurrence: 'once' | 'weekly') => {
+
+    const resolveDateKeywordToISO = (keyword: string): string => {
+        const now = new Date();
+        const dayMap: { [key: string]: number } = {
+            'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+            'thursday': 4, 'friday': 5, 'saturday': 6
+        };
+
+        if (keyword === 'today') {
+            return now.toISOString().split('T')[0];
+        } else if (keyword === 'tomorrow') {
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            return tomorrow.toISOString().split('T')[0];
+        } else if (keyword in dayMap) {
+            // For day names, resolve to the actual date
+            const targetDay = dayMap[keyword];
+            const currentDay = now.getDay();
+            let daysToAdd = targetDay - currentDay;
+            
+            // If it's the same day as today, use today's date
+            if (daysToAdd === 0) {
+                return now.toISOString().split('T')[0];
+            }
+            
+            // Otherwise get the next occurrence of this day
+            if (daysToAdd < 0) daysToAdd += 7;
+            
+            const targetDate = new Date(now);
+            targetDate.setDate(targetDate.getDate() + daysToAdd);
+            return targetDate.toISOString().split('T')[0];
+        }
+        
+        return keyword; // Fallback
+    };
+
+    const finalizeWithAI = async (time: string, dates: string[], recurrence: 'once' | 'weekly') => {
         setLoading(true);
         try {
-            const result = await parseScheduleRequest({
-                coachInput: `Schedule on ${date} at ${time} ${recurrence === 'weekly' ? 'every week' : 'one time'}`,
-                currentDate: new Date().toISOString(),
-                clientContext,
-                currentProposedSessions: proposedSessions,
-                existingSessions: existingSessions,
-            });
+            // Resolve all date keywords to ISO dates and deduplicate
+            const resolvedDates = dates.map(d => resolveDateKeywordToISO(d));
+            const uniqueDates = Array.from(new Set(resolvedDates));
+            
+            const allSessions: ProposedSession[] = [];
+            
+            // Create a session for each unique date
+            for (const isoDate of uniqueDates) {
+                const result = await parseScheduleRequest({
+                    coachInput: `Schedule on ${isoDate} at ${time} ${recurrence === 'weekly' ? 'every week' : 'one time'}`,
+                    currentDate: new Date().toISOString(),
+                    clientContext,
+                    currentProposedSessions: proposedSessions,
+                    existingSessions: existingSessions,
+                });
 
-            if (result.sessions && result.sessions.length > 0) {
-                setProposedSessions(result.sessions);
+                if (result.sessions && result.sessions.length > 0) {
+                    allSessions.push(...result.sessions);
+                } else if (result.clarification) {
+                    Alert.alert('Validation Error', result.clarification.message);
+                    setLoading(false);
+                    return;
+                }
+            }
+            
+            if (allSessions.length > 0) {
+                setProposedSessions(allSessions);
                 setStep('review');
-            } else if (result.clarification) {
-                Alert.alert('Validation Error', result.clarification.message);
             }
         } catch (error: any) {
             if (error instanceof RateLimitError || error.name === 'RateLimitError') {
-                Alert.alert('AI Usage Limit', error.message);
+                Alert.alert(
+                    'Please Wait', 
+                    `The AI service is rate-limited. Please wait ${error.retryAfter || 60} seconds before trying again.\n\nTip: The scheduler works better when you provide complete information at once (e.g., "Schedule at 2pm on Monday").`
+                );
             } else {
                 Alert.alert('Error', 'Failed to create session. Please try again.');
             }
@@ -96,12 +161,12 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
     const handleFormSubmit = () => {
         // Validate form
-        if (!formTime || !formDate || !formRecurrence) {
+        if (!formTime || formDates.length === 0 || !formRecurrence) {
             Alert.alert('Missing Information', 'Please fill in all fields.');
             return;
         }
         
-        finalizeWithAI(formTime, formDate, formRecurrence);
+        finalizeWithAI(formTime, formDates, formRecurrence);
     };
 
     const handleConfirm = async () => {
@@ -109,12 +174,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         try {
             await onConfirm(proposedSessions);
             onClose();
-            setStep('input');
-            setInput('');
-            setFormTime('');
-            setFormDate('');
-            setFormRecurrence(null);
-            setProposedSessions([]);
+            resetForm();
         } catch (error) {
             Alert.alert('Error', 'Failed to save sessions.');
         } finally {
@@ -187,7 +247,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             <View style={styles.container}>
                 <View style={styles.header}>
                     <Text style={styles.title}>AI Scheduler</Text>
-                    <TouchableOpacity onPress={onClose}>
+                    <TouchableOpacity onPress={() => { resetForm(); onClose(); }}>
                         <X size={24} color="#374151" />
                     </TouchableOpacity>
                 </View>
@@ -242,17 +302,24 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             />
                         </View>
 
-                        {/* Date Input */}
+                        {/* Date Input - Multiple Selection */}
                         <View style={styles.formGroup}>
-                            <Text style={styles.formLabel}>Date {formDate && '✓'}</Text>
+                            <Text style={styles.formLabel}>Dates {formDates.length > 0 && `✓ (${formDates.length} selected)`}</Text>
                             <View style={styles.dateButtons}>
                                 {['today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
                                     <TouchableOpacity
                                         key={day}
-                                        style={[styles.dayButton, formDate === day && styles.dayButtonActive]}
-                                        onPress={() => setFormDate(day)}
+                                        style={[styles.dayButton, formDates.includes(day) && styles.dayButtonActive]}
+                                        onPress={() => {
+                                            // Toggle date selection
+                                            if (formDates.includes(day)) {
+                                                setFormDates(formDates.filter(d => d !== day));
+                                            } else {
+                                                setFormDates([...formDates, day]);
+                                            }
+                                        }}
                                     >
-                                        <Text style={[styles.dayButtonText, formDate === day && styles.dayButtonTextActive]}>
+                                        <Text style={[styles.dayButtonText, formDates.includes(day) && styles.dayButtonTextActive]}>
                                             {day.charAt(0).toUpperCase() + day.slice(1)}
                                         </Text>
                                     </TouchableOpacity>
@@ -261,7 +328,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         </View>
 
                         {/* Recurrence */}
-                        {formTime && formDate && (
+                        {formTime && formDates.length > 0 && (
                             <View style={styles.formGroup}>
                                 <Text style={styles.formLabel}>Recurrence {formRecurrence && '✓'}</Text>
                                 <View style={styles.recurrenceButtons}>
@@ -287,22 +354,24 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             </View>
                         )}
 
-                        <TouchableOpacity
-                            style={[styles.button, (!formTime || !formDate || !formRecurrence || loading) && styles.buttonDisabled]}
-                            onPress={handleFormSubmit}
-                            disabled={!formTime || !formDate || !formRecurrence || loading}
-                        >
-                            {loading ? <ActivityIndicator color="#FFF" /> : (
-                                <>
-                                    <Text style={styles.buttonText}>Create Schedule</Text>
-                                    <Check size={20} color="#FFF" />
-                                </>
-                            )}
-                        </TouchableOpacity>
+                        <View style={styles.buttonGroup}>
+                            <TouchableOpacity
+                                style={[styles.button, (!formTime || formDates.length === 0 || !formRecurrence || loading) && styles.buttonDisabled]}
+                                onPress={handleFormSubmit}
+                                disabled={!formTime || formDates.length === 0 || !formRecurrence || loading}
+                            >
+                                {loading ? <ActivityIndicator color="#FFF" /> : (
+                                    <>
+                                        <Text style={styles.buttonText}>Create Schedule</Text>
+                                        <Check size={20} color="#FFF" />
+                                    </>
+                                )}
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('input')}>
-                            <Text style={styles.secondaryButtonText}>Back</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.secondaryButton} onPress={resetForm}>
+                                <Text style={styles.secondaryButtonText}>Back</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 ) : (
                     <View style={styles.content}>
@@ -389,7 +458,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         </ScrollView>
 
                         <View style={styles.footer}>
-                            <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('input')}>
+                            <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('form')}>
                                 <Text style={styles.secondaryButtonText}>Back</Text>
                             </TouchableOpacity>
                             <TouchableOpacity 
@@ -553,12 +622,13 @@ const styles = StyleSheet.create({
         marginTop: 20,
     },
     secondaryButton: {
-        flex: 1,
         padding: 16,
         borderRadius: 12,
         borderWidth: 1,
+        marginTop:10,
         borderColor: '#D1D5DB',
         alignItems: 'center',
+        justifyContent: 'center',
     },
     secondaryButtonText: {
         color: '#374151',
@@ -685,5 +755,9 @@ const styles = StyleSheet.create({
     optionButtonTextActive: {
         color: '#1E40AF',
         fontWeight: '700',
+    },
+    buttonGroup: {
+        flexDirection: 'column',
+        gap: 12,
     },
 });

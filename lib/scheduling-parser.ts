@@ -1,6 +1,6 @@
 interface ParsedScheduleInfo {
     time?: string;        // 24-hour format: "19:25", "14:00"
-    date?: string;        // keywords: "today", "tomorrow", "monday", etc.
+    dates?: string[];     // keywords: ["today", "monday"], etc.
     recurrence?: 'once' | 'weekly' | null;
     originalInput: string;
     hasTime: boolean;
@@ -12,8 +12,9 @@ interface ParsedScheduleInfo {
  * 
  * Examples:
  * - "Schedule at 7:25pm" -> { time: "19:25", hasTime: true, hasDate: false }
- * - "Schedule today at 2pm" -> { time: "14:00", date: "today", hasTime: true, hasDate: true }
- * - "Every Monday at 9am" -> { time: "09:00", date: "monday", recurrence: "weekly" }
+ * - "Schedule today at 2pm" -> { time: "14:00", dates: ["today"], hasTime: true, hasDate: true }
+ * - "Every Monday at 9am" -> { time: "09:00", dates: ["monday"], recurrence: "weekly" }
+ * - "today and monday" -> { dates: ["today", "monday"], hasTime: false, hasDate: true }
  */
 export function parseSchedulingInput(input: string): ParsedScheduleInfo {
     const lowercaseInput = input.toLowerCase();
@@ -41,12 +42,16 @@ export function parseSchedulingInput(input: string): ParsedScheduleInfo {
 
     // ===== DATE PARSING =====
     const dateKeywords = ['today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const foundDates: string[] = [];
     for (const keyword of dateKeywords) {
         if (lowercaseInput.includes(keyword)) {
-            result.date = keyword;
-            result.hasDate = true;
-            break;
+            foundDates.push(keyword);
         }
+    }
+
+    if (foundDates.length > 0) {
+        result.dates = foundDates;
+        result.hasDate = true;
     }
 
     // ===== RECURRENCE PARSING =====
