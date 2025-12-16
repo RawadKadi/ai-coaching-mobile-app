@@ -4,6 +4,9 @@ import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Sa
 import { parseScheduleRequest, ProposedSession, RateLimitError } from '@/lib/ai-scheduling-service';
 import { parseSchedulingInput } from '@/lib/scheduling-parser';
 import { Session } from '@/types/database';
+import ConflictResolutionModal from './ConflictResolutionModal';
+import { ConflictInfo, Resolution } from '@/types/conflict';
+import { findAvailableSlots } from '@/lib/time-slot-finder';
 
 interface SchedulerModalProps {
     visible: boolean;
@@ -30,6 +33,9 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     const [formDates, setFormDates] = useState<string[]>([]); // Changed to array for multiple dates
     const [formRecurrence, setFormRecurrence] = useState<'once' | 'weekly' | null>(null);
 
+    // Conflict resolution state
+    const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
+    const [showConflictModal, setShowConflictModal] = useState(false);
     
     const resetForm = () => {
         setStep('input');
@@ -40,6 +46,8 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         setProposedSessions([]);
         setEditingIndex(null);
         setEditForm(null);
+        setConflictInfo(null);
+        setShowConflictModal(false);
     };
 
     const handleAnalyze = async () => {
@@ -186,28 +194,115 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         const newStart = new Date(session.scheduled_at);
         const newEnd = new Date(newStart.getTime() + session.duration_minutes * 60000);
 
-        // 1. Check for Overlaps (Coach Availability)
+        // Helper: Check if two dates are the same day
+        const isSameDay = (date1: Date, date2: Date) => {
+            return date1.getDate() === date2.getDate() &&
+                   date1.getMonth() === date2.getMonth() &&
+                   date1.getFullYear() === date2.getFullYear();
+        };
+
+        // 1. Check for Overlaps (Coach Availability) - MUST be same day
         const overlap = existingSessions.find(existing => {
-            const start = new Date(existing.scheduled_at);
-            const end = new Date(start.getTime() + existing.duration_minutes * 60000);
-            return (newStart < end && newEnd > start);
+            const existingStart = new Date(existing.scheduled_at);
+            
+            // CRITICAL: Check same day first!
+            if (!isSameDay(newStart, existingStart)) return false;
+            
+            const existingEnd = new Date(existingStart.getTime() + existing.duration_minutes * 60000);
+            return (newStart < existingEnd && newEnd > existingStart);
         });
 
-        if (overlap) return { type: 'overlap', message: 'Overlaps with another session' };
+        if (overlap) {
+            return { 
+                type: 'overlap', 
+                message: 'Overlaps with another session',
+                existingSession: overlap
+            };
+        }
 
         // 2. Check for One Session Per Day (Client Limit)
         const sameDaySession = existingSessions.find(existing => {
             if (existing.client_id !== targetClientId) return false;
             
             const existingDate = new Date(existing.scheduled_at);
-            return existingDate.getDate() === newStart.getDate() &&
-                   existingDate.getMonth() === newStart.getMonth() &&
-                   existingDate.getFullYear() === newStart.getFullYear();
+            return isSameDay(newStart, existingDate);
         });
 
-        if (sameDaySession) return { type: 'limit', message: 'Client already has a session this day' };
+        if (sameDaySession) {
+            return { 
+                type: 'limit', 
+                message: 'Client already has a session this day',
+                existingSession: sameDaySession
+            };
+        }
 
         return null;
+    };
+
+    const handleConflictDetected = (session: ProposedSession, conflict: any) => {
+        // Generate recommendations
+        const recommendations = findAvailableSlots({
+            proposedTime: session.scheduled_at,
+            duration: session.duration_minutes,
+            existingSessions: existingSessions,
+            targetClientId: targetClientId,
+        });
+
+        // Build conflict info
+        const conflictData: ConflictInfo = {
+            type: conflict.type,
+            message: conflict.message,
+            existingSession: {
+                id: conflict.existingSession.id,
+                client_id: conflict.existingSession.client_id,
+                client_name: conflict.existingSession.client?.name || 'Unknown',
+                scheduled_at: conflict.existingSession.scheduled_at,
+                duration_minutes: conflict.existingSession.duration_minutes,
+                session_type: conflict.existingSession.session_type,
+            },
+            proposedSession: {
+                client_id: targetClientId,
+                client_name: clientContext.name,
+                scheduled_at: session.scheduled_at,
+                duration_minutes: session.duration_minutes,
+                session_type: session.session_type,
+            },
+            recommendations,
+        };
+
+        setConflictInfo(conflictData);
+        setShowConflictModal(true);
+    };
+
+    const handleResolution = (resolution: Resolution) => {
+        if (resolution.action === 'cancel') {
+            setShowConflictModal(false);
+            setConflictInfo(null);
+            return;
+        }
+
+        if (resolution.action === 'keep_existing_reschedule_new' && resolution.newTime) {
+            // Update the proposed session to the new time
+            const updatedSessions = proposedSessions.map(session => {
+                if (conflictInfo && session.scheduled_at === conflictInfo.proposedSession.scheduled_at) {
+                    return { ...session, scheduled_at: resolution.newTime! };
+                }
+                return session;
+            });
+            setProposedSessions(updatedSessions);
+            setShowConflictModal(false);
+            setConflictInfo(null);
+            Alert.alert('Resolved', 'Session rescheduled successfully');
+        } else if (resolution.action === 'reschedule_existing' && resolution.newTime) {
+            // This would require updating the existing session in the database
+            // For now, show a message that this requires backend implementation
+            Alert.alert(
+                'Advanced Feature',
+                'Rescheduling existing sessions requires additional implementation. For now, please cancel this scheduling and manually reschedule the existing session.',
+            );
+            setShowConflictModal(false);
+            setConflictInfo(null);
+        }
     };
 
     const startEditing = (index: number) => {
@@ -426,10 +521,13 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                         </View>
                                         
                                         {conflict && (
-                                            <View style={styles.conflictBadge}>
+                                            <TouchableOpacity 
+                                                style={styles.conflictBadge}
+                                                onPress={() => handleConflictDetected(session, conflict)}
+                                            >
                                                 <AlertTriangle size={12} color="#B91C1C" />
-                                                <Text style={styles.conflictText}>{conflict.message}</Text>
-                                            </View>
+                                                <Text style={styles.conflictText}>Conflict Detected • Tap to Resolve</Text>
+                                            </TouchableOpacity>
                                         )}
 
                                         <View style={styles.row}>
@@ -479,6 +577,12 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     </View>
                 )}
             </View>
+            <ConflictResolutionModal
+                visible={showConflictModal}
+                conflictInfo={conflictInfo}
+                onResolve={handleResolution}
+                onCancel={() => setShowConflictModal(false)}
+            />
         </Modal>
     );
 }
