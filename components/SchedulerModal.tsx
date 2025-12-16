@@ -7,6 +7,7 @@ import { Session } from '@/types/database';
 import ConflictResolutionModal from './ConflictResolutionModal';
 import { ConflictInfo, Resolution } from '@/types/conflict';
 import { findAvailableSlots } from '@/lib/time-slot-finder';
+import { supabase } from '@/lib/supabase';
 
 interface SchedulerModalProps {
     visible: boolean;
@@ -216,7 +217,10 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             return { 
                 type: 'overlap', 
                 message: 'Overlaps with another session',
-                existingSession: overlap
+                existingSession: {
+                    ...overlap,
+                    client_id: overlap.client_id // Ensure client_id is passed
+                }
             };
         }
 
@@ -232,7 +236,10 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             return { 
                 type: 'limit', 
                 message: 'Client already has a session this day',
-                existingSession: sameDaySession
+                existingSession: {
+                    ...sameDaySession,
+                    client_id: sameDaySession.client_id // Ensure client_id is passed
+                }
             };
         }
 
@@ -274,34 +281,128 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         setShowConflictModal(true);
     };
 
-    const handleResolution = (resolution: Resolution) => {
+    const handleResolution = async (resolution: Resolution) => {
         if (resolution.action === 'cancel') {
             setShowConflictModal(false);
             setConflictInfo(null);
             return;
         }
 
-        if (resolution.action === 'keep_existing_reschedule_new' && resolution.newTime) {
-            // Update the proposed session to the new time
-            const updatedSessions = proposedSessions.map(session => {
-                if (conflictInfo && session.scheduled_at === conflictInfo.proposedSession.scheduled_at) {
-                    return { ...session, scheduled_at: resolution.newTime! };
-                }
-                return session;
-            });
+        if (!conflictInfo) return;
+
+        try {
+            setLoading(true);
+            const { existingSession, proposedSession } = conflictInfo;
+            const currentUser = (await supabase.auth.getUser()).data.user;
+
+            if (!currentUser) throw new Error('Not authenticated');
+
+            if (resolution.action === 'propose_new_time_for_incoming') {
+                // Option 1: Propose to INCOMING client
+                
+                // 1. Get Incoming Client User ID
+                const { data: clientData, error: clientError } = await supabase
+                    .from('clients')
+                    .select('user_id')
+                    .eq('id', proposedSession.client_id)
+                    .single();
+                
+                if (clientError || !clientData) throw new Error('Client not found');
+
+                // 2. Create session as pending
+                const { data: newSession, error: sessionError } = await supabase
+                    .from('sessions')
+                    .insert({
+                        coach_id: existingSessions[0]?.coach_id, 
+                        client_id: proposedSession.client_id,
+                        scheduled_at: proposedSession.scheduled_at,
+                        duration_minutes: proposedSession.duration_minutes,
+                        session_type: proposedSession.session_type,
+                        status: 'pending_resolution',
+                    })
+                    .select()
+                    .single();
+
+                if (sessionError) throw sessionError;
+
+                // 3. Send Message
+                const messageContent = {
+                    type: 'reschedule_proposal',
+                    sessionId: newSession.id,
+                    originalTime: proposedSession.scheduled_at,
+                    proposedSlots: resolution.proposedSlots,
+                    mode: 'select_time',
+                    text: `Hi ${proposedSession.client_name}, I'd like to propose a few times for our session. Please select one that works for you.`
+                };
+
+                await supabase.from('messages').insert({
+                    sender_id: currentUser.id,
+                    recipient_id: clientData.user_id,
+                    client_id: proposedSession.client_id,
+                    content: JSON.stringify(messageContent),
+                    read: false,
+                    metadata: messageContent
+                });
+
+                Alert.alert('Request Sent', `Resolution request sent to ${proposedSession.client_name}`);
+
+            } else if (resolution.action === 'propose_reschedule_for_existing') {
+                // Option 2: Propose to EXISTING client
+                
+                // 1. Get Existing Client User ID
+                const { data: clientData, error: clientError } = await supabase
+                    .from('clients')
+                    .select('user_id')
+                    .eq('id', existingSession.client_id)
+                    .single();
+
+                if (clientError || !clientData) throw new Error('Client not found');
+
+                // 2. Send Message
+                const messageContent = {
+                    type: 'reschedule_proposal',
+                    sessionId: existingSession.id,
+                    originalTime: existingSession.scheduled_at,
+                    proposedSlots: resolution.proposedSlots,
+                    mode: 'accept_reject',
+                    text: `Hi ${existingSession.client_name}, could we reschedule our session to accommodate another client? Here are some alternative times.`
+                };
+
+                await supabase.from('messages').insert({
+                    sender_id: currentUser.id,
+                    recipient_id: clientData.user_id,
+                    client_id: existingSession.client_id,
+                    content: JSON.stringify(messageContent),
+                    read: false,
+                    metadata: messageContent
+                });
+
+                 // 3. Create INCOMING session as pending
+                 await supabase
+                    .from('sessions')
+                    .insert({
+                        coach_id: existingSessions[0]?.coach_id,
+                        client_id: proposedSession.client_id,
+                        scheduled_at: proposedSession.scheduled_at,
+                        duration_minutes: proposedSession.duration_minutes,
+                        session_type: proposedSession.session_type,
+                        status: 'pending_resolution',
+                    });
+
+                Alert.alert('Request Sent', `Resolution request sent to ${existingSession.client_name}`);
+            }
+
+            // Cleanup
+            const updatedSessions = proposedSessions.filter(s => s.scheduled_at !== proposedSession.scheduled_at);
             setProposedSessions(updatedSessions);
             setShowConflictModal(false);
             setConflictInfo(null);
-            Alert.alert('Resolved', 'Session rescheduled successfully');
-        } else if (resolution.action === 'reschedule_existing' && resolution.newTime) {
-            // This would require updating the existing session in the database
-            // For now, show a message that this requires backend implementation
-            Alert.alert(
-                'Advanced Feature',
-                'Rescheduling existing sessions requires additional implementation. For now, please cancel this scheduling and manually reschedule the existing session.',
-            );
-            setShowConflictModal(false);
-            setConflictInfo(null);
+
+        } catch (error) {
+            console.error('Error handling resolution:', error);
+            Alert.alert('Error', 'Failed to process resolution request');
+        } finally {
+            setLoading(false);
         }
     };
 

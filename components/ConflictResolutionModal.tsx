@@ -78,24 +78,25 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
             return;
         }
 
+        if (!recommendations || recommendations.length === 0) {
+            Alert.alert('No Slots', 'No alternative slots available to propose.');
+            return;
+        }
+        
+        const proposedSlots = recommendations.slice(0, 3).map(r => r.time);
+
         if (selectedOption === 'keep') {
-            if (!selectedNewTime) {
-                Alert.alert('Time Required', 'Please select a new time for the proposed session');
-                return;
-            }
+            // Option 1: Propose new time to INCOMING client
             onResolve({
-                action: 'keep_existing_reschedule_new',
-                newTime: selectedNewTime,
+                action: 'propose_new_time_for_incoming',
+                proposedSlots: proposedSlots,
             });
         } else if (selectedOption === 'reschedule') {
-            if (!selectedNewTime) {
-                Alert.alert('Time Required', 'Please select a new time for the existing session');
-                return;
-            }
+            // Option 2: Propose reschedule to EXISTING client
             onResolve({
-                action: 'reschedule_existing',
-                newTime: selectedNewTime,
+                action: 'propose_reschedule_for_existing',
                 targetSessionId: conflictInfo.existingSession.id,
+                proposedSlots: proposedSlots,
             });
         }
     };
@@ -119,7 +120,7 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
             <View style={styles.container}>
-                {/* Header */}
+                {/* ... (Header) */}
                 <View style={styles.header}>
                     <View style={styles.headerContent}>
                         <AlertTriangle size={24} color="#EF4444" />
@@ -131,7 +132,7 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
                 </View>
 
                 <ScrollView style={styles.content}>
-                    {/* Conflict Info Header */}
+                    {/* ... (Info Card, Timeline, Session Details remain same) */}
                     <View style={styles.infoCard}>
                         <View style={styles.infoHeader}>
                             <AlertTriangle size={20} color="#B91C1C" />
@@ -192,7 +193,7 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>✅ Resolution Options</Text>
 
-                        {/* Option 1: Keep Existing */}
+                        {/* Option 1: Propose to Incoming */}
                         <TouchableOpacity
                             style={[styles.optionCard, selectedOption === 'keep' && styles.optionCardSelected]}
                             onPress={() => setSelectedOption('keep')}
@@ -201,33 +202,33 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
                                 <View style={styles.optionRadio}>
                                     {selectedOption === 'keep' && <View style={styles.optionRadioInner} />}
                                 </View>
-                                <Text style={styles.optionTitle}>Option 1 — Keep existing session (Recommended)</Text>
+                                <View>
+                                    <Text style={styles.optionTitle}>Option 1 — Propose new time to {proposedSession.client_name}</Text>
+                                    <Text style={styles.advancedLabel}>(Sends Message)</Text>
+                                </View>
                             </View>
                             <Text style={styles.optionDescription}>
-                                Reschedule {proposedSession.client_name} to a different time
+                                Send a message to {proposedSession.client_name} with alternative times.
                             </Text>
 
                             {selectedOption === 'keep' && recommendations && (
                                 <View style={styles.recommendationsContainer}>
-                                    <TouchableOpacity 
-                                        style={styles.timeSelectorButton}
-                                        onPress={() => setShowTimePicker(true)}
-                                    >
-                                        <Calendar size={20} color="#3B82F6" />
-                                        <Text style={styles.timeSelectorText}>
-                                            {selectedNewTime 
-                                                ? new Date(selectedNewTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) 
-                                                : 'Select a time...'}
-                                        </Text>
-                                        <Text style={styles.timeSelectorCount}>
-                                            {recommendations.length} slots
-                                        </Text>
-                                    </TouchableOpacity>
+                                    <Text style={styles.recommendationLabel}>
+                                        We'll suggest these top 3 slots:
+                                    </Text>
+                                    {recommendations.slice(0, 3).map((rec, idx) => (
+                                        <View key={idx} style={styles.miniSlotItem}>
+                                            <Clock size={14} color="#6B7280" />
+                                            <Text style={styles.miniSlotText}>
+                                                {new Date(rec.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                            </Text>
+                                        </View>
+                                    ))}
                                 </View>
                             )}
                         </TouchableOpacity>
 
-                        {/* Option 2: Reschedule Existing */}
+                        {/* Option 2: Propose to Existing */}
                         <TouchableOpacity
                             style={[styles.optionCard, styles.advancedOption, selectedOption === 'reschedule' && styles.optionCardSelected]}
                             onPress={() => setSelectedOption('reschedule')}
@@ -237,40 +238,29 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
                                     {selectedOption === 'reschedule' && <View style={styles.optionRadioInner} />}
                                 </View>
                                 <View>
-                                    <Text style={styles.optionTitle}>Option 2 — Reschedule existing session</Text>
-                                    <Text style={styles.advancedLabel}>(Advanced)</Text>
+                                    <Text style={styles.optionTitle}>Option 2 — Propose reschedule to {existingSession.client_name}</Text>
+                                    <Text style={styles.advancedLabel}>(Sends Message)</Text>
                                 </View>
                             </View>
                             <Text style={styles.optionDescription}>
-                                Move {existingSession.client_name || 'the existing client'} to a different time
+                                Ask {existingSession.client_name} to move their session to accommodate {proposedSession.client_name}.
                             </Text>
 
                             {selectedOption === 'reschedule' && recommendations && (
                                 <View style={styles.recommendationsContainer}>
-                                    <TouchableOpacity 
-                                        style={styles.timeSelectorButton}
-                                        onPress={() => setShowTimePicker(true)}
-                                    >
-                                        <Calendar size={20} color="#3B82F6" />
-                                        <Text style={styles.timeSelectorText}>
-                                            {selectedNewTime 
-                                                ? new Date(selectedNewTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) 
-                                                : 'Select a time...'}
-                                        </Text>
-                                        <Text style={styles.timeSelectorCount}>
-                                            {recommendations.length} slots
-                                        </Text>
-                                    </TouchableOpacity>
+                                    <Text style={styles.recommendationLabel}>
+                                        We'll suggest these top 3 slots:
+                                    </Text>
+                                    {recommendations.slice(0, 3).map((rec, idx) => (
+                                        <View key={idx} style={styles.miniSlotItem}>
+                                            <Clock size={14} color="#6B7280" />
+                                            <Text style={styles.miniSlotText}>
+                                                {new Date(rec.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                            </Text>
+                                        </View>
+                                    ))}
                                 </View>
                             )}
-                        </TouchableOpacity>
-
-                        {/* Option 3: Cancel */}
-                        <TouchableOpacity
-                            style={styles.cancelOption}
-                            onPress={handleCancel}
-                        >
-                            <Text style={styles.cancelText}>Option 3 — Cancel scheduling action</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
@@ -285,11 +275,11 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
                         onPress={handleResolve}
                         disabled={!selectedOption}
                     >
-                        <Text style={styles.primaryButtonText}>Apply Resolution</Text>
+                        <Text style={styles.primaryButtonText}>Request Resolution</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Time Slot Picker Modal */}
+                {/* Time Slot Picker Modal - Kept but unused for now if we auto-select top 3 */}
                 <TimeSlotPicker 
                     visible={showTimePicker}
                     onClose={() => setShowTimePicker(false)}
@@ -607,5 +597,27 @@ const styles = StyleSheet.create({
     pickerItemReason: {
         fontSize: 12,
         color: '#6B7280',
+    },
+    miniSlotItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#F3F4F6',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 6,
+        marginBottom: 4,
+        alignSelf: 'flex-start',
+    },
+    miniSlotText: {
+        fontSize: 13,
+        color: '#4B5563',
+        fontWeight: '500',
+    },
+    recommendationLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
     },
 });

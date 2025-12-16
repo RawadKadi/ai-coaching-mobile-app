@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
+import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
 import { useFocusEffect } from 'expo-router';
 
 if (Platform.OS === 'android') {
@@ -13,6 +14,9 @@ if (Platform.OS === 'android') {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
 }
+
+
+// ... (existing imports)
 
 type Message = {
   id: string;
@@ -22,7 +26,14 @@ type Message = {
   created_at: string;
   read: boolean;
   client_id: string;
+  metadata?: any; // Added metadata
 };
+
+// ... (ZoomableImage, TaskCompletionMessage, SessionInviteMessage components)
+
+// ... (SessionInviteMessageWrapper)
+
+
 
 const ZoomableImage = ({ imageUrl, onClose, onLoadStart, onLoadEnd }: {
   imageUrl: string;
@@ -721,7 +732,18 @@ export default function MessagesScreen() {
     const showUnreadSeparator = index === firstUnreadIndex;
 
     const renderContent = () => {
-      // ... (TaskCompletionMessage logic remains same)
+      // 1. Check for Reschedule Proposal (Metadata based)
+      if (item.metadata && item.metadata.type === 'reschedule_proposal') {
+        return (
+            <RescheduleProposalMessage 
+                messageId={item.id}
+                metadata={item.metadata}
+                isOwn={isMe}
+            />
+        );
+      }
+
+      // 2. Task Completion (JSON content based)
       let isTaskMessage = false;
       try {
         const parsed = JSON.parse(item.content);
@@ -755,7 +777,7 @@ export default function MessagesScreen() {
         );
       }
 
-      // ... (MealLog logic remains same)
+      // Meal Log Logic
       let isMealLog = false;
       try {
         const parsed = JSON.parse(item.content);
