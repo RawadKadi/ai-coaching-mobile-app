@@ -94,12 +94,20 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             'thursday': 4, 'friday': 5, 'saturday': 6
         };
 
+        // Helper to format local date as YYYY-MM-DD
+        const toLocalISO = (date: Date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
         if (keyword === 'today') {
-            return now.toISOString().split('T')[0];
+            return toLocalISO(now);
         } else if (keyword === 'tomorrow') {
             const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            return tomorrow.toISOString().split('T')[0];
+            tomorrow.setDate(now.getDate() + 1);
+            return toLocalISO(tomorrow);
         } else if (keyword in dayMap) {
             // For day names, resolve to the actual date
             const targetDay = dayMap[keyword];
@@ -181,7 +189,11 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     const handleConfirm = async () => {
         setLoading(true);
         try {
-            await onConfirm(proposedSessions);
+            // Only confirm sessions that are NOT pending resolution
+            const sessionsToConfirm = proposedSessions.filter(s => s.status !== 'pending_resolution');
+            if (sessionsToConfirm.length > 0) {
+                await onConfirm(sessionsToConfirm);
+            }
             onClose();
             resetForm();
         } catch (error) {
@@ -253,6 +265,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             duration: session.duration_minutes,
             existingSessions: existingSessions,
             targetClientId: targetClientId,
+            ignoreSessionId: conflict.existingSession?.id,
         });
 
         // Build conflict info
@@ -330,18 +343,16 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     type: 'reschedule_proposal',
                     sessionId: newSession.id,
                     originalTime: proposedSession.scheduled_at,
-                    proposedSlots: resolution.proposedSlots,
-                    mode: 'select_time',
-                    text: `Hi ${proposedSession.client_name}, I'd like to propose a few times for our session. Please select one that works for you.`
+                    availableSlots: resolution.proposedSlots, // Contains all slots now
+                    mode: 'open_calendar', // New mode
+                    text: `Hi ${proposedSession.client_name}, the time you requested is unavailable. Please tap here to choose another time for ${new Date(proposedSession.scheduled_at).toLocaleDateString()}.`
                 };
 
                 await supabase.from('messages').insert({
                     sender_id: currentUser.id,
                     recipient_id: clientData.user_id,
-                    client_id: proposedSession.client_id,
                     content: JSON.stringify(messageContent),
-                    read: false,
-                    metadata: messageContent
+                    read: false
                 });
 
                 Alert.alert('Request Sent', `Resolution request sent to ${proposedSession.client_name}`);
@@ -363,18 +374,16 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     type: 'reschedule_proposal',
                     sessionId: existingSession.id,
                     originalTime: existingSession.scheduled_at,
-                    proposedSlots: resolution.proposedSlots,
-                    mode: 'accept_reject',
-                    text: `Hi ${existingSession.client_name}, could we reschedule our session to accommodate another client? Here are some alternative times.`
+                    availableSlots: resolution.proposedSlots, // Slots for them if they accept
+                    mode: 'confirm_reschedule', // New mode
+                    text: `Hi ${existingSession.client_name}, could we reschedule our session to accommodate another client?`
                 };
 
                 await supabase.from('messages').insert({
                     sender_id: currentUser.id,
                     recipient_id: clientData.user_id,
-                    client_id: existingSession.client_id,
                     content: JSON.stringify(messageContent),
-                    read: false,
-                    metadata: messageContent
+                    read: false
                 });
 
                  // 3. Create INCOMING session as pending
@@ -392,8 +401,13 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 Alert.alert('Request Sent', `Resolution request sent to ${existingSession.client_name}`);
             }
 
-            // Cleanup
-            const updatedSessions = proposedSessions.filter(s => s.scheduled_at !== proposedSession.scheduled_at);
+            // Cleanup: Mark as pending instead of removing
+            const updatedSessions = proposedSessions.map(s => {
+                if (s.scheduled_at === proposedSession.scheduled_at) {
+                    return { ...s, status: 'pending_resolution' };
+                }
+                return s;
+            });
             setProposedSessions(updatedSessions);
             setShowConflictModal(false);
             setConflictInfo(null);
@@ -574,7 +588,8 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         <Text style={styles.label}>Review Proposed Sessions</Text>
                         <ScrollView style={styles.list}>
                             {proposedSessions.map((session, index) => {
-                                const conflict = checkConflict(session);
+                                const isPending = session.status === 'pending_resolution';
+                                const conflict = !isPending ? checkConflict(session) : null;
                                 const isEditing = editingIndex === index;
 
                                 if (isEditing && editForm) {
@@ -621,7 +636,12 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                             </View>
                                         </View>
                                         
-                                        {conflict && (
+                                        {isPending ? (
+                                            <View style={[styles.conflictBadge, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
+                                                <Clock size={12} color="#B45309" />
+                                                <Text style={[styles.conflictText, { color: '#B45309' }]}>Pending Resolution</Text>
+                                            </View>
+                                        ) : conflict && (
                                             <TouchableOpacity 
                                                 style={styles.conflictBadge}
                                                 onPress={() => handleConflictDetected(session, conflict)}
@@ -668,7 +688,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 {loading ? <ActivityIndicator color="#FFF" /> : (
                                     <>
                                         <Text style={styles.buttonText}>
-                                            {hasAnyConflict ? 'Resolve Conflicts' : 'Confirm & Lock'}
+                                            {hasAnyConflict ? 'Resolve Conflicts' : proposedSessions.every(s => s.status === 'pending_resolution') ? 'Done' : 'Confirm & Lock'}
                                         </Text>
                                         {!hasAnyConflict && <Check size={20} color="#FFF" />}
                                     </>

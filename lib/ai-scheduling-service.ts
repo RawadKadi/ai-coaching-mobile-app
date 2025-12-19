@@ -41,61 +41,12 @@ export class RateLimitError extends Error {
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF = 2000;
 
-// Client-side rate limiter to prevent hitting API limits
-class RateLimiter {
-    private requestTimestamps: number[] = [];
-    private readonly maxRequests = 10; // Conservative limit (API allows 15/min)
-    private readonly windowMs = 60000; // 1 minute window
-    private rateLimitUntil: number = 0;
-
-    canMakeRequest(): { allowed: boolean; waitTime?: number } {
-        const now = Date.now();
-
-        // Check if we're in a rate-limit cooldown
-        if (this.rateLimitUntil > now) {
-            const waitTime = Math.ceil((this.rateLimitUntil - now) / 1000);
-            return { allowed: false, waitTime };
-        }
-
-        // Clean old timestamps outside the window
-        this.requestTimestamps = this.requestTimestamps.filter(
-            timestamp => now - timestamp < this.windowMs
-        );
-
-        // Check if we're at the limit
-        if (this.requestTimestamps.length >= this.maxRequests) {
-            const oldestRequest = this.requestTimestamps[0];
-            const waitTime = Math.ceil((oldestRequest + this.windowMs - now) / 1000);
-            return { allowed: false, waitTime };
-        }
-
-        return { allowed: true };
-    }
-
-    recordRequest() {
-        this.requestTimestamps.push(Date.now());
-    }
-
-    setRateLimit(seconds: number) {
-        this.rateLimitUntil = Date.now() + (seconds * 1000);
-    }
-}
-
-const rateLimiter = new RateLimiter();
-
 const callWithRetry = async <T>(
     fn: () => Promise<T>,
     retries = MAX_RETRIES,
     backoff = INITIAL_BACKOFF
 ): Promise<T> => {
-    // Check rate limit before making request
-    const { allowed, waitTime } = rateLimiter.canMakeRequest();
-    if (!allowed && waitTime) {
-        throw new RateLimitError(waitTime);
-    }
-
     try {
-        rateLimiter.recordRequest();
         return await fn();
     } catch (error: any) {
         // Handle explicit retry delay from Gemini API
@@ -103,12 +54,14 @@ const callWithRetry = async <T>(
             const match = error.message?.match(/Please retry in ([0-9.]+)s/);
             if (match) {
                 const delaySeconds = parseFloat(match[1]);
-                rateLimiter.setRateLimit(delaySeconds);
-                throw new RateLimitError(delaySeconds);
+                // If delay is significant (> 5s), let the UI handle it
+                if (delaySeconds > 5) {
+                    throw new RateLimitError(delaySeconds);
+                }
+                // Otherwise wait and retry
+                await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000 + 500));
+                return callWithRetry(fn, retries - 1, backoff);
             }
-            // If no specific delay mentioned, set a 60s cooldown
-            rateLimiter.setRateLimit(60);
-            throw new RateLimitError(60);
         }
 
         if (retries > 0 && (

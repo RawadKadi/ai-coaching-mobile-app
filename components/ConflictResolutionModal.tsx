@@ -78,25 +78,23 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
             return;
         }
 
-        if (!recommendations || recommendations.length === 0) {
-            Alert.alert('No Slots', 'No alternative slots available to propose.');
-            return;
-        }
+
         
-        const proposedSlots = recommendations.slice(0, 3).map(r => r.time);
+        // Pass ALL available slots so the client can choose
+        const availableSlots = recommendations.map(r => r.time);
 
         if (selectedOption === 'keep') {
             // Option 1: Propose new time to INCOMING client
             onResolve({
                 action: 'propose_new_time_for_incoming',
-                proposedSlots: proposedSlots,
+                proposedSlots: availableSlots,
             });
         } else if (selectedOption === 'reschedule') {
             // Option 2: Propose reschedule to EXISTING client
             onResolve({
                 action: 'propose_reschedule_for_existing',
                 targetSessionId: conflictInfo.existingSession.id,
-                proposedSlots: proposedSlots,
+                proposedSlots: availableSlots,
             });
         }
     };
@@ -211,21 +209,7 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
                                 Send a message to {proposedSession.client_name} with alternative times.
                             </Text>
 
-                            {selectedOption === 'keep' && recommendations && (
-                                <View style={styles.recommendationsContainer}>
-                                    <Text style={styles.recommendationLabel}>
-                                        We'll suggest these top 3 slots:
-                                    </Text>
-                                    {recommendations.slice(0, 3).map((rec, idx) => (
-                                        <View key={idx} style={styles.miniSlotItem}>
-                                            <Clock size={14} color="#6B7280" />
-                                            <Text style={styles.miniSlotText}>
-                                                {new Date(rec.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                                            </Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
+
                         </TouchableOpacity>
 
                         {/* Option 2: Propose to Existing */}
@@ -233,34 +217,19 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
                             style={[styles.optionCard, styles.advancedOption, selectedOption === 'reschedule' && styles.optionCardSelected]}
                             onPress={() => setSelectedOption('reschedule')}
                         >
-                            <View style={styles.optionHeader}>
-                                <View style={styles.optionRadio}>
-                                    {selectedOption === 'reschedule' && <View style={styles.optionRadioInner} />}
-                                </View>
-                                <View>
-                                    <Text style={styles.optionTitle}>Option 2 — Propose reschedule to {existingSession.client_name}</Text>
-                                    <Text style={styles.advancedLabel}>(Sends Message)</Text>
+                            <View style={styles.optionContent}>
+                                <View style={styles.optionHeader}>
+                                    <View style={[styles.radioOuter, selectedOption === 'reschedule' && styles.radioOuterSelected]}>
+                                        {selectedOption === 'reschedule' && <View style={styles.radioInner} />}
+                                    </View>
+                                    <View style={styles.optionTextContainer}>
+                                        <Text style={styles.optionTitle}>Ask {existingSession.client_name} to Reschedule</Text>
+                                        <Text style={styles.optionDescription}>
+                                            Request {existingSession.client_name} to move their session to accommodate {proposedSession.client_name}.
+                                        </Text>
+                                    </View>
                                 </View>
                             </View>
-                            <Text style={styles.optionDescription}>
-                                Ask {existingSession.client_name} to move their session to accommodate {proposedSession.client_name}.
-                            </Text>
-
-                            {selectedOption === 'reschedule' && recommendations && (
-                                <View style={styles.recommendationsContainer}>
-                                    <Text style={styles.recommendationLabel}>
-                                        We'll suggest these top 3 slots:
-                                    </Text>
-                                    {recommendations.slice(0, 3).map((rec, idx) => (
-                                        <View key={idx} style={styles.miniSlotItem}>
-                                            <Clock size={14} color="#6B7280" />
-                                            <Text style={styles.miniSlotText}>
-                                                {new Date(rec.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                                            </Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
@@ -619,5 +588,32 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#374151',
         marginBottom: 8,
+    },
+    optionContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    radioOuter: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#3B82F6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+        marginTop: 2,
+    },
+    radioOuterSelected: {
+        borderColor: '#3B82F6',
+    },
+    radioInner: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#3B82F6',
+    },
+    optionTextContainer: {
+        flex: 1,
     },
 });

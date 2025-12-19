@@ -29,6 +29,7 @@ export default function ClientDetailsScreen() {
   const [schedulerVisible, setSchedulerVisible] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Habit | null>(null);
   const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
+  const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
 
   // Form state
   const [name, setName] = useState('');
@@ -70,6 +71,13 @@ export default function ClientDetailsScreen() {
         
       if (!sessionsError && sessionsData) {
           setAllCoachSessions(sessionsData);
+          
+          // Filter for pending resolutions for THIS client
+          const pending = sessionsData.filter(s => 
+            s.client_id === id && 
+            s.status === 'pending_resolution'
+          );
+          setPendingResolutions(pending);
       }
 
     } catch (error) {
@@ -271,6 +279,23 @@ export default function ClientDetailsScreen() {
           <CalendarIcon size={24} color="#3B82F6" />
         </TouchableOpacity>
       </View>
+
+      {pendingResolutions.length > 0 && (
+        <TouchableOpacity 
+          style={styles.pendingBanner}
+          onPress={() => {
+            // Open scheduler or a specific resolution view
+            // For now, let's open the scheduler which shows the calendar
+            setSchedulerVisible(true);
+            Alert.alert('Pending Resolutions', `You have ${pendingResolutions.length} sessions waiting for resolution. Please check the calendar.`);
+          }}
+        >
+            <Text style={styles.pendingBannerText}>
+                ⚠️ {pendingResolutions.length} Proposed Resolution{pendingResolutions.length > 1 ? 's' : ''} Pending
+            </Text>
+            <Text style={styles.pendingBannerSubtext}>Tap to review</Text>
+        </TouchableOpacity>
+      )}
 
       <ScrollView style={styles.content}>
         {/* Client Info Card */}
@@ -684,5 +709,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+
+  pendingBanner: {
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    alignItems: 'center',
+  },
+  pendingBannerText: {
+    color: '#B45309',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  pendingBannerSubtext: {
+    color: '#B45309',
+    fontSize: 12,
+    marginTop: 2,
   },
 });

@@ -82,12 +82,29 @@ export default function CoachMessagesScreen() {
             .eq('sender_id', client.user_id)
             .eq('read', false);
 
+          // Parse content if it's JSON for the preview
+          let displayContent = lastMsg?.content || 'No messages yet';
+          try {
+            const parsed = JSON.parse(displayContent);
+            if (parsed && parsed.text) {
+              displayContent = parsed.text;
+            } else if (parsed && parsed.type === 'reschedule_proposal') {
+              displayContent = '📅 Reschedule Proposal';
+            } else if (parsed && parsed.type === 'session_invite') {
+              displayContent = '🎥 Session Invite';
+            } else if (parsed && parsed.type === 'meal_log') {
+              displayContent = '🍽️ Meal Log';
+            }
+          } catch (e) {
+            // Not JSON, use as is
+          }
+
           return {
             id: client.id,
             user_id: client.user_id,
             full_name: profile.full_name,
             avatar_url: profile.avatar_url,
-            last_message: lastMsg?.content,
+            last_message: displayContent,
             last_message_time: lastMsg?.created_at,
             unread_count: count || 0,
           };

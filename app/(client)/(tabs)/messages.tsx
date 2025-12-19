@@ -15,9 +15,6 @@ if (Platform.OS === 'android') {
   }
 }
 
-
-// ... (existing imports)
-
 type Message = {
   id: string;
   sender_id: string;
@@ -26,14 +23,7 @@ type Message = {
   created_at: string;
   read: boolean;
   client_id: string;
-  metadata?: any; // Added metadata
 };
-
-// ... (ZoomableImage, TaskCompletionMessage, SessionInviteMessage components)
-
-// ... (SessionInviteMessageWrapper)
-
-
 
 const ZoomableImage = ({ imageUrl, onClose, onLoadStart, onLoadEnd }: {
   imageUrl: string;
@@ -732,18 +722,7 @@ export default function MessagesScreen() {
     const showUnreadSeparator = index === firstUnreadIndex;
 
     const renderContent = () => {
-      // 1. Check for Reschedule Proposal (Metadata based)
-      if (item.metadata && item.metadata.type === 'reschedule_proposal') {
-        return (
-            <RescheduleProposalMessage 
-                messageId={item.id}
-                metadata={item.metadata}
-                isOwn={isMe}
-            />
-        );
-      }
-
-      // 2. Task Completion (JSON content based)
+      // ... (TaskCompletionMessage logic remains same)
       let isTaskMessage = false;
       try {
         const parsed = JSON.parse(item.content);
@@ -777,7 +756,23 @@ export default function MessagesScreen() {
         );
       }
 
-      // Meal Log Logic
+      // Reschedule Proposal Logic
+      try {
+        const parsed = JSON.parse(item.content);
+        if (parsed && parsed.type === 'reschedule_proposal') {
+          return (
+            <RescheduleProposalMessage 
+              messageId={item.id}
+              metadata={parsed}
+              isOwn={isMe}
+            />
+          );
+        }
+      } catch (e) {
+        // Not JSON or missing type, fall through
+      }
+
+      // ... (MealLog logic remains same)
       let isMealLog = false;
       try {
         const parsed = JSON.parse(item.content);

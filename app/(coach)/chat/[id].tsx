@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft, X, Calendar, Video, ArrowDown } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
+import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
 import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 
 if (Platform.OS === 'android') {
@@ -1405,56 +1406,46 @@ export default function CoachChat() {
     const showUnreadSeparator = index === firstUnreadIndex;
     
     const renderContent = () => {
-      let isTaskMessage = false;
+      let parsed: any = null;
       try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'task_completion') {
-          isTaskMessage = true;
-        }
-      } catch (e) {
-        // Not JSON, render normally
-      }
-
-      if (isTaskMessage) {
-        return <TaskCompletionMessage content={item.content} isOwn={isOwn} />;
-      }
-
-      // Check if this is a session invite message
-      let isSessionInvite = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'session_invite') {
-          isSessionInvite = true;
+        if (typeof item.content === 'object' && item.content !== null) {
+          parsed = item.content;
+        } else if (typeof item.content === 'string' && (item.content.trim().startsWith('{') || item.content.trim().startsWith('['))) {
+          parsed = JSON.parse(item.content);
+          if (typeof parsed === 'string') {
+            parsed = JSON.parse(parsed);
+          }
         }
       } catch (e) {
         // Not JSON
       }
 
-      if (isSessionInvite) {
-        const parsed = JSON.parse(item.content);
-        return (
-          <SessionInviteMessageWrapper 
-            item={item}
-            parsed={parsed}
-            isOwn={isOwn}
-            loadNextSession={loadNextSession}
-          />
-        );
-      }
-
-      // Check if this is a meal log message
-      let isMealLog = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'meal_log') {
-          isMealLog = true;
+      if (parsed && parsed.type) {
+        if (parsed.type === 'task_completion') {
+          return <TaskCompletionMessage content={item.content} isOwn={isOwn} />;
         }
-      } catch (e) {
-        // Not JSON
-      }
-
-      if (isMealLog) {
-        return <MealMessageCard content={item.content} isOwn={isOwn} />;
+        if (parsed.type === 'session_invite') {
+          return (
+            <SessionInviteMessageWrapper 
+              item={item}
+              parsed={parsed}
+              isOwn={isOwn}
+              loadNextSession={loadNextSession}
+            />
+          );
+        }
+        if (parsed.type === 'reschedule_proposal') {
+          return (
+            <RescheduleProposalMessage 
+              messageId={item.id}
+              metadata={parsed}
+              isOwn={isOwn}
+            />
+          );
+        }
+        if (parsed.type === 'meal_log') {
+          return <MealMessageCard content={item.content} isOwn={isOwn} />;
+        }
       }
 
       return (
