@@ -105,11 +105,16 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
     };
 
     const { existingSession, proposedSession, recommendations } = conflictInfo;
-    const conflictDate = new Date(proposedSession.scheduled_at).toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        month: 'long', 
-        day: 'numeric' 
-    });
+    const isWeekly = proposedSession.recurrence === 'weekly';
+    const dayName = new Date(proposedSession.scheduled_at).toLocaleDateString('en-US', { weekday: 'long' });
+    
+    const conflictDate = isWeekly 
+        ? `Every ${dayName}`
+        : new Date(proposedSession.scheduled_at).toLocaleDateString('en-US', { 
+            weekday: 'long', 
+            month: 'long', 
+            day: 'numeric' 
+        });
     const conflictTime = new Date(proposedSession.scheduled_at).toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit' 

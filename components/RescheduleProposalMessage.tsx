@@ -14,6 +14,8 @@ interface RescheduleProposalMessageProps {
         acceptedSlot?: string;
         mode?: 'select_time' | 'accept_reject' | 'open_calendar' | 'confirm_reschedule';
         text?: string;
+        recurrence?: 'weekly' | 'once';
+        dayOfWeek?: string;
     };
     isOwn: boolean;
 }
@@ -191,29 +193,41 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                         </View>
                         <Text style={styles.modalSubtitle}>Available slots:</Text>
                         <ScrollView style={styles.slotsList}>
-                            {slots.map((slot, index) => {
-                                const slotDate = new Date(slot);
-                                const isSameDay = slotDate.toDateString() === originalDate.toDateString();
-                                return (
-                                    <TouchableOpacity 
-                                        key={index} 
-                                        style={styles.modalSlot}
-                                        onPress={() => handleAcceptSlot(slot)}
-                                    >
-                                        <Clock size={16} color="#374151" />
-                                        <View>
-                                            <Text style={styles.modalSlotText}>
-                                                {slotDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                            </Text>
-                                            {!isSameDay && (
-                                                <Text style={styles.modalSlotSubtext}>
-                                                    {slotDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                            {slots
+                                .filter(slot => {
+                                    if (metadata.recurrence === 'weekly') {
+                                        const slotDate = new Date(slot);
+                                        const originalDay = originalDate.getDay();
+                                        return slotDate.getDay() === originalDay;
+                                    }
+                                    return true;
+                                })
+                                .map((slot, index) => {
+                                    const slotDate = new Date(slot);
+                                    const isSameDay = slotDate.toDateString() === originalDate.toDateString();
+                                    
+                                    // For weekly, we want to show the day name clearly
+                                    const dayName = slotDate.toLocaleDateString([], { weekday: 'long' });
+                                    const dateStr = slotDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+                                    return (
+                                        <TouchableOpacity 
+                                            key={index} 
+                                            style={styles.modalSlot}
+                                            onPress={() => handleAcceptSlot(slot)}
+                                        >
+                                            <Clock size={16} color="#374151" />
+                                            <View>
+                                                <Text style={styles.modalSlotText}>
+                                                    {slotDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                                                 </Text>
-                                            )}
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
+                                                <Text style={styles.modalSlotSubtext}>
+                                                    {metadata.recurrence === 'weekly' ? `${dayName}s (starting ${dateStr})` : dateStr}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             {slots.length === 0 && (
                                 <Text style={styles.noSlotsText}>No slots available.</Text>
                             )}

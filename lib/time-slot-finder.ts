@@ -17,6 +17,7 @@ interface FindSlotsOptions {
     duration: number; // minutes
     existingSessions: Session[];
     targetClientId?: string;
+    recurrence?: 'weekly' | 'once';
 }
 
 /**
@@ -29,6 +30,7 @@ export function findAvailableSlots({
     existingSessions,
     targetClientId,
     ignoreSessionId,
+    recurrence,
 }: FindSlotsOptions & { ignoreSessionId?: string }): TimeSlotRecommendation[] {
     const recommendations: TimeSlotRecommendation[] = [];
     const proposedDate = new Date(proposedTime);
@@ -111,16 +113,24 @@ export function findAvailableSlots({
     // 1. Find available slots on the SAME DAY
     let availableSlots = findSlotsOnDay(proposedDate, duration, isSlotAvailable);
 
-    // 2. If fewer than 3 slots found, search the next 7 days
+    // 2. If fewer than 3 slots found, search future occurrences
     if (availableSlots.length < 3) {
-        console.log('[SlotFinder] Insufficient slots on same day, searching next 7 days...');
-        for (let i = 1; i <= 7; i++) {
-            const nextDay = new Date(proposedDate);
-            nextDay.setDate(proposedDate.getDate() + i);
-            const nextDaySlots = findSlotsOnDay(nextDay, duration, isSlotAvailable);
+        console.log(`[SlotFinder] Insufficient slots on same day, searching future ${recurrence === 'weekly' ? 'weeks' : 'days'}...`);
+        for (let i = 1; i <= 14; i++) {
+            const nextDate = new Date(proposedDate);
+            if (recurrence === 'weekly') {
+                // For weekly, only look at the same day in future weeks
+                nextDate.setDate(proposedDate.getDate() + (i * 7));
+            } else {
+                // For once, look at consecutive days
+                nextDate.setDate(proposedDate.getDate() + i);
+            }
+
+            const nextDaySlots = findSlotsOnDay(nextDate, duration, isSlotAvailable);
             availableSlots = [...availableSlots, ...nextDaySlots];
 
             if (availableSlots.length >= 10) break; // Stop if we have enough
+            if (i >= 7 && recurrence !== 'weekly') break; // Only search 7 days for 'once'
         }
     }
 

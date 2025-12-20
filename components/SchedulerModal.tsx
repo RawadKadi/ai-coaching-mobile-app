@@ -116,7 +116,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             
             // If it's the same day as today, use today's date
             if (daysToAdd === 0) {
-                return now.toISOString().split('T')[0];
+                return toLocalISO(now);
             }
             
             // Otherwise get the next occurrence of this day
@@ -124,7 +124,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             
             const targetDate = new Date(now);
             targetDate.setDate(targetDate.getDate() + daysToAdd);
-            return targetDate.toISOString().split('T')[0];
+            return toLocalISO(targetDate);
         }
         
         return keyword; // Fallback
@@ -143,14 +143,29 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             for (const isoDate of uniqueDates) {
                 const result = await parseScheduleRequest({
                     coachInput: `Schedule on ${isoDate} at ${time} ${recurrence === 'weekly' ? 'every week' : 'one time'}`,
-                    currentDate: new Date().toISOString(),
+                    currentDate: new Date().toLocaleString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        timeZoneName: 'short'
+                    }),
                     clientContext,
                     currentProposedSessions: proposedSessions,
                     existingSessions: existingSessions,
                 });
 
                 if (result.sessions && result.sessions.length > 0) {
-                    allSessions.push(...result.sessions);
+                    // Force the recurrence and day_of_week from our intent if AI didn't pick it up
+                    const sessionsWithIntent = result.sessions.map(s => ({
+                        ...s,
+                        recurrence: recurrence, // Always use the form's recurrence
+                        day_of_week: s.day_of_week || new Date(isoDate).toLocaleDateString('en-US', { weekday: 'long' })
+                    }));
+                    allSessions.push(...sessionsWithIntent);
                 } else if (result.clarification) {
                     Alert.alert('Validation Error', result.clarification.message);
                     setLoading(false);
@@ -266,6 +281,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             existingSessions: existingSessions,
             targetClientId: targetClientId,
             ignoreSessionId: conflict.existingSession?.id,
+            recurrence: session.recurrence,
         });
 
         // Build conflict info
@@ -286,6 +302,8 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 scheduled_at: session.scheduled_at,
                 duration_minutes: session.duration_minutes,
                 session_type: session.session_type,
+                recurrence: session.recurrence,
+                day_of_week: session.day_of_week,
             },
             recommendations,
         };
@@ -339,13 +357,23 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 if (sessionError) throw sessionError;
 
                 // 3. Send Message
+                const isWeekly = proposedSession.recurrence === 'weekly';
+                const dayName = new Date(proposedSession.scheduled_at).toLocaleDateString('en-US', { weekday: 'long' });
+                const dateStr = new Date(proposedSession.scheduled_at).toLocaleDateString();
+                
+                const messageText = isWeekly
+                    ? `Hi ${proposedSession.client_name}, the time you requested for your weekly sessions on ${dayName}s is unavailable. Please tap here to choose another time.`
+                    : `Hi ${proposedSession.client_name}, the time you requested for ${dateStr} is unavailable. Please tap here to choose another time.`;
+
                 const messageContent = {
                     type: 'reschedule_proposal',
                     sessionId: newSession.id,
                     originalTime: proposedSession.scheduled_at,
-                    availableSlots: resolution.proposedSlots, // Contains all slots now
-                    mode: 'open_calendar', // New mode
-                    text: `Hi ${proposedSession.client_name}, the time you requested is unavailable. Please tap here to choose another time for ${new Date(proposedSession.scheduled_at).toLocaleDateString()}.`
+                    availableSlots: resolution.proposedSlots,
+                    mode: 'open_calendar',
+                    text: messageText,
+                    recurrence: proposedSession.recurrence,
+                    dayOfWeek: dayName
                 };
 
                 await supabase.from('messages').insert({
@@ -370,13 +398,23 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 if (clientError || !clientData) throw new Error('Client not found');
 
                 // 2. Send Message
+                const isWeekly = existingSession.recurrence === 'weekly';
+                const dayName = new Date(existingSession.scheduled_at).toLocaleDateString('en-US', { weekday: 'long' });
+                const dateStr = new Date(existingSession.scheduled_at).toLocaleDateString();
+
+                const messageText = isWeekly
+                    ? `Hi ${existingSession.client_name}, could we reschedule our weekly sessions on ${dayName}s to accommodate another client?`
+                    : `Hi ${existingSession.client_name}, could we reschedule our session on ${dateStr} to accommodate another client?`;
+
                 const messageContent = {
                     type: 'reschedule_proposal',
                     sessionId: existingSession.id,
                     originalTime: existingSession.scheduled_at,
-                    availableSlots: resolution.proposedSlots, // Slots for them if they accept
-                    mode: 'confirm_reschedule', // New mode
-                    text: `Hi ${existingSession.client_name}, could we reschedule our session to accommodate another client?`
+                    availableSlots: resolution.proposedSlots,
+                    mode: 'confirm_reschedule',
+                    text: messageText,
+                    recurrence: existingSession.recurrence,
+                    dayOfWeek: dayName
                 };
 
                 await supabase.from('messages').insert({
