@@ -17,6 +17,7 @@ import { Client, Habit } from '@/types/database';
 import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon } from 'lucide-react-native';
 import SchedulerModal from '@/components/SchedulerModal';
 import PendingResolutionsModal from '@/components/PendingResolutionsModal';
+import ConflictResolutionModal from '@/components/ConflictResolutionModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 
 export default function ClientDetailsScreen() {
@@ -32,6 +33,10 @@ export default function ClientDetailsScreen() {
   const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
+  
+  // Conflict Resolution State
+  const [conflictModalVisible, setConflictModalVisible] = useState(false);
+  const [currentConflict, setCurrentConflict] = useState<any>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -77,7 +82,11 @@ export default function ClientDetailsScreen() {
           // Filter for pending resolutions for THIS client
           const pending = sessionsData.filter(s => 
             s.client_id === id && 
-            s.status === 'pending_resolution'
+            (
+                s.status === 'pending_resolution' ||
+                s.status === 'proposed' ||
+                (s.status === 'scheduled' && s.cancellation_reason && s.cancellation_reason.startsWith('pending_reschedule'))
+            )
           );
           setPendingResolutions(pending);
       }
@@ -456,15 +465,99 @@ export default function ClientDetailsScreen() {
 
       <PendingResolutionsModal
         visible={pendingModalVisible}
-        onClose={() => setPendingModalVisible(false)}
+        onClose={() => {
+            setPendingModalVisible(false);
+            loadClientData(); // Refresh data to show correct count
+        }}
         sessions={pendingResolutions}
         onResolve={(session) => {
             setPendingModalVisible(false);
-            // In the future, this should open the ConflictResolutionModal specifically for this session
-            // For now, allow viewing it in the calendar or scheduler
-            Alert.alert('Resolution Required', `Please check your calendar for the session on ${new Date(session.scheduled_at).toLocaleDateString()} to resolve conflicts.`);
+            
+            // Find the conflicting session
+            const proposedStart = new Date(session.scheduled_at).getTime();
+            const proposedEnd = proposedStart + session.duration_minutes * 60000;
+
+            const existing = allCoachSessions.find(s => {
+                if (s.id === session.id) return false;
+                if (s.status === 'cancelled') return false;
+                
+                const start = new Date(s.scheduled_at).getTime();
+                const end = start + s.duration_minutes * 60000;
+
+                return (start < proposedEnd && end > proposedStart);
+            });
+
+            if (existing) {
+                // Populate conflict info
+                setCurrentConflict({
+                    existingSession: {
+                        ...existing,
+                        client_name: existing.client?.profiles?.full_name || 'Unknown' // Assuming joined data
+                    },
+                    proposedSession: {
+                        ...session,
+                        client_name: (client as any).profiles?.full_name || 'Client'
+                    },
+                    recommendations: [] // Todo: fetch recommendations if needed
+                });
+                setConflictModalVisible(true);
+            } else {
+                 Alert.alert('No Conflict Found', 'The conflicting session may have been moved or cancelled. You can now confirm this session.', [
+                     { text: 'Cancel', style: 'cancel' },
+                     { text: 'Confirm Session', onPress: async () => {
+                         // Simple status update to scheduled
+                         const { error } = await supabase.from('sessions').update({ status: 'scheduled' }).eq('id', session.id);
+                         if (!error) {
+                             Alert.alert('Success', 'Session confirmed!');
+                             loadClientData();
+                         }
+                     }}
+                 ]);
+            }
         }}
       />
+
+       {/* Conflict Resolution Modal */}
+       {currentConflict && (
+        <ConflictResolutionModal 
+            visible={conflictModalVisible}
+            conflictInfo={currentConflict}
+            onCancel={() => {
+                setConflictModalVisible(false);
+                setCurrentConflict(null);
+            }}
+            onResolve={async (resolution) => {
+                console.log('Resolving with:', resolution);
+               try {
+                   if (resolution.action === 'propose_new_time_for_incoming') {
+                       // Option 1 Logic: Send msg to Incoming (Current Client in this context, mostly)
+                       // logic to send message... 
+                       // For now we just update status to 'proposed' (or keep it) and mark invitation sent
+                        await supabase.from('sessions').update({ 
+                            invite_sent: true,
+                            status: 'proposed' // Ensure it's proposed
+                        }).eq('id', currentConflict.proposedSession.id);
+                        
+                        Alert.alert('Sent', 'Proposal sent to client.');
+                   } else if (resolution.action === 'propose_reschedule_for_existing') {
+                       // Option 2 Logic: Ask Existing (Other Client) to move
+                        await supabase.from('sessions').update({ 
+                            status: 'scheduled', // Keep scheduled until they verify
+                            cancellation_reason: 'pending_reschedule_for_' + currentConflict.proposedSession.client_id
+                        }).eq('id', currentConflict.existingSession.id);
+
+                        Alert.alert('Sent', `Request sent to ${currentConflict.existingSession.client_name}`);
+                   }
+                   
+                   setConflictModalVisible(false);
+                   setCurrentConflict(null);
+                   loadClientData();
+               } catch (e) {
+                   Alert.alert('Error', 'Failed to apply resolution');
+               }
+            }}
+        />
+       )}
     </View>
   );
 }
