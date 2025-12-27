@@ -36,15 +36,13 @@ export function findAvailableSlots({
     const proposedDate = new Date(proposedTime);
     const now = new Date();
 
-    console.log(`[SlotFinder] Searching for slots on ${proposedDate.toDateString()} for Client ${targetClientId}`);
-    console.log(`[SlotFinder] Existing sessions: ${existingSessions.length}`);
-    if (ignoreSessionId) console.log(`[SlotFinder] Ignoring session: ${ignoreSessionId}`);
+    // console.log(`[SlotFinder] Searching for slots on ${proposedDate.toLocaleDateString()} for Client ${targetClientId}`);
 
     // Helper: Check if time slot is available
     const isSlotAvailable = (time: Date): boolean => {
-        // 1. Filter Past Slots
-        if (time < now) {
-            // console.log(`[SlotFinder] Rejected ${time.toLocaleTimeString()}: Past time`);
+        // 1. Filter Past Slots (with 5-minute buffer to account for processing time)
+        const nowWithBuffer = new Date(now.getTime() - 5 * 60000);
+        if (time < nowWithBuffer) {
             return false;
         }
 
@@ -53,25 +51,21 @@ export function findAvailableSlots({
 
         // Check coach availability (no overlaps on same day)
         const hasOverlap = existingSessions.some(session => {
-            if (session.id === ignoreSessionId) {
-                // console.log(`[SlotFinder] Ignoring session ${session.id} (matches ignoreSessionId)`);
-                return false;
-            }
-            if (session.status === 'cancelled') return false; // Ignore cancelled sessions
-            if (session.status === 'pending_resolution') return false; // Ignore pending resolutions
+            if (session.id === ignoreSessionId) return false;
+            if (session.status === 'cancelled') return false;
+            if (session.status === 'pending_resolution') return false;
 
             const sessionStart = new Date(session.scheduled_at);
 
             // Must be same day
-            if (!isSameDay(slotStart, sessionStart)) return false;
+            if (!isSameDay(slotStart, sessionStart)) {
+                return false;
+            }
 
-            const sessionDuration = session.duration_minutes || 60; // Default to 60 if missing
+            const sessionDuration = session.duration_minutes || 60;
             const sessionEnd = new Date(sessionStart.getTime() + sessionDuration * 60000);
             const overlaps = slotStart < sessionEnd && slotEnd > sessionStart;
 
-            if (overlaps) {
-                console.log(`[SlotFinder] REJECTED ${time.toLocaleTimeString()}: Overlap with session ${session.id} (${sessionStart.toLocaleTimeString()} - ${sessionEnd.toLocaleTimeString()})`);
-            }
             return overlaps;
         });
 
@@ -81,7 +75,7 @@ export function findAvailableSlots({
 
         // Check client limit (one per day)
         if (targetClientId) {
-            const clientHasSessionToday = existingSessions.some(session => {
+            const clientSessionsToday = existingSessions.filter(session => {
                 if (session.id === ignoreSessionId) return false; // Ignore specific session
                 if (session.status === 'cancelled') return false; // Ignore cancelled sessions
                 if (session.status === 'pending_resolution') return false; // Ignore pending resolutions
@@ -91,8 +85,7 @@ export function findAvailableSlots({
                 return isSameDay(slotStart, sessionDate);
             });
 
-            if (clientHasSessionToday) {
-                console.log(`[SlotFinder] Rejected ${time.toLocaleTimeString()}: Client ${targetClientId} already has session`);
+            if (clientSessionsToday.length > 0) {
                 return false;
             }
         }
@@ -102,9 +95,11 @@ export function findAvailableSlots({
 
     // Helper: Check if two dates are the same day
     const isSameDay = (date1: Date, date2: Date): boolean => {
-        return date1.getDate() === date2.getDate() &&
-            date1.getMonth() === date2.getMonth() &&
-            date1.getFullYear() === date2.getFullYear();
+        const d1 = new Date(date1);
+        const d2 = new Date(date2);
+        return d1.getFullYear() === d2.getFullYear() &&
+            d1.getMonth() === d2.getMonth() &&
+            d1.getDate() === d2.getDate();
     };
 
     // INTENT LOCKING: Only search for slots on the SAME DAY as the proposed time
@@ -115,22 +110,20 @@ export function findAvailableSlots({
 
     // 2. If fewer than 3 slots found, search future occurrences
     if (availableSlots.length < 3) {
-        console.log(`[SlotFinder] Insufficient slots on same day, searching future ${recurrence === 'weekly' ? 'weeks' : 'days'}...`);
-        for (let i = 1; i <= 14; i++) {
+        const searchLimit = recurrence === 'weekly' ? 14 : 3; // Search up to 3 days for 'once' if day is full
+
+        for (let i = 1; i <= searchLimit; i++) {
             const nextDate = new Date(proposedDate);
             if (recurrence === 'weekly') {
-                // For weekly, only look at the same day in future weeks
                 nextDate.setDate(proposedDate.getDate() + (i * 7));
             } else {
-                // For once, look at consecutive days
                 nextDate.setDate(proposedDate.getDate() + i);
             }
 
             const nextDaySlots = findSlotsOnDay(nextDate, duration, isSlotAvailable);
             availableSlots = [...availableSlots, ...nextDaySlots];
 
-            if (availableSlots.length >= 10) break; // Stop if we have enough
-            if (i >= 7 && recurrence !== 'weekly') break; // Only search 7 days for 'once'
+            if (availableSlots.length >= 10) break;
         }
     }
 

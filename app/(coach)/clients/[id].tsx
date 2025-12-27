@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { Client, Habit } from '@/types/database';
 import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon } from 'lucide-react-native';
 import SchedulerModal from '@/components/SchedulerModal';
+import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 
 export default function ClientDetailsScreen() {
@@ -30,6 +31,7 @@ export default function ClientDetailsScreen() {
   const [editingChallenge, setEditingChallenge] = useState<Habit | null>(null);
   const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
+  const [pendingModalVisible, setPendingModalVisible] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -284,10 +286,7 @@ export default function ClientDetailsScreen() {
         <TouchableOpacity 
           style={styles.pendingBanner}
           onPress={() => {
-            // Open scheduler or a specific resolution view
-            // For now, let's open the scheduler which shows the calendar
-            setSchedulerVisible(true);
-            Alert.alert('Pending Resolutions', `You have ${pendingResolutions.length} sessions waiting for resolution. Please check the calendar.`);
+            setPendingModalVisible(true);
           }}
         >
             <Text style={styles.pendingBannerText}>
@@ -454,6 +453,18 @@ export default function ClientDetailsScreen() {
           targetClientId={id as string}
         />
       )}
+
+      <PendingResolutionsModal
+        visible={pendingModalVisible}
+        onClose={() => setPendingModalVisible(false)}
+        sessions={pendingResolutions}
+        onResolve={(session) => {
+            setPendingModalVisible(false);
+            // In the future, this should open the ConflictResolutionModal specifically for this session
+            // For now, allow viewing it in the calendar or scheduler
+            Alert.alert('Resolution Required', `Please check your calendar for the session on ${new Date(session.scheduled_at).toLocaleDateString()} to resolve conflicts.`);
+        }}
+      />
     </View>
   );
 }

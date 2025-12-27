@@ -2,6 +2,7 @@ export interface TimeSlotRecommendation {
     time: string;
     label: string;
     reason: string;
+    priority?: 'high' | 'medium' | 'low';
 }
 
 export interface ConflictInfo {
@@ -14,6 +15,7 @@ export interface ConflictInfo {
         scheduled_at: string;
         duration_minutes: number;
         session_type: string;
+        recurrence?: 'weekly' | 'once';
     };
     proposedSession: {
         client_id: string;

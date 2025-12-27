@@ -193,18 +193,29 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                         </View>
                         <Text style={styles.modalSubtitle}>Available slots:</Text>
                         <ScrollView style={styles.slotsList}>
-                            {slots
-                                .filter(slot => {
+                            {(() => {
+                                const filteredSlots = slots.filter(slot => {
+                                    const slotDate = new Date(slot);
                                     if (metadata.recurrence === 'weekly') {
-                                        const slotDate = new Date(slot);
                                         const originalDay = originalDate.getDay();
                                         return slotDate.getDay() === originalDay;
                                     }
+                                    if (metadata.recurrence === 'once') {
+                                        return slotDate.getFullYear() === originalDate.getFullYear() &&
+                                               slotDate.getMonth() === originalDate.getMonth() &&
+                                               slotDate.getDate() === originalDate.getDate();
+                                    }
                                     return true;
-                                })
-                                .map((slot, index) => {
+                                });
+
+                                // Fallback: if filter returns nothing, show all slots (better than empty)
+                                const displaySlots = filteredSlots.length > 0 ? filteredSlots : slots;
+
+                                return displaySlots.map((slot, index) => {
                                     const slotDate = new Date(slot);
-                                    const isSameDay = slotDate.toDateString() === originalDate.toDateString();
+                                    const isSameDay = slotDate.getFullYear() === originalDate.getFullYear() &&
+                                                     slotDate.getMonth() === originalDate.getMonth() &&
+                                                     slotDate.getDate() === originalDate.getDate();
                                     
                                     // For weekly, we want to show the day name clearly
                                     const dayName = slotDate.toLocaleDateString([], { weekday: 'long' });
@@ -227,7 +238,8 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                                             </View>
                                         </TouchableOpacity>
                                     );
-                                })}
+                                });
+                            })()}
                             {slots.length === 0 && (
                                 <Text style={styles.noSlotsText}>No slots available.</Text>
                             )}

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat } from 'lucide-react-native';
-import { parseScheduleRequest, ProposedSession, RateLimitError } from '@/lib/ai-scheduling-service';
-import { parseSchedulingInput } from '@/lib/scheduling-parser';
+import { parseScheduleRequest, ProposedSession, RateLimitError, extractSchedulingIntent } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
 import ConflictResolutionModal from './ConflictResolutionModal';
 import { ConflictInfo, Resolution } from '@/types/conflict';
@@ -51,39 +50,76 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         setShowConflictModal(false);
     };
 
+    const formatTimeToHHmm = (isoString: string) => {
+        try {
+            const date = new Date(isoString);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        } catch (e) {
+            return '';
+        }
+    };
+
+    const updateSessionTime = (isoString: string, timeStr: string): string => {
+        try {
+            const date = new Date(isoString);
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+                date.setHours(hours, minutes, 0, 0);
+            }
+            return date.toISOString();
+        } catch (e) {
+            return isoString;
+        }
+    };
+
     const handleAnalyze = async () => {
         if (!input.trim()) return;
 
-        // Parse the input client-side
-        const parsed = parseSchedulingInput(input);
+        setLoading(true);
         
-        // Check what we have and what we need
-        const needsDates = !parsed.hasDate && formDates.length === 0;
-        const needsTime = !parsed.hasTime && !formTime;
-        const needsRecurrence = parsed.recurrence === null && formRecurrence === null;
+        // CRITICAL: Clear previous analysis state for a fresh start to avoid "sticky" fields
+        setFormTime('');
+        setFormDates([]);
+        setFormRecurrence(null);
+        setProposedSessions([]);
 
-        // If we're missing date or time, show the form
-        if (needsDates || needsTime) {
-            setFormTime(parsed.time || formTime || '');
-            setFormDates(parsed.dates || formDates);
-            setStep('form');
-            return;
+        try {
+            // Use AI to extract intent robustly (handles typos, abbreviations, multiple sessions)
+            const intent = await extractSchedulingIntent(input);
+            
+            // Map NEW sessions to form state (filter out null dates for initial analysis)
+            const newDates = intent.sessions.map(s => s.date).filter((d): d is string => d !== null);
+            const firstTime = intent.sessions.find(s => s.time !== null)?.time || '';
+            const newRecurrence = intent.recurrence;
+
+            // Update form state with whatever was found
+            if (firstTime) setFormTime(firstTime);
+            if (newDates.length > 0) setFormDates(newDates);
+            if (newRecurrence) setFormRecurrence(newRecurrence);
+
+            // Check what we have and what we need
+            // needsTime is true if ANY session is missing a time
+            const needsDates = newDates.length === 0;
+            const needsTime = intent.sessions.length > 0 && intent.sessions.some(s => s.time === null);
+            const needsRecurrence = !newRecurrence;
+
+            // If we're missing date or time, show the form
+            if (needsDates || needsTime || needsRecurrence) {
+                setStep('form');
+                return;
+            }
+
+            // We have everything, proceed to AI validation
+            await finalizeWithAI(
+                intent.sessions.filter((s): s is { date: string, time: string | null } => s.date !== null),
+                newRecurrence || 'once'
+            );
+        } catch (error) {
+            console.error('Error in handleAnalyze:', error);
+            Alert.alert('Error', 'Failed to analyze scheduling request. Please try again.');
+        } finally {
+            setLoading(false);
         }
-
-        // If we have both date and time but recurrence is unclear, ask
-        if (needsRecurrence) {
-            setFormTime(parsed.time || formTime);
-            setFormDates(parsed.dates || formDates);
-            setStep('form');
-            return;
-        }
-
-        // We have everything, proceed to AI validation
-        await finalizeWithAI(
-            parsed.time || formTime,
-            parsed.dates || formDates,
-            parsed.recurrence || formRecurrence || 'once'
-        );
     };
 
 
@@ -130,19 +166,21 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         return keyword; // Fallback
     };
 
-    const finalizeWithAI = async (time: string, dates: string[], recurrence: 'once' | 'weekly') => {
+    const finalizeWithAI = async (
+        sessionIntents: { date: string, time: string | null }[], 
+        recurrence: 'weekly' | 'once'
+    ) => {
         setLoading(true);
         try {
-            // Resolve all date keywords to ISO dates and deduplicate
-            const resolvedDates = dates.map(d => resolveDateKeywordToISO(d));
-            const uniqueDates = Array.from(new Set(resolvedDates));
-            
             const allSessions: ProposedSession[] = [];
             
-            // Create a session for each unique date
-            for (const isoDate of uniqueDates) {
+            // Create a session for each unique intent
+            for (const intent of sessionIntents) {
+                // If date is a keyword (monday, today), resolve to ISO
+                const isoDate = resolveDateKeywordToISO(intent.date);
+                
                 const result = await parseScheduleRequest({
-                    coachInput: `Schedule on ${isoDate} at ${time} ${recurrence === 'weekly' ? 'every week' : 'one time'}`,
+                    coachInput: `Schedule on ${isoDate} at ${intent.time} ${recurrence === 'weekly' ? 'every week' : 'one time'}`,
                     currentDate: new Date().toLocaleString('en-US', { 
                         weekday: 'long', 
                         year: 'numeric', 
@@ -191,14 +229,55 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         }
     };
 
-    const handleFormSubmit = () => {
-        // Validate form
-        if (!formTime || formDates.length === 0 || !formRecurrence) {
-            Alert.alert('Missing Information', 'Please fill in all fields.');
+    const handleFormSubmit = async () => {
+        if (!formTime.trim() || formDates.length === 0) {
+            Alert.alert('Missing Information', 'Please provide dates and times.');
             return;
         }
-        
-        finalizeWithAI(formTime, formDates, formRecurrence);
+
+        setLoading(true);
+        try {
+            // Re-analyze the follow-up input (which might be "Mon at 1, Tue at 4" OR just "1pm")
+            const intent = await extractSchedulingIntent(formTime);
+            const finalRecurrence = intent.recurrence || formRecurrence || 'once';
+            
+            let finalIntents: { date: string, time: string | null }[] = [];
+
+            // Case 1: AI found specific sessions (e.g., "Monday at 1pm")
+            const specificSessions = intent.sessions.filter(s => s.date !== null);
+            const catchAllTime = intent.sessions.find(s => s.date === null)?.time;
+
+            if (specificSessions.length > 0) {
+                // Use specific sessions found in text
+                finalIntents = specificSessions.map(s => ({ date: s.date!, time: s.time }));
+                
+                // If there's a catch-all time (e.g. "Mon at 1 and everything else at 4"),
+                // apply it to UI-selected dates NOT mentioned in text.
+                if (catchAllTime) {
+                    const mentionedDates = new Set(specificSessions.map(s => s.date!));
+                    for (const day of formDates) {
+                        if (!mentionedDates.has(day)) {
+                            finalIntents.push({ date: day, time: catchAllTime });
+                        }
+                    }
+                }
+            } else if (catchAllTime) {
+                // Case 2: AI only found a time (e.g., "1pm")
+                // Apply this time to all selected dates from the UI
+                finalIntents = formDates.map(day => ({ date: day, time: catchAllTime }));
+            } else {
+                // Case 3: AI couldn't parse it well, fallback to treating the whole string as time
+                finalIntents = formDates.map(day => ({ date: day, time: formTime }));
+            }
+
+            // Proceed to finalize
+            await finalizeWithAI(finalIntents, finalRecurrence);
+        } catch (error) {
+            console.error('Error in handleFormSubmit:', error);
+            Alert.alert('Error', 'Failed to process follow-up input.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleConfirm = async () => {
@@ -280,9 +359,10 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             duration: session.duration_minutes,
             existingSessions: existingSessions,
             targetClientId: targetClientId,
-            ignoreSessionId: conflict.existingSession?.id,
+            ignoreSessionId: conflict.existingSession?.client_id === targetClientId ? conflict.existingSession?.id : undefined,
             recurrence: session.recurrence,
         });
+
 
         // Build conflict info
         const conflictData: ConflictInfo = {
@@ -295,6 +375,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 scheduled_at: conflict.existingSession.scheduled_at,
                 duration_minutes: conflict.existingSession.duration_minutes,
                 session_type: conflict.existingSession.session_type,
+                recurrence: conflict.existingSession.recurrence,
             },
             proposedSession: {
                 client_id: targetClientId,
@@ -363,7 +444,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 
                 const messageText = isWeekly
                     ? `Hi ${proposedSession.client_name}, the time you requested for your weekly sessions on ${dayName}s is unavailable. Please tap here to choose another time.`
-                    : `Hi ${proposedSession.client_name}, the time you requested for ${dateStr} is unavailable. Please tap here to choose another time.`;
+                    : `Hi ${proposedSession.client_name}, the time you requested for ${dayName}, ${dateStr} is unavailable. Please tap here to choose another time.`;
 
                 const messageContent = {
                     type: 'reschedule_proposal',
@@ -404,7 +485,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                 const messageText = isWeekly
                     ? `Hi ${existingSession.client_name}, could we reschedule our weekly sessions on ${dayName}s to accommodate another client?`
-                    : `Hi ${existingSession.client_name}, could we reschedule our session on ${dateStr} to accommodate another client?`;
+                    : `Hi ${existingSession.client_name}, could we reschedule our session on ${dayName}, ${dateStr} to accommodate another client?`;
 
                 const messageContent = {
                     type: 'reschedule_proposal',
@@ -534,83 +615,121 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     </View>
                 ) : step === 'form' ? (
                     <View style={styles.content}>
-                        <Text style={styles.label}>Complete the schedule details</Text>
+                        <View style={styles.conversationalHeader}>
+                            <Text style={styles.conversationalLabel}>
+                                {formDates.length > 0 
+                                    ? `You didn't mention the time for ${formDates.length === 1 ? formDates[0] : 'these days'}.` 
+                                    : "You didn't mention the days or time."
+                                }
+                            </Text>
+                            <Text style={styles.label}>
+                                What time do you want to schedule? 
+                                {formDates.length > 1 && <Text style={styles.subLabel}> (Mention individual days if they are different)</Text>}
+                            </Text>
+                        </View>
                         
-                        {/* Time Input */}
-                        <View style={styles.formGroup}>
-                            <Text style={styles.formLabel}>Time {formTime && '✓'}</Text>
-                            <TextInput
-                                style={styles.formInput}
-                                placeholder="e.g., 7:25pm"
-                                value={formTime}
-                                onChangeText={(text) => {
-                                    const parsed = parseSchedulingInput(`at ${text}`);
-                                    setFormTime(parsed.time || text);
-                                }}
-                            />
-                        </View>
-
-                        {/* Date Input - Multiple Selection */}
-                        <View style={styles.formGroup}>
-                            <Text style={styles.formLabel}>Dates {formDates.length > 0 && `✓ (${formDates.length} selected)`}</Text>
-                            <View style={styles.dateButtons}>
-                                {['today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
-                                    <TouchableOpacity
-                                        key={day}
-                                        style={[styles.dayButton, formDates.includes(day) && styles.dayButtonActive]}
-                                        onPress={() => {
-                                            // Toggle date selection
-                                            if (formDates.includes(day)) {
-                                                setFormDates(formDates.filter(d => d !== day));
-                                            } else {
-                                                setFormDates([...formDates, day]);
-                                            }
-                                        }}
-                                    >
-                                        <Text style={[styles.dayButtonText, formDates.includes(day) && styles.dayButtonTextActive]}>
-                                            {day.charAt(0).toUpperCase() + day.slice(1)}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
-
-                        {/* Recurrence */}
-                        {formTime && formDates.length > 0 && (
-                            <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>Recurrence {formRecurrence && '✓'}</Text>
-                                <View style={styles.recurrenceButtons}>
-                                    <TouchableOpacity
-                                        style={[styles.optionButton, formRecurrence === 'once' && styles.optionButtonActive]}
-                                        onPress={() => setFormRecurrence('once')}
-                                    >
-                                        <Calendar size={20} color={formRecurrence === 'once' ? '#3B82F6' : '#6B7280'} />
-                                        <Text style={[styles.optionButtonText, formRecurrence === 'once' && styles.optionButtonTextActive]}>
-                                            Just this date
-                                        </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.optionButton, formRecurrence === 'weekly' && styles.optionButtonActive]}
-                                        onPress={() => setFormRecurrence('weekly')}
-                                    >
-                                        <Repeat size={20} color={formRecurrence === 'weekly' ? '#3B82F6' : '#6B7280'} />
-                                        <Text style={[styles.optionButtonText, formRecurrence === 'weekly' && styles.optionButtonTextActive]}>
-                                            Every week
-                                        </Text>
-                                    </TouchableOpacity>
+                        {/* Selected Days Summary */}
+                        {formDates.length > 0 && (
+                            <View style={styles.summaryContainer}>
+                                <Text style={styles.summaryLabel}>Selected Days:</Text>
+                                <View style={styles.summaryTags}>
+                                    {formDates.map(day => (
+                                        <View key={day} style={styles.summaryTag}>
+                                            <Calendar size={12} color="#3B82F6" />
+                                            <Text style={styles.summaryTagText}>{day.charAt(0).toUpperCase() + day.slice(1)}</Text>
+                                        </View>
+                                    ))}
                                 </View>
                             </View>
                         )}
 
+                        {/* Natural Language Input */}
+                        <View style={styles.formGroup}>
+                            <Text style={styles.formLabel}>Time or Details</Text>
+                            <TextInput
+                                style={[styles.formInput, !formTime && styles.inputHighlight]}
+                                placeholder={formDates.length > 1 
+                                    ? "e.g., '1pm' or 'Mon at 1 and Tue at 4'"
+                                    : "e.g., '10am' or '7:25pm'"
+                                }
+                                value={formTime}
+                                autoFocus={!formTime}
+                                onChangeText={setFormTime}
+                            />
+                            <Text style={styles.inputHint}>
+                                Tip: You can say "All days at 1pm" or specify times per day.
+                            </Text>
+                        </View>
+
+                        {/* Date selection is HIDDEN if days are chosen, unless they want to edit */}
+                        {formDates.length > 0 ? (
+                            <TouchableOpacity 
+                                style={styles.editDatesToggle}
+                                onPress={() => setFormDates([])}
+                            >
+                                <Text style={styles.editDatesText}>+ Add or Change Dates</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.formGroup}>
+                                <Text style={styles.formLabel}>Select Dates</Text>
+                                <View style={styles.dateButtons}>
+                                    {['today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
+                                        <TouchableOpacity
+                                            key={day}
+                                            style={[styles.dayButton, formDates.includes(day) && styles.dayButtonActive]}
+                                            onPress={() => {
+                                                if (formDates.includes(day)) {
+                                                    setFormDates(formDates.filter(d => d !== day));
+                                                } else {
+                                                    setFormDates([...formDates, day]);
+                                                }
+                                            }}
+                                        >
+                                            <Text style={[styles.dayButtonText, formDates.includes(day) && styles.dayButtonTextActive]}>
+                                                {day.charAt(0).toUpperCase() + day.slice(1)}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Recurrence (Shown only if we have a basic input or if user wants to set global recurrence) */}
+                        <View style={styles.formGroup}>
+                            <Text style={styles.formLabel}>Recurrence</Text>
+                            <View style={styles.recurrenceButtons}>
+                                <TouchableOpacity
+                                    style={[styles.optionButton, (formRecurrence === 'once' || !formRecurrence) && styles.optionButtonActive]}
+                                    onPress={() => setFormRecurrence('once')}
+                                >
+                                    <Calendar size={20} color={formRecurrence === 'once' ? '#3B82F6' : '#6B7280'} />
+                                    <View>
+                                        <Text style={[styles.optionButtonText, (formRecurrence === 'once' || !formRecurrence) && styles.optionButtonTextActive]}>One-time</Text>
+                                        <Text style={styles.optionSubText}>Just for the days mentioned</Text>
+                                    </View>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.optionButton, formRecurrence === 'weekly' && styles.optionButtonActive]}
+                                    onPress={() => setFormRecurrence('weekly')}
+                                >
+                                    <Repeat size={20} color={formRecurrence === 'weekly' ? '#3B82F6' : '#6B7280'} />
+                                    <View>
+                                        <Text style={[styles.optionButtonText, formRecurrence === 'weekly' && styles.optionButtonTextActive]}>Weekly</Text>
+                                        <Text style={styles.optionSubText}>Repeating every week</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
                         <View style={styles.buttonGroup}>
                             <TouchableOpacity
-                                style={[styles.button, (!formTime || formDates.length === 0 || !formRecurrence || loading) && styles.buttonDisabled]}
+                                style={[styles.button, (!formTime || formDates.length === 0 || loading) && styles.buttonDisabled]}
                                 onPress={handleFormSubmit}
-                                disabled={!formTime || formDates.length === 0 || !formRecurrence || loading}
+                                disabled={!formTime || formDates.length === 0 || loading}
                             >
                                 {loading ? <ActivityIndicator color="#FFF" /> : (
                                     <>
-                                        <Text style={styles.buttonText}>Create Schedule</Text>
+                                        <Text style={styles.buttonText}>Review Schedule</Text>
                                         <Check size={20} color="#FFF" />
                                     </>
                                 )}
@@ -634,12 +753,30 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                     return (
                                         <View key={index} style={styles.card}>
                                             <Text style={styles.editLabel}>Edit Session</Text>
-                                            <TextInput
-                                                style={styles.editInput}
-                                                value={editForm.notes}
-                                                onChangeText={(text) => setEditForm({...editForm, notes: text})}
-                                                placeholder="Notes"
-                                            />
+                                            
+                                            <View style={styles.formGroup}>
+                                                <Text style={styles.fieldLabel}>Time (24h format)</Text>
+                                                <TextInput
+                                                    style={styles.editInput}
+                                                    value={formatTimeToHHmm(editForm.scheduled_at)}
+                                                    onChangeText={(text) => {
+                                                        const updatedTime = updateSessionTime(editForm.scheduled_at, text);
+                                                        setEditForm({ ...editForm, scheduled_at: updatedTime });
+                                                    }}
+                                                    placeholder="HH:mm"
+                                                />
+                                            </View>
+
+                                            <View style={styles.formGroup}>
+                                                <Text style={styles.fieldLabel}>Notes</Text>
+                                                <TextInput
+                                                    style={styles.editInput}
+                                                    value={editForm.notes}
+                                                    onChangeText={(text) => setEditForm({...editForm, notes: text})}
+                                                    placeholder="Notes"
+                                                />
+                                            </View>
+
                                             <View style={styles.editActions}>
                                                 <TouchableOpacity style={styles.iconButton} onPress={() => setEditingIndex(null)}>
                                                     <X size={20} color="#6B7280" />
@@ -915,6 +1052,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'flex-end',
         gap: 12,
+        marginTop: 8,
+    },
+    fieldLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#6B7280',
+        marginBottom: 4,
     },
     iconButton: {
         padding: 8,
@@ -1022,5 +1166,80 @@ const styles = StyleSheet.create({
     buttonGroup: {
         flexDirection: 'column',
         gap: 12,
+    },
+    summaryContainer: {
+        marginBottom: 20,
+        backgroundColor: '#F9FAFB',
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+    },
+    summaryLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#6B7280',
+        marginBottom: 8,
+        textTransform: 'uppercase',
+    },
+    summaryTags: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    summaryTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FFF',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    summaryTagText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: '#374151',
+    },
+    inputHighlight: {
+        borderColor: '#3B82F6',
+        backgroundColor: '#EFF6FF',
+    },
+    editDatesToggle: {
+        marginTop: -16,
+        marginBottom: 24,
+        padding: 4,
+    },
+    editDatesText: {
+        fontSize: 13,
+        color: '#3B82F6',
+        fontWeight: '500',
+    },
+    conversationalHeader: {
+        marginBottom: 20,
+    },
+    conversationalLabel: {
+        fontSize: 15,
+        color: '#4B5563',
+        marginBottom: 4,
+        lineHeight: 20,
+    },
+    subLabel: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '400',
+    },
+    inputHint: {
+        fontSize: 12,
+        color: '#6B7280',
+        marginTop: 6,
+        fontStyle: 'italic',
+    },
+    optionSubText: {
+        fontSize: 12,
+        color: '#6B7280',
+        marginTop: 2,
     },
 });
