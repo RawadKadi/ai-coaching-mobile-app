@@ -1,50 +1,66 @@
--- FINAL FIX for Sessions Table
--- Run this to fix the 400 Bad Request error
+-- =========================================================
+-- FIX: RE-APPLY PROPOSED STATUS AND MISSING COLUMNS
+-- =========================================================
 
--- 1. Add missing meet_link column
-ALTER TABLE public.sessions 
-ADD COLUMN IF NOT EXISTS meet_link text;
+-- 1. Ensure Enum Values (using DO block to avoid errors if they exist)
+DO $$ BEGIN
+  ALTER TYPE session_status ADD VALUE 'proposed';
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
--- 2. Enable RLS
-ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  ALTER TYPE session_status ADD VALUE 'pending_resolution';
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
--- 3. Fix RLS Policies
--- Allow coaches to insert sessions for their linked clients
-DROP POLICY IF EXISTS "Coaches can insert sessions" ON sessions;
-CREATE POLICY "Coaches can insert sessions"
-ON sessions
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM coach_client_links ccl
-    JOIN coaches c ON c.id = ccl.coach_id
-    WHERE ccl.client_id = sessions.client_id
-    AND c.user_id = auth.uid()
-    AND ccl.status = 'active'
+DO $$ BEGIN
+  ALTER TYPE session_status ADD VALUE 'reschedule_requested';
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+
+-- 2. Ensure Columns Exist (using DO block for safety)
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'invite_sent') THEN
+        ALTER TABLE sessions ADD COLUMN invite_sent BOOLEAN DEFAULT FALSE;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'cancellation_reason') THEN
+        ALTER TABLE sessions ADD COLUMN cancellation_reason TEXT;
+    END IF;
+END $$;
+
+
+-- 3. FIX RLS POLICIES FOR 'proposed' STATUS
+-- Sometimes policies check for specific statuses. Let's make sure Coaches can update ANY session they own.
+
+DROP POLICY IF EXISTS "Coaches can update their sessions" ON sessions;
+
+CREATE POLICY "Coaches can update their sessions"
+  ON sessions FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM coaches
+      WHERE coaches.id = sessions.coach_id
+      AND coaches.user_id = auth.uid()
+    )
   )
-);
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM coaches
+      WHERE coaches.id = sessions.coach_id
+      AND coaches.user_id = auth.uid()
+    )
+  );
 
--- Allow coaches to view/update/delete their sessions
-DROP POLICY IF EXISTS "Coaches can manage their sessions" ON sessions;
-CREATE POLICY "Coaches can manage their sessions"
-ON sessions
-FOR ALL
-TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM coaches c
-    WHERE c.id = sessions.coach_id
-    AND c.user_id = auth.uid()
-  )
-);
+-- 4. FORCE UPDATE EXISTING 'not yet sent' SESSIONS TO 'pending_resolution' IF they are proposed?
+-- No, let's just make sure the system works forward.
 
--- Allow clients to view their own sessions
-DROP POLICY IF EXISTS "Clients can view their own sessions" ON sessions;
-CREATE POLICY "Clients can view their own sessions"
-ON sessions
-FOR SELECT
-TO authenticated
-USING (
-  client_id = (SELECT id FROM clients WHERE user_id = auth.uid())
-);
+-- 5. Debug Helper (Optional, to see what is happening)
+-- Checks if there are any sessions that look like proposals but have wrong status
+-- SELECT * FROM sessions WHERE invite_sent = true;

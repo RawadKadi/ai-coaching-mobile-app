@@ -73,24 +73,27 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
     if (!conflictInfo) return null;
 
     const handleResolve = () => {
+        console.log('[ConflictModal] handleResolve called, selectedOption:', selectedOption);
+        
         if (!selectedOption) {
             Alert.alert('Selection Required', 'Please select a resolution option');
             return;
         }
 
-
-        
         // Pass ALL available slots so the client can choose
         const availableSlots = recommendations.map(r => r.time);
+        console.log('[ConflictModal] Available slots:', availableSlots);
 
         if (selectedOption === 'keep') {
             // Option 1: Propose new time to INCOMING client
+            console.log('[ConflictModal] Calling onResolve with Option 1');
             onResolve({
                 action: 'propose_new_time_for_incoming',
                 proposedSlots: availableSlots,
             });
         } else if (selectedOption === 'reschedule') {
             // Option 2: Propose reschedule to EXISTING client
+            console.log('[ConflictModal] Calling onResolve with Option 2');
             onResolve({
                 action: 'propose_reschedule_for_existing',
                 targetSessionId: conflictInfo.existingSession.id,

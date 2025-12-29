@@ -48,6 +48,29 @@ export default function ClientDetailsScreen() {
   useEffect(() => {
     if (coach && id) {
       loadClientData();
+      
+      // Real-time subscription for sessions to update pending resolutions live
+      const subscription = supabase
+        .channel('client-details-sessions')
+        .on(
+            'postgres_changes',
+            {
+                event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
+                schema: 'public',
+                table: 'sessions',
+                filter: `coach_id=eq.${coach.id}` // Listen for ALL coach sessions to catch conflicts
+            },
+            () => {
+                // When any session changes, reload data to update conflicts and counts
+                console.log('[ClientDetails] Session update detected, reloading...');
+                loadClientData();
+            }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(subscription);
+      };
     }
   }, [coach, id]);
 
@@ -77,6 +100,8 @@ export default function ClientDetailsScreen() {
         .gte('scheduled_at', new Date().toISOString());
         
       if (!sessionsError && sessionsData) {
+          console.log('[ClientDetails] Fetched sessions:', sessionsData.length);
+          console.log('[ClientDetails] Sample session:', sessionsData[0]);
           setAllCoachSessions(sessionsData);
           
           // Filter for pending resolutions for THIS client
@@ -85,10 +110,18 @@ export default function ClientDetailsScreen() {
             (
                 s.status === 'pending_resolution' ||
                 s.status === 'proposed' ||
-                (s.status === 'scheduled' && s.cancellation_reason && s.cancellation_reason.startsWith('pending_reschedule'))
+                (s.invite_sent === true && s.status === 'scheduled' && !s.cancellation_reason) || // Detect 'Accepted'
+                (s.cancellation_reason && s.cancellation_reason.startsWith('pending_reschedule')) ||
+                (s.cancellation_reason === 'reschedule_rejected')
             )
           );
+          console.log('[ClientDetails] Pending resolutions:', pending.length);
+          pending.forEach(p => {
+              console.log(`  - Session ${p.id}: status=${p.status}, invite_sent=${p.invite_sent}, reason=${p.cancellation_reason}`);
+          });
           setPendingResolutions(pending);
+      } else if (sessionsError) {
+          console.error('[ClientDetails] Sessions error:', sessionsError);
       }
 
     } catch (error) {
@@ -108,6 +141,19 @@ export default function ClientDetailsScreen() {
       const WEEKS_TO_SCHEDULE = 4;
 
       proposedSessions.forEach(session => {
+        // Check for conflicts locally before preparing insert
+        const proposedStart = new Date(session.scheduled_at).getTime();
+        const proposedEnd = proposedStart + session.duration_minutes * 60000;
+        
+        const hasConflict = allCoachSessions.some(s => {
+            if (s.status === 'cancelled') return false;
+            const start = new Date(s.scheduled_at).getTime();
+            const end = start + s.duration_minutes * 60000;
+            return (start < proposedEnd && end > proposedStart);
+        });
+
+        const initialStatus = hasConflict ? 'pending_resolution' : 'scheduled';
+
         if (session.recurrence === 'weekly') {
           // Generate 4 weeks of sessions
           const startDate = new Date(session.scheduled_at);
@@ -115,6 +161,16 @@ export default function ClientDetailsScreen() {
             const nextDate = new Date(startDate);
             nextDate.setDate(startDate.getDate() + (i * 7));
             
+            // Re-check conflict for EACH recurring instance
+            const instanceStart = nextDate.getTime();
+            const instanceEnd = instanceStart + session.duration_minutes * 60000;
+            const instanceConflict = allCoachSessions.some(s => {
+                if (s.status === 'cancelled') return false;
+                const start = new Date(s.scheduled_at).getTime();
+                const end = start + s.duration_minutes * 60000;
+                return (start < instanceEnd && end > instanceStart);
+            });
+
             sessionsToInsert.push({
               coach_id: coach.id,
               client_id: client.id,
@@ -122,7 +178,7 @@ export default function ClientDetailsScreen() {
               duration_minutes: session.duration_minutes,
               session_type: session.session_type,
               notes: session.notes,
-              status: 'scheduled',
+              status: instanceConflict ? 'pending_resolution' : 'scheduled',
               is_locked: true,
               ai_generated: true,
               meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}-${i}`,
@@ -137,7 +193,7 @@ export default function ClientDetailsScreen() {
             duration_minutes: session.duration_minutes,
             session_type: session.session_type,
             notes: session.notes,
-            status: 'scheduled',
+            status: initialStatus,
             is_locked: true,
             ai_generated: true,
             meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}`,
@@ -260,6 +316,18 @@ export default function ClientDetailsScreen() {
         },
       ]
     );
+  };
+
+  const handleDeletePendingResolution = async (session: any) => {
+      try {
+          const { error } = await supabase.from('sessions').delete().eq('id', session.id);
+          if (error) throw error;
+          
+          loadClientData();
+      } catch (error) {
+          console.error('Error deleting resolution:', error);
+          Alert.alert('Error', 'Failed to delete resolution');
+      }
   };
 
   if (loading) {
@@ -515,6 +583,7 @@ export default function ClientDetailsScreen() {
                  ]);
             }
         }}
+        onDelete={handleDeletePendingResolution}
       />
 
        {/* Conflict Resolution Modal */}
@@ -527,33 +596,68 @@ export default function ClientDetailsScreen() {
                 setCurrentConflict(null);
             }}
             onResolve={async (resolution) => {
-                console.log('Resolving with:', resolution);
+                console.log('[ConflictResolution] onResolve called with:', resolution);
                try {
                    if (resolution.action === 'propose_new_time_for_incoming') {
-                       // Option 1 Logic: Send msg to Incoming (Current Client in this context, mostly)
-                       // logic to send message... 
-                       // For now we just update status to 'proposed' (or keep it) and mark invitation sent
-                        await supabase.from('sessions').update({ 
-                            invite_sent: true,
-                            status: 'proposed' // Ensure it's proposed
-                        }).eq('id', currentConflict.proposedSession.id);
+                        console.log('[ConflictResolution] Option 1: updating session', currentConflict.proposedSession.id);
                         
-                        Alert.alert('Sent', 'Proposal sent to client.');
+                        const updateData = { 
+                            invite_sent: true,
+                            status: 'proposed' 
+                        };
+                        console.log('[ConflictResolution] Update data:', updateData);
+                        
+                        const { data, error: updateError } = await supabase
+                            .from('sessions')
+                            .update(updateData)
+                            .eq('id', currentConflict.proposedSession.id)
+                            .select();
+                        
+                        if (updateError) {
+                            console.error('[ConflictResolution] Database Error:', updateError);
+                            Alert.alert('Database Error', JSON.stringify(updateError));
+                            return;
+                        }
+                        
+                        console.log('[ConflictResolution] Database returned:', data);
+                        console.log('[ConflictResolution] Option 1 SUCCESS - invite_sent=true, status=proposed');
+                        Alert.alert('DEBUG', `Updated session ${currentConflict.proposedSession.id} to proposed/invite_sent=true`);
+                        
                    } else if (resolution.action === 'propose_reschedule_for_existing') {
-                       // Option 2 Logic: Ask Existing (Other Client) to move
-                        await supabase.from('sessions').update({ 
-                            status: 'scheduled', // Keep scheduled until they verify
+                        console.log('[ConflictResolution] Option 2: updating session', currentConflict.existingSession.id);
+                        
+                        const updateData = {
+                            status: 'scheduled',
+                            invite_sent: true,
                             cancellation_reason: 'pending_reschedule_for_' + currentConflict.proposedSession.client_id
-                        }).eq('id', currentConflict.existingSession.id);
+                        };
+                        console.log('[ConflictResolution] Update data:', updateData);
+                        
+                        const { data, error: updateError } = await supabase
+                            .from('sessions')
+                            .update(updateData)
+                            .eq('id', currentConflict.existingSession.id)
+                            .select();
 
-                        Alert.alert('Sent', `Request sent to ${currentConflict.existingSession.client_name}`);
+                        if (updateError) {
+                            console.error('[ConflictResolution] Database Error:', updateError);
+                            Alert.alert('Database Error', JSON.stringify(updateError));
+                            return;
+                        }
+                        
+                        console.log('[ConflictResolution] Database returned:', data);
+                        console.log('[ConflictResolution] Option 2 SUCCESS - invite_sent=true, cancellation_reason set');
+                        Alert.alert('DEBUG', `Updated session ${currentConflict.existingSession.id}`);
                    }
                    
                    setConflictModalVisible(false);
                    setCurrentConflict(null);
-                   loadClientData();
+                   console.log('[ConflictResolution] Refreshing data...');
+                   await loadClientData(); // This will refetch and update pendingResolutions
+                   Alert.alert('Sent', 'Resolution request sent to client.');
                } catch (e) {
-                   Alert.alert('Error', 'Failed to apply resolution');
+                   console.error('[ConflictResolution] Unexpected error:', e);
+                   Alert.alert('Error', 'An unexpected error occurred.');
                }
             }}
         />

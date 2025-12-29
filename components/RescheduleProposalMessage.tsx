@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
-import { Clock, Calendar, CheckCircle2, X } from 'lucide-react-native';
+import { Clock, Calendar, CheckCircle2, X, Check } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 
 interface RescheduleProposalMessageProps {
@@ -9,7 +9,7 @@ interface RescheduleProposalMessageProps {
         sessionId: string;
         originalTime: string;
         availableSlots?: string[];
-        proposedSlots?: string[]; // Legacy support
+        proposedSlots?: string[];
         status?: 'pending' | 'accepted' | 'declined';
         acceptedSlot?: string;
         mode?: 'select_time' | 'accept_reject' | 'open_calendar' | 'confirm_reschedule';
@@ -25,62 +25,62 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
     const [status, setStatus] = useState(metadata.status || 'pending');
     const [acceptedSlot, setAcceptedSlot] = useState(metadata.acceptedSlot || null);
     const [showPicker, setShowPicker] = useState(false);
+    const [selectedSlot, setSelectedSlot] = useState<string | null>(null); // NEW: Track selected slot
 
     const slots = metadata.availableSlots || metadata.proposedSlots || [];
 
-    const handleAcceptSlot = async (slot: string) => {
-        if (loading || status !== 'pending') return;
+    const handleConfirmSlot = async () => {
+        if (!selectedSlot || loading) return;
 
-        Alert.alert(
-            'Confirm Reschedule',
-            `Are you sure you want to move your session to ${new Date(slot).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Confirm',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            // 1. Update the session in the database
-                            const { error: sessionError } = await supabase
-                                .from('sessions')
-                                .update({ 
-                                    scheduled_at: slot,
-                                    status: 'scheduled' 
-                                })
-                                .eq('id', metadata.sessionId);
+        setLoading(true);
+        try {
+            console.log('[Client] Confirming slot:', selectedSlot);
+            
+            // Update session
+            const { error: sessionError } = await supabase
+                .from('sessions')
+                .update({ 
+                    scheduled_at: selectedSlot,
+                    status: 'scheduled',
+                    cancellation_reason: null,
+                    invite_sent: true
+                })
+                .eq('id', metadata.sessionId);
 
-                            if (sessionError) throw sessionError;
+            if (sessionError) {
+                console.error('[Client] Session update error:', sessionError);
+                throw new Error(sessionError.message);
+            }
 
-                            // 2. Update the message metadata
-                            const { error: msgError } = await supabase
-                                .from('messages')
-                                .update({
-                                    content: JSON.stringify({
-                                        ...metadata,
-                                        status: 'accepted',
-                                        acceptedSlot: slot
-                                    })
-                                })
-                                .eq('id', messageId);
+            // Update message
+            const { error: msgError } = await supabase
+                .from('messages')
+                .update({
+                    content: JSON.stringify({
+                        ...metadata,
+                        status: 'accepted',
+                        acceptedSlot: selectedSlot
+                    })
+                })
+                .eq('id', messageId);
 
-                            if (msgError) throw msgError;
+            if (msgError) {
+                console.error('[Client] Message update error:', msgError);
+                throw new Error(msgError.message);
+            }
 
-                            setStatus('accepted');
-                            setAcceptedSlot(slot);
-                            setShowPicker(false);
-                            Alert.alert('Success', 'Session rescheduled successfully!');
+            setStatus('accepted');
+            setAcceptedSlot(selectedSlot);
+            setShowPicker(false);
+            setSelectedSlot(null);
+            Alert.alert('Success', 'Session rescheduled successfully!');
 
-                        } catch (error) {
-                            console.error('Error rescheduling:', error);
-                            Alert.alert('Error', 'Failed to reschedule. Please try again.');
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
-                }
-            ]
-        );
+        } catch (error: any) {
+            console.error('[Client] Error rescheduling:', error);
+            Alert.alert('Update Failed', error.message || 'Failed to update. Check permissions.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleDecline = async () => {
@@ -88,7 +88,7 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
 
         Alert.alert(
             'Decline Request',
-            'Are you sure you want to decline this rescheduling request?',
+            'Are you sure you want to decline this request?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -97,6 +97,11 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                     onPress: async () => {
                         setLoading(true);
                         try {
+                            await supabase
+                                .from('sessions')
+                                .update({ cancellation_reason: 'reschedule_rejected' })
+                                .eq('id', metadata.sessionId);
+
                             await supabase
                                 .from('messages')
                                 .update({
@@ -120,6 +125,9 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
     };
 
     const originalDate = new Date(metadata.originalTime);
+    const isPending = status === 'pending';
+    const isAccepted = status === 'accepted';
+    const isDeclined = status === 'declined';
 
     return (
         <View style={[styles.container, isOwn ? styles.ownContainer : styles.theirContainer]}>
@@ -132,51 +140,40 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                 {metadata.text || `The coach has proposed new times for your session on ${originalDate.toLocaleDateString()}.`}
             </Text>
 
-            {status === 'accepted' && acceptedSlot ? (
+            {isAccepted && acceptedSlot ? (
                 <View style={styles.acceptedContainer}>
                     <CheckCircle2 size={24} color="#059669" />
                     <Text style={styles.acceptedText}>
                         Rescheduled to: {new Date(acceptedSlot).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                     </Text>
                 </View>
-            ) : status === 'declined' ? (
+            ) : isDeclined ? (
                 <View style={[styles.acceptedContainer, { borderColor: '#EF4444', backgroundColor: '#FEF2F2' }]}>
-                    <Text style={[styles.acceptedText, { color: '#B91C1C' }]}>
-                        You declined this request.
-                    </Text>
+                    <Text style={[styles.acceptedText, { color: '#B91C1C' }]}>Request Declined</Text>
                 </View>
             ) : (
                 <View style={styles.actionsContainer}>
-                    {/* Mode: Open Calendar (Option 1) */}
-                    {(metadata.mode === 'open_calendar' || metadata.mode === 'select_time') && (
-                        <TouchableOpacity 
-                            style={styles.primaryButton}
-                            onPress={() => setShowPicker(true)}
-                            disabled={loading}
-                        >
-                            <Calendar size={16} color="#FFF" />
-                            <Text style={styles.primaryButtonText}>Open Calendar</Text>
-                        </TouchableOpacity>
-                    )}
+                    {isPending && (
+                        <>
+                            <TouchableOpacity 
+                                style={styles.primaryButton}
+                                onPress={() => setShowPicker(true)}
+                                disabled={loading}
+                            >
+                                <Calendar size={16} color="#FFF" />
+                                <Text style={styles.primaryButtonText}>View Available Times</Text>
+                            </TouchableOpacity>
 
-                    {/* Mode: Confirm Reschedule (Option 2) */}
-                    {(metadata.mode === 'confirm_reschedule' || metadata.mode === 'accept_reject') && (
-                        <View style={styles.row}>
-                            <TouchableOpacity 
-                                style={[styles.primaryButton, { flex: 1, backgroundColor: '#059669', borderColor: '#059669' }]}
-                                onPress={() => setShowPicker(true)} // Accepting means picking a new time
-                                disabled={loading}
-                            >
-                                <Text style={styles.primaryButtonText}>Accept & Reschedule</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.slotButton, styles.declineButton, { flex: 1, marginTop: 0 }]}
-                                onPress={handleDecline}
-                                disabled={loading}
-                            >
-                                <Text style={styles.declineText}>Decline</Text>
-                            </TouchableOpacity>
-                        </View>
+                            {(metadata.mode === 'confirm_reschedule' || metadata.mode === 'accept_reject') && (
+                                <TouchableOpacity 
+                                    style={[styles.slotButton, styles.declineButton]}
+                                    onPress={handleDecline}
+                                    disabled={loading}
+                                >
+                                    <Text style={styles.declineText}>Decline Request</Text>
+                                </TouchableOpacity>
+                            )}
+                        </>
                     )}
                 </View>
             )}
@@ -187,63 +184,60 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Select a New Time</Text>
-                            <TouchableOpacity onPress={() => setShowPicker(false)}>
+                            <TouchableOpacity onPress={() => { setShowPicker(false); setSelectedSlot(null); }}>
                                 <X size={24} color="#374151" />
                             </TouchableOpacity>
                         </View>
-                        <Text style={styles.modalSubtitle}>Available slots:</Text>
+                        <Text style={styles.modalSubtitle}>
+                            {selectedSlot ? 'Tap "Confirm" to finalize' : 'Please choose a time slot:'}
+                        </Text>
+                        
                         <ScrollView style={styles.slotsList}>
-                            {(() => {
-                                const filteredSlots = slots.filter(slot => {
-                                    const slotDate = new Date(slot);
-                                    if (metadata.recurrence === 'weekly') {
-                                        const originalDay = originalDate.getDay();
-                                        return slotDate.getDay() === originalDay;
-                                    }
-                                    if (metadata.recurrence === 'once') {
-                                        return slotDate.getFullYear() === originalDate.getFullYear() &&
-                                               slotDate.getMonth() === originalDate.getMonth() &&
-                                               slotDate.getDate() === originalDate.getDate();
-                                    }
-                                    return true;
-                                });
+                            {slots.map((slot, index) => {
+                                const slotDate = new Date(slot);
+                                const dayName = slotDate.toLocaleDateString([], { weekday: 'long' });
+                                const dateStr = slotDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                                const isSelected = selectedSlot === slot;
 
-                                // Fallback: if filter returns nothing, show all slots (better than empty)
-                                const displaySlots = filteredSlots.length > 0 ? filteredSlots : slots;
-
-                                return displaySlots.map((slot, index) => {
-                                    const slotDate = new Date(slot);
-                                    const isSameDay = slotDate.getFullYear() === originalDate.getFullYear() &&
-                                                     slotDate.getMonth() === originalDate.getMonth() &&
-                                                     slotDate.getDate() === originalDate.getDate();
-                                    
-                                    // For weekly, we want to show the day name clearly
-                                    const dayName = slotDate.toLocaleDateString([], { weekday: 'long' });
-                                    const dateStr = slotDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
-
-                                    return (
-                                        <TouchableOpacity 
-                                            key={index} 
-                                            style={styles.modalSlot}
-                                            onPress={() => handleAcceptSlot(slot)}
-                                        >
-                                            <Clock size={16} color="#374151" />
-                                            <View>
-                                                <Text style={styles.modalSlotText}>
-                                                    {slotDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                                </Text>
-                                                <Text style={styles.modalSlotSubtext}>
-                                                    {metadata.recurrence === 'weekly' ? `${dayName}s (starting ${dateStr})` : dateStr}
-                                                </Text>
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                });
-                            })()}
-                            {slots.length === 0 && (
-                                <Text style={styles.noSlotsText}>No slots available.</Text>
-                            )}
+                                return (
+                                    <TouchableOpacity 
+                                        key={index} 
+                                        style={[styles.modalSlot, isSelected && styles.modalSlotSelected]}
+                                        onPress={() => setSelectedSlot(slot)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Clock size={18} color={isSelected ? "#3B82F6" : "#6B7280"} />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.modalSlotText, isSelected && styles.modalSlotTextSelected]}>
+                                                {slotDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                            </Text>
+                                            <Text style={styles.modalSlotSubtext}>
+                                                {metadata.recurrence === 'weekly' ? `${dayName}s (starting ${dateStr})` : dateStr}
+                                            </Text>
+                                        </View>
+                                        {isSelected && <Check size={20} color="#3B82F6" />}
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </ScrollView>
+
+                        {/* Confirm Button */}
+                        {selectedSlot && (
+                            <TouchableOpacity 
+                                style={[styles.confirmButton, loading && styles.confirmButtonDisabled]}
+                                onPress={handleConfirmSlot}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <>
+                                        <Check size={20} color="#FFF" />
+                                        <Text style={styles.confirmButtonText}>Confirm Slot</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -253,13 +247,13 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
 
 const styles = StyleSheet.create({
     container: {
-        maxWidth: '80%',
+        maxWidth: '85%',
         padding: 16,
         borderRadius: 16,
-        marginVertical: 4,
-        backgroundColor: '#FEFCE8', // Yellow-50
+        marginVertical: 6,
+        backgroundColor: '#FEFCE8',
         borderWidth: 1,
-        borderColor: '#FEF08A', // Yellow-200
+        borderColor: '#FEF08A',
     },
     ownContainer: {
         alignSelf: 'flex-end',
@@ -278,30 +272,49 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#B45309', // Yellow-700
+        color: '#B45309',
     },
     description: {
         fontSize: 14,
-        color: '#92400E', // Yellow-800
+        color: '#92400E',
+        lineHeight: 20,
         marginBottom: 12,
     },
-    slotsContainer: {
+    actionsContainer: {
+        marginTop: 4,
         gap: 8,
     },
-    slotButton: {
+    primaryButton: {
+        backgroundColor: '#3B82F6',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 10,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        justifyContent: 'center',
+        gap: 10,
+    },
+    primaryButtonText: {
+        color: '#FFF',
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    slotButton: {
         backgroundColor: '#FFFFFF',
         padding: 12,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
-    slotText: {
+    declineButton: {
+        backgroundColor: '#FEF2F2',
+        borderColor: '#FCA5A5',
+        alignItems: 'center',
+    },
+    declineText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#374151',
+        color: '#B91C1C',
     },
     acceptedContainer: {
         flexDirection: 'row',
@@ -309,49 +322,15 @@ const styles = StyleSheet.create({
         gap: 8,
         backgroundColor: '#ECFDF5',
         padding: 12,
-        borderRadius: 8,
+        borderRadius: 10,
         borderWidth: 1,
         borderColor: '#10B981',
+        marginTop: 4,
     },
     acceptedText: {
         fontSize: 14,
         fontWeight: '600',
         color: '#065F46',
-    },
-    declineButton: {
-        marginTop: 8,
-        backgroundColor: '#FEF2F2',
-        borderColor: '#FCA5A5',
-        justifyContent: 'center',
-    },
-    declineText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#B91C1C',
-    },
-    actionsContainer: {
-        marginTop: 12,
-        gap: 8,
-    },
-    row: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    primaryButton: {
-        backgroundColor: '#3B82F6',
-        padding: 12,
-        borderRadius: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        borderWidth: 1,
-        borderColor: '#2563EB',
-    },
-    primaryButtonText: {
-        color: '#FFF',
-        fontSize: 14,
-        fontWeight: '600',
     },
     modalOverlay: {
         flex: 1,
@@ -360,52 +339,77 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         backgroundColor: '#FFF',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 20,
-        maxHeight: '80%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        maxHeight: '85%',
     },
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 12,
     },
     modalTitle: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: '700',
         color: '#111827',
     },
     modalSubtitle: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#6B7280',
-        marginBottom: 12,
+        marginBottom: 16,
+        fontWeight: '500',
     },
     slotsList: {
         maxHeight: 400,
+        marginBottom: 16,
     },
     modalSlot: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
-        backgroundColor: '#F3F4F6',
-        borderRadius: 12,
-        marginBottom: 8,
-        gap: 12,
+        backgroundColor: '#F9FAFB',
+        borderRadius: 14,
+        marginBottom: 10,
+        borderWidth: 2,
+        borderColor: '#F3F4F6',
+        gap: 14,
+    },
+    modalSlotSelected: {
+        backgroundColor: '#EFF6FF',
+        borderColor: '#3B82F6',
     },
     modalSlotText: {
-        fontSize: 16,
-        color: '#374151',
-        fontWeight: '500',
+        fontSize: 17,
+        color: '#111827',
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    modalSlotTextSelected: {
+        color: '#1E40AF',
     },
     modalSlotSubtext: {
-        fontSize: 12,
+        fontSize: 13,
         color: '#6B7280',
     },
-    noSlotsText: {
-        textAlign: 'center',
-        color: '#6B7280',
-        marginTop: 20,
-        marginBottom: 20,
+    confirmButton: {
+        backgroundColor: '#059669',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 8,
+    },
+    confirmButtonDisabled: {
+        opacity: 0.6,
+    },
+    confirmButtonText: {
+        color: '#FFF',
+        fontSize: 17,
+        fontWeight: '700',
     },
 });

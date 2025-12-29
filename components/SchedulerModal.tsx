@@ -123,7 +123,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     };
 
 
-    const resolveDateKeywordToISO = (keyword: string): string => {
+    const resolveDateKeywordToISO = (keyword: string, timeStr?: string | null): string => {
         const now = new Date();
         const dayMap: { [key: string]: number } = {
             'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
@@ -139,6 +139,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         };
 
         if (keyword === 'today') {
+             // If time is provided and in the past, maybe warn? But usually 'today' means today.
             return toLocalISO(now);
         } else if (keyword === 'tomorrow') {
             const tomorrow = new Date(now);
@@ -148,16 +149,31 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             // For day names, resolve to the actual date
             const targetDay = dayMap[keyword];
             const currentDay = now.getDay();
+            
+            // Calculate basic diff
             let daysToAdd = targetDay - currentDay;
-            
-            // If it's the same day as today, use today's date
-            if (daysToAdd === 0) {
-                return toLocalISO(now);
-            }
-            
-            // Otherwise get the next occurrence of this day
             if (daysToAdd < 0) daysToAdd += 7;
             
+            // Same day logic: if today is Monday and user says "Monday"
+            if (daysToAdd === 0) {
+                 // Check if time is passed
+                 if (timeStr) {
+                     const [hours, mins] = timeStr.split(':').map(Number);
+                     const requestedTime = new Date(now);
+                     requestedTime.setHours(hours || 0, mins || 0, 0, 0);
+                     
+                     // If requested time is earlier than now, assume next week
+                     if (requestedTime < now) {
+                         daysToAdd = 7;
+                     }
+                 } else {
+                     // No time provided, ambiguous. 
+                     // Usually if I say "Monday" on Monday, I mean "next Monday" unless I say "today".
+                     // But let's stick to simple logic: if it's SAME day, default to today unless logic says otherwise.
+                     // The user complained specifically about past time.
+                 }
+            }
+
             const targetDate = new Date(now);
             targetDate.setDate(targetDate.getDate() + daysToAdd);
             return toLocalISO(targetDate);
@@ -177,7 +193,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             // Create a session for each unique intent
             for (const intent of sessionIntents) {
                 // If date is a keyword (monday, today), resolve to ISO
-                const isoDate = resolveDateKeywordToISO(intent.date);
+                const isoDate = resolveDateKeywordToISO(intent.date, intent.time);
                 
                 const result = await parseScheduleRequest({
                     coachInput: `Schedule on ${isoDate} at ${intent.time} ${recurrence === 'weekly' ? 'every week' : 'one time'}`,
@@ -576,7 +592,21 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             <View style={styles.container}>
                 <View style={styles.header}>
                     <Text style={styles.title}>AI Scheduler</Text>
-                    <TouchableOpacity onPress={() => { resetForm(); onClose(); }}>
+                    <TouchableOpacity onPress={() => { 
+                        if (proposedSessions.length > 0 && step === 'review') {
+                            Alert.alert(
+                                'Save Progress?',
+                                'Do you want to save these proposed sessions as pending resolutions?',
+                                [
+                                    { text: 'Discard', style: 'destructive', onPress: () => { resetForm(); onClose(); } },
+                                    { text: 'Save', onPress: () => { handleConfirm(); resetForm(); onClose(); } }
+                                ]
+                            );
+                        } else {
+                            resetForm(); 
+                            onClose(); 
+                        }
+                    }}>
                         <X size={24} color="#374151" />
                     </TouchableOpacity>
                 </View>

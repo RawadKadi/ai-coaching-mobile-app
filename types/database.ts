@@ -130,6 +130,8 @@ export interface Session {
     notes?: string;
     meet_link?: string;
     is_locked: boolean;
+    invite_sent?: boolean;
+    cancellation_reason?: string;
     ai_generated: boolean;
     created_at: string;
 }

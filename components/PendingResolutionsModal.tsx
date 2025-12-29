@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { X, Calendar, Clock, AlertTriangle, CheckCircle, Bell, MessageCircle, Filter, ChevronDown, Check } from 'lucide-react-native';
+import { X, Calendar, Clock, AlertTriangle, CheckCircle, Bell, MessageCircle, Filter, ChevronDown, Check, Trash2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 
 interface PendingResolutionsModalProps {
@@ -8,9 +8,10 @@ interface PendingResolutionsModalProps {
     onClose: () => void;
     sessions: any[]; 
     onResolve: (session: any) => void;
+    onDelete: (session: any) => void;
 }
 
-export default function PendingResolutionsModal({ visible, onClose, sessions: initialSessions, onResolve }: PendingResolutionsModalProps) {
+export default function PendingResolutionsModal({ visible, onClose, sessions: initialSessions, onResolve, onDelete }: PendingResolutionsModalProps) {
     const [sessions, setSessions] = useState(initialSessions);
     const [filter, setFilter] = useState<'all' | 'pending' | 'unsent'>('all');
     const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
@@ -51,36 +52,51 @@ export default function PendingResolutionsModal({ visible, onClose, sessions: in
     if (!visible) return null;
 
     const getStatusInfo = (session: any) => {
-        // Option 2 Case: We asked an existing client to reschedule
-        if (session.status === 'scheduled' && session.cancellation_reason && session.cancellation_reason.startsWith('pending_reschedule')) {
-             // Check if client rejected or accepted (mock logic via cancellation_reason or separate field)
-             // If they rejected, we might have updated cancellation_reason to 'reschedule_rejected'
-             return {
-                label: 'Pending Client',
-                color: '#F59E0B', 
-                bgColor: '#FFFBEB',
-                icon: <Clock size={14} color="#F59E0B" />,
-                description: 'Asked this client to reschedule',
-                actionable: false
-            };
-        }
+        console.log(`[PendingModal] Checking session ${session.id}: status=${session.status}, invite_sent=${session.invite_sent}, reason=${session.cancellation_reason}`);
         
+        // 1. Check for explicit client rejection
         if (session.cancellation_reason === 'reschedule_rejected') {
+            console.log(`  -> Rejected`);
             return {
                 label: 'Rejected',
                 color: '#EF4444', 
                 bgColor: '#FEF2F2',
                 icon: <X size={14} color="#EF4444" />,
-                description: 'Client rejected reschedule. TAP TO RESOLVE.',
+                description: 'Client rejected the request',
                 actionable: true
             };
         }
 
-        // Option 1 or General Case
-        const isNotified = session.invite_sent || session.notification_sent || session.status === 'proposed';
-        
-        if (isNotified) {
-            return {
+        // 2. Check for "Rescheduled" (Accepted)
+        if (session.status === 'scheduled' && session.invite_sent && !session.cancellation_reason) {
+             console.log(`  -> Rescheduled`);
+             return {
+                label: 'Rescheduled',
+                color: '#059669',
+                bgColor: '#ECFDF5',
+                icon: <CheckCircle size={14} color="#059669" />,
+                description: 'Client accepted and scheduled',
+                actionable: false
+            };
+        }
+
+        // 3. Option 2 Case: Coach asked client to reschedule (Waiting)
+        if (session.cancellation_reason && session.cancellation_reason.startsWith('pending_reschedule')) {
+             console.log(`  -> Pending (Option 2)`);
+             return {
+                label: 'Pending',
+                color: '#F59E0B', 
+                bgColor: '#FFFBEB',
+                icon: <Clock size={14} color="#F59E0B" />,
+                description: 'Waiting for client to pick a new time',
+                actionable: false
+            };
+        }
+
+        // 4. Option 1 Case: Proposal sent by Coach
+        if (session.status === 'proposed' || session.invite_sent) {
+             console.log(`  -> Pending (Option 1 or general proposal)`);
+             return {
                 label: 'Pending',
                 color: '#F59E0B',
                 bgColor: '#FFFBEB',
@@ -88,22 +104,24 @@ export default function PendingResolutionsModal({ visible, onClose, sessions: in
                 description: 'Proposal with client',
                 actionable: false
             };
-        } else {
-            return {
+        }
+
+        // 5. Default: Not Yet Sent
+        console.log(`  -> Not Yet Sent (fallback)`);
+        return {
                 label: 'Not Yet Sent',
                 color: '#EF4444',
                 bgColor: '#FEF2F2',
                 icon: <AlertTriangle size={14} color="#EF4444" />,
-                description: 'Waiting for your proposal',
+                description: 'Coach action required',
                 actionable: true
-            };
-        }
+        };
     };
 
     const filteredSessions = sessions
         .filter(s => {
             const status = getStatusInfo(s);
-            if (filter === 'pending') return status.label === 'Pending' || status.label === 'Pending Client';
+            if (filter === 'pending') return status.label === 'Pending';
             if (filter === 'unsent') return status.label === 'Not Yet Sent' || status.label === 'Rejected';
             return true;
         })
@@ -179,14 +197,9 @@ export default function PendingResolutionsModal({ visible, onClose, sessions: in
                                 style={[styles.card, !status.actionable && styles.cardDisabled]}
                                 onPress={() => {
                                     if (status.actionable) {
-                                        // Open resolution
                                         onResolve(session);
                                     } else {
-                                        // Maybe send reminder?
-                                        Alert.alert('Send Reminder?', 'Would you like to notify the client again?', [
-                                            { text: 'Cancel', style: 'cancel'},
-                                            { text: 'Send', onPress: () => console.log('Send reminder') }
-                                        ]);
+                                        Alert.alert('In Progress', 'This resolution is currently waiting for client response.');
                                     }
                                 }}
                             >
@@ -206,6 +219,14 @@ export default function PendingResolutionsModal({ visible, onClose, sessions: in
                                         {status.icon}
                                         <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
                                     </View>
+                                    <TouchableOpacity style={styles.deleteButton} onPress={() => {
+                                        Alert.alert('Delete Resolution', 'Are you sure you want to delete this resolution?', [
+                                            { text: 'Cancel', style: 'cancel' },
+                                            { text: 'Delete', style: 'destructive', onPress: () => onDelete(session) }
+                                        ]);
+                                    }}>
+                                        <Trash2 size={16} color="#9CA3AF" />
+                                    </TouchableOpacity>
                                 </View>
 
                                 <View style={styles.detailsContainer}>
@@ -225,6 +246,12 @@ export default function PendingResolutionsModal({ visible, onClose, sessions: in
                             </TouchableOpacity>
                         );
                     })}
+                    {filteredSessions.length === 0 && (
+                        <View style={styles.emptyContainer}>
+                            <CheckCircle size={48} color="#D1D5DB" />
+                            <Text style={styles.emptyText}>No pending resolutions found.</Text>
+                        </View>
+                    )}
                     <View style={{ height: 40 }} />
                 </ScrollView>
             </View>
@@ -259,6 +286,10 @@ const styles = StyleSheet.create({
     closeButton: {
         padding: 4,
     },
+    deleteButton: {
+        marginLeft: 8,
+        padding: 4,
+    },
     subheader: {
         paddingVertical: 12,
         paddingHorizontal: 20,
@@ -282,10 +313,6 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         borderWidth: 1,
         borderColor: '#E5E7EB',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
     },
     cardHeader: {
         flexDirection: 'row',
@@ -355,7 +382,6 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         flex: 1,
     },
-    // Filter Styles
     filterBar: {
         flexDirection: 'row',
         paddingHorizontal: 20,
@@ -404,7 +430,7 @@ const styles = StyleSheet.create({
         color: '#4B5563',
     },
     cardDisabled: {
-        opacity: 0.8,
+        opacity: 0.9,
     },
     footerRow: {
         flexDirection: 'row',
@@ -420,4 +446,14 @@ const styles = StyleSheet.create({
         color: '#9CA3AF',
         marginLeft: 'auto',
     },
+    emptyContainer: {
+        padding: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    emptyText: {
+        color: '#9CA3AF',
+        fontSize: 16,
+    }
 });
