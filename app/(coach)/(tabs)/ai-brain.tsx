@@ -9,11 +9,14 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { AICoachBrain } from '@/types/database';
 
 export default function AIBrainScreen() {
+  const router = useRouter();
   const { coach } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -102,6 +105,12 @@ export default function AIBrainScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color="#111827" />
+        </TouchableOpacity>
         <Text style={styles.title}>AI Brain Configuration</Text>
         <Text style={styles.subtitle}>
           Customize how AI communicates with your clients
@@ -203,6 +212,11 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    marginBottom: 16,
+    padding: 8,
+    alignSelf: 'flex-start',
   },
   title: {
     fontSize: 28,
