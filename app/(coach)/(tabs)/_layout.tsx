@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, Users, Brain, User, Calendar } from 'lucide-react-native';
+import { Home, Users, User, Calendar, MessageSquare } from 'lucide-react-native';
 
 export default function CoachTabLayout() {
   return (
@@ -40,10 +40,10 @@ export default function CoachTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="ai-brain"
+        name="messages"
         options={{
-          title: 'AI Brain',
-          tabBarIcon: ({ size, color }) => <Brain size={size} color={color} />,
+          title: 'Messages',
+          tabBarIcon: ({ size, color }) => <MessageSquare size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -51,6 +51,13 @@ export default function CoachTabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ size, color }) => <User size={size} color={color} />,
+        }}
+      />
+      {/* Keep ai-brain file but hide from tabs - accessible from Profile */}
+      <Tabs.Screen
+        name="ai-brain"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

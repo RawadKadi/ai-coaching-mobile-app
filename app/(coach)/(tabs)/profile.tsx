@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, User, Settings } from 'lucide-react-native';
+import { LogOut, User, Settings, Brain } from 'lucide-react-native';
 
 export default function CoachProfileScreen() {
   const router = useRouter();
@@ -35,6 +35,11 @@ export default function CoachProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/settings')}>
             <Settings size={20} color="#6B7280" />
             <Text style={styles.menuItemText}>Settings</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/(tabs)/ai-brain')}>
+            <Brain size={20} color="#8B5CF6" />
+            <Text style={[styles.menuItemText, styles.aiBrainText]}>AI Brain</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
@@ -115,6 +120,9 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 16,
     color: '#111827',
+  },
+  aiBrainText: {
+    color: '#8B5CF6',
   },
   signOutText: {
     color: '#EF4444',
