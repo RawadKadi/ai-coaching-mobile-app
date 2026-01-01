@@ -34,3 +34,23 @@ export interface Resolution {
     proposedSlots?: string[];
     targetSessionId?: string;
 }
+
+export interface RescheduleMessageMetadata {
+    type: 'reschedule_proposal';
+    sessionId: string | null;
+    originalTime: string;
+    availableSlots?: string[];
+    proposedSlots?: string[];
+    status?: 'pending' | 'accepted' | 'declined';
+    acceptedSlot?: string;
+    mode?: 'select_time' | 'open_calendar' | 'confirm_reschedule' | 'time_picker';
+    text?: string;
+    recurrence?: 'weekly' | 'once';
+    dayOfWeek?: string;
+    proposedSessionData?: {
+        client_id: string;
+        duration_minutes: number;
+        session_type: string;
+        coach_id: string;
+    };
+}

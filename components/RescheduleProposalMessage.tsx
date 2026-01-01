@@ -2,21 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Clock, Calendar, CheckCircle2, X, Check } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { RescheduleMessageMetadata } from '@/types/conflict';
 
 interface RescheduleProposalMessageProps {
     messageId: string;
-    metadata: {
-        sessionId: string;
-        originalTime: string;
-        availableSlots?: string[];
-        proposedSlots?: string[];
-        status?: 'pending' | 'accepted' | 'declined';
-        acceptedSlot?: string;
-        mode?: 'select_time' | 'accept_reject' | 'open_calendar' | 'confirm_reschedule';
-        text?: string;
-        recurrence?: 'weekly' | 'once';
-        dayOfWeek?: string;
-    };
+    metadata: RescheduleMessageMetadata;
     isOwn: boolean;
 }
 
@@ -36,28 +26,62 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
         try {
             console.log('[Client] Confirming slot:', selectedSlot);
             
-            // Update session
-            const { error: sessionError } = await supabase
-                .from('sessions')
-                .update({ 
-                    scheduled_at: selectedSlot,
-                    status: 'scheduled',
-                    cancellation_reason: null,
-                    invite_sent: true
-                })
-                .eq('id', metadata.sessionId);
+            let sessionId = metadata.sessionId;
+            
+            // If sessionId is null, we need to CREATE a new session (Option 1 case)
+            if (!sessionId && metadata.proposedSessionData) {
+                console.log('[Client] Creating new session for Option 1');
+                const { data: newSession, error: createError } = await supabase
+                    .from('sessions')
+                    .insert({
+                        coach_id: metadata.proposedSessionData.coach_id,
+                        client_id: metadata.proposedSessionData.client_id,
+                        scheduled_at: selectedSlot,
+                        duration_minutes: metadata.proposedSessionData.duration_minutes,
+                        session_type: metadata.proposedSessionData.session_type,
+                        status: 'scheduled',
+                        invite_sent: true,
+                        meet_link: `https://meet.jit.si/${metadata.proposedSessionData.coach_id}-${metadata.proposedSessionData.client_id}-${Date.now()}`,
+                    })
+                    .select()
+                    .single();
+                
+                if (createError) {
+                    console.error('[Client] Session creation error:', createError);
+                    throw new Error(createError.message);
+                }
+                
+                sessionId = newSession.id;
+                console.log('[Client] New session created:', sessionId);
+            } 
+            // If sessionId exists, UPDATE the existing session (Option 2 case)
+            else if (sessionId) {
+                console.log('[Client] Updating existing session:', sessionId);
+                const { error: sessionError } = await supabase
+                    .from('sessions')
+                    .update({ 
+                        scheduled_at: selectedSlot,
+                        status: 'scheduled',
+                        cancellation_reason: null,
+                        invite_sent: true
+                    })
+                    .eq('id', sessionId);
 
-            if (sessionError) {
-                console.error('[Client] Session update error:', sessionError);
-                throw new Error(sessionError.message);
+                if (sessionError) {
+                    console.error('[Client] Session update error:', sessionError);
+                    throw new Error(sessionError.message);
+                }
+            } else {
+                throw new Error('Missing session data - cannot create or update session');
             }
 
-            // Update message
+            // Update message to mark as accepted
             const { error: msgError } = await supabase
                 .from('messages')
                 .update({
                     content: JSON.stringify({
                         ...metadata,
+                        sessionId: sessionId, // Update with the actual sessionId
                         status: 'accepted',
                         acceptedSlot: selectedSlot
                     })
@@ -73,11 +97,11 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
             setAcceptedSlot(selectedSlot);
             setShowPicker(false);
             setSelectedSlot(null);
-            Alert.alert('Success', 'Session rescheduled successfully!');
+            Alert.alert('Success', 'Session scheduled successfully!');
 
         } catch (error: any) {
-            console.error('[Client] Error rescheduling:', error);
-            Alert.alert('Update Failed', error.message || 'Failed to update. Check permissions.');
+            console.error('[Client] Error confirming slot:', error);
+            Alert.alert('Scheduling Failed', error.message || 'Failed to schedule. Please try again.');
         } finally {
             setLoading(false);
         }

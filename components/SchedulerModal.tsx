@@ -355,12 +355,27 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         });
 
         if (sameDaySession) {
+            // Check if it's the EXACT same time (not a conflict, just re-confirming)
+            const existingStart = new Date(sameDaySession.scheduled_at);
+            const isSameTime = existingStart.getTime() === newStart.getTime();
+            
+            if (isSameTime) {
+                // Same client, same day, same time = Already scheduled!
+                Alert.alert(
+                    'Already Scheduled',
+                    `${clientContext.name} already has a session at this time.`,
+                    [{ text: 'OK' }]
+                );
+                return { type: 'already_scheduled', message: 'Already scheduled at this time', existingSession: sameDaySession };
+            }
+            
+            // Same client, same day, DIFFERENT time = Conflict (max 1 per day)
             return { 
                 type: 'limit', 
                 message: 'Client already has a session this day',
                 existingSession: {
                     ...sameDaySession,
-                    client_id: sameDaySession.client_id // Ensure client_id is passed
+                    client_id: sameDaySession.client_id
                 }
             };
         }
@@ -387,7 +402,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             existingSession: {
                 id: conflict.existingSession.id,
                 client_id: conflict.existingSession.client_id,
-                client_name: conflict.existingSession.client?.name || 'Unknown',
+                client_name: conflict.existingSession.client_name || 'Unknown',
                 scheduled_at: conflict.existingSession.scheduled_at,
                 duration_minutes: conflict.existingSession.duration_minutes,
                 session_type: conflict.existingSession.session_type,
@@ -427,6 +442,8 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
             if (resolution.action === 'propose_new_time_for_incoming') {
                 // Option 1: Propose to INCOMING client
+                // NOTE: We do NOT create a session here because the proposed time conflicts!
+                // The session will be created AFTER the client picks an available time.
                 
                 // 1. Get Incoming Client User ID
                 const { data: clientData, error: clientError } = await supabase
@@ -437,23 +454,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 
                 if (clientError || !clientData) throw new Error('Client not found');
 
-                // 2. Create session as pending
-                const { data: newSession, error: sessionError } = await supabase
-                    .from('sessions')
-                    .insert({
-                        coach_id: existingSessions[0]?.coach_id, 
-                        client_id: proposedSession.client_id,
-                        scheduled_at: proposedSession.scheduled_at,
-                        duration_minutes: proposedSession.duration_minutes,
-                        session_type: proposedSession.session_type,
-                        status: 'pending_resolution',
-                    })
-                    .select()
-                    .single();
-
-                if (sessionError) throw sessionError;
-
-                // 3. Send Message
+                // 2. Send Message with available slots
                 const isWeekly = proposedSession.recurrence === 'weekly';
                 const dayName = new Date(proposedSession.scheduled_at).toLocaleDateString('en-US', { weekday: 'long' });
                 const dateStr = new Date(proposedSession.scheduled_at).toLocaleDateString();
@@ -464,13 +465,20 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                 const messageContent = {
                     type: 'reschedule_proposal',
-                    sessionId: newSession.id,
+                    sessionId: null, // No session created yet - client will pick time first
                     originalTime: proposedSession.scheduled_at,
                     availableSlots: resolution.proposedSlots,
                     mode: 'open_calendar',
                     text: messageText,
                     recurrence: proposedSession.recurrence,
-                    dayOfWeek: dayName
+                    dayOfWeek: dayName,
+                    // Add metadata needed to create session later
+                    proposedSessionData: {
+                        client_id: proposedSession.client_id,
+                        duration_minutes: proposedSession.duration_minutes,
+                        session_type: proposedSession.session_type,
+                        coach_id: existingSessions[0]?.coach_id,
+                    }
                 };
 
                 await supabase.from('messages').insert({
@@ -480,6 +488,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     read: false
                 });
 
+                console.log('[SchedulerModal] Option 1: Message sent without creating conflicting session');
                 Alert.alert('Request Sent', `Resolution request sent to ${proposedSession.client_name}`);
 
             } else if (resolution.action === 'propose_reschedule_for_existing') {
@@ -494,14 +503,29 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                 if (clientError || !clientData) throw new Error('Client not found');
 
-                // 2. Send Message
+                // 2. Update existing session to mark it as pending reschedule
+                console.log('[SchedulerModal] Updating existing session for Option 2:', existingSession.id);
+                const { error: updateError } = await supabase
+                    .from('sessions')
+                    .update({
+                        invite_sent: true,
+                        cancellation_reason: 'pending_reschedule_for_' + proposedSession.client_id
+                    })
+                    .eq('id', existingSession.id);
+                
+                if (updateError) {
+                    console.error('[SchedulerModal] Error updating existing session:', updateError);
+                    throw updateError;
+                }
+
+                // 3. Send Message
                 const isWeekly = existingSession.recurrence === 'weekly';
                 const dayName = new Date(existingSession.scheduled_at).toLocaleDateString('en-US', { weekday: 'long' });
                 const dateStr = new Date(existingSession.scheduled_at).toLocaleDateString();
 
                 const messageText = isWeekly
                     ? `Hi ${existingSession.client_name}, could we reschedule our weekly sessions on ${dayName}s to accommodate another client?`
-                    : `Hi ${existingSession.client_name}, could we reschedule our session on ${dayName}, ${dateStr} to accommodate another client?`;
+                    : `Hi ${existingSession.client_name}, could we reschedule our session on ${dayName}, ${dateStr} to accommodate another client?                `;
 
                 const messageContent = {
                     type: 'reschedule_proposal',
@@ -520,20 +544,14 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     content: JSON.stringify(messageContent),
                     read: false
                 });
+                console.log('[SchedulerModal] Message sent to existing client');
 
-                 // 3. Create INCOMING session as pending
-                 await supabase
-                    .from('sessions')
-                    .insert({
-                        coach_id: existingSessions[0]?.coach_id,
-                        client_id: proposedSession.client_id,
-                        scheduled_at: proposedSession.scheduled_at,
-                        duration_minutes: proposedSession.duration_minutes,
-                        session_type: proposedSession.session_type,
-                        status: 'pending_resolution',
-                    });
+                // NOTE: We do NOT create the incoming session here!
+                // The incoming client will get their session AFTER the existing client
+                // picks a new time and frees up the original slot.
+                // Their request stays in the queue as pending_resolution.
 
-                Alert.alert('Request Sent', `Resolution request sent to ${existingSession.client_name}`);
+                Alert.alert('Request Sent', `Reschedule request sent to ${existingSession.client_name}`);
             }
 
             // Cleanup: Mark as pending instead of removing

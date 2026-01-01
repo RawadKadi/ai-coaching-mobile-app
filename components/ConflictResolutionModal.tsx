@@ -73,7 +73,9 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
     if (!conflictInfo) return null;
 
     const handleResolve = () => {
-        console.log('[ConflictModal] handleResolve called, selectedOption:', selectedOption);
+        console.log('[ConflictModal] =================================');
+        console.log('[ConflictModal] handleResolve START');
+        console.log('[ConflictModal] selectedOption:', selectedOption);
         
         if (!selectedOption) {
             Alert.alert('Selection Required', 'Please select a resolution option');
@@ -84,22 +86,32 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
         const availableSlots = recommendations.map(r => r.time);
         console.log('[ConflictModal] Available slots:', availableSlots);
 
-        if (selectedOption === 'keep') {
-            // Option 1: Propose new time to INCOMING client
-            console.log('[ConflictModal] Calling onResolve with Option 1');
-            onResolve({
-                action: 'propose_new_time_for_incoming',
-                proposedSlots: availableSlots,
-            });
-        } else if (selectedOption === 'reschedule') {
-            // Option 2: Propose reschedule to EXISTING client
-            console.log('[ConflictModal] Calling onResolve with Option 2');
-            onResolve({
-                action: 'propose_reschedule_for_existing',
-                targetSessionId: conflictInfo.existingSession.id,
-                proposedSlots: availableSlots,
-            });
+        try {
+            if (selectedOption === 'keep') {
+                // Option 1: Propose new time to INCOMING client
+                console.log('[ConflictModal] About to call onResolve with Option 1');
+                onResolve({
+                    action: 'propose_new_time_for_incoming',
+                    proposedSlots: availableSlots,
+                });
+                console.log('[ConflictModal] onResolve called successfully for Option 1');
+            } else if (selectedOption === 'reschedule') {
+                // Option 2: Propose reschedule to EXISTING client
+                console.log('[ConflictModal] About to call onResolve with Option 2');
+                onResolve({
+                    action: 'propose_reschedule_for_existing',
+                    targetSessionId: conflictInfo.existingSession.id,
+                    proposedSlots: availableSlots,
+                });
+                console.log('[ConflictModal] onResolve called successfully for Option 2');
+            }
+        } catch (error) {
+            console.error('[ConflictModal] ERROR calling onResolve:', error);
+            Alert.alert('Error', 'Failed to call onResolve: ' + error);
         }
+        
+        console.log('[ConflictModal] handleResolve END');
+        console.log('[ConflictModal] =================================');
     };
 
     const handleCancel = () => {

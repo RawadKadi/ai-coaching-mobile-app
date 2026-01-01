@@ -93,16 +93,30 @@ export default function ClientDetailsScreen() {
       setChallenges(habitsData || []);
 
       // Fetch ALL future sessions for the coach (for conflict detection)
+      // CRITICAL: Join with clients to get client names!
       const { data: sessionsData, error: sessionsError } = await supabase
         .from('sessions')
-        .select('*')
+        .select(`
+          *,
+          client:clients!sessions_client_id_fkey(
+            id,
+            profiles(full_name)
+          )
+        `)
         .eq('coach_id', coach?.id)
         .gte('scheduled_at', new Date().toISOString());
         
       if (!sessionsError && sessionsData) {
           console.log('[ClientDetails] Fetched sessions:', sessionsData.length);
           console.log('[ClientDetails] Sample session:', sessionsData[0]);
-          setAllCoachSessions(sessionsData);
+          
+          // Transform to include client name at top level
+          const sessionsWithNames = sessionsData.map(s => ({
+            ...s,
+            client_name: s.client?.profiles?.full_name || 'Unknown Client'
+          }));
+          
+          setAllCoachSessions(sessionsWithNames);
           
           // Filter for pending resolutions for THIS client
           const pending = sessionsData.filter(s => 
@@ -136,42 +150,43 @@ export default function ClientDetailsScreen() {
     if (!coach || !client) return;
 
     try {
-      // Expand recurring sessions
       const sessionsToInsert: any[] = [];
+      const sessionsToUpdate: { id: string; data: any }[] = [];
       const WEEKS_TO_SCHEDULE = 4;
 
-      proposedSessions.forEach(session => {
-        // Check for conflicts locally before preparing insert
-        const proposedStart = new Date(session.scheduled_at).getTime();
-        const proposedEnd = proposedStart + session.duration_minutes * 60000;
-        
-        const hasConflict = allCoachSessions.some(s => {
-            if (s.status === 'cancelled') return false;
-            const start = new Date(s.scheduled_at).getTime();
-            const end = start + s.duration_minutes * 60000;
-            return (start < proposedEnd && end > proposedStart);
-        });
-
-        const initialStatus = hasConflict ? 'pending_resolution' : 'scheduled';
-
+      for (const session of proposedSessions) {
         if (session.recurrence === 'weekly') {
-          // Generate 4 weeks of sessions
           const startDate = new Date(session.scheduled_at);
+          
           for (let i = 0; i < WEEKS_TO_SCHEDULE; i++) {
             const nextDate = new Date(startDate);
             nextDate.setDate(startDate.getDate() + (i * 7));
             
-            // Re-check conflict for EACH recurring instance
+            // Check if THIS CLIENT already has a session on this exact day
+            const existingOnSameDay = allCoachSessions.find(s => {
+              if (s.client_id !== client.id) return false;
+              if (s.status === 'cancelled') return false;
+              
+              const existingDate = new Date(s.scheduled_at);
+              return (
+                existingDate.getFullYear() === nextDate.getFullYear() &&
+                existingDate.getMonth() === nextDate.getMonth() &&
+                existingDate.getDate() === nextDate.getDate()
+              );
+            });
+
+            // Check for conflicts with OTHER clients
             const instanceStart = nextDate.getTime();
             const instanceEnd = instanceStart + session.duration_minutes * 60000;
             const instanceConflict = allCoachSessions.some(s => {
                 if (s.status === 'cancelled') return false;
+                if (s.client_id === client.id) return false; // Ignore same client
                 const start = new Date(s.scheduled_at).getTime();
                 const end = start + s.duration_minutes * 60000;
                 return (start < instanceEnd && end > instanceStart);
             });
 
-            sessionsToInsert.push({
+            const sessionData = {
               coach_id: coach.id,
               client_id: client.id,
               scheduled_at: nextDate.toISOString(),
@@ -181,32 +196,86 @@ export default function ClientDetailsScreen() {
               status: instanceConflict ? 'pending_resolution' : 'scheduled',
               is_locked: true,
               ai_generated: true,
-              meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}-${i}`,
-            });
+            };
+
+            if (existingOnSameDay) {
+              sessionsToUpdate.push({ 
+                id: existingOnSameDay.id, 
+                data: { ...sessionData, meet_link: existingOnSameDay.meet_link } 
+              });
+            } else {
+              sessionsToInsert.push({
+                ...sessionData,
+                meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}-${i}`,
+              });
+            }
           }
         } else {
           // Single session
-          sessionsToInsert.push({
+          const proposedDate = new Date(session.scheduled_at);
+          const existingOnSameDay = allCoachSessions.find(s => {
+            if (s.client_id !== client.id) return false;
+            if (s.status === 'cancelled') return false;
+            
+            const existingDate = new Date(s.scheduled_at);
+            return (
+              existingDate.getFullYear() === proposedDate.getFullYear() &&
+              existingDate.getMonth() === proposedDate.getMonth() &&
+              existingDate.getDate() === proposedDate.getDate()
+            );
+          });
+
+          const proposedStart = new Date(session.scheduled_at).getTime();
+          const proposedEnd = proposedStart + session.duration_minutes * 60000;
+          const hasConflict = allCoachSessions.some(s => {
+              if (s.status === 'cancelled') return false;
+              if (s.client_id === client.id) return false;
+              const start = new Date(s.scheduled_at).getTime();
+              const end = start + s.duration_minutes * 60000;
+              return (start < proposedEnd && end > proposedStart);
+          });
+
+          const sessionData = {
             coach_id: coach.id,
             client_id: client.id,
             scheduled_at: session.scheduled_at,
             duration_minutes: session.duration_minutes,
             session_type: session.session_type,
             notes: session.notes,
-            status: initialStatus,
+            status: hasConflict ? 'pending_resolution' : 'scheduled',
             is_locked: true,
             ai_generated: true,
-            meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}`,
-          });
+          };
+
+          if (existingOnSameDay) {
+            sessionsToUpdate.push({ 
+              id: existingOnSameDay.id, 
+              data: { ...sessionData, meet_link: existingOnSameDay.meet_link } 
+            });
+          } else {
+            sessionsToInsert.push({
+              ...sessionData,
+              meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}`,
+            });
+          }
         }
-      });
+      }
 
-      const { error } = await supabase
-        .from('sessions')
-        .insert(sessionsToInsert);
+      // Perform updates
+      for (const { id, data } of sessionsToUpdate) {
+        const { error } = await supabase.from('sessions').update(data).eq('id', id);
+        if (error) throw error;
+      }
 
-      if (error) throw error;
-      Alert.alert('Success', 'Sessions scheduled successfully');
+      // Perform inserts
+      if (sessionsToInsert.length > 0) {
+        const { error } = await supabase.from('sessions').insert(sessionsToInsert);
+        if (error) throw error;
+      }
+
+      const total = sessionsToUpdate.length + sessionsToInsert.length;
+      Alert.alert('Success', `${total} session(s) saved!`);
+      await loadClientData();
     } catch (error) {
       console.error('Error saving sessions:', error);
       Alert.alert('Error', 'Failed to save sessions');
@@ -599,62 +668,76 @@ export default function ClientDetailsScreen() {
                 console.log('[ConflictResolution] onResolve called with:', resolution);
                try {
                    if (resolution.action === 'propose_new_time_for_incoming') {
-                        console.log('[ConflictResolution] Option 1: updating session', currentConflict.proposedSession.id);
+                        console.log('[ConflictResolution] ========== OPTION 1 START ==========');
+                        console.log('[ConflictResolution] Current session BEFORE update:', currentConflict.proposedSession);
+                        console.log('[ConflictResolution] Session ID:', currentConflict.proposedSession.id);
                         
                         const updateData = { 
                             invite_sent: true,
                             status: 'proposed' 
                         };
-                        console.log('[ConflictResolution] Update data:', updateData);
+                        console.log('[ConflictResolution] Update payload:', JSON.stringify(updateData));
                         
                         const { data, error: updateError } = await supabase
                             .from('sessions')
                             .update(updateData)
                             .eq('id', currentConflict.proposedSession.id)
-                            .select();
+                            .select('*'); // Select all fields to see what's returned
                         
                         if (updateError) {
-                            console.error('[ConflictResolution] Database Error:', updateError);
+                            console.error('[ConflictResolution] ❌ DATABASE UPDATE FAILED');
+                            console.error('[ConflictResolution] Error details:', JSON.stringify(updateError));
                             Alert.alert('Database Error', JSON.stringify(updateError));
                             return;
                         }
                         
-                        console.log('[ConflictResolution] Database returned:', data);
-                        console.log('[ConflictResolution] Option 1 SUCCESS - invite_sent=true, status=proposed');
-                        Alert.alert('DEBUG', `Updated session ${currentConflict.proposedSession.id} to proposed/invite_sent=true`);
+                        console.log('[ConflictResolution] ✅ DATABASE UPDATE SUCCESS');
+                        console.log('[ConflictResolution] Returned data:', JSON.stringify(data, null, 2));
+                        
+                        if (data && data[0]) {
+                            console.log('[ConflictResolution] Updated session invite_sent:', data[0].invite_sent);
+                            console.log('[ConflictResolution] Updated session status:', data[0].status);
+                        }
+                        
+                        console.log('[ConflictResolution] ========== OPTION 1 END ==========');
                         
                    } else if (resolution.action === 'propose_reschedule_for_existing') {
-                        console.log('[ConflictResolution] Option 2: updating session', currentConflict.existingSession.id);
+                        console.log('[ConflictResolution] ========== OPTION 2 START ==========');
+                        console.log('[ConflictResolution] Existing session:', currentConflict.existingSession);
                         
                         const updateData = {
                             status: 'scheduled',
                             invite_sent: true,
                             cancellation_reason: 'pending_reschedule_for_' + currentConflict.proposedSession.client_id
                         };
-                        console.log('[ConflictResolution] Update data:', updateData);
+                        console.log('[ConflictResolution] Update payload:', JSON.stringify(updateData));
                         
                         const { data, error: updateError } = await supabase
                             .from('sessions')
                             .update(updateData)
                             .eq('id', currentConflict.existingSession.id)
-                            .select();
+                            .select('*');
 
                         if (updateError) {
-                            console.error('[ConflictResolution] Database Error:', updateError);
+                            console.error('[ConflictResolution] ❌ DATABASE UPDATE FAILED');
+                            console.error('[ConflictResolution] Error details:', JSON.stringify(updateError));
                             Alert.alert('Database Error', JSON.stringify(updateError));
                             return;
                         }
                         
-                        console.log('[ConflictResolution] Database returned:', data);
-                        console.log('[ConflictResolution] Option 2 SUCCESS - invite_sent=true, cancellation_reason set');
-                        Alert.alert('DEBUG', `Updated session ${currentConflict.existingSession.id}`);
+                        console.log('[ConflictResolution] ✅ DATABASE UPDATE SUCCESS');
+                        console.log('[ConflictResolution] Returned data:', JSON.stringify(data, null, 2));
+                        console.log('[ConflictResolution] ========== OPTION 2 END ==========');
                    }
                    
+                   // CRITICAL: Load data FIRST, then close modal
+                   console.log('[ConflictResolution] Refreshing data...');
+                   await loadClientData(); // Wait for data to refresh
+                   Alert.alert('Sent', 'Resolution request sent to client.');
+                   
+                   // Now close modal AFTER data is loaded
                    setConflictModalVisible(false);
                    setCurrentConflict(null);
-                   console.log('[ConflictResolution] Refreshing data...');
-                   await loadClientData(); // This will refetch and update pendingResolutions
-                   Alert.alert('Sent', 'Resolution request sent to client.');
                } catch (e) {
                    console.error('[ConflictResolution] Unexpected error:', e);
                    Alert.alert('Error', 'An unexpected error occurred.');

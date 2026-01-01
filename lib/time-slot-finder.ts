@@ -43,6 +43,7 @@ export function findAvailableSlots({
         // 1. Filter Past Slots (with 5-minute buffer to account for processing time)
         const nowWithBuffer = new Date(now.getTime() - 5 * 60000);
         if (time < nowWithBuffer) {
+            console.log(`[SlotFinder] ${time.toLocaleTimeString()} - PAST (skipped)`);
             return false;
         }
 
@@ -53,7 +54,7 @@ export function findAvailableSlots({
         const hasOverlap = existingSessions.some(session => {
             if (session.id === ignoreSessionId) return false;
             if (session.status === 'cancelled') return false;
-            if (session.status === 'pending_resolution') return false;
+            // DO NOT exclude 'pending_resolution' or 'proposed' - they are REAL sessions that block time!
 
             const sessionStart = new Date(session.scheduled_at);
 
@@ -66,6 +67,10 @@ export function findAvailableSlots({
             const sessionEnd = new Date(sessionStart.getTime() + sessionDuration * 60000);
             const overlaps = slotStart < sessionEnd && slotEnd > sessionStart;
 
+            if (overlaps) {
+                console.log(`[SlotFinder] ${time.toLocaleTimeString()} - OVERLAP with session at ${sessionStart.toLocaleTimeString()} (client: ${session.client_id}, status: ${session.status})`);
+            }
+
             return overlaps;
         });
 
@@ -76,9 +81,9 @@ export function findAvailableSlots({
         // Check client limit (one per day)
         if (targetClientId) {
             const clientSessionsToday = existingSessions.filter(session => {
-                if (session.id === ignoreSessionId) return false; // Ignore specific session
-                if (session.status === 'cancelled') return false; // Ignore cancelled sessions
-                if (session.status === 'pending_resolution') return false; // Ignore pending resolutions
+                if (session.id === ignoreSessionId) return false;
+                if (session.status === 'cancelled') return false;
+                // DO NOT exclude pending_resolution - client still has a session that day!
                 if (session.client_id !== targetClientId) return false;
 
                 const sessionDate = new Date(session.scheduled_at);
@@ -86,10 +91,12 @@ export function findAvailableSlots({
             });
 
             if (clientSessionsToday.length > 0) {
+                console.log(`[SlotFinder] ${time.toLocaleTimeString()} - CLIENT LIMIT (client ${targetClientId} already has session today)`);
                 return false;
             }
         }
 
+        console.log(`[SlotFinder] ${time.toLocaleTimeString()} - AVAILABLE ✓`);
         return true;
     };
 
