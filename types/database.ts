@@ -370,3 +370,110 @@ export interface ClientSettings {
     updated_at: string;
 }
 
+// =====================================================
+// AI-Assisted Challenges System Types
+// =====================================================
+
+export type ChallengeStatus = 'draft' | 'suggested' | 'active' | 'completed' | 'cancelled';
+export type ChallengeCreator = 'coach' | 'ai';
+export type ChallengeFocusType = 'training' | 'nutrition' | 'recovery' | 'consistency';
+export type SuggestionStatus = 'pending' | 'approved' | 'dismissed' | 'expired';
+export type ChallengeIntensity = 'light' | 'moderate' | 'intense';
+
+export interface Challenge {
+    id: string;
+
+    // Ownership
+    client_id: string;
+    coach_id: string;
+
+    // Challenge Definition
+    name: string;
+    description?: string;
+    focus_type: ChallengeFocusType;
+    duration_days: number; // 3-14
+    rules: string[];
+
+    // Scheduling
+    start_date: string;
+    end_date: string; // Computed: start_date + duration_days
+
+    // Status & Workflow
+    status: ChallengeStatus;
+    created_by: ChallengeCreator;
+    approved_by?: string;
+    approved_at?: string;
+
+    // AI Context
+    trigger_reason?: string;
+    ai_metadata: Record<string, any>;
+
+    // Audit
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ChallengeProgress {
+    id: string;
+    challenge_id: string;
+
+    // Daily Tracking
+    date: string;
+    completed: boolean;
+    notes?: string;
+    proof_url?: string;
+
+    // Audit
+    created_at: string;
+}
+
+export interface AISuggestion {
+    id: string;
+
+    // Ownership
+    client_id: string;
+    coach_id: string;
+
+    // Suggestion Payload
+    challenge_payload: {
+        name: string;
+        description: string;
+        focus_type: ChallengeFocusType;
+        duration_days: number;
+        rules: string[];
+        reasoning: string;
+        expected_impact: 'high' | 'medium' | 'low';
+        intensity: ChallengeIntensity;
+    };
+    trigger_reason: string;
+    trigger_data: Record<string, any>;
+
+    // Priority & Status
+    priority: number; // 1-5
+    status: SuggestionStatus;
+
+    // Expiration
+    expires_at: string;
+
+    // Audit
+    created_at: string;
+    reviewed_at?: string;
+    reviewed_by?: string;
+}
+
+export interface ChallengeWithProgress extends Challenge {
+    progress: ChallengeProgress[];
+    completion_rate?: number;
+}
+
+// Enhanced AI Coach Brain with Challenge Settings
+export interface AICoachBrainEnhanced extends AICoachBrain {
+    training_style?: string;
+    forbidden_methods?: string[];
+    nutrition_philosophy?: string;
+    max_challenge_duration?: number; // 3-14
+    preferred_intensity?: ChallengeIntensity;
+    allowed_challenge_types?: ChallengeFocusType[];
+    challenge_tone?: string;
+}
+
