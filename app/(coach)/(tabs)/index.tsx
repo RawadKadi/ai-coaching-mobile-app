@@ -5,15 +5,18 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Users, TrendingUp, MessageCircle, CheckCircle } from 'lucide-react-native';
+import { Users, TrendingUp, MessageCircle, CheckCircle, Target, Sparkles } from 'lucide-react-native';
 import NewClientModal from '@/components/NewClientModal';
 import SchedulerModal from '@/components/SchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 
 export default function CoachDashboard() {
+  const router = useRouter();
   const { profile, coach } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -268,6 +271,28 @@ export default function CoachDashboard() {
         </View>
       </View>
 
+      {/* Quick Actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <TouchableOpacity 
+          style={styles.actionCard}
+          onPress={() => router.push('/challenges')}
+        >
+          <View style={styles.actionIconContainer}>
+            <Target size={28} color="#6366f1" />
+          </View>
+          <View style={styles.actionContent}>
+            <Text style={styles.actionTitle}>Challenges</Text>
+            <Text style={styles.actionDescription}>
+              Manage client challenges and AI suggestions
+            </Text>
+          </View>
+          <View style={styles.aiIndicator}>
+            <Sparkles size={16} color="#6366f1" />
+          </View>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Recent Activity</Text>
         <View style={styles.emptyState}>
@@ -386,5 +411,44 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 14,
     color: '#9CA3AF',
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 12,
+  },
+  actionIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#EDE9FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionContent: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  actionDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  aiIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EDE9FE',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

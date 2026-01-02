@@ -60,6 +60,13 @@ export default function CoachTabLayout() {
           href: null, // Hide from tab bar
         }}
       />
+      {/* Challenges - hide from tabs, accessible via navigation */}
+      <Tabs.Screen
+        name="challenges"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }

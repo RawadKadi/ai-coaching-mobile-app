@@ -1,0 +1,40 @@
+=== ACTIVITY.TSX FIX - EXACT INSTRUCTIONS ===
+
+FILE: app/(client)/(tabs)/activity.tsx
+
+STEP 1: Find line 33 that says:
+const [mealsResult, workoutsResult, habitsResult, logsResult, challengesResult] = await Promise.all([
+
+STEP 2: Change it to (remove challengesResult):
+const [mealsResult, workoutsResult, habitsResult, logsResult] = await Promise.all([
+
+STEP 3: Delete lines 56-61 (the entire daily_challenges query):
+        supabase
+          .from('daily_challenges')
+          .select('*')
+          .eq('client_id', client?.id)
+          .eq('assigned_date', selectedDate)
+          .eq('status', 'active'),
+
+STEP 4: Delete line 68:
+      if (challengesResult.error) throw challengesResult.error;
+
+STEP 5: Replace line 75:
+FROM: setChallenges(challengesResult.data || []);
+TO: (delete this line for now)
+
+STEP 6: After line 77 (setChallengeProgress), ADD these new lines:
+
+      // Get sub-challenges via RPC
+      const { data: subsData, error: subsError } = await supabase.rpc('get_todays_sub_challenges', {
+        p_client_id: client?.id,
+        p_date: selectedDate
+      });
+
+      if (subsError) {
+        console.error('Error loading challenges:', subsError);
+      }
+
+      setChallenges(subsData || []);
+
+DONE! The activity tab will now load challenges correctly.

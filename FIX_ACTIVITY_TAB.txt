@@ -1,0 +1,76 @@
+/**
+ * ACTIVITY.TSX FIX - CRITICAL CHANGES NEEDED
+ * 
+ * File: app/(client)/(tabs)/activity.tsx
+ * 
+ * FIND lines 33-77 and REPLACE WITH THE CODE BELOW:
+ */
+
+// REPLACE THE loadActivityData FUNCTION WITH THIS:
+
+const loadActivityData = async () => {
+  try {
+    setLoading(true);
+    
+    // Load meals, workouts, habits, logs
+    const [mealsResult, workoutsResult, habitsResult, logsResult] = await Promise.all([
+      supabase
+        .from('meals')
+        .select('*')
+        .eq('client_id', client?.id)
+        .eq('meal_date', selectedDate)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('workouts')
+        .select('*')
+        .eq('client_id', client?.id)
+        .eq('date', selectedDate)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('habits')
+        .select('*')
+        .eq('client_id', client?.id)
+        .eq('is_active', true),
+      supabase
+        .from('habit_logs')
+        .select('*')
+        .eq('client_id', client?.id)
+        .eq('date', selectedDate),
+    ]);
+
+    if (mealsResult.error) throw mealsResult.error;
+    if (workoutsResult.error) throw workoutsResult.error;
+    if (habitsResult.error) throw habitsResult.error;
+    if (logsResult.error) throw logsResult.error;
+
+    setMeals(mealsResult.data || []);
+    setWorkouts(workoutsResult.data || []);
+    setHabits(habitsResult.data || []);
+    const logs = logsResult.data || [];
+    setHabitLogs(logs);
+
+    // ✅ GET SUB-CHALLENGES VIA RPC (NOT TABLE QUERY)
+    const { data: subsData, error: subsError } = await supabase.rpc('get_todays_sub_challenges', {
+      p_client_id: client?.id,
+      p_date: selectedDate
+    });
+
+    if (subsError) {
+      console.error('Error loading challenges:', subsError);
+    }
+
+    setChallenges(subsData || []);
+    setChallengeProgress([]);
+
+    // Rest of the function continues...
+    logs.forEach(log => {
+      // ... existing code
+    });
+
+  } catch (error) {
+    console.error('Error loading activity data:', error);
+    Alert.alert('Error', 'Failed to load activity data');
+  } finally {
+    setLoading(false);
+  }
+};

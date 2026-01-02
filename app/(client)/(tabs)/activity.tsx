@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
@@ -9,12 +10,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 
 export default function ActivityScreen() {
+  const router = useRouter();
   const { client } = useAuth();
   const [loading, setLoading] = useState(true);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>([]);
+  const [challenges, setChallenges] = useState<any[]>([]);
+  const [challengeProgress, setChallengeProgress] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
@@ -49,6 +53,7 @@ export default function ActivityScreen() {
           .select('*')
           .eq('client_id', client?.id)
           .eq('date', selectedDate),
+
       ]);
 
       if (mealsResult.error) throw mealsResult.error;
@@ -56,11 +61,24 @@ export default function ActivityScreen() {
       if (habitsResult.error) throw habitsResult.error;
       if (logsResult.error) throw logsResult.error;
 
+
       setMeals(mealsResult.data || []);
       setWorkouts(workoutsResult.data || []);
       setHabits(habitsResult.data || []);
       const logs = logsResult.data || [];
       setHabitLogs(logs);
+      // Get sub-challenges via RPC
+      const { data: subsData, error: subsError } = await supabase.rpc('get_todays_sub_challenges', {
+        p_client_id: client?.id,
+        p_date: selectedDate
+      });
+
+      if (subsError) {
+        console.error('Error loading challenges:', subsError);
+      }
+
+      setChallenges(subsData || []);
+      setChallengeProgress([]);
 
       // Initialize last reported status
       logs.forEach(log => {
@@ -70,6 +88,65 @@ export default function ActivityScreen() {
       console.error('Error loading activity:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleChallenge = async (challenge: any) => {
+    try {
+      const newCompleted = !challenge.completed;
+
+      // Optimistic update
+      setChallenges((prev) =>
+        prev.map((c) => (c.id === challenge.id ? { ...c, completed: newCompleted } : c))
+      );
+
+      // Update via RPC
+      const { error } = await supabase.rpc('mark_sub_challenge', {
+        p_sub_challenge_id: challenge.id,
+        p_client_id: client?.id,
+        p_completed: newCompleted,
+      });
+
+      if (error) throw error;
+
+      // Send auto-message to coach if completed
+      if (newCompleted) {
+        const { data: motherData } = await supabase
+          .from('mother_challenges')
+          .select('coach_id')
+          .eq('id', challenge.mother_challenge_id)
+          .single();
+
+        if (motherData?.coach_id) {
+          const { data: coachData } = await supabase
+            .from('coaches')
+            .select('user_id')
+            .eq('id', motherData.coach_id)
+            .single();
+
+          if (coachData?.user_id) {
+            await supabase.from('messages').insert({
+              sender_id: client!.user_id,
+              recipient_id: coachData.user_id,
+              content: JSON.stringify({
+                type: 'challenge_completed',
+                title: 'Client finished this task',
+                taskName: challenge.name,
+                taskDescription: challenge.description || '',
+                completedAt: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+                focusType: challenge.focus_type,
+                intensity: challenge.intensity,
+              }),
+              ai_generated: true,
+              message_type: 'system',
+            });
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error toggling challenge:', error);
+      Alert.alert('Error', 'Failed to update challenge');
+      loadActivityData();
     }
   };
 
@@ -297,31 +374,37 @@ export default function ActivityScreen() {
       ) : (
         <ScrollView style={styles.content}>
           <Text style={styles.sectionTitle}>Challenges</Text>
-          {habits.length === 0 ? (
+          {challenges.length === 0 ? (
             <Text style={styles.emptyText}>No active challenges</Text>
           ) : (
-            habits.map((habit) => {
-              const log = habitLogs.find((l) => l.habit_id === habit.id);
-              const isCompleted = log?.completed || false;
+            challenges.map((challenge) => {
+              const isCompleted = challenge.completed || false;
 
               return (
                 <TouchableOpacity
-                  key={habit.id}
+                  key={challenge.id}
                   style={[styles.card, isCompleted && styles.cardCompleted]}
-                  onPress={() => toggleChallenge(habit)}
+                  onPress={() => handleToggleChallenge(challenge)}
                 >
                   <View style={styles.cardContent}>
-                    <Text style={[styles.cardTitle, isCompleted && styles.textCompleted]}>
-                      {habit.name}
-                    </Text>
-                    {habit.description && (
-                      <Text style={styles.cardSubtitle}>{habit.description}</Text>
+                    <View style={styles.challengeHeader}>
+                      <Text style={[styles.cardTitle, isCompleted && styles.textCompleted]}>
+                        {challenge.name}
+                      </Text>
+                      <Text style={styles.challengeBadge}>
+                        {challenge.focus_type}
+                      </Text>
+                    </View>
+                    {challenge.description && (
+                      <Text style={styles.cardSubtitle} numberOfLines={1}>
+                        {challenge.description}
+                      </Text>
                     )}
                   </View>
                   {isCompleted ? (
                     <CheckCircle size={24} color="#10B981" />
                   ) : (
-                    <Circle size={24} color="#D1D5DB" />
+                    <Circle size={24} color="#6366f1" />
                   )}
                 </TouchableOpacity>
               );
@@ -475,5 +558,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginTop: 2,
+  },
+  challengeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  challengeBadge: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6366f1',
+    backgroundColor: '#ede9fe',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  challengeProgressBar: {
+    height: 4,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  challengeProgressFill: {
+    height: '100%',
+    backgroundColor: '#6366f1',
+    borderRadius: 2,
   },
 });
