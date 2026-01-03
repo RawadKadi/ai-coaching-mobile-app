@@ -17,7 +17,7 @@ type ClientPreview = {
 
 export default function CoachMessagesScreen() {
   const router = useRouter();
-  const { coach } = useAuth();
+  const { coach, user } = useAuth();
   const [clients, setClients] = useState<ClientPreview[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -82,13 +82,12 @@ export default function CoachMessagesScreen() {
             .limit(1)
             .single();
 
-          // Get unread count (messages from client to coach that are unread)
-          // We need the coach's user_id for this, assuming 'coach' object has it or we get it from auth
-          // But here we can just check sender_id = client.user_id and read = false
+          // Get unread count (messages from client to THIS coach that are unread)
           const { count } = await supabase
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .eq('sender_id', client.user_id)
+            .eq('recipient_id', user?.id)
             .eq('read', false);
 
           // Parse content if it's JSON for the preview

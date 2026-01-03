@@ -5,7 +5,7 @@ import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gest
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
-import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown } from 'lucide-react-native';
+import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown, Check, CheckCheck } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
 import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
 import { useFocusEffect } from 'expo-router';
@@ -449,10 +449,6 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
 
 import PostponeModal from '@/components/PostponeModal';
 
-// ... (previous imports)
-
-// ... (ZoomableImage, TaskCompletionMessage components remain same)
-
 const SessionInviteMessageWrapper = ({ 
   item, 
   parsed, 
@@ -464,12 +460,10 @@ const SessionInviteMessageWrapper = ({
   isOwn: boolean,
   handlePostpone: (sessionData: any, messageId: string) => void
 }) => {
-  // ... (state and effects remain same)
   const [sessionStatus, setSessionStatus] = React.useState(parsed.status);
   const [cancellationReason, setCancellationReason] = React.useState(parsed.cancellationReason);
   const [coachId, setCoachId] = React.useState(parsed.coachId);
   
-  // Sync state with props when they change (e.g. after local update)
   React.useEffect(() => {
     if (parsed.status) {
       setSessionStatus(parsed.status);
@@ -484,7 +478,6 @@ const SessionInviteMessageWrapper = ({
 
   React.useEffect(() => {
     const fetchSessionStatus = async () => {
-      // Only fetch if we don't already have status from props
       if (!parsed.status || !coachId) {
         const { data: session } = await supabase
           .from('sessions')
@@ -504,7 +497,6 @@ const SessionInviteMessageWrapper = ({
     
     fetchSessionStatus();
     
-    // Subscribe to session updates for real-time changes
     const subscription = supabase
       .channel(`session-updates-${parsed.sessionId}`)
       .on(
@@ -545,64 +537,61 @@ const SessionInviteMessageWrapper = ({
 };
 
 export default function MessagesScreen() {
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const { refreshUnreadCount } = useUnread();
   const [messages, setMessages] = useState<Message[]>([]);
-  // ... (other existing state)
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [nextSession, setNextSession] = useState<any>(null);
   const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(null);
   const [firstUnreadIndex, setFirstUnreadIndex] = useState<number>(-1);
+  const [unreadCountAtOpen, setUnreadCountAtOpen] = useState<number>(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  // Postpone Modal State
   const [postponeModalVisible, setPostponeModalVisible] = useState(false);
   const [postponeData, setPostponeData] = useState<{sessionData: any, messageId: string, sessionId: string} | null>(null);
 
   useEffect(() => {
-    if (client?.user_id) {
+    if (user?.id) {
       loadMessages();
       loadNextSession();
       const cleanup = subscribeToMessages();
       return cleanup;
     }
-  }, [client?.user_id]);
+  }, [user?.id]);
 
-  // Reload messages when screen comes into focus (fallback if realtime doesn't work)
   useFocusEffect(
     React.useCallback(() => {
-      if (client?.user_id) {
-        console.log('[Messages] Screen focused, reloading messages');
-        loadMessages();
-        loadNextSession();
+      if (user?.id) {
+        setFirstUnreadIndex(-1);
+        setUnreadCountAtOpen(0);
         
-        // Mark messages as read when viewing page
-        setTimeout(() => {
-          markMessagesAsRead();
-        }, 500);
+        loadMessages().then((data) => {
+          setTimeout(() => {
+            markMessagesAsRead(data);
+          }, 500);
+        });
+        loadNextSession();
       }
-    }, [client?.user_id])
+    }, [user?.id])
   );
 
   const loadNextSession = async () => {
+    if (!client?.id) return;
     try {
       const { data, error } = await supabase
         .from('sessions')
         .select('*')
-        .eq('client_id', client?.id)
+        .eq('client_id', client.id)
         .eq('status', 'scheduled')
         .gt('scheduled_at', new Date().toISOString())
         .order('scheduled_at', { ascending: true })
         .limit(1)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error loading next session:', error);
-      }
-      
+      if (error && error.code !== 'PGRST116') throw error;
       setNextSession(data);
     } catch (error) {
       console.error('Error loading next session:', error);
@@ -610,11 +599,10 @@ export default function MessagesScreen() {
   };
 
   const subscribeToMessages = () => {
-    if (!client?.user_id) return;
+    if (!user?.id) return;
     
-    // Messages Subscription
     const messageChannel = supabase
-      .channel(`messages-${client.user_id}-${Date.now()}`)
+      .channel(`messages-${user.id}-${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -624,9 +612,8 @@ export default function MessagesScreen() {
         },
         (payload) => {
           const newMessage = payload.new as Message;
-          if (newMessage.recipient_id === client.user_id || newMessage.sender_id === client.user_id) {
+          if (newMessage.recipient_id === user.id || newMessage.sender_id === user.id) {
             setMessages((current) => {
-              // Check for duplicates by ID or by content+sender (for optimistic updates)
               const existsById = current.find(m => m.id === newMessage.id);
               const existsByContent = current.find(m => 
                 m.sender_id === newMessage.sender_id && 
@@ -635,13 +622,11 @@ export default function MessagesScreen() {
               );
               
               if (existsById || existsByContent) {
-                // If it's a temp message, replace it with the real one
                 if (existsByContent && existsByContent.id.startsWith('temp-')) {
                   return current.map(m => m.id === existsByContent.id ? newMessage : m);
                 }
                 return current;
               }
-              
               return [...current, newMessage];
             });
           }
@@ -656,7 +641,7 @@ export default function MessagesScreen() {
         },
         (payload) => {
           const updatedMessage = payload.new as Message;
-          if (updatedMessage.recipient_id === client.user_id || updatedMessage.sender_id === client.user_id) {
+          if (updatedMessage.recipient_id === user.id || updatedMessage.sender_id === user.id) {
             setMessages((current) => 
               current.map(msg => 
                 msg.id === updatedMessage.id ? updatedMessage : msg
@@ -665,16 +650,10 @@ export default function MessagesScreen() {
           }
         }
       )
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          // Silently reload messages on error
-          loadMessages();
-        }
-      });
+      .subscribe();
 
-    // Sessions Subscription (for "Wait for Coach")
     const sessionChannel = supabase
-      .channel(`sessions:${client.user_id}`)
+      .channel(`sessions:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -684,7 +663,6 @@ export default function MessagesScreen() {
           filter: `client_id=eq.${client?.id}`
         },
         () => {
-          console.log('[Messages] Session update received, reloading...');
           loadNextSession();
         }
       )
@@ -697,74 +675,83 @@ export default function MessagesScreen() {
   };
 
   const loadMessages = async () => {
+    if (!user?.id) return [];
     try {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .or(`sender_id.eq.${client?.user_id},recipient_id.eq.${client?.user_id}`)
+        .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       setMessages(data || []);
+      
+      if (data && data.length > 0) {
+        const unreadMsgs = data.filter(m => !m.read && m.sender_id !== user.id);
+        if (unreadMsgs.length > 0) {
+          const firstUnread = data.findIndex(m => m.id === unreadMsgs[0].id);
+          if (firstUnread !== -1) {
+            const reversedIndex = data.length - 1 - firstUnread;
+            if (firstUnreadIndex === -1) {
+              setFirstUnreadIndex(reversedIndex);
+              setUnreadCountAtOpen(unreadMsgs.length);
+            }
+          }
+        }
+      }
+      return data || [];
     } catch (error) {
       console.error('Error loading messages:', error);
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
- const markMessagesAsRead = async () => {
-    if (!messages.length || !client?.user_id) return;
+  const markMessagesAsRead = async (msgs?: Message[]) => {
+    const messagesToUse = msgs || messages;
+    if (!messagesToUse.length || !user?.id) return;
     
-    const lastMessage = messages[messages.length - 1];
-    setLastReadMessageId(lastMessage.id);
-    setFirstUnreadIndex(-1);
-    
-    // Mark all unread messages as read in database
-    const unreadIds = messages
-      .filter(m => !m.read && m.recipient_id === client.user_id)
+    const unreadIds = messagesToUse
+      .filter(m => !m.read && m.sender_id !== user.id)
       .map(m => m.id);
     
     if (unreadIds.length > 0) {
-      await supabase
+      const { error } = await supabase
         .from('messages')
         .update({ read: true })
         .in('id', unreadIds);
       
-      // Refresh unread count to update badge
-      refreshUnreadCount();
+      if (!error) {
+        refreshUnreadCount();
+      }
     }
   };
 
   const handleScroll = (event: any) => {
     const { contentOffset } = event.nativeEvent;
-    // For inverted list, offset close to 0 means at bottom (newest messages)
     const isAtBottom = contentOffset.y <= 50;
     setShowScrollButton(!isAtBottom);
     
-    // Mark as read when at bottom
     if (isAtBottom && messages.length > 0) {
       markMessagesAsRead();
     }
   };
 
   const scrollToBottom = () => {
-    // For inverted lists, offset 0 is the bottom (newest messages)
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     markMessagesAsRead();
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !client) return;
+    if (!newMessage.trim() || !user || !client) return;
 
     const messageText = newMessage.trim();
-    
-    // Optimistic update - add to UI immediately
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = {
       id: tempId,
-      sender_id: client.user_id,
-      recipient_id: '', // Will be filled after we get coach
+      sender_id: user.id,
+      recipient_id: '', 
       content: messageText,
       created_at: new Date().toISOString(),
       read: false,
@@ -774,11 +761,8 @@ export default function MessagesScreen() {
     setMessages([...messages, optimisticMessage]);
     setNewMessage('');
 
-    // Send to backend in background
     try {
       setSending(true);
-      
-      // Get active coach from coach_client_links
       const { data: coachLink, error: linkError } = await supabase
         .from('coach_client_links')
         .select('coach_id')
@@ -786,13 +770,7 @@ export default function MessagesScreen() {
         .eq('status', 'active')
         .single();
 
-      if (linkError || !coachLink) {
-        console.error('No active coach found for client:', client.id);
-        // Remove optimistic message on error
-        setMessages(messages);
-        setNewMessage(messageText);
-        return;
-      }
+      if (linkError || !coachLink) throw new Error('No active coach');
 
       const { data: coach } = await supabase
         .from('coaches')
@@ -800,14 +778,10 @@ export default function MessagesScreen() {
         .eq('id', coachLink.coach_id)
         .single();
 
-      if (!coach) {
-        setMessages(messages);
-        setNewMessage(messageText);
-        return;
-      }
+      if (!coach) throw new Error('Coach not found');
 
       const message = {
-        sender_id: client.user_id,
+        sender_id: user.id,
         recipient_id: coach.user_id,
         content: messageText,
         read: false,
@@ -822,13 +796,11 @@ export default function MessagesScreen() {
 
       if (error) throw error;
 
-      // Replace temp message with real one
       setMessages((current) => 
         current.map(m => m.id === tempId ? data : m)
       );
     } catch (error) {
       console.error('Error sending message:', error);
-      // Remove optimistic message on error
       setMessages((current) => current.filter(m => m.id !== tempId));
       setNewMessage(messageText);
     } finally {
@@ -840,19 +812,16 @@ export default function MessagesScreen() {
     setPostponeData({
         sessionData,
         messageId,
-        sessionId: sessionData.sessionId // Ensure this is passed from the message content
+        sessionId: sessionData.sessionId
     });
     setPostponeModalVisible(true);
   };
 
   const handleConfirmPostpone = async (reason: string, newDate: string) => {
-    if (!postponeData || !client) return;
-
+    if (!postponeData || !user) return;
     const { sessionData, messageId } = postponeData;
-
     try {
-      // Use RPC function to securely handle the postponement transaction
-      const { data, error } = await supabase.rpc('postpone_session', {
+      const { error } = await supabase.rpc('postpone_session', {
         p_old_session_id: sessionData.sessionId,
         p_old_message_id: messageId,
         p_new_scheduled_at: newDate,
@@ -860,61 +829,40 @@ export default function MessagesScreen() {
       });
 
       if (error) throw error;
-
       Alert.alert('Success', 'Session postponed successfully.');
       setPostponeModalVisible(false);
-      
-      // Reload messages to show the changes
       loadMessages();
       loadNextSession();
-
     } catch (error) {
       console.error('Error postponing session:', error);
-      Alert.alert('Error', 'Failed to postpone session. Please try again.');
+      Alert.alert('Error', 'Failed to postpone. Please try again.');
     }
   };
 
   const renderMessage = ({ item, index }: { item: Message, index: number }) => {
-    // ... (isMe, showUnreadSeparator logic remains same)
-    const isMe = item.sender_id === client?.user_id;
+    const isMe = item.sender_id === user?.id;
     const showUnreadSeparator = index === firstUnreadIndex;
 
     const renderContent = () => {
-      // ... (TaskCompletionMessage logic remains same)
       let isTaskMessage = false;
       try {
         const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'task_completion') {
-          isTaskMessage = true;
-        }
+        if (parsed && parsed.type === 'task_completion') isTaskMessage = true;
       } catch (e) {}
+      if (isTaskMessage) return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
 
-      if (isTaskMessage) {
-        return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
-      }
-
-      // Challenge Completion Logic
       let isChallengeMessage = false;
       try {
         const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'challenge_completed') {
-          isChallengeMessage = true;
-        }
+        if (parsed && parsed.type === 'challenge_completed') isChallengeMessage = true;
       } catch (e) {}
+      if (isChallengeMessage) return <ChallengeCompletionMessage content={item.content} isOwn={isMe} />;
 
-      if (isChallengeMessage) {
-        return <ChallengeCompletionMessage content={item.content} isOwn={isMe} />;
-      }
-
-      // Session Invite Logic
       let isSessionInvite = false;
       try {
         const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'session_invite') {
-          isSessionInvite = true;
-        }
+        if (parsed && parsed.type === 'session_invite') isSessionInvite = true;
       } catch (e) {}
-
       if (isSessionInvite) {
         const parsed = JSON.parse(item.content);
         return (
@@ -927,43 +875,35 @@ export default function MessagesScreen() {
         );
       }
 
-      // Reschedule Proposal Logic
       try {
         const parsed = JSON.parse(item.content);
         if (parsed && parsed.type === 'reschedule_proposal') {
-          return (
-            <RescheduleProposalMessage 
-              messageId={item.id}
-              metadata={parsed}
-              isOwn={isMe}
-            />
-          );
-        }
-      } catch (e) {
-        // Not JSON or missing type, fall through
-      }
-
-      // ... (MealLog logic remains same)
-      let isMealLog = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'meal_log') {
-          isMealLog = true;
+          return <RescheduleProposalMessage messageId={item.id} metadata={parsed} isOwn={isMe} />;
         }
       } catch (e) {}
 
-      if (isMealLog) {
-        return <MealMessageCard content={item.content} isOwn={isMe} />;
-      }
+      let isMealLog = false;
+      try {
+        const parsed = JSON.parse(item.content);
+        if (parsed && parsed.type === 'meal_log') isMealLog = true;
+      } catch (e) {}
+      if (isMealLog) return <MealMessageCard content={item.content} isOwn={isMe} />;
 
       return (
-        <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
-          <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.theirMessageText]}>
+        <View style={[styles.messageBubble, isMe ? styles.ownBubble : styles.receivedBubble]}>
+          <Text style={[styles.messageText, isMe ? styles.ownText : styles.receivedText]}>
             {item.content}
           </Text>
-          <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.theirTimestamp]}>
-            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
+          <View style={styles.messageFooter}>
+            <Text style={[styles.timestamp, isMe ? styles.sentTimestamp : styles.receivedTimestamp]}>
+              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isMe && (
+              item.read ? 
+                <CheckCheck size={14} color="rgba(255, 255, 255, 0.7)" /> : 
+                <Check size={14} color="rgba(255, 255, 255, 0.7)" />
+            )}
+          </View>
         </View>
       );
     };
@@ -974,7 +914,9 @@ export default function MessagesScreen() {
           <View style={styles.unreadSeparator}>
             <View style={styles.unreadSeparatorLine} />
             <View style={styles.unreadSeparatorBadge}>
-              <Text style={styles.unreadSeparatorText}>{messages.length - index} NEW MESSAGES</Text>
+              <Text style={styles.unreadSeparatorText}>
+                {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
+              </Text>
             </View>
             <View style={styles.unreadSeparatorLine} />
           </View>
@@ -986,16 +928,8 @@ export default function MessagesScreen() {
 
   return (
     <View style={styles.container}>
-        {/* ... (Header and Message List remain same - need to ensure we don't overwrite them) */}
-        {/* Since I'm replacing a large chunk, I need to be careful. 
-            I'll assume the structure is standard and just wrap the return. 
-            Wait, I can't see the return statement in the previous view_file. 
-            I should probably view the end of the file first to be safe. 
-        */}
-        {/* Actually, I'll just use the existing structure and inject the modal at the end */}
-        
         <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
+          <Text style={styles.title}>Messages</Text>
         </View>
 
         <KeyboardAvoidingView 
@@ -1012,25 +946,14 @@ export default function MessagesScreen() {
                 inverted
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
-                onScrollToIndexFailed={(info) => {
-                  const wait = new Promise(resolve => setTimeout(resolve, 500));
-                  wait.then(() => {
-                    flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
-                  });
-                }}
             />
             
-            {/* Scroll to bottom button */}
             {showScrollButton && (
-              <TouchableOpacity
-                style={styles.scrollToBottomButton}
-                onPress={scrollToBottom}
-              >
+              <TouchableOpacity style={styles.scrollToBottomButton} onPress={scrollToBottom}>
                 <ArrowDown size={20} color="#3B82F6" />
               </TouchableOpacity>
             )}
             
-            {/* Input Area */}
             <View style={styles.inputContainer}>
                 <TextInput
                     style={styles.input}
@@ -1054,7 +977,7 @@ export default function MessagesScreen() {
                 visible={postponeModalVisible}
                 onClose={() => setPostponeModalVisible(false)}
                 onConfirm={handleConfirmPostpone}
-                coachId={postponeData.sessionData.coachId} // Ensure sessionData has coachId
+                coachId={postponeData.sessionData.coachId}
                 clientId={client?.id}
                 sessionId={postponeData.sessionId}
                 initialDate={postponeData.sessionData.timestamp}
@@ -1063,6 +986,7 @@ export default function MessagesScreen() {
     </View>
   );
 }
+
 
 
 
@@ -1094,45 +1018,6 @@ const styles = StyleSheet.create({
   messageList: {
     padding: 16,
     gap: 12,
-  },
-  messageContainer: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 4,
-  },
-  myMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#3B82F6',
-    borderBottomRightRadius: 4,
-  },
-  theirMessage: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  myMessageText: {
-    color: '#FFFFFF',
-  },
-  theirMessageText: {
-    color: '#111827',
-  },
-  timestamp: {
-    fontSize: 10,
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
-  myTimestamp: {
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  theirTimestamp: {
-    color: '#9CA3AF',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -1169,10 +1054,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 4,
   },
-  sentBubble: {
+  ownBubble: {
     alignSelf: 'flex-end',
     backgroundColor: '#3B82F6',
     borderBottomRightRadius: 4,
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  timestamp: {
+    fontSize: 10,
+    marginTop: 4,
+    alignSelf: 'flex-end',
   },
   receivedBubble: {
     alignSelf: 'flex-start',
@@ -1181,11 +1075,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  sentText: {
+  ownText: {
     color: '#FFFFFF',
+    fontSize: 16,
+    lineHeight: 24,
   },
   receivedText: {
     color: '#111827',
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 4,
+  },
+  sentTimestamp: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  receivedTimestamp: {
+    fontSize: 10,
+    color: '#9CA3AF',
   },
   taskMessageContainer: {
     width: '100%',

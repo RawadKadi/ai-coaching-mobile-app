@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { Users, TrendingUp, MessageCircle, CheckCircle, Target, Sparkles } from 'lucide-react-native';
 import NewClientModal from '@/components/NewClientModal';
@@ -18,6 +19,7 @@ import { ProposedSession } from '@/lib/ai-scheduling-service';
 export default function CoachDashboard() {
   const router = useRouter();
   const { profile, coach } = useAuth();
+  const { unreadCount } = useUnread();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalClients: 0,
@@ -266,7 +268,7 @@ export default function CoachDashboard() {
           <View style={styles.statIconContainer}>
             <MessageCircle size={24} color="#EF4444" />
           </View>
-          <Text style={styles.statValue}>{stats.unreadMessages}</Text>
+          <Text style={styles.statValue}>{unreadCount}</Text>
           <Text style={styles.statLabel}>Unread Messages</Text>
         </View>
       </View>

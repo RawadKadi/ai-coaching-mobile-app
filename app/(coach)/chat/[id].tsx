@@ -1122,6 +1122,7 @@ export default function CoachChat() {
   const [modalImageLoading, setModalImageLoading] = useState(false);
   const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(null);
   const [firstUnreadIndex, setFirstUnreadIndex] = useState<number>(-1);
+  const [unreadCountAtOpen, setUnreadCountAtOpen] = useState<number>(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -1143,13 +1144,17 @@ export default function CoachChat() {
     React.useCallback(() => {
       if (profile && id) {
         console.log('[CoachChat] Screen focused, reloading chat');
-        loadChatData();
+        // Reset separator states
+        setFirstUnreadIndex(-1);
+        setUnreadCountAtOpen(0);
+
+        loadChatData().then((data) => {
+          // Mark messages as read after loading using fresh data
+          setTimeout(() => {
+            markMessagesAsRead(data);
+          }, 500);
+        });
         loadNextSession();
-        
-        // Mark messages as read when viewing
-        setTimeout(() => {
-          markMessagesAsRead();
-        }, 500);
       }
     }, [profile, id])
   );
@@ -1431,6 +1436,23 @@ export default function CoachChat() {
       if (error) throw error;
       
       setMessages(data || []);
+      
+      // Calculate first unread message index for NEW separator
+      if (data && data.length > 0) {
+        const unreadMsgs = data.filter(m => !m.read && m.sender_id === clientUserId);
+        if (unreadMsgs.length > 0) {
+          // Find first unread message index
+          const firstUnread = data.findIndex(m => m.id === unreadMsgs[0].id);
+          if (firstUnread !== -1) {
+            const reversedIndex = data.length - 1 - firstUnread;
+            // Only set if not already set this session to prevent shifting
+            if (firstUnreadIndex === -1) {
+              setFirstUnreadIndex(reversedIndex);
+              setUnreadCountAtOpen(unreadMsgs.length);
+            }
+          }
+        }
+      }
 
       // onContentSizeChange will handle initial scroll
       // Log session invite messages to verify cancelled status
@@ -1454,23 +1476,26 @@ export default function CoachChat() {
       loadNextSession();
       loadAllCoachSessions();
 
+      return data || [];
     } catch (error) {
       console.error('Error loading chat:', error);
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
-  const markMessagesAsRead = async () => {
-    if (!messages.length || !profile?.id) return;
+  const markMessagesAsRead = async (msgs?: Message[]) => {
+    const messagesToUse = msgs || messages;
+    if (!messagesToUse.length || !profile?.id) return;
     
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = messagesToUse[messagesToUse.length - 1];
     setLastReadMessageId(lastMessage.id);
-    setFirstUnreadIndex(-1);
+    // REMOVED: setFirstUnreadIndex(-1); // Keep the separator visible for this session
     
     // Mark all unread messages from client as read in database
-    const unreadIds = messages
-      .filter(m => !m.read && m.sender_id === clientProfile?.user_id)
+    const unreadIds = messagesToUse
+      .filter(m => !m.read && m.recipient_id === profile.id)
       .map(m => m.id);
     
     if (unreadIds.length > 0) {
@@ -1634,7 +1659,9 @@ export default function CoachChat() {
           <View style={styles.unreadSeparator}>
             <View style={styles.unreadSeparatorLine} />
             <View style={styles.unreadSeparatorBadge}>
-              <Text style={styles.unreadSeparatorText}>{messages.length - index} NEW MESSAGES</Text>
+              <Text style={styles.unreadSeparatorText}>
+                {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
+              </Text>
             </View>
             <View style={styles.unreadSeparatorLine} />
           </View>
