@@ -11,11 +11,11 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { X, AlertCircle, CheckCircle, Calendar, Target } from 'lucide-react-native';
+import { ArrowLeft, X, AlertCircle, CheckCircle, Calendar, Target } from 'lucide-react-native';
 
 /**
- * Daily Challenge Detail Screen (Coach View)
- * Shows single challenge details for a specific date
+ * Mother Challenge Detail Screen V3 (Coach View)
+ * Shows mother challenge with all sub-challenges
  */
 
 export default function ChallengeDetailScreen() {
@@ -25,7 +25,6 @@ export default function ChallengeDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [challenge, setChallenge] = useState<any>(null);
-  const [clientName, setClientName] = useState('');
 
   useEffect(() => {
     loadChallengeDetails();
@@ -37,29 +36,20 @@ export default function ChallengeDetailScreen() {
     try {
       setLoading(true);
 
-      // Get challenge from daily_challenges
-      const { data, error } = await supabase
-        .from('daily_challenges')
-        .select(`
-          *,
-          client:clients(
-            id,
-            profiles:user_id(full_name)
-          )
-        `)
-        .eq('id', id)
-        .single();
+      // Get mother challenge with all sub-challenges
+      const { data, error } = await supabase.rpc('get_mother_challenge_details', {
+        p_mother_challenge_id: id
+      });
 
       if (error) throw error;
 
-      setChallenge(data);
+      if (!data || data.length === 0) {
+        Alert.alert('Error', 'Challenge not found');
+        router.back();
+        return;
+      }
 
-      // Extract client name
-      const clientData = data.client;
-      const profiles = Array.isArray(clientData?.profiles)
-        ? clientData.profiles[0]
-        : clientData?.profiles;
-      setClientName(profiles?.full_name || 'Client');
+      setChallenge(data[0]);
     } catch (error) {
       console.error('Error loading challenge:', error);
       Alert.alert('Error', 'Failed to load challenge details');
@@ -79,26 +69,17 @@ export default function ChallengeDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { data: coachData } = await supabase
-                .from('coaches')
-                .select('id')
-                .eq('user_id', user!.id)
-                .single();
-
-              if (!coachData) throw new Error('Coach not found');
-
-              const { error } = await supabase.rpc('cancel_daily_challenge', {
-                p_challenge_id: id,
-                p_coach_id: coachData.id,
+              const { error } = await supabase.rpc('cancel_mother_challenge', {
+                p_mother_challenge_id: id
               });
 
               if (error) throw error;
 
-              Alert.alert('Success', 'Challenge cancelled', [
-                { text: 'OK', onPress: () => router.back() },
-              ]);
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to cancel challenge');
+              Alert.alert('Success', 'Challenge cancelled');
+              router.back();
+            } catch (error:any) {
+              console.error('Error cancelling challenge:', error);
+              Alert.alert('Error', 'Failed to cancel challenge');
             }
           },
         },
@@ -116,134 +97,123 @@ export default function ChallengeDetailScreen() {
 
   if (!challenge) {
     return (
-      <View style={styles.errorContainer}>
-        <AlertCircle size={48} color="#ef4444" />
-        <Text style={styles.errorText}>Challenge not found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color="#111" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Challenge Details</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.emptyContainer}>
+          <AlertCircle size={48} color="#999" />
+          <Text style={styles.emptyText}>Challenge not found</Text>
+        </View>
       </View>
     );
   }
+
+  const completedCount = challenge.sub_challenges?.filter((s: any) => s.completed).length || 0;
+  const totalCount = challenge.sub_challenges?.length || 0;
+  const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-          <X size={24} color="#666" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ArrowLeft size={24} color="#111" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Challenge Details</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.scrollView}>
-        {/* Challenge Info */}
-        <View style={styles.section}>
-          <View style={styles.titleRow}>
-            <Text style={styles.challengeTitle}>{challenge.name}</Text>
-            <View
-              style={[
-                styles.statusBadge,
-                challenge.status === 'active'
-                  ? styles.activeBadge
-                  : challenge.completed
-                  ? styles.completedBadge
-                  : styles.cancelledBadge,
-              ]}
-            >
-              <Text style={styles.statusText}>
-                {challenge.completed ? 'Completed' : challenge.status}
-              </Text>
+        {/* Challenge Info Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.challengeName}>{challenge.name}</Text>
+            <View style={[styles.statusBadge, challenge.status === 'active' && styles.statusActive]}>
+              <Text style={styles.statusText}>{challenge.status}</Text>
             </View>
           </View>
-
-          {challenge.created_by === 'ai' && (
-            <View style={styles.aiTag}>
-              <Text style={styles.aiTagText}>🤖 AI Generated</Text>
-            </View>
-          )}
-
-          <Text style={styles.clientName}>👤 {clientName}</Text>
 
           {challenge.description && (
             <Text style={styles.description}>{challenge.description}</Text>
           )}
 
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Calendar size={16} color="#666" />
-              <Text style={styles.metaText}>
-                {new Date(challenge.assigned_date).toLocaleDateString()}
-              </Text>
+          <View style={styles.infoRow}>
+            <Calendar size={16} color="#666" />
+            <Text style={styles.infoText}>
+              {new Date(challenge.start_date).toLocaleDateString()} - {new Date(challenge.end_date).toLocaleDateString()}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Target size={16} color="#666" />
+            <Text style={styles.infoText}>
+              {challenge.client_name}
+            </Text>
+          </View>
+
+          {/* Progress */}
+          <View style={styles.progressSection}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressLabel}>Overall Progress</Text>
+              <Text style={styles.progressPercent}>{completionRate}%</Text>
             </View>
-            <View style={styles.metaItem}>
-              <Target size={16} color="#666" />
-              <Text style={styles.metaText}>{challenge.focus_type}</Text>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${completionRate}%` }]} />
             </View>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaText}>
-                {challenge.intensity} intensity
-              </Text>
-            </View>
+            <Text style={styles.progressText}>
+              {completedCount} of {totalCount} tasks completed
+            </Text>
           </View>
         </View>
 
-        {/* Completion Status */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Status</Text>
-          <View style={styles.statusBox}>
-            {challenge.completed ? (
-              <>
-                <CheckCircle size={32} color="#10b981" />
-                <Text style={styles.completedText}>Completed ✓</Text>
-                {challenge.completed_at && (
-                  <Text style={styles.completedTimeText}>
-                    {new Date(challenge.completed_at).toLocaleString()}
-                  </Text>
-                )}
-                {challenge.notes && (
-                  <View style={styles.notesBox}>
-                    <Text style={styles.notesLabel}>Client Notes:</Text>
-                    <Text style={styles.notesText}>{challenge.notes}</Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <>
-                <AlertCircle size={32} color="#f59e0b" />
-                <Text style={styles.pendingText}>Not yet completed</Text>
-              </>
+        {/* Sub-Challenges List */}
+        <Text style={styles.sectionTitle}>Daily Tasks ({totalCount})</Text>
+        {challenge.sub_challenges?.map((sub: any, index: number) => (
+          <View key={sub.id} style={styles.subChallengeCard}>
+            <View style={styles.subHeader}>
+              <View style={styles.subHeaderLeft}>
+                <Text style={styles.subDate}>
+                  {new Date(sub.assigned_date).toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </Text>
+                <View style={[styles.focusBadge, { backgroundColor: getFocusColor(sub.focus_type) }]}>
+                  <Text style={styles.focusText}>{sub.focus_type}</Text>
+                </View>
+              </View>
+              {sub.completed ? (
+                <CheckCircle size={24} color="#10b981" />
+              ) : (
+                <View style={styles.incompleteBadge}>
+                  <Text style={styles.incompleteText}>Pending</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.subName}>{sub.name}</Text>
+            {sub.description && (
+              <Text style={styles.subDescription}>{sub.description}</Text>
             )}
-          </View>
-        </View>
 
-        {/* Rules */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Rules</Text>
-          {challenge.rules?.map((rule: string, index: number) => (
-            <View key={index} style={styles.ruleRow}>
-              <Text style={styles.ruleNumber}>{index + 1}.</Text>
-              <Text style={styles.ruleText}>{rule}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* AI Reasoning */}
-        {challenge.ai_reasoning && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>AI Insight</Text>
-            <View style={styles.insightBox}>
-              <Text style={styles.insightText}>{challenge.ai_reasoning}</Text>
+            <View style={styles.subFooter}>
+              <Text style={styles.intensityText}>Intensity: {sub.intensity}</Text>
             </View>
           </View>
-        )}
+        ))}
       </ScrollView>
 
-      {/* Actions */}
-      {challenge.status === 'active' && !challenge.completed && (
+      {/* Cancel Button */}
+      {challenge.status === 'active' && (
         <View style={styles.footer}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+            <X size={20} color="#ef4444" />
             <Text style={styles.cancelButtonText}>Cancel Challenge</Text>
           </TouchableOpacity>
         </View>
@@ -252,227 +222,55 @@ export default function ChallengeDetailScreen() {
   );
 }
 
+function getFocusColor(focusType: string): string {
+  const colors: Record<string, string> = {
+    training: '#3b82f6',
+    nutrition: '#10b981',
+    recovery: '#8b5cf6',
+    consistency: '#f59e0b',
+  };
+  return colors[focusType] || '#6b7280';
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-  },
-  backButton: {
-    marginTop: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#6366f1',
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    paddingTop: 60,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  closeButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  section: {
-    backgroundColor: '#fff',
-    margin: 12,
-    padding: 16,
-    borderRadius: 12,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  challengeTitle: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111',
-    marginRight: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  activeBadge: {
-    backgroundColor: '#dcfce7',
-  },
-  completedBadge: {
-    backgroundColor: '#dbeafe',
-  },
-  cancelledBadge: {
-    backgroundColor: '#fee2e2',
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#111',
-    textTransform: 'capitalize',
-  },
-  aiTag: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#ede9fe',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  aiTagText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6366f1',
-  },
-  clientName: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  description: {
-    fontSize: 14,
-    color: '#444',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  metaText: {
-    fontSize: 12,
-    color: '#666',
-    textTransform: 'capitalize',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
-    marginBottom: 12,
-  },
-  statusBox: {
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f9fafb',
-    borderRadius: 8,
-  },
-  completedText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#10b981',
-    marginTop: 8,
-  },
-  completedTimeText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  pendingText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#f59e0b',
-    marginTop: 8,
-  },
-  notesBox: {
-    width: '100%',
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-  },
-  notesLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#444',
-    lineHeight: 20,
-  },
-  ruleRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  ruleNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6366f1',
-  },
-  ruleText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#444',
-    lineHeight: 20,
-  },
-  insightBox: {
-    backgroundColor: '#ede9fe',
-    padding: 12,
-    borderRadius: 8,
-  },
-  insightText: {
-    fontSize: 14,
-    color: '#444',
-  },
-  footer: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  cancelButton: {
-    backgroundColor: '#ef4444',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#f9fafb' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+  emptyText: { fontSize: 16, color: '#999', marginTop: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: 60, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  backButton: { padding: 8 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
+  scrollView: { flex: 1 },
+  card: { backgroundColor: '#fff', margin: 16, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
+  challengeName: { fontSize: 20, fontWeight: 'bold', color: '#111', flex: 1, marginRight: 12 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: '#f3f4f6' },
+  statusActive: { backgroundColor: '#dcfce7' },
+  statusText: { fontSize: 12, fontWeight: '600', color: '#16a34a', textTransform: 'capitalize' },
+  description: { fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 16 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  infoText: { fontSize: 14, color: '#666' },
+  progressSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  progressLabel: { fontSize: 14, fontWeight: '600', color: '#111' },
+  progressPercent: { fontSize: 18, fontWeight: 'bold', color: '#6366f1' },
+  progressBar: { height: 8, backgroundColor: '#e5e7eb', borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
+  progressFill: { height: '100%', backgroundColor: '#10b981', borderRadius: 4 },
+  progressText: { fontSize: 12, color: '#666' },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111', marginHorizontal: 16, marginTop: 8, marginBottom: 12 },
+  subChallengeCard: { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  subHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  subHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  subDate: { fontSize: 13, fontWeight: '600', color: '#111' },
+  focusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  focusText: { fontSize: 11, fontWeight: '600', color: '#fff' },
+  incompleteBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#fef3c7' },
+  incompleteText: { fontSize: 11, fontWeight: '600', color: '#92400e' },
+  subName: { fontSize: 16, fontWeight: '600', color: '#111', marginBottom: 4 },
+  subDescription: { fontSize: 13, color: '#666', lineHeight: 18, marginBottom: 8 },
+  subFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  intensityText: { fontSize: 12, color: '#666', textTransform: 'capitalize' },
+  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  cancelButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 12, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fca5a5' },
+  cancelButtonText: { fontSize: 16, fontWeight: '600', color: '#ef4444' },
 });
