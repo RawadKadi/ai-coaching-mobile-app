@@ -1147,6 +1147,90 @@ export default function CoachChat() {
     }, [profile, id])
   );
 
+  // Separate useEffect for real-time subscription
+  useEffect(() => {
+    if (!profile?.id || !clientProfile?.user_id || !id) return;
+
+    console.log('[CoachChat] Setting up real-time subscription');
+    
+    const channel = supabase
+      .channel(`chat:${id}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const newMessage = payload.new as Message;
+          console.log('[CoachChat] INSERT event:', newMessage);
+          
+          const isFromClient = newMessage.sender_id === clientProfile.user_id && newMessage.recipient_id === profile.id;
+          const isFromMe = newMessage.sender_id === profile.id && newMessage.recipient_id === clientProfile.user_id;
+          
+          if (isFromClient || isFromMe) {
+            console.log('[CoachChat] Adding message to list');
+            setMessages((current) => {
+              // Check for duplicates by ID or by content+sender (for optimistic updates)
+              const existsById = current.find(m => m.id === newMessage.id);
+              const existsByContent = current.find(m => 
+                m.sender_id === newMessage.sender_id && 
+                m.content === newMessage.content &&
+                Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 3000
+              );
+              
+              if (existsById || existsByContent) {
+                console.log('[CoachChat] Duplicate message detected, skipping');
+                // If it's a temp message, replace it with the real one
+                if (existsByContent && existsByContent.id.startsWith('temp-')) {
+                  return current.map(m => m.id === existsByContent.id ? newMessage : m);
+                }
+                return current;
+              }
+              
+              return [...current, newMessage];
+            });
+            
+            if (isFromClient) {
+              markAsRead(newMessage.id);
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const updatedMessage = payload.new as Message;
+          console.log('[CoachChat] UPDATE event:', updatedMessage);
+          
+          const isFromClient = updatedMessage.sender_id === clientProfile.user_id && updatedMessage.recipient_id === profile.id;
+          const isFromMe = updatedMessage.sender_id === profile.id && updatedMessage.recipient_id === clientProfile.user_id;
+          
+          if (isFromClient || isFromMe) {
+            setMessages((current) => 
+              current.map(msg => 
+                msg.id === updatedMessage.id ? updatedMessage : msg
+              )
+            );
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[CoachChat] Subscription status:`, status);
+      });
+
+    return () => {
+      console.log('[CoachChat] Cleaning up subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, clientProfile?.user_id, id]);
+
   const loadAllCoachSessions = async () => {
       if (!coach) return;
       const { data, error } = await supabase
@@ -1341,40 +1425,7 @@ export default function CoachChat() {
       
       setMessages(data || []);
 
-      // Calculate first unread message
-      if (data && data.length > 0) {
-        const lastRead = lastReadMessageId;
-        if (lastRead) {
-          const lastReadIdx = data.findIndex(m => m.id === lastRead);
-          const firstUnread = lastReadIdx + 1;
-          if (firstUnread < data.length && !data[firstUnread].read) {
-            setFirstUnreadIndex(firstUnread);
-            // Auto-scroll to first unread on load
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({
-                index: firstUnread,
-                animated: true,
-                viewPosition: 0.1 // Show near top
-              });
-            }, 300);
-          } else {
-            setFirstUnreadIndex(-1);
-          }
-        } else {
-          // Find first unread message from client
-          const firstUnreadIdx = data.findIndex(m => !m.read && m.sender_id === clientUserId);
-          setFirstUnreadIndex(firstUnreadIdx);
-          if (firstUnreadIdx >= 0) {
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({
-                index: firstUnreadIdx,
-                animated: true,
-                viewPosition: 0.1
-              });
-            }, 300);
-          }
-        }
-      }
+      // onContentSizeChange will handle initial scroll
       // Log session invite messages to verify cancelled status
       data?.forEach(msg => {
         try {
@@ -1390,79 +1441,11 @@ export default function CoachChat() {
           // Not JSON, skip
         }
       });
-      
       setMessages(data || []);
-
-      // 3. Subscribe to new messages
-      console.log('[CoachChat] Setting up subscription for coach:', profile?.id);
       
-      // Use unique channel ID
+      // Load sessions
       loadNextSession();
       loadAllCoachSessions();
-      
-      const channel = supabase
-        .channel(`chat:${id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-          },
-          (payload) => {
-            const newMessage = payload.new as Message;
-            console.log('[CoachChat] Realtime event received:', newMessage);
-            
-            // Check if message belongs to this conversation
-            // Either sent by client to coach, or sent by coach to client
-            const isFromClient = newMessage.sender_id === clientUserId && newMessage.recipient_id === profile?.id;
-            const isFromMe = newMessage.sender_id === profile?.id && newMessage.recipient_id === clientUserId;
-            
-            if (isFromClient || isFromMe) {
-              console.log('[CoachChat] Adding relevant message to list');
-              setMessages((current) => {
-                if (current.find(m => m.id === newMessage.id)) return current;
-                return [...current, newMessage];
-              });
-              
-              if (isFromClient) {
-                markAsRead(newMessage.id);
-              }
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'messages',
-          },
-          (payload) => {
-            const updatedMessage = payload.new as Message;
-            console.log('[CoachChat] UPDATE event received:', updatedMessage);
-            
-            const isFromClient = updatedMessage.sender_id === clientUserId && updatedMessage.recipient_id === profile?.id;
-            const isFromMe = updatedMessage.sender_id === profile?.id && updatedMessage.recipient_id === clientUserId;
-            
-            if (isFromClient || isFromMe) {
-              console.log('[CoachChat] Updating message in list');
-              setMessages((current) => 
-                current.map(msg => 
-                  msg.id === updatedMessage.id ? updatedMessage : msg
-                )
-              );
-            }
-          }
-        )
-        .subscribe((status) => {
-          console.log(`[CoachChat] Subscription status (chat:${id}):`, status);
-        });
-
-      return () => {
-        console.log(`[CoachChat] Cleaning up subscription (chat:${id})`);
-        supabase.removeChannel(channel);
-      };
 
     } catch (error) {
       console.error('Error loading chat:', error);
@@ -1503,7 +1486,9 @@ export default function CoachChat() {
   };
 
   const scrollToBottom = () => {
-    flatListRef.current?.scrollToEnd({ animated: true });
+    // For inverted lists, offset 0 is the bottom (newest messages)
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setShowScrollButton(false);
     markMessagesAsRead();
   };
 
@@ -1514,13 +1499,30 @@ export default function CoachChat() {
   const sendMessage = async () => {
     if (!newMessage.trim() || !profile || !clientProfile) return;
 
+    const messageText = newMessage.trim();
+    
+    // Optimistic update - add to UI immediately
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage = {
+      id: tempId,
+      sender_id: profile.id,
+      recipient_id: clientProfile.user_id,
+      content: messageText,
+      created_at: new Date().toISOString(),
+      read: false,
+    };
+    
+    setMessages([...messages, optimisticMessage]);
+    setNewMessage('');
+
+    // Send to backend in background
     try {
       setSending(true);
 
       const message = {
         sender_id: profile.id,
         recipient_id: clientProfile.user_id,
-        content: newMessage.trim(),
+        content: messageText,
         read: false,
         ai_generated: false,
       };
@@ -1533,10 +1535,15 @@ export default function CoachChat() {
 
       if (error) throw error;
 
-      setMessages([...messages, data]);
-      setNewMessage('');
+      // Replace temp message with real one
+      setMessages((current) => 
+        current.map(m => m.id === tempId ? data : m)
+      );
     } catch (error) {
       console.error('Error sending message:', error);
+      // Remove optimistic message on error and restore text
+      setMessages((current) => current.filter(m => m.id !== tempId));
+      setNewMessage(messageText);
     } finally {
       setSending(false);
     }
@@ -1670,10 +1677,11 @@ export default function CoachChat() {
       ) : (
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={messages.slice().reverse()}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messageList}
+          inverted
           onScroll={handleScroll}
           scrollEventThrottle={16}
           onScrollToIndexFailed={(info) => {

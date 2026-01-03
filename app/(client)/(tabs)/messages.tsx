@@ -619,7 +619,22 @@ export default function MessagesScreen() {
           const newMessage = payload.new as Message;
           if (newMessage.recipient_id === client.user_id || newMessage.sender_id === client.user_id) {
             setMessages((current) => {
-              if (current.find(m => m.id === newMessage.id)) return current;
+              // Check for duplicates by ID or by content+sender (for optimistic updates)
+              const existsById = current.find(m => m.id === newMessage.id);
+              const existsByContent = current.find(m => 
+                m.sender_id === newMessage.sender_id && 
+                m.content === newMessage.content &&
+                Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 3000
+              );
+              
+              if (existsById || existsByContent) {
+                // If it's a temp message, replace it with the real one
+                if (existsByContent && existsByContent.id.startsWith('temp-')) {
+                  return current.map(m => m.id === existsByContent.id ? newMessage : m);
+                }
+                return current;
+              }
+              
               return [...current, newMessage];
             });
           }
@@ -684,41 +699,6 @@ export default function MessagesScreen() {
 
       if (error) throw error;
       setMessages(data || []);
-      
-      // Calculate first unread message
-      if (data && data.length > 0) {
-        const lastRead = lastReadMessageId;
-        if (lastRead) {
-          const lastReadIdx = data.findIndex(m => m.id === lastRead);
-          const firstUnread = lastReadIdx + 1;
-          if (firstUnread < data.length && !data[firstUnread].read) {
-            setFirstUnreadIndex(firstUnread);
-            // Auto-scroll to first unread on load
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({
-                index: firstUnread,
-                animated: true,
-                viewPosition: 0.1 // Show near top
-              });
-            }, 300);
-          } else {
-            setFirstUnreadIndex(-1);
-          }
-        } else {
-          // Find first unread message
-          const firstUnreadIdx = data.findIndex(m => !m.read && m.sender_id !== client?.user_id);
-          setFirstUnreadIndex(firstUnreadIdx);
-          if (firstUnreadIdx >= 0) {
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({
-                index: firstUnreadIdx,
-                animated: true,
-                viewPosition: 0.1
-              });
-            }, 300);
-          }
-        }
-      }
     } catch (error) {
       console.error('Error loading messages:', error);
     } finally {
@@ -747,24 +727,44 @@ export default function MessagesScreen() {
   };
 
   const handleScroll = (event: any) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const isAtBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 50;
+    const { contentOffset } = event.nativeEvent;
+    // For inverted list, offset close to 0 means at bottom (newest messages)
+    const isAtBottom = contentOffset.y <= 50;
     setShowScrollButton(!isAtBottom);
     
-    // Mark as read when scrolled to bottom
+    // Mark as read when at bottom
     if (isAtBottom && messages.length > 0) {
       markMessagesAsRead();
     }
   };
 
   const scrollToBottom = () => {
-    flatListRef.current?.scrollToEnd({ animated: true });
+    // For inverted lists, offset 0 is the bottom (newest messages)
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     markMessagesAsRead();
   };
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !client) return;
 
+    const messageText = newMessage.trim();
+    
+    // Optimistic update - add to UI immediately
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage = {
+      id: tempId,
+      sender_id: client.user_id,
+      recipient_id: '', // Will be filled after we get coach
+      content: messageText,
+      created_at: new Date().toISOString(),
+      read: false,
+      client_id: client.id,
+    };
+    
+    setMessages([...messages, optimisticMessage]);
+    setNewMessage('');
+
+    // Send to backend in background
     try {
       setSending(true);
       
@@ -778,6 +778,9 @@ export default function MessagesScreen() {
 
       if (linkError || !coachLink) {
         console.error('No active coach found for client:', client.id);
+        // Remove optimistic message on error
+        setMessages(messages);
+        setNewMessage(messageText);
         return;
       }
 
@@ -787,12 +790,16 @@ export default function MessagesScreen() {
         .eq('id', coachLink.coach_id)
         .single();
 
-      if (!coach) return;
+      if (!coach) {
+        setMessages(messages);
+        setNewMessage(messageText);
+        return;
+      }
 
       const message = {
         sender_id: client.user_id,
         recipient_id: coach.user_id,
-        content: newMessage.trim(),
+        content: messageText,
         read: false,
         ai_generated: false,
       };
@@ -805,10 +812,15 @@ export default function MessagesScreen() {
 
       if (error) throw error;
 
-      setMessages([...messages, data]);
-      setNewMessage('');
+      // Replace temp message with real one
+      setMessages((current) => 
+        current.map(m => m.id === tempId ? data : m)
+      );
     } catch (error) {
       console.error('Error sending message:', error);
+      // Remove optimistic message on error
+      setMessages((current) => current.filter(m => m.id !== tempId));
+      setNewMessage(messageText);
     } finally {
       setSending(false);
     }
@@ -983,10 +995,11 @@ export default function MessagesScreen() {
         >
             <FlatList
                 ref={flatListRef}
-                data={messages}
+                data={messages.slice().reverse()}
                 keyExtractor={(item) => item.id}
                 renderItem={renderMessage}
                 contentContainerStyle={styles.messageList}
+                inverted
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
                 onScrollToIndexFailed={(info) => {
@@ -995,12 +1008,17 @@ export default function MessagesScreen() {
                     flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
                   });
                 }}
-                onLayout={() => {
-                    if (firstUnreadIndex === -1) {
-                        flatListRef.current?.scrollToEnd({ animated: false });
-                    }
-                }}
             />
+            
+            {/* Scroll to bottom button */}
+            {showScrollButton && (
+              <TouchableOpacity
+                style={styles.scrollToBottomButton}
+                onPress={scrollToBottom}
+              >
+                <ArrowDown size={20} color="#3B82F6" />
+              </TouchableOpacity>
+            )}
             
             {/* Input Area */}
             <View style={styles.inputContainer}>
@@ -1012,11 +1030,11 @@ export default function MessagesScreen() {
                     multiline
                 />
                 <TouchableOpacity 
-                    style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]} 
+                    style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]} 
                     onPress={sendMessage}
-                    disabled={!newMessage.trim() || sending}
+                    disabled={!newMessage.trim()}
                 >
-                    {sending ? <ActivityIndicator color="#FFF" size="small" /> : <Send size={20} color="#FFFFFF" />}
+                    <Send size={20} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
         </KeyboardAvoidingView>
@@ -1481,6 +1499,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  scrollToBottomButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
     elevation: 4,
     borderWidth: 1,
     borderColor: '#E5E7EB',
