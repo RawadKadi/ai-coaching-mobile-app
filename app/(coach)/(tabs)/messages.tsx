@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { ChevronRight, MessageCircle } from 'lucide-react-native';
@@ -26,6 +26,15 @@ export default function CoachMessagesScreen() {
       loadClients();
     }
   }, [coach]);
+
+  // Reload when screen comes into focus to update unread counts
+  useFocusEffect(
+    React.useCallback(() => {
+      if (coach) {
+        loadClients();
+      }
+    }, [coach])
+  );
 
   const loadClients = async () => {
     try {

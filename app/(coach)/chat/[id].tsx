@@ -4,6 +4,7 @@ import SchedulerModal from '@/components/SchedulerModal';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image, Modal, Pressable, Dimensions, Linking, Alert, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft, X, Calendar, Video, ArrowDown } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
@@ -1104,6 +1105,7 @@ export default function CoachChat() {
   const { id, suggestedMessage } = useLocalSearchParams();
   const router = useRouter();
   const { user: profile } = useAuth();
+  const { refreshUnreadCount } = useUnread();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState(suggestedMessage as string || '');
   const [loading, setLoading] = useState(true);
@@ -1143,6 +1145,11 @@ export default function CoachChat() {
         console.log('[CoachChat] Screen focused, reloading chat');
         loadChatData();
         loadNextSession();
+        
+        // Mark messages as read when viewing
+        setTimeout(() => {
+          markMessagesAsRead();
+        }, 500);
       }
     }, [profile, id])
   );
@@ -1471,6 +1478,9 @@ export default function CoachChat() {
         .from('messages')
         .update({ read: true })
         .in('id', unreadIds);
+      
+      // Refresh unread count to update badge
+      refreshUnreadCount();
     }
   };
 

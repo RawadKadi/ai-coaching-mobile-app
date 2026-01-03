@@ -1,9 +1,11 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Home, Activity, MessageCircle, User, Camera } from 'lucide-react-native';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { useUnread } from '@/contexts/UnreadContext';
 
 export default function ClientTabLayout() {
   const router = useRouter();
+  const { unreadCount } = useUnread();
 
   return (
     <Tabs
@@ -62,6 +64,7 @@ export default function ClientTabLayout() {
           tabBarIcon: ({ size, color }) => (
             <MessageCircle size={size} color={color} />
           ),
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
       />
       <Tabs.Screen

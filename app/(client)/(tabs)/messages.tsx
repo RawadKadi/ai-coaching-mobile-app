@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Keyboard
 import { Image } from 'expo-image';
 import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
@@ -545,6 +546,7 @@ const SessionInviteMessageWrapper = ({
 
 export default function MessagesScreen() {
   const { client } = useAuth();
+  const { refreshUnreadCount } = useUnread();
   const [messages, setMessages] = useState<Message[]>([]);
   // ... (other existing state)
   const [newMessage, setNewMessage] = useState('');
@@ -576,6 +578,11 @@ export default function MessagesScreen() {
         console.log('[Messages] Screen focused, reloading messages');
         loadMessages();
         loadNextSession();
+        
+        // Mark messages as read when viewing page
+        setTimeout(() => {
+          markMessagesAsRead();
+        }, 500);
       }
     }, [client?.user_id])
   );
@@ -723,6 +730,9 @@ export default function MessagesScreen() {
         .from('messages')
         .update({ read: true })
         .in('id', unreadIds);
+      
+      // Refresh unread count to update badge
+      refreshUnreadCount();
     }
   };
 

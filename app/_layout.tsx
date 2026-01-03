@@ -4,11 +4,16 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { UnreadProvider } from '@/contexts/UnreadContext';
+import { NotificationProvider, useNotification } from '@/contexts/NotificationContext';
+import NotificationToast from '@/components/NotificationToast';
+import { loadNotificationSound, unloadNotificationSound } from '@/lib/notification-sound';
 
 function RootLayoutNav() {
   const { session, loading, profile } = useAuth();
   const segments = useSegments() as string[];
   const router = useRouter();
+  const { activeToast, dismissToast } = useNotification();
 
   useEffect(() => {
     if (loading) return;
@@ -63,6 +68,16 @@ function RootLayoutNav() {
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
+      
+      {/* Global notification toast */}
+      {activeToast && (
+        <NotificationToast
+          senderName={activeToast.senderName}
+          message={activeToast.message}
+          onPress={() => router.push(activeToast.navigateTo as any)}
+          onDismiss={dismissToast}
+        />
+      )}
     </>
   );
 }
@@ -70,9 +85,22 @@ function RootLayoutNav() {
 export default function RootLayout() {
   useFrameworkReady();
 
+  // Load notification sound on app start
+  useEffect(() => {
+    loadNotificationSound();
+    
+    return () => {
+      unloadNotificationSound();
+    };
+  }, []);
+
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <UnreadProvider>
+        <NotificationProvider>
+          <RootLayoutNav />
+        </NotificationProvider>
+      </UnreadProvider>
     </AuthProvider>
   );
 }
