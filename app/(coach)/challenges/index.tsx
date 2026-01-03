@@ -1,7 +1,7 @@
 // COPY THIS ENTIRE CONTENT AND PASTE INTO:
 // app/(coach)/challenges/index.tsx
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -35,6 +35,32 @@ export default function CoachChallengesDashboard() {
       loadChallenges();
     }, [])
   );
+
+  // Real-time subscription for sub-challenge updates
+  useEffect(() => {
+    if (!user) return;
+
+    const subscription = supabase
+      .channel('sub-challenges-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sub_challenges'
+        },
+        (payload) => {
+          console.log('[Dashboard Real-time] Sub-challenge updated');
+          // Reload challenges to update progress
+          loadChallenges();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [user]);
 
   const loadChallenges = async () => {
     if (!user) return;

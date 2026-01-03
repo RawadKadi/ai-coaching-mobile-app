@@ -28,6 +28,50 @@ export default function ChallengeDetailScreen() {
 
   useEffect(() => {
     loadChallengeDetails();
+
+    // Set up real-time subscription for sub-challenge updates
+    if (!id) return;
+
+    const subscription = supabase
+      .channel(`challenge-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sub_challenges',
+          filter: `mother_challenge_id=eq.${id}`
+        },
+        (payload) => {
+          console.log('[Real-time] Sub-challenge updated:', payload.new);
+          
+          // Update the specific sub-challenge in local state
+          setChallenge((current: any) => {
+            if (!current) return current;
+            
+            const updatedSubChallenges = current.sub_challenges.map((sub: any) => {
+              if (sub.id === payload.new.id) {
+                return {
+                  ...sub,
+                  completed: payload.new.completed,
+                  completed_at: payload.new.completed_at
+                };
+              }
+              return sub;
+            });
+
+            return {
+              ...current,
+              sub_challenges: updatedSubChallenges
+            };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
   }, [id]);
 
   const loadChallengeDetails = async () => {
