@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { X, ChevronLeft, AlertTriangle, Check, Plus, Minus, Send } from 'lucide-react-native';
+import { X, ChevronLeft, AlertTriangle, Check, Plus, Minus, Send, RefreshCw, Image as ImageIcon } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { analyzeMealImage, reanalyzeMealWithContext, recalculateNutrition, MealAnalysisResult, reanalyzeMealWithFeedback } from '@/lib/ai-meal-service';
@@ -407,23 +407,31 @@ export default function LogMealScreen() {
       <View style={styles.container}>
         <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
           <View style={styles.cameraHeader}>
+            <View style={{ width: 48 }} />
+            <Text style={styles.cameraTitle}>Capture Your Meal</Text>
             <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
               <X size={28} color="#FFF" />
-            </TouchableOpacity>
-            <Text style={styles.cameraTitle}>Capture Your Meal</Text>
-            <TouchableOpacity onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}>
-              <ChevronLeft size={28} color="#FFF" />
             </TouchableOpacity>
           </View>
           
           <View style={styles.cameraFooter}>
+            {/* Left side - Gallery */}
             <TouchableOpacity onPress={pickFromGallery} style={styles.galleryButton}>
-              <Text style={styles.galleryButtonText}>Gallery</Text>
+              <ImageIcon size={32} color="#FFF" />
             </TouchableOpacity>
+            
+            {/* Center - Capture button */}
             <TouchableOpacity onPress={takePicture} style={styles.captureButton}>
               <View style={styles.captureButtonInner} />
             </TouchableOpacity>
-            <View style={{ width: 80 }} />
+            
+            {/* Right side - Flip camera */}
+            <TouchableOpacity 
+              onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
+              style={styles.flipButton}
+            >
+              <RefreshCw size={28} color="#FFF" />
+            </TouchableOpacity>
           </View>
         </CameraView>
       </View>
@@ -768,19 +776,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cameraFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 40,
+    paddingHorizontal: 30,
+    paddingBottom: 50,
     paddingTop: 20,
   },
   galleryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    width: 60,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   galleryButtonText: {
     color: '#FFF',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  flipButton: {
+    width: 60,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   captureButton: {
     width: 70,
