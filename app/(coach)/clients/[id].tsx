@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Client, Habit } from '@/types/database';
-import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon } from 'lucide-react-native';
+import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon, Target, Scale, Award, Info, User } from 'lucide-react-native';
 import SchedulerModal from '@/components/SchedulerModal';
 import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
@@ -25,8 +25,8 @@ export default function ClientDetailsScreen() {
   const router = useRouter();
   const { coach } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [client, setClient] = useState<Client | null>(null);
-  const [challenges, setChallenges] = useState<Habit[]>([]);
+  const [client, setClient] = useState<any>(null);
+  const [challenges, setChallenges] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [schedulerVisible, setSchedulerVisible] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Habit | null>(null);
@@ -78,19 +78,22 @@ export default function ClientDetailsScreen() {
     try {
       setLoading(true);
       
-      // Fetch client data using secure RPC
+      // Fetch client data using existing RPC
       const { data: clientData, error: clientError } = await supabase
         .rpc('get_client_details', { target_client_id: id });
 
       if (clientError) throw clientError;
       setClient(clientData);
 
-      // Fetch challenges using secure RPC
-      const { data: habitsData, error: habitsError } = await supabase
-        .rpc('get_client_habits', { target_client_id: id });
+      // Fetch mother challenges using V3 secure RPC
+      const { data: challengesData, error: challengesError } = await supabase
+        .rpc('get_coach_mother_challenges', { 
+          p_coach_id: coach?.id,
+          p_client_id: id 
+        });
 
-      if (habitsError) throw habitsError;
-      setChallenges(habitsData || []);
+      if (challengesError) throw challengesError;
+      setChallenges(challengesData || []);
 
       // Fetch ALL future sessions for the coach (for conflict detection)
       // CRITICAL: Join with clients to get client names!
@@ -446,66 +449,109 @@ export default function ClientDetailsScreen() {
         {/* Client Info Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Client Information</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Goal:</Text>
-            <Text style={styles.infoValue}>{client.goal || 'Not set'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Experience:</Text>
-            <Text style={styles.infoValue}>{client.experience_level || 'Not set'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Height:</Text>
-            <Text style={styles.infoValue}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
+          <View style={styles.infoGrid}>
+            <View style={styles.infoRowFull}>
+              <User size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Goal:</Text>
+              <Text style={styles.infoValue}>{client.goal || 'Not set'}</Text>
+            </View>
+            
+            <View style={styles.infoRowHalf}>
+              <Award size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Exp:</Text>
+              <Text style={styles.infoValue}>{client.experience_level || 'Not set'}</Text>
+            </View>
+
+            <View style={styles.infoRowHalf}>
+              <Scale size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Weight:</Text>
+              <Text style={styles.infoValue}>{client.latest_weight ? `${client.latest_weight} kg` : 'Not set'}</Text>
+            </View>
+
+            <View style={styles.infoRowHalf}>
+              <Target size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Height:</Text>
+              <Text style={styles.infoValue}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
+            </View>
+
+            <View style={styles.infoRowHalf}>
+              <Info size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Age:</Text>
+              <Text style={styles.infoValue}>
+                {client.date_of_birth ? 
+                  Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : 
+                  'Not set'}
+              </Text>
+            </View>
+
+            {client.dietary_restrictions?.length > 0 && (
+              <View style={styles.infoRowFull}>
+                <Info size={16} color="#6B7280" />
+                <Text style={styles.infoLabel}>Dietary:</Text>
+                <Text style={styles.infoValue}>{client.dietary_restrictions.join(', ')}</Text>
+              </View>
+            )}
+
+            {client.medical_conditions?.length > 0 && (
+              <View style={styles.infoRowFull}>
+                <Info size={16} color="#6B7280" />
+                <Text style={styles.infoLabel}>Medical:</Text>
+                <Text style={styles.infoValue}>{client.medical_conditions.join(', ')}</Text>
+              </View>
+            )}
           </View>
         </View>
 
         {/* Challenges Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Challenges</Text>
-            <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
+            <Text style={styles.sectionTitle}>Active Challenges</Text>
+            <TouchableOpacity style={styles.addButton} onPress={() => router.push(`/(coach)/challenges/new?clientId=${id}`)}>
               <Plus size={20} color="#FFFFFF" />
-              <Text style={styles.addButtonText}>Add</Text>
+              <Text style={styles.addButtonText}>Create</Text>
             </TouchableOpacity>
           </View>
 
           {challenges.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No challenges yet. Add one to get started!</Text>
+              <Text style={styles.emptyText}>No active challenges found.</Text>
             </View>
           ) : (
             challenges.map((challenge) => (
-              <View key={challenge.id} style={[styles.challengeCard, !challenge.is_active && styles.challengeInactive]}>
+              <TouchableOpacity 
+                key={challenge.id} 
+                style={[styles.challengeCard, challenge.status !== 'active' && styles.challengeInactive]}
+                onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+              >
                 <View style={styles.challengeHeader}>
-                  <Text style={styles.challengeName}>{challenge.name}</Text>
-                  <View style={styles.challengeActions}>
-                    <TouchableOpacity onPress={() => toggleChallengeActive(challenge)} style={styles.iconButton}>
-                      {challenge.is_active ? (
-                        <ToggleRight size={24} color="#10B981" />
-                      ) : (
-                        <ToggleLeft size={24} color="#9CA3AF" />
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => openEditModal(challenge)} style={styles.iconButton}>
-                      <Edit2 size={20} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => deleteChallenge(challenge.id)} style={styles.iconButton}>
-                      <Trash2 size={20} color="#EF4444" />
-                    </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.challengeName}>{challenge.name}</Text>
+                    <Text style={styles.challengeDates}>
+                      {new Date(challenge.start_date).toLocaleDateString()} - {new Date(challenge.end_date).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={styles.completionBadge}>
+                    <Text style={styles.completionText}>{challenge.completion_rate}%</Text>
                   </View>
                 </View>
+                
                 {challenge.description && (
-                  <Text style={styles.challengeDescription}>{challenge.description}</Text>
+                  <Text style={styles.challengeDescription} numberOfLines={2}>
+                    {challenge.description}
+                  </Text>
                 )}
-                <View style={styles.challengeMeta}>
-                  {challenge.target_value && (
-                    <Text style={styles.metaText}>Target: {challenge.target_value} {challenge.unit}</Text>
-                  )}
-                  <Text style={styles.metaText}>Type: {challenge.verification_type || 'none'}</Text>
-                  <Text style={styles.metaText}>Status: {challenge.is_active ? 'Active' : 'Inactive'}</Text>
+
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${challenge.completion_rate}%` }]} />
                 </View>
-              </View>
+
+                <View style={styles.challengeMeta}>
+                  <Text style={styles.metaText}>
+                    {challenge.completed_subs} / {challenge.total_subs} Tasks Completed
+                  </Text>
+                  <Text style={styles.metaStatus}>{challenge.status}</Text>
+                </View>
+              </TouchableOpacity>
             ))
           )}
         </View>
@@ -800,20 +846,68 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 16,
   },
-  infoRow: {
+  infoGrid: {
     flexDirection: 'row',
-    paddingVertical: 8,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  infoRowFull: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  infoRowHalf: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
   },
   infoLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
-    width: 100,
+    width: 50,
   },
   infoValue: {
     fontSize: 14,
     color: '#111827',
-    fontWeight: '500',
+    fontWeight: '600',
     flex: 1,
+  },
+  challengeDates: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  completionBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  completionText: {
+    color: '#3B82F6',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  progressBarContainer: {
+    height: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 3,
+    marginVertical: 12,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#3B82F6',
+  },
+  metaStatus: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3B82F6',
+    textTransform: 'uppercase',
   },
   section: {
     marginBottom: 16,

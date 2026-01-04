@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
-import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft, X, Calendar, Video, ArrowDown } from 'lucide-react-native';
+import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft, X, Calendar, Video, ArrowDown, MoreVertical, Activity } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
 import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
 import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
@@ -573,6 +573,50 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  menuContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  menuTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  menuItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
 });
 const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolean }) => {
   const [expanded, setExpanded] = useState(false);
@@ -1124,6 +1168,7 @@ export default function CoachChat() {
   const [firstUnreadIndex, setFirstUnreadIndex] = useState<number>(-1);
   const [unreadCountAtOpen, setUnreadCountAtOpen] = useState<number>(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -1680,8 +1725,8 @@ export default function CoachChat() {
         <Text style={styles.title}>
           {clientProfile?.profiles?.full_name || 'Chat'}
         </Text>
-        <TouchableOpacity onPress={() => setShowScheduleModal(true)} style={styles.scheduleButton}>
-          <Calendar size={24} color="#3B82F6" />
+        <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.scheduleButton}>
+          <MoreVertical size={24} color="#3B82F6" />
         </TouchableOpacity>
       </View>
 
@@ -1786,6 +1831,54 @@ export default function CoachChat() {
           targetClientId={clientProfile.id}
         />
       )}
+
+      {/* Options Menu Modal */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable 
+          style={styles.menuOverlay} 
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.menuContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuTitle}>Options</Text>
+              <TouchableOpacity onPress={() => setMenuVisible(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuVisible(false);
+                setSchedulerVisible(true);
+              }}
+            >
+              <View style={styles.menuItemIcon}>
+                <Calendar size={20} color="#3B82F6" />
+              </View>
+              <Text style={styles.menuItemText}>AI Scheduler</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuVisible(false);
+                router.push(`/(coach)/clients/${id}`);
+              }}
+            >
+              <View style={styles.menuItemIcon}>
+                <Activity size={20} color="#10B981" />
+              </View>
+              <Text style={styles.menuItemText}>Activity</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
