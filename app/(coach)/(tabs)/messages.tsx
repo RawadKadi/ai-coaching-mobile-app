@@ -27,6 +27,50 @@ export default function CoachMessagesScreen() {
     }
   }, [coach]);
 
+  // Real-time subscription for instant updates
+  useEffect(() => {
+    if (!user?.id) return;
+
+    console.log('[CoachMessages] Setting up real-time subscription for user:', user.id);
+
+    const subscription = supabase
+      .channel('coach-messages-list')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'messages',
+          filter: `recipient_id=eq.${user.id}`, // Messages TO the coach
+        },
+        (payload) => {
+          console.log('[CoachMessages] Message change detected:', payload.eventType);
+          // Reload the entire client list to update counts and previews (silently)
+          loadClients(true);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+          filter: `sender_id=eq.${user.id}`, // Messages FROM the coach
+        },
+        (payload) => {
+          console.log('[CoachMessages] Sent message detected:', payload.eventType);
+          // Also reload when coach sends messages (silently)
+          loadClients(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('[CoachMessages] Cleaning up subscription');
+      supabase.removeChannel(subscription);
+    };
+  }, [user?.id]);
+
   // Reload when screen comes into focus to update unread counts
   useFocusEffect(
     React.useCallback(() => {
@@ -36,9 +80,11 @@ export default function CoachMessagesScreen() {
     }, [coach])
   );
 
-  const loadClients = async () => {
+  const loadClients = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       
       // 1. Get all active clients for this coach
       const { data: links, error: linksError } = await supabase
