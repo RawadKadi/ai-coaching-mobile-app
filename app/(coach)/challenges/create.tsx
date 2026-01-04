@@ -8,16 +8,17 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChallengeFocusType } from '@/types/database';
-import { X, Plus, Calendar, Target } from 'lucide-react-native';
+import { X, Plus, Calendar, Target, Trash2 } from 'lucide-react-native';
 
 /**
- * Manual Challenge Creation Screen
- * Allows coaches to create challenges without AI assistance
+ * V3 Challenge Creation Screen
+ * Creates Mother Challenges with daily Sub-Challenges
  */
 
 interface Client {
@@ -25,18 +26,26 @@ interface Client {
   full_name: string;
 }
 
+interface SubChallenge {
+  name: string;
+  description: string;
+  assigned_date: string;
+  focus_type: ChallengeFocusType;
+  intensity: 'light' | 'moderate' | 'intense';
+}
+
 export default function CreateChallengeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { clientId } = useLocalSearchParams();
+  const { coach } = useAuth();
 
   // Form State
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [focusType, setFocusType] = useState<ChallengeFocusType>('training');
-  const [durationDays, setDurationDays] = useState('7');
-  const [rules, setRules] = useState<string[]>(['']);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [durationDays, setDurationDays] = useState('7');
+  const [subChallenges, setSubChallenges] = useState<SubChallenge[]>([]);
 
   // UI State
   const [clients, setClients] = useState<Client[]>([]);
@@ -47,50 +56,63 @@ export default function CreateChallengeScreen() {
     loadClients();
   }, []);
 
+  useEffect(() => {
+    // Auto-generate sub-challenges when duration changes
+    const duration = parseInt(durationDays);
+    if (!isNaN(duration) && duration >= 3 && duration <= 14) {
+      generateSubChallenges(duration);
+    }
+  }, [durationDays, startDate]);
+
   const loadClients = async () => {
-    if (!user) return;
+    if (!coach) return;
 
     try {
-      const { data, error } = await supabase
-        .from('coach_client_links')
-        .select(`
-          client_id,
-          profiles:client_id (
-            id,
-            full_name
-          )
-        `)
-        .eq('coach_id', user.id)
-        .eq('status', 'active');
+      const { data, error } = await supabase.rpc('get_coach_clients', {
+        p_coach_id: coach.id
+      });
 
       if (error) throw error;
 
-      const clientList = data
-        .map((link: any) => ({
-          id: link.profiles.id,
-          full_name: link.profiles.full_name,
-        }))
-        .filter(Boolean);
+      setClients(data || []);
 
-      setClients(clientList);
+      // Pre-select client if provided via URL
+      if (clientId && data) {
+        const preSelectedClient = data.find((c: Client) => c.id === clientId);
+        if (preSelectedClient) {
+          setSelectedClient(preSelectedClient);
+        }
+      }
     } catch (error) {
       console.error('Error loading clients:', error);
       Alert.alert('Error', 'Failed to load clients');
     }
   };
 
-  const handleAddRule = () => {
-    setRules([...rules, '']);
+  const generateSubChallenges = (days: number) => {
+    const start = new Date(startDate);
+    const subs: SubChallenge[] = [];
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      
+      subs.push({
+        name: `Day ${i + 1} Task`,
+        description: '',
+        assigned_date: date.toISOString().split('T')[0],
+        focus_type: 'training',
+        intensity: 'moderate',
+      });
+    }
+
+    setSubChallenges(subs);
   };
 
-  const handleRemoveRule = (index: number) => {
-    setRules(rules.filter((_, i) => i !== index));
-  };
-
-  const handleRuleChange = (index: number, value: string) => {
-    const newRules = [...rules];
-    newRules[index] = value;
-    setRules(newRules);
+  const updateSubChallenge = (index: number, field: keyof SubChallenge, value: any) => {
+    const updated = [...subChallenges];
+    updated[index] = { ...updated[index], [field]: value };
+    setSubChallenges(updated);
   };
 
   const validateForm = (): boolean => {
@@ -110,9 +132,9 @@ export default function CreateChallengeScreen() {
       return false;
     }
 
-    const validRules = rules.filter(r => r.trim().length > 0);
-    if (validRules.length === 0) {
-      Alert.alert('Validation Error', 'Please add at least one rule');
+    const invalidSubs = subChallenges.filter(s => !s.name.trim());
+    if (invalidSubs.length > 0) {
+      Alert.alert('Validation Error', 'All sub-challenges must have a name');
       return false;
     }
 
@@ -120,22 +142,23 @@ export default function CreateChallengeScreen() {
   };
 
   const handleCreate = async () => {
-    if (!validateForm()) return;
+    if (!validateForm() || !coach) return;
 
     try {
       setLoading(true);
 
-      const validRules = rules.filter(r => r.trim().length > 0);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + parseInt(durationDays) - 1);
 
-      const { data, error } = await supabase.rpc('create_manual_challenge', {
-        p_coach_id: user!.id,
+      const { data, error } = await supabase.rpc('create_mother_challenge', {
+        p_coach_id: coach.id,
         p_client_id: selectedClient!.id,
         p_name: name.trim(),
         p_description: description.trim() || null,
-        p_focus_type: focusType,
-        p_duration_days: parseInt(durationDays),
-        p_rules: validRules,
         p_start_date: startDate,
+        p_end_date: endDate.toISOString().split('T')[0],
+        p_sub_challenges: subChallenges,
+        p_created_by: 'coach',
       });
 
       if (error) throw error;
@@ -159,7 +182,7 @@ export default function CreateChallengeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
@@ -205,7 +228,7 @@ export default function CreateChallengeScreen() {
           <Text style={styles.label}>Challenge Name *</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g., Walk 10,000 Steps Daily"
+            placeholder="e.g., 7-Day Wellness Challenge"
             value={name}
             onChangeText={setName}
             maxLength={100}
@@ -217,40 +240,12 @@ export default function CreateChallengeScreen() {
           <Text style={styles.label}>Description</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
-            placeholder="Explain what this challenge is about and why it matters..."
+            placeholder="Explain what this challenge is about..."
             value={description}
             onChangeText={setDescription}
             multiline
             numberOfLines={4}
           />
-        </View>
-
-        {/* Focus Type */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Focus Type *</Text>
-          <View style={styles.focusGrid}>
-            {(['training', 'nutrition', 'recovery', 'consistency'] as ChallengeFocusType[]).map(
-              (type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.focusChip,
-                    focusType === type && styles.focusChipActive,
-                  ]}
-                  onPress={() => setFocusType(type)}
-                >
-                  <Text
-                    style={[
-                      styles.focusChipText,
-                      focusType === type && styles.focusChipTextActive,
-                    ]}
-                  >
-                    {getFocusEmoji(type)} {type}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-          </View>
         </View>
 
         {/* Duration */}
@@ -283,62 +278,92 @@ export default function CreateChallengeScreen() {
           </View>
         </View>
 
-        {/* Rules */}
+        {/* Sub-Challenges */}
         <View style={styles.section}>
-          <View style={styles.rulesHeader}>
-            <Text style={styles.label}>Rules *</Text>
-            <TouchableOpacity style={styles.addRuleButton} onPress={handleAddRule}>
-              <Plus size={16} color="#6366f1" />
-              <Text style={styles.addRuleText}>Add Rule</Text>
-            </TouchableOpacity>
-          </View>
-
-          {rules.map((rule, index) => (
-            <View key={index} style={styles.ruleRow}>
-              <Text style={styles.ruleNumber}>{index + 1}.</Text>
+          <Text style={styles.label}>Daily Tasks ({subChallenges.length})</Text>
+          <Text style={styles.helperText}>
+            Customize the daily tasks for each day of the challenge
+          </Text>
+          
+          {subChallenges.map((sub, index) => (
+            <View key={index} style={styles.subChallengeCard }>
+              <View style={styles.subChallengeHeader}>
+                <Text style={styles.subChallengeDay}>
+                  Day {index + 1} - {sub.assigned_date}
+                </Text>
+              </View>
+              
               <TextInput
-                style={[styles.input, styles.ruleInput]}
-                placeholder="e.g., Walk at least 10,000 steps every day"
-                value={rule}
-                onChangeText={(value) => handleRuleChange(index, value)}
-                multiline
+                style={[styles.input, styles.subInput]}
+                placeholder={`Day ${index + 1} task name`}
+                value={sub.name}
+                onChangeText={(value) => updateSubChallenge(index, 'name', value)}
               />
-              {rules.length > 1 && (
-                <TouchableOpacity onPress={() => handleRemoveRule(index)}>
-                  <X size={20} color="#ef4444" />
-                </TouchableOpacity>
-              )}
+              
+              <TextInput
+                style={[styles.input, styles.textArea, { marginTop: 8 }]}
+                placeholder="Task description (optional)"
+                value={sub.description}
+                onChangeText={(value) => updateSubChallenge(index, 'description', value)}
+                multiline
+                numberOfLines={2}
+              />
+
+              <View style={styles.subMeta}>
+                <View style={styles.metaRow}>
+                  <Text style={styles.metaLabel}>Focus:</Text>
+                  <View style={styles.focusButtons}>
+                    {(['training', 'nutrition', 'recovery', 'consistency'] as ChallengeFocusType[]).map(
+                      (type) => (
+                        <TouchableOpacity
+                          key={type}
+                          style={[
+                            styles.metaChip,
+                            sub.focus_type === type && styles.metaChipActive,
+                          ]}
+                          onPress={() => updateSubChallenge(index, 'focus_type', type)}
+                        >
+                          <Text
+                            style={[
+                              styles.metaChipText,
+                              sub.focus_type === type && styles.metaChipTextActive,
+                            ]}
+                          >
+                            {type}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.metaRow}>
+                  <Text style={styles.metaLabel}>Intensity:</Text>
+                  <View style={styles.focusButtons}>
+                    {(['light', 'moderate', 'intense'] as const).map((intensity) => (
+                      <TouchableOpacity
+                        key={intensity}
+                        style={[
+                          styles.metaChip,
+                          sub.intensity === intensity && styles.metaChipActive,
+                        ]}
+                        onPress={() => updateSubChallenge(index, 'intensity', intensity)}
+                      >
+                        <Text
+                          style={[
+                            styles.metaChipText,
+                            sub.intensity === intensity && styles.metaChipTextActive,
+                          ]}
+                        >
+                          {intensity}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
             </View>
           ))}
-        </View>
-
-        {/* Preview */}
-        <View style={styles.previewSection}>
-          <Text style={styles.previewTitle}>Preview</Text>
-          <View style={styles.previewCard}>
-            <Text style={styles.previewName}>{name || 'Challenge Name'}</Text>
-            <Text style={styles.previewDescription}>
-              {description || 'No description provided'}
-            </Text>
-            <View style={styles.previewMeta}>
-              <Text style={styles.previewMetaText}>
-                {getFocusEmoji(focusType)} {focusType}
-              </Text>
-              <Text style={styles.previewMetaText}>
-                {durationDays || '?'} days
-              </Text>
-            </View>
-            <View style={styles.previewRules}>
-              <Text style={styles.previewRulesTitle}>Rules:</Text>
-              {rules
-                .filter(r => r.trim())
-                .map((rule, i) => (
-                  <Text key={i} style={styles.previewRule}>
-                    • {rule}
-                  </Text>
-                ))}
-            </View>
-          </View>
         </View>
       </ScrollView>
 
@@ -367,7 +392,7 @@ export default function CreateChallengeScreen() {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -415,6 +440,70 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 12,
+  },
+  subChallengeCard: {
+   backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  subChallengeHeader: {
+    marginBottom: 12,
+  },
+  subChallengeDay: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  subInput: {
+    fontWeight: '600',
+  },
+  subMeta: {
+    marginTop: 12,
+    gap: 8,
+  },
+  metaRow: {
+    gap: 8,
+  },
+  metaLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  focusButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  metaChip: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  metaChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  metaChipText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  metaChipTextActive: {
+    color: '#3B82F6',
+    fontWeight: '600',
   },
   input: {
     backgroundColor: '#fff',

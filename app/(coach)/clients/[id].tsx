@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Client, Habit } from '@/types/database';
-import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon, Target, Scale, Award, Info, User } from 'lucide-react-native';
+import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon, Target, Scale, Award, Info, User, Sparkles } from 'lucide-react-native';
 import SchedulerModal from '@/components/SchedulerModal';
 import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
@@ -506,10 +506,21 @@ export default function ClientDetailsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Challenges</Text>
-            <TouchableOpacity style={styles.addButton} onPress={() => router.push(`/(coach)/challenges/new?clientId=${id}`)}>
-              <Plus size={20} color="#FFFFFF" />
-              <Text style={styles.addButtonText}>Create</Text>
-            </TouchableOpacity>
+            <View style={styles.buttonGroup}>
+              <TouchableOpacity 
+                style={styles.aiButton} 
+                onPress={() => router.push(`/(coach)/challenges/suggest?clientId=${id}`)}
+              >
+                <Sparkles size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.addButton} 
+                onPress={() => router.push(`/(coach)/challenges/create?clientId=${id}`)}
+              >
+                <Plus size={20} color="#FFFFFF" />
+                <Text style={styles.addButtonText}>Create</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {challenges.length === 0 ? (
@@ -936,6 +947,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  buttonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  aiButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#7C3AED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   emptyState: {
     backgroundColor: '#FFFFFF',

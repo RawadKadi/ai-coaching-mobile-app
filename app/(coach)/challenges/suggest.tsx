@@ -8,7 +8,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Sparkles, Calendar } from 'lucide-react-native';
@@ -26,6 +26,7 @@ interface Client {
 
 export default function AISuggestChallengeScreen() {
   const router = useRouter();
+  const { clientId } = useLocalSearchParams();
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -55,6 +56,14 @@ export default function AISuggestChallengeScreen() {
       if (error) throw error;
 
       setClients(data || []);
+
+      // Auto-select client if provided via URL
+      if (clientId && data) {
+        const preSelectedClient = data.find((c: Client) => c.id === clientId);
+        if (preSelectedClient) {
+          setSelectedClient(preSelectedClient);
+        }
+      }
     } catch (error) {
       console.error('Error loading clients:', error);
       Alert.alert('Error', 'Failed to load clients');
