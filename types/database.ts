@@ -29,6 +29,10 @@ export interface Coach {
     is_active: boolean;
     subscription_tier: string;
     meeting_link?: string | null;
+    // VERSION 2.0: Whitelabel fields
+    brand_id?: string | null;
+    is_parent_coach?: boolean;
+    can_manage_brand?: boolean;
     created_at: string;
     updated_at: string;
 }

@@ -1,11 +1,13 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, User, Settings, Brain } from 'lucide-react-native';
+import { useBrand } from '@/contexts/BrandContext';
+import { LogOut, User, Settings, Brain, Palette, Users, UserPlus } from 'lucide-react-native';
 
 export default function CoachProfileScreen() {
   const router = useRouter();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, coach } = useAuth();
+  const { brand, canManageBrand } = useBrand();
 
   const handleSignOut = async () => {
     try {
@@ -35,6 +37,43 @@ export default function CoachProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/settings')}>
             <Settings size={20} color="#6B7280" />
             <Text style={styles.menuItemText}>Settings</Text>
+          </TouchableOpacity>
+
+          {/* Brand Settings - Only show if coach has brand_id or can manage brand */}
+          {(coach?.brand_id || coach?.can_manage_brand) && (
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => router.push('/(coach)/settings/branding')}
+            >
+              <Palette size={20} color="#F59E0B" />
+              <Text style={styles.menuItemText}>
+                Brand Settings
+                {canManageBrand && <Text style={styles.badgeText}> • Manage</Text>}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Team Management - Only for parent coaches */}
+          {coach?.is_parent_coach && (
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => router.push('/(coach)/team')}
+            >
+              <Users size={20} color="#10B981" />
+              <Text style={styles.menuItemText}>
+                Team Management
+                <Text style={styles.parentBadge}> • Parent</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Invite Client - For all coaches */}
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => router.push('/(coach)/invite-client')}
+          >
+            <UserPlus size={20} color="#8B5CF6" />
+            <Text style={styles.menuItemText}>Invite Client</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/(tabs)/ai-brain')}>
@@ -120,6 +159,16 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 16,
     color: '#111827',
+  },
+  badgeText: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  parentBadge: {
+    fontSize: 12,
+    color: '#3B82F6',
+    fontWeight: '600',
   },
   aiBrainText: {
     color: '#8B5CF6',

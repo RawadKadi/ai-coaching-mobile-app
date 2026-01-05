@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { BrandProvider } from '@/contexts/BrandContext';
 import { UnreadProvider } from '@/contexts/UnreadContext';
 import { NotificationProvider, useNotification } from '@/contexts/NotificationContext';
 import NotificationToast from '@/components/NotificationToast';
@@ -96,11 +97,13 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <UnreadProvider>
-        <NotificationProvider>
-          <RootLayoutNav />
-        </NotificationProvider>
-      </UnreadProvider>
+      <BrandProvider>
+        <UnreadProvider>
+          <NotificationProvider>
+            <RootLayoutNav />
+          </NotificationProvider>
+        </UnreadProvider>
+      </BrandProvider>
     </AuthProvider>
   );
 }
