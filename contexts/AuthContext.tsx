@@ -11,7 +11,7 @@ interface AuthContextType {
   client: Client | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, role: 'client' | 'coach') => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, role: 'client' | 'coach') => Promise<boolean>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -105,8 +105,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email.trim())) {
+      throw new Error('Please enter a valid email address');
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim().toLowerCase(),
       password,
     });
 
@@ -121,8 +127,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     console.log('[SignUp] Starting signup process for:', email, 'Role:', role);
     
+    // Validate email format before sending to Supabase
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email.trim())) {
+      console.error('[SignUp] Invalid email format:', email);
+      throw new Error('Please enter a valid email address');
+    }
+
+    // Trim and lowercase the email
+    const cleanEmail = email.trim().toLowerCase();
+    
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: cleanEmail,
       password,
     });
 
@@ -192,6 +208,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     console.log('[SignUp] Signup process completed successfully');
+    
+    // Small delay to ensure all database triggers complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    console.log('[SignUp] Ready for navigation');
+    return true;
   };
 
   const signOut = async () => {

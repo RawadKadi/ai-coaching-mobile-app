@@ -30,6 +30,13 @@ export default function SignUpScreen() {
       return;
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -44,11 +51,17 @@ export default function SignUpScreen() {
     setError('');
 
     try {
+      console.log('[SignUpScreen] Calling signUp...');
       await signUp(email, password, fullName, role);
-      router.replace('/');
+      console.log('[SignUpScreen] SignUp completed, navigating...');
+      
+      // Give the auth state a moment to update
+      setTimeout(() => {
+        router.replace('/');
+      }, 100);
     } catch (err: any) {
+      console.error('[SignUpScreen] Signup error:', err);
       setError(err.message || 'Failed to sign up');
-    } finally {
       setLoading(false);
     }
   };
