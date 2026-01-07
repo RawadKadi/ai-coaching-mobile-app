@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand } from '@/contexts/BrandContext';
-import { LogOut, User, Settings, Brain, Palette, Users, UserPlus } from 'lucide-react-native';
+import { LogOut, User, Settings, Brain, Palette, Users, UserPlus, Link } from 'lucide-react-native';
 
 export default function CoachProfileScreen() {
   const router = useRouter();
@@ -79,6 +79,17 @@ export default function CoachProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/(tabs)/ai-brain')}>
             <Brain size={20} color="#8B5CF6" />
             <Text style={[styles.menuItemText, styles.aiBrainText]}>AI Brain</Text>
+          </TouchableOpacity>
+
+          {/* TEST: Deep Link Tester (Remove after testing) */}
+          <TouchableOpacity 
+            style={[styles.menuItem, { backgroundColor: '#FFF7ED' }]} 
+            onPress={() => router.push('/(coach)/test-deeplink')}
+          >
+            <Link size={20} color="#F97316" />
+            <Text style={[styles.menuItemText, { color: '#F97316' }]}>
+              🧪 Test Deep Links
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>

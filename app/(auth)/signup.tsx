@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,18 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { validateInviteCode } from '@/lib/brand-service';
+import { supabase } from '@/lib/supabase';
 
 export default function SignUpScreen() {
   const router = useRouter();
   const { signUp } = useAuth();
+  const params = useLocalSearchParams();
+  
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,6 +28,54 @@ export default function SignUpScreen() {
   const [role, setRole] = useState<'client' | 'coach'>('client');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [validatingInvite, setValidatingInvite] = useState(false);
+  const [inviteValid, setInviteValid] = useState(false);
+
+  // Handle deep link invite code
+  useEffect(() => {
+    const invite = params.invite as string;
+    if (invite) {
+      console.log('[Signup] Invite code from deep link:', invite);
+      setInviteCode(invite);
+      setRole('client'); // Invites are for clients only
+      validateInvite(invite);
+    }
+  }, [params.invite]);
+
+  const validateInvite = async (code: string) => {
+    if (!code) return;
+    
+    setValidatingInvite(true);
+    try {
+      const result = await validateInviteCode(code);
+      
+      if (result.valid) {
+        setInviteValid(true);
+        Alert.alert(
+          'Valid Invite!',
+          'This invite code is valid. Complete the signup to join!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        setInviteValid(false);
+        Alert.alert(
+          'Invalid Invite',
+          result.reason === 'expired' ? 'This invite has expired' :
+          result.reason === 'max_uses' ? 'This invite has reached max uses' :
+          'This invite code is not valid',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => router.back() },
+            { text: 'Continue Anyway', onPress: () => setInviteCode('') }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('[Signup] Invite validation error:', error);
+    } finally {
+      setValidatingInvite(false);
+    }
+  };
 
   const handleSignUp = async () => {
     if (!fullName || !email || !password || !confirmPassword) {
@@ -52,8 +105,61 @@ export default function SignUpScreen() {
 
     try {
       console.log('[SignUpScreen] Calling signUp...');
-      await signUp(email, password, fullName, role);
-      console.log('[SignUpScreen] SignUp completed, navigating...');
+      const success = await signUp(email, password, fullName, role);
+      console.log('[SignUpScreen] SignUp completed:', success);
+      
+      // If signup was successful and we have an invite code
+      if (success && inviteCode && inviteValid && role === 'client') {
+        console.log('[SignUpScreen] Using invite code:', inviteCode);
+        
+        try {
+          // Get the current user (just created)
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          if (!user) {
+            throw new Error('User not found after signup');
+          }
+
+          // Get the client record
+          const { data: clientData, error: clientError } = await supabase
+            .from('clients')
+            .select('id')
+            .eq('user_id', user.id)
+            .single();
+
+          if (clientError || !clientData) {
+            console.error('[SignUpScreen] Client not found:', clientError);
+            throw new Error('Client record not found');
+          }
+
+          console.log('[SignUpScreen] Client ID:', clientData.id);
+
+          // Use the invite code to link client to coach (with BOTH parameters)
+          const { data, error } = await supabase.rpc('use_invite_code', {
+            p_client_id: clientData.id,
+            p_code: inviteCode
+          });
+
+          if (error) {
+            console.error('[SignUpScreen] Invite code usage error:', error);
+            // Don't fail signup, just log the error
+            Alert.alert(
+              'Account Created',
+              'Your account was created but there was an issue with the invite code. Please contact your coach.',
+              [{ text: 'OK' }]
+            );
+          } else {
+            console.log('[SignUpScreen] Invite code used successfully:', data);
+            Alert.alert(
+              'Welcome! 🎉',
+              'Your account has been created and you\'ve been added to your coach\'s program!',
+              [{ text: 'Get Started' }]
+            );
+          }
+        } catch (inviteError) {
+          console.error('[SignUpScreen] Invite code error:', inviteError);
+        }
+      }
       
       // Give the auth state a moment to update
       setTimeout(() => {
@@ -76,10 +182,24 @@ export default function SignUpScreen() {
           <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>Join the coaching community</Text>
 
+          {/* Invite Code Banner */}
+          {inviteCode && (
+            <View style={[styles.inviteBanner, inviteValid ? styles.inviteBannerValid : styles.inviteBannerInvalid]}>
+              <Text style={styles.inviteLabel}>
+                {validatingInvite ? '  Validating...' :
+                 inviteValid ? '✓ Valid Invite Code' :
+                 '✗ Invalid Invite Code'}
+              </Text>
+              <Text style={styles.inviteCode}>{inviteCode}</Text>
+            </View>
+          )}
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <View style={styles.form}>
-            <View style={styles.roleSelector}>
+            {/* Hide role selector if coming from invite */}
+            {!inviteCode && (
+              <View style={styles.roleSelector}>
               <TouchableOpacity
                 style={[
                   styles.roleButton,
@@ -113,6 +233,7 @@ export default function SignUpScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            )}
 
             <TextInput
               style={styles.input}
@@ -149,6 +270,26 @@ export default function SignUpScreen() {
               secureTextEntry
               placeholderTextColor="#9CA3AF"
             />
+
+            {/* Invite Code Input - Only for clients without deep link */}
+            {role === 'client' && !inviteCode && (
+              <View>
+                <Text style={styles.optionalLabel}>Have an invite code? (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter invite code"
+                  value={inviteCode}
+                  onChangeText={(text) => {
+                    setInviteCode(text);
+                    if (text.length >= 10) {
+                      validateInvite(text);
+                    }
+                  }}
+                  autoCapitalize="none"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
@@ -268,5 +409,35 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#3B82F6',
     fontSize: 14,
+  },
+  optionalLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  inviteBanner: {
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 12,
+    borderWidth: 2,
+  },
+  inviteBannerValid: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  inviteBannerInvalid: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#EF4444',
+  },
+  inviteLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  inviteCode: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'monospace',
   },
 });

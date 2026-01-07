@@ -67,8 +67,17 @@ export default function InviteClientScreen() {
   };
 
   const getInviteLink = () => {
-    // Use your app's custom scheme or https link
-    return `https://coaching.app/join/${inviteCode}`;
+    // ✅ CONNECTED TO VERCEL LANDING PAGE!
+    const PRODUCTION_DOMAIN = 'https://ai-coach-app-landing-page.vercel.app';
+    
+    // 🧪 TEMPORARILY DISABLED FOR TESTING
+    // Uncomment the __DEV__ check before publishing to production!
+    // if (__DEV__) {
+    //   return `coachingapp://signup?invite=${inviteCode}`;
+    // }
+    
+    // Always use HTTPS link for testing
+    return `${PRODUCTION_DOMAIN}/join/${inviteCode}`;
   };
 
   const handleCopyLink = async () => {
