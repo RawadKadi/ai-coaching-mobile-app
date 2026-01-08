@@ -21,6 +21,8 @@ export default function ClientDashboard() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [todayHabitLogs, setTodayHabitLogs] = useState<HabitLog[]>([]);
 
+
+
   useEffect(() => {
     if (client) {
       loadDashboardData();

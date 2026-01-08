@@ -23,6 +23,13 @@ export default function Index() {
             router.replace('/(admin)/(tabs)');
             break;
         }
+      } else {
+        // Session exists but no profile - wait then redirect
+        console.warn('[Index] Session exists but no profile loaded');
+        const timeout = setTimeout(() => {
+          router.replace('/(auth)/login');
+        }, 2000);
+        return () => clearTimeout(timeout);
       }
     }
   }, [loading, session, profile]);

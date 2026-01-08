@@ -38,40 +38,44 @@ export default function AddSubCoachScreen() {
     setFoundCoach(null);
 
     try {
-      // Search for coach by email
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .eq('email', email.trim().toLowerCase())
-        .eq('role', 'coach')
-        .single();
+      // Search for coach by email using RPC (email is in auth.users, not profiles)
+      const { data: searchResult, error: searchError } = await supabase
+        .rpc('find_coach_by_email', { p_email: email.trim().toLowerCase() });
 
-      if (profileError || !profileData) {
+      console.log('[AddSubCoach] Search result:', searchResult);
+
+      if (searchError) {
+        console.error('[AddSubCoach] Search error:', searchError);
+        Alert.alert('Error', 'Failed to search for coach');
+        return;
+      }
+
+      if (!searchResult || !searchResult.found) {
         Alert.alert(
           'Not Found',
-          'No coach account found with this email address. They need to create a coach account first.'
+          searchResult?.error || 'No coach account found with this email address. They need to create a coach account first.'
         );
         return;
       }
 
-      // Get coach record
-      const { data: coachData, error: coachError } = await supabase
-        .from('coaches')
-        .select('id, brand_id')
-        .eq('user_id', profileData.id)
-        .single();
+      const foundCoachData = {
+        id: searchResult.coach_id,
+        user_id: searchResult.user_id,
+        brand_id: searchResult.brand_id
+      };
 
-      if (coachError || !coachData) {
-        Alert.alert('Error', 'Failed to find coach record');
-        return;
-      }
+      const foundProfileData = {
+        id: searchResult.user_id,
+        full_name: searchResult.full_name,
+        role: 'coach'
+      };
 
       // Check if already linked
       const { data: existingLink, error: linkError } = await supabase
         .from('coach_hierarchy')
         .select('id')
         .eq('parent_coach_id', coach?.id)
-        .eq('child_coach_id', coachData.id)
+        .eq('child_coach_id', foundCoachData.id)
         .maybeSingle();
 
       if (existingLink) {
@@ -80,7 +84,7 @@ export default function AddSubCoachScreen() {
       }
 
       // Check if coach already has a different brand
-      if (coachData.brand_id && coachData.brand_id !== coach?.brand_id) {
+      if (foundCoachData.brand_id && foundCoachData.brand_id !== coach?.brand_id) {
         Alert.alert(
           'Warning',
           'This coach is already part of another brand. Adding them will change their brand association.',
@@ -89,7 +93,7 @@ export default function AddSubCoachScreen() {
             {
               text: 'Continue',
               onPress: () => {
-                setFoundCoach({ ...profileData, coach_id: coachData.id });
+                setFoundCoach({ ...foundProfileData, coach_id: foundCoachData.id, email: email.trim().toLowerCase() });
               },
             },
           ]
@@ -97,7 +101,7 @@ export default function AddSubCoachScreen() {
         return;
       }
 
-      setFoundCoach({ ...profileData, coach_id: coachData.id });
+      setFoundCoach({ ...foundProfileData, coach_id: foundCoachData.id, email: email.trim().toLowerCase() });
     } catch (error) {
       console.error('[AddSubCoach] Search error:', error);
       Alert.alert('Error', 'Failed to search for coach');
