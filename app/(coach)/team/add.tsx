@@ -11,12 +11,15 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { UserPlus, Mail, Search, Check } from 'lucide-react-native';
+import { UserPlus, Mail, Search as SearchIcon, Check, Send, AlertTriangle } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrandColors } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
+import { sendSubCoachInvite } from '@/lib/brevo-service';
 import { BrandedHeader } from '@/components/BrandedHeader';
 import { BrandedButton } from '@/components/BrandedButton';
+
+type SearchState = 'idle' | 'searching' | 'found' | 'not_found';
 
 export default function AddSubCoachScreen() {
   const router = useRouter();
@@ -24,8 +27,8 @@ export default function AddSubCoachScreen() {
   const { primary, secondary } = useBrandColors();
   
   const [email, setEmail] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [searchState, setSearchState] = useState<SearchState>('idle');
+  const [loading, setLoading] = useState(false);
   const [foundCoach, setFoundCoach] = useState<any>(null);
 
   const handleSearch = async () => {
@@ -34,110 +37,110 @@ export default function AddSubCoachScreen() {
       return;
     }
 
-    setSearching(true);
+    setSearchState('searching');
     setFoundCoach(null);
 
     try {
-      // Search for coach by email using RPC (email is in auth.users, not profiles)
+      // 1. Search for coach by email using RPC
       const { data: searchResult, error: searchError } = await supabase
         .rpc('find_coach_by_email', { p_email: email.trim().toLowerCase() });
 
       console.log('[AddSubCoach] Search result:', searchResult);
 
-      if (searchError) {
-        console.error('[AddSubCoach] Search error:', searchError);
-        Alert.alert('Error', 'Failed to search for coach');
-        return;
-      }
+      if (searchError) throw searchError;
 
-      if (!searchResult || !searchResult.found) {
+      if (searchResult && searchResult.found) {
+        setFoundCoach({
+          id: searchResult.coach_id,
+          full_name: searchResult.full_name,
+          email: email.trim().toLowerCase()
+        });
+        setSearchState('found');
+      } else {
+        setSearchState('not_found');
+      }
+    } catch (error: any) {
+      console.error('[AddSubCoach] Search error:', error);
+      Alert.alert('Error', 'Failed to search for coach');
+      setSearchState('idle');
+    }
+  };
+
+  const sendInviteEmail = async (inviteData: any, isRegistered: boolean) => {
+    setLoading(true);
+    try {
+      const emailResult = await sendSubCoachInvite({
+        inviteEmail: inviteData.invite_email,
+        inviteToken: inviteData.invite_token,
+        parentCoachName: inviteData.parent_coach_name,
+        expiresAt: inviteData.expires_at,
+        isRegistered: isRegistered
+      });
+
+      if (!emailResult.success) {
         Alert.alert(
-          'Not Found',
-          searchResult?.error || 'No coach account found with this email address. They need to create a coach account first.'
+          'Invite Link Ready',
+          'The invite link is valid, but the email failed to send. You can still share the link manually from the team management page.',
+          [{ text: 'OK', onPress: () => router.back() }]
         );
-        return;
-      }
-
-      const foundCoachData = {
-        id: searchResult.coach_id,
-        user_id: searchResult.user_id,
-        brand_id: searchResult.brand_id
-      };
-
-      const foundProfileData = {
-        id: searchResult.user_id,
-        full_name: searchResult.full_name,
-        role: 'coach'
-      };
-
-      // Check if already linked
-      const { data: existingLink, error: linkError } = await supabase
-        .from('coach_hierarchy')
-        .select('id')
-        .eq('parent_coach_id', coach?.id)
-        .eq('child_coach_id', foundCoachData.id)
-        .maybeSingle();
-
-      if (existingLink) {
-        Alert.alert('Already Added', 'This coach is already part of your team');
-        return;
-      }
-
-      // Check if coach already has a different brand
-      if (foundCoachData.brand_id && foundCoachData.brand_id !== coach?.brand_id) {
+      } else {
         Alert.alert(
-          'Warning',
-          'This coach is already part of another brand. Adding them will change their brand association.',
+          'Success! ✅',
+          `An invitation has been sent to ${email.trim().toLowerCase()}. They will join your team as soon as they accept the invite.`,
+          [{ text: 'Great!', onPress: () => router.back() }]
+        );
+      }
+    } catch (error: any) {
+      console.error('[AddSubCoach] Email error:', error);
+      Alert.alert('Error', 'Failed to send invitation email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInvite = async (isRegistered: boolean) => {
+    setLoading(true);
+
+    try {
+      console.log('[AddSubCoach] Processing invite for:', email);
+
+      // 1. Generate or Retrieve invite token via RPC
+      const { data, error } = await supabase.rpc('generate_subcoach_invite', {
+        p_parent_coach_id: coach?.id,
+        p_invite_email: email.trim().toLowerCase(),
+      });
+
+      if (error) throw error;
+
+      if (!data || !data.success) {
+        throw new Error(data?.message || 'Failed to generate invite');
+      }
+
+      // 2. If an active invite already exists, prompt the user
+      if (data.active_exists) {
+        setLoading(false);
+        Alert.alert(
+          'Active Invite Exists',
+          'An active invite already exists for this email. Do you want to resend it?',
           [
             { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Continue',
-              onPress: () => {
-                setFoundCoach({ ...foundProfileData, coach_id: foundCoachData.id, email: email.trim().toLowerCase() });
-              },
-            },
+            { 
+              text: 'Resend Invite', 
+              onPress: () => sendInviteEmail(data, isRegistered) 
+            }
           ]
         );
         return;
       }
 
-      setFoundCoach({ ...foundProfileData, coach_id: foundCoachData.id, email: email.trim().toLowerCase() });
-    } catch (error) {
-      console.error('[AddSubCoach] Search error:', error);
-      Alert.alert('Error', 'Failed to search for coach');
+      // 3. New invite - Send the email immediately
+      await sendInviteEmail(data, isRegistered);
+      
+    } catch (error: any) {
+      console.error('[AddSubCoach] Invite error:', error);
+      Alert.alert('Error', error.message || 'Failed to process invitation');
     } finally {
-      setSearching(false);
-    }
-  };
-
-  const handleAdd = async () => {
-    if (!foundCoach) return;
-
-    setAdding(true);
-
-    try {
-      const { data, error } = await supabase.rpc('add_sub_coach', {
-        p_parent_coach_id: coach?.id,
-        p_child_coach_id: foundCoach.coach_id,
-      });
-
-      if (error) throw error;
-
-      Alert.alert(
-        'Success',
-        `${foundCoach.full_name} has been added to your team!`,
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('[AddSubCoach] Add error:', error);
-      Alert.alert('Error', 'Failed to add sub-coach. Please try again.');
-    } finally {
-      setAdding(false);
+      setLoading(false);
     }
   };
 
@@ -149,18 +152,17 @@ export default function AddSubCoachScreen() {
         onBackPress={() => router.back()}
       />
 
-      <ScrollView style={styles.content}>
-        {/* Instructions */}
+      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Step 1: Search */}
         <View style={styles.instructionsCard}>
           <UserPlus size={24} color={primary} />
-          <Text style={styles.instructionsTitle}>Add a Team Member</Text>
+          <Text style={styles.instructionsTitle}>Invite a Team Member</Text>
           <Text style={styles.instructionsText}>
-            Enter the email address of an existing coach to add them to your team.
-            They must already have a coach account.
+            Enter the email address of the coach you'd like to invite. 
+            They will receive a secure link to join your coaching team.
           </Text>
         </View>
 
-        {/* Search Form */}
         <View style={styles.section}>
           <Text style={styles.label}>Coach Email Address</Text>
           <View style={styles.searchContainer}>
@@ -169,47 +171,86 @@ export default function AddSubCoachScreen() {
               style={styles.input}
               placeholder="coach@example.com"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (searchState !== 'idle') setSearchState('idle');
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               placeholderTextColor="#9CA3AF"
+              editable={!loading && searchState !== 'searching'}
             />
           </View>
 
-          <BrandedButton
-            title="Search"
-            variant="primary"
-            onPress={handleSearch}
-            loading={searching}
-            disabled={!email.trim() || searching}
-            icon={<Search size={20} color="#FFFFFF" />}
-            style={styles.searchButton}
-          />
+          {searchState === 'idle' && (
+            <BrandedButton
+              title="Search Coach"
+              variant="primary"
+              onPress={handleSearch}
+              icon={<SearchIcon size={20} color="#FFFFFF" />}
+              style={styles.actionButton}
+            />
+          )}
+
+          {searchState === 'searching' && (
+            <View style={styles.statusContainer}>
+              <ActivityIndicator size="small" color={primary} />
+              <Text style={styles.statusText}>Checking database...</Text>
+            </View>
+          )}
         </View>
 
-        {/* Found Coach Card */}
-        {foundCoach && (
-          <View style={[styles.foundCard, { borderColor: secondary }]}>
-            <View style={styles.foundHeader}>
-              <View style={[styles.checkIcon, { backgroundColor: secondary }]}>
-                <Check size={20} color="#FFFFFF" />
+        {/* Step 2: Found Coach Flow */}
+        {searchState === 'found' && foundCoach && (
+          <View style={[styles.resultCard, { borderColor: secondary }]}>
+            <View style={styles.resultHeader}>
+              <View style={[styles.statusBadge, { backgroundColor: secondary }]}>
+                <Check size={18} color="#FFFFFF" />
               </View>
-              <Text style={styles.foundTitle}>Coach Found!</Text>
+              <Text style={styles.resultTitle}>Coach Found</Text>
             </View>
-
-            <View style={styles.foundInfo}>
-              <Text style={styles.foundName}>{foundCoach.full_name}</Text>
-              <Text style={styles.foundEmail}>{foundCoach.email}</Text>
+            
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{foundCoach.full_name}</Text>
+              <Text style={styles.profileEmail}>{foundCoach.email}</Text>
+              <View style={styles.infoRow}>
+                <Check size={14} color="#10B981" />
+                <Text style={styles.infoLabel}>Already registered on platform</Text>
+              </View>
             </View>
 
             <BrandedButton
-              title="Add to Team"
-              variant="secondary"
-              onPress={handleAdd}
-              loading={adding}
-              disabled={adding}
-              icon={<UserPlus size={20} color="#FFFFFF" />}
-              style={styles.addButton}
+              title="Send Team Invite"
+              variant="primary"
+              onPress={() => handleInvite(true)}
+              loading={loading}
+              icon={<Send size={18} color="#FFFFFF" />}
+              style={styles.actionButton}
+            />
+          </View>
+        )}
+
+        {/* Step 2: Not Found Flow */}
+        {searchState === 'not_found' && (
+          <View style={[styles.resultCard, { borderColor: '#F59E0B' }]}>
+            <View style={styles.resultHeader}>
+              <View style={[styles.statusBadge, { backgroundColor: '#F59E0B' }]}>
+                <AlertTriangle size={18} color="#FFFFFF" />
+              </View>
+              <Text style={styles.resultTitle}>Email Not Registered</Text>
+            </View>
+            
+            <Text style={styles.promptText}>
+              This email isn't registered yet. Would you like to invite them to download the app and join your team?
+            </Text>
+
+            <BrandedButton
+              title="Send Registration Invite"
+              variant="primary"
+              onPress={() => handleInvite(false)}
+              loading={loading}
+              icon={<Send size={18} color="#FFFFFF" />}
+              style={styles.actionButton}
             />
           </View>
         )}
@@ -218,10 +259,10 @@ export default function AddSubCoachScreen() {
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>What happens next?</Text>
           <Text style={styles.infoText}>
-            • The coach will be added to your team{'\n'}
-            • They will inherit your brand settings{'\n'}
-            • You can assign clients to them{'\n'}
-            • They can only see their own clients
+            • The coach receives an invite email with a link{'\n'}
+            • Tapping the link connects them to your brand{'\n'}
+            • They automatically become a sub-coach in your team{'\n'}
+            • You can then assign clients and collaborate
           </Text>
         </View>
       </ScrollView>
@@ -242,7 +283,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 20,
-    marginBottom: 24,
+    marginBottom: 20,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -261,7 +302,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   label: {
     fontSize: 14,
@@ -288,49 +329,79 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
   },
-  searchButton: {
+  actionButton: {
     marginTop: 4,
   },
-  foundCard: {
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  statusText: {
+    marginLeft: 8,
+    color: '#6B7280',
+    fontSize: 14,
+  },
+  resultCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 20,
     marginBottom: 24,
     borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  foundHeader: {
+  resultHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
-  checkIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  statusBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
-  foundTitle: {
-    fontSize: 16,
+  resultTitle: {
+    fontSize: 17,
     fontWeight: '700',
     color: '#111827',
   },
-  foundInfo: {
+  profileInfo: {
     marginBottom: 16,
   },
-  foundName: {
+  profileName: {
     fontSize: 20,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 4,
   },
-  foundEmail: {
+  profileEmail: {
     fontSize: 14,
     color: '#6B7280',
+    marginBottom: 8,
   },
-  addButton: {
-    marginTop: 8,
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoLabel: {
+    fontSize: 13,
+    color: '#10B981',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  promptText: {
+    fontSize: 15,
+    color: '#4B5563',
+    lineHeight: 22,
+    marginBottom: 20,
   },
   infoBox: {
     backgroundColor: '#EFF6FF',
@@ -338,6 +409,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#BFDBFE',
+    marginBottom: 32,
   },
   infoTitle: {
     fontSize: 14,

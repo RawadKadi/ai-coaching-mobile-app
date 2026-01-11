@@ -18,11 +18,13 @@ import { BrandedHeader } from '@/components/BrandedHeader';
 import { BrandedButton } from '@/components/BrandedButton';
 
 interface SubCoach {
-  coach_id: string;
+  coach_id: string | null;
   full_name: string;
   email: string;
   client_count: number;
   added_at: string;
+  status: 'active' | 'pending';
+  invite_token: string | null;
 }
 
 export default function TeamManagementScreen() {
@@ -39,8 +41,30 @@ export default function TeamManagementScreen() {
     if (coach?.is_parent_coach) {
       loadSubCoaches();
       loadBrandStats();
+
+      // Set up real-time subscription for team changes
+      const subscription = supabase
+        .channel('team-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'coach_hierarchy',
+            filter: `parent_coach_id=eq.${coach.id}`
+          },
+          () => {
+            console.log('[TeamManagement] Real-time update detected, reloading...');
+            loadSubCoaches();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        subscription.unsubscribe();
+      };
     }
-  }, [coach]);
+  }, [coach?.id]);
 
   const loadSubCoaches = async () => {
     if (!coach?.id) {
@@ -88,17 +112,55 @@ export default function TeamManagementScreen() {
     }
   };
 
+  const getInviteUrl = (token: string) => {
+    // Development link for Expo Go
+    // For Production, it would be coachingapp://join-team?invite=${token}
+    return `exp://192.168.0.104:8081/--/join-team?invite=${token}`;
+  };
+
   const renderSubCoach = ({ item }: { item: SubCoach }) => (
     <TouchableOpacity
-      style={styles.coachCard}
-      // onPress={() => router.push(`/(coach)/team/${item.coach_id}`)} // TODO: Create detail page
+      style={[
+        styles.coachCard,
+        item.status === 'pending' && styles.pendingCard
+      ]}
+      onPress={() => {
+        if (item.status === 'active' && item.coach_id) {
+          // router.push(`/(coach)/team/${item.coach_id}`); // TODO: Create detail page
+        } else if (item.status === 'pending' && item.invite_token) {
+          Alert.alert(
+            'Pending Invite',
+            `Email: ${item.email}\n\nInvite Link (Expo Go Debug):\n${getInviteUrl(item.invite_token)}`,
+            [
+              { text: 'OK' },
+              { 
+                text: 'Copy Debug Link', 
+                onPress: () => {
+                  // If we had Clipboard, we'd copy it here
+                  Alert.alert('Link', getInviteUrl(item.invite_token!));
+                } 
+              }
+            ]
+          );
+        }
+      }}
     >
       <View style={styles.coachHeader}>
-        <View style={[styles.avatar, { backgroundColor: `${primary}20` }]}>
-          <UserCheck size={24} color={primary} />
+        <View style={[
+          styles.avatar, 
+          { backgroundColor: item.status === 'active' ? `${primary}20` : '#F3F4F6' }
+        ]}>
+          <UserCheck size={24} color={item.status === 'active' ? primary : '#9CA3AF'} />
         </View>
         <View style={styles.coachInfo}>
-          <Text style={styles.coachName}>{item.full_name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.coachName}>{item.full_name}</Text>
+            {item.status === 'pending' && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingBadgeText}>Pending</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.coachEmail}>{item.email}</Text>
         </View>
       </View>
@@ -111,14 +173,30 @@ export default function TeamManagementScreen() {
         </View>
         
         <View style={styles.stat}>
-          <TrendingUp size={16} color={secondary} />
-          <Text style={[styles.statValue, { color: secondary }]}>Active</Text>
+          <TrendingUp size={16} color={item.status === 'active' ? secondary : '#9CA3AF'} />
+          <Text style={[
+            styles.statValue, 
+            { color: item.status === 'active' ? secondary : '#9CA3AF' }
+          ]}>
+            {item.status === 'active' ? 'Active' : 'Invited'}
+          </Text>
         </View>
       </View>
 
-      <Text style={styles.addedDate}>
-        Added {new Date(item.added_at).toLocaleDateString()}
-      </Text>
+      <View style={styles.footerRow}>
+        <Text style={styles.addedDate}>
+          {item.status === 'active' ? 'Joined' : 'Invited'} {new Date(item.added_at).toLocaleDateString()}
+        </Text>
+        {item.status === 'pending' && item.invite_token && (
+          <TouchableOpacity 
+            onPress={() => {
+              Alert.alert('Invite Token', item.invite_token!);
+            }}
+          >
+            <Text style={[styles.copyCodeText, { color: primary }]}>View Token</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </TouchableOpacity>
   );
 
@@ -199,7 +277,7 @@ export default function TeamManagementScreen() {
         <FlatList
           data={subCoaches}
           renderItem={renderSubCoach}
-          keyExtractor={(item) => item.coach_id}
+          keyExtractor={(item) => item.invite_token || item.coach_id || Math.random().toString()}
           contentContainerStyle={styles.listContent}
           refreshing={loading}
           onRefresh={loadSubCoaches}
@@ -313,7 +391,38 @@ const styles = StyleSheet.create({
   addedDate: {
     fontSize: 12,
     color: '#9CA3AF',
+  },
+  pendingCard: {
+    backgroundColor: '#F3F4F6',
+    borderStyle: 'dashed',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  pendingBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pendingBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
+    textTransform: 'uppercase',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 8,
+  },
+  copyCodeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,

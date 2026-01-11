@@ -32,16 +32,51 @@ export default function SignUpScreen() {
   const [validatingInvite, setValidatingInvite] = useState(false);
   const [inviteValid, setInviteValid] = useState(false);
 
-  // Handle deep link invite code
+  // Handle deep link invite code (Client or Sub-Coach)
   useEffect(() => {
     const invite = params.invite as string;
     if (invite) {
-      console.log('[Signup] Invite code from deep link:', invite);
+      console.log('[Signup] Invite code detected:', invite);
       setInviteCode(invite);
-      setRole('client'); // Invites are for clients only
-      validateInvite(invite);
+      
+      // Determine if it's a sub-coach invite (usually a UUID/long token) 
+      // or a client invite (usually shorter 10-char code)
+      if (invite.length > 20) {
+        console.log('[Signup] Treating as sub-coach invite');
+        setRole('coach');
+        validateSubCoachInvite(invite);
+      } else {
+        console.log('[Signup] Treating as client invite');
+        setRole('client');
+        validateInvite(invite);
+      }
     }
   }, [params.invite]);
+
+  const validateSubCoachInvite = async (token: string) => {
+    setValidatingInvite(true);
+    try {
+      const { data, error } = await supabase.rpc('validate_subcoach_invite', {
+        p_invite_token: token
+      });
+
+      if (error || !data?.valid) {
+        setInviteValid(false);
+        Alert.alert('Invalid Invite', data?.message || 'This sub-coach invitation is invalid or has expired.');
+      } else {
+        setInviteValid(true);
+        Alert.alert(
+          'Join Team! 🤝',
+          `You've been invited by ${data.parent_coach_name} to join their coaching team!`,
+          [{ text: 'Great!' }]
+        );
+      }
+    } catch (err) {
+      console.error('[Signup] Sub-coach validation error:', err);
+    } finally {
+      setValidatingInvite(false);
+    }
+  };
 
   const validateInvite = async (code: string) => {
     if (!code) return;
@@ -108,67 +143,59 @@ export default function SignUpScreen() {
       const success = await signUp(email, password, fullName, role);
       console.log('[SignUpScreen] SignUp completed:', success);
       
-      // If signup was successful and we have an invite code
-      if (success && inviteCode && inviteValid && role === 'client') {
-        console.log('[SignUpScreen] Using invite code:', inviteCode);
-        
-        try {
-          // Get the current user (just created)
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          if (!user) {
-            throw new Error('User not found after signup');
-          }
-
-          // Get the client record
-          const { data: clientData, error: clientError } = await supabase
-            .from('clients')
-            .select('id')
-            .eq('user_id', user.id)
-            .single();
-
-          if (clientError || !clientData) {
-            console.error('[SignUpScreen] Client not found:', clientError);
-            throw new Error('Client record not found');
-          }
-
-          console.log('[SignUpScreen] Client ID:', clientData.id);
-
-          // Use the invite code to link client to coach (with BOTH parameters)
-          const { data, error } = await supabase.rpc('use_invite_code', {
-            p_client_id: clientData.id,
-            p_code: inviteCode
-          });
-
-          if (error) {
-            console.error('[SignUpScreen] Invite code usage error:', error);
-            // Don't fail signup, just log the error
-            Alert.alert(
-              'Account Created',
-              'Your account was created but there was an issue with the invite code. Please contact your coach.',
-              [{ text: 'OK' }]
-            );
-          } else {
-            console.log('[SignUpScreen] Invite code used successfully:', data);
-            Alert.alert(
-              'Welcome! 🎉',
-              'Your account has been created and you\'ve been added to your coach\'s program!',
-              [{ text: 'Get Started' }]
-            );
-          }
-        } catch (inviteError) {
-          console.error('[SignUpScreen] Invite code error:', inviteError);
-        }
+      if (!success) {
+        throw new Error('Signup failed. Please try again.');
       }
+
+      // If signup was successful
+      const { data: { session } } = await supabase.auth.getSession();
       
-      // Give the auth state a moment to update
-      setTimeout(() => {
-        router.replace('/');
-      }, 100);
+      if (!session) {
+        // Verification required
+        setLoading(false);
+        Alert.alert(
+          'Success!',
+          'Your account has been created. Please check your email to verify your account before signing in.',
+          [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+        );
+        return;
+      }
+
+      // If we have a session, navigate to dashboard
+      // The TeamInvitationMonitor will handle detecting the auto-linked invite
+      // and showing the welcome slider!
+      console.log('[SignUpScreen] Navigating to dashboard (/)');
+      router.replace('/');
     } catch (err: any) {
       console.error('[SignUpScreen] Signup error:', err);
       setError(err.message || 'Failed to sign up');
       setLoading(false);
+    }
+  };
+
+  const processCoachInvite = async (token: string, coachId: string) => {
+    console.log('[SignUpScreen] Accepting sub-coach invite:', { token, coachId });
+    
+    const { data: acceptData, error: acceptError } = await supabase.rpc('accept_subcoach_invite', {
+      p_invite_token: token,
+      p_child_coach_id: coachId
+    });
+
+    if (acceptError) {
+      console.error('[SignUpScreen] Accept invite error:', acceptError);
+      // Even if linking fails, let them to dashboard
+      router.replace('/');
+    } else {
+      console.log('[SignUpScreen] Sub-coach invite accepted successfully:', acceptData);
+      
+      // Redirect to welcome screen specifically
+      router.replace({
+        pathname: '/(coach)/team-welcome',
+        params: { 
+          parentCoachName: acceptData.parent_coach_name || 'your lead coach',
+          hierarchyId: acceptData.hierarchy_id
+        }
+      });
     }
   };
 

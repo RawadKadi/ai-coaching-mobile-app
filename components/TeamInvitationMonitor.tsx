@@ -32,7 +32,9 @@ export default function TeamInvitationMonitor() {
     console.log('[TeamInvitationMonitor] 🔍 Checking for pending invitations for coach:', coach.id);
 
     try {
-      const { data, error } = await supabase
+      // 1. First check by ID (already linked)
+      console.log('[TeamInvitationMonitor] 🔍 Checking by ID for coach:', coach.id);
+      const { data: idData, error: idError } = await supabase
         .from('coach_hierarchy')
         .select('id, parent_coach_name, acknowledged_at, created_at')
         .eq('child_coach_id', coach.id)
@@ -41,36 +43,76 @@ export default function TeamInvitationMonitor() {
         .limit(1)
         .maybeSingle();
 
-      console.log('[TeamInvitationMonitor] Query result:', { data, error });
+      if (idError) {
+        console.error('[TeamInvitationMonitor] ❌ Error checking by ID:', idError);
+      }
 
-      if (error) {
-        console.error('[TeamInvitationMonitor] ❌ Error checking invitation:', error);
+      if (idData) {
+        handleFoundInvitation(idData);
         return;
       }
 
-      if (data) {
-        console.log('[TeamInvitationMonitor] ✅ FOUND UNACKNOWLEDGED INVITATION!', data);
-        setHasChecked(true);
-        setInvitationFound(true); // STOP all further checks!
+      // 2. FALLBACK: Check by Email (not yet linked)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+
+      console.log('[TeamInvitationMonitor] 📧 Checking by email for coach:', user.email);
+      const { data: emailData, error: emailError } = await supabase
+        .from('coach_hierarchy')
+        .select('id, parent_coach_name, invite_token')
+        .eq('invite_email', user.email)
+        .is('child_coach_id', null)
+        .is('invite_accepted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (emailError) {
+        console.error('[TeamInvitationMonitor] ❌ Error checking by email:', emailError);
+      }
+
+      if (emailData && emailData.invite_token) {
+        console.log('[TeamInvitationMonitor] 🔄 Automatic linking starting for invite:', emailData.id);
         
-        // Navigate to welcome screen
-        setTimeout(() => {
-          console.log('[TeamInvitationMonitor] 🚀 Navigating to welcome screen...');
-          router.push({
-            pathname: '/(coach)/team-welcome',
-            params: {
-              hierarchyId: data.id,
-              parentCoachName: data.parent_coach_name || 'Your Coach',
-            },
+        const { data: acceptData, error: acceptError } = await supabase.rpc('accept_subcoach_invite', {
+          p_invite_token: emailData.invite_token,
+          p_child_coach_id: coach.id
+        });
+
+        if (acceptError) {
+          console.error('[TeamInvitationMonitor] ❌ Auto-link RPC failed:', acceptError);
+        } else {
+          console.log('[TeamInvitationMonitor] ✅ Auto-linked successfully!', acceptData);
+          handleFoundInvitation({
+            id: emailData.id,
+            parent_coach_name: emailData.parent_coach_name || acceptData.parent_coach_name
           });
-        }, 200);
+        }
       } else {
-        console.log('[TeamInvitationMonitor] No pending invitations found');
+        console.log('[TeamInvitationMonitor] No pending invitations found by ID or Email');
         setHasChecked(true);
       }
     } catch (err) {
       console.error('[TeamInvitationMonitor] Unexpected error:', err);
     }
+  };
+
+  const handleFoundInvitation = (data: any) => {
+    console.log('[TeamInvitationMonitor] ✅ PROCESSING INVITATION!', data);
+    setHasChecked(true);
+    setInvitationFound(true); // STOP all further checks!
+    
+    // Navigate to welcome screen
+    setTimeout(() => {
+      console.log('[TeamInvitationMonitor] 🚀 Navigating to welcome screen...');
+      router.push({
+        pathname: '/(coach)/team-welcome',
+        params: {
+          hierarchyId: data.id,
+          parentCoachName: data.parent_coach_name || 'Your Coach',
+        },
+      });
+    }, 200);
   };
 
   // Check whenever coach ID becomes available or changes
