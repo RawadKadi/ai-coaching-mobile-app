@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useBrandColors } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { BrandedHeader } from '@/components/BrandedHeader';
+import { AssignClientsModal } from '@/components/AssignClientsModal';
 
 interface SubCoachDetails {
   coach_id: string;
@@ -38,6 +39,7 @@ export default function SubCoachDetailsScreen() {
   
   const [subCoach, setSubCoach] = useState<SubCoachDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAssignModal, setShowAssignModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -67,49 +69,24 @@ export default function SubCoachDetailsScreen() {
         throw new Error('Sub-coach not found. They may not have accepted the invitation yet.');
       }
 
-      // Get assigned clients
-      const { data: clientsData, error: clientsError } = await supabase
-        .from('coach_client_links')
-        .select(`
-          created_at,
-          clients!inner(
-            id,
-            user_id
-          )
-        `)
-        .eq('coach_id', id)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false });
+      // Get assigned clients using RPC (bypasses RLS)
+      console.log('[SubCoachDetails] Fetching clients for coach:', id);
+      const { data: clientsRaw, error: clientsError } = await supabase.rpc('get_subcoach_clients', {
+        p_coach_id: id
+      });
+
+      console.log('[SubCoachDetails] Clients RPC response:', clientsRaw);
+      console.log('[SubCoachDetails] Clients error:', clientsError);
 
       if (clientsError) throw clientsError;
 
-      // For each client, get their profile and email
-      const formattedClients = await Promise.all(
-        (clientsData || []).map(async (link: any) => {
-          const { data: clientProfile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', link.clients.user_id)
-            .maybeSingle();
-
-          let clientEmail = 'No email';
-          try {
-            const { data: { user: clientUser } } = await supabase.auth.admin.getUserById(
-              link.clients.user_id
-            );
-            clientEmail = clientUser?.email || 'No email';
-          } catch (e) {
-            console.log('[SubCoachDetails] Could not fetch client email');
-          }
-
-          return {
-            id: link.clients.id,
-            full_name: clientProfile?.full_name || 'Unknown',
-            email: clientEmail,
-            added_at: link.created_at,
-          };
-        })
-      );
+      // Parse the JSON array from RPC
+      const formattedClients = (clientsRaw || []).map((client: any) => ({
+        id: client.client_id,
+        full_name: client.full_name,
+        email: client.email,
+        added_at: client.assigned_at,
+      }));
 
       setSubCoach({
         coach_id: coachDetailsRaw.coach_id,
@@ -203,6 +180,13 @@ export default function SubCoachDetailsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Assigned Clients ({subCoach.client_count})</Text>
+            <TouchableOpacity
+              style={[styles.assignButton, { backgroundColor: primary }]}
+              onPress={() => setShowAssignModal(true)}
+            >
+              <Users size={16} color="#FFFFFF" />
+              <Text style={styles.assignButtonText}>Assign Clients</Text>
+            </TouchableOpacity>
           </View>
           
           {subCoach.clients.length === 0 ? (
@@ -240,6 +224,18 @@ export default function SubCoachDetailsScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Assignment Modal */}
+      {coach?.id && (
+        <AssignClientsModal
+          visible={showAssignModal}
+          subCoachId={subCoach.coach_id}
+          subCoachName={subCoach.full_name}
+          mainCoachId={coach.id}
+          onClose={() => setShowAssignModal(false)}
+          onSuccess={() => loadSubCoachDetails()}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -345,12 +341,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#111827',
+  },
+  assignButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  assignButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   clientCard: {
     backgroundColor: '#FFFFFF',
