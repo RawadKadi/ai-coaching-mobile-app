@@ -11,7 +11,7 @@ interface AuthContextType {
   client: Client | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, role: 'client' | 'coach') => Promise<boolean>;
+  signUp: (email: string, password: string, fullName: string, role: 'client' | 'coach', inviteToken?: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -123,7 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     fullName: string,
-    role: 'client' | 'coach'
+    role: 'client' | 'coach',
+    inviteToken?: string
   ) => {
     console.log('[SignUp] Starting signup process for:', email, 'Role:', role);
     
@@ -144,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           full_name: fullName,
           role: role,
+          invite_token: inviteToken
         }
       }
     });

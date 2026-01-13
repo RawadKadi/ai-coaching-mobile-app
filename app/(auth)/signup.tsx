@@ -139,8 +139,9 @@ export default function SignUpScreen() {
     setError('');
 
     try {
-      console.log('[SignUpScreen] Calling signUp...');
-      const success = await signUp(email, password, fullName, role);
+      const tokenToPass = inviteCode || undefined;
+      console.log('[SignUpScreen] Calling signUp with token:', tokenToPass, '(original inviteCode:', inviteCode, ')');
+      const success = await signUp(email, password, fullName, role, tokenToPass);
       console.log('[SignUpScreen] SignUp completed:', success);
       
       if (!success) {
