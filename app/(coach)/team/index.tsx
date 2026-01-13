@@ -125,8 +125,9 @@ export default function TeamManagementScreen() {
         item.status === 'pending' && styles.pendingCard
       ]}
       onPress={() => {
+        console.log('[TeamManagement] Card clicked:', { status: item.status, coach_id: item.coach_id });
         if (item.status === 'active' && item.coach_id) {
-          // router.push(`/(coach)/team/${item.coach_id}`); // TODO: Create detail page
+          router.push(`/(coach)/team/${item.coach_id}`); // TODO: Create detail page
         } else if (item.status === 'pending' && item.invite_token) {
           Alert.alert(
             'Pending Invite',
