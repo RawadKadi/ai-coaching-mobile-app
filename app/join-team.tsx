@@ -10,7 +10,7 @@ const PENDING_INVITE_KEY = '@pending_invite_token';
 export default function JoinTeamScreen() {
   const router = useRouter();
   const { invite } = useLocalSearchParams<{ invite: string }>();
-  const { user, coach } = useAuth();
+  const { user, coach, refreshProfile } = useAuth();
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
@@ -102,9 +102,12 @@ export default function JoinTeamScreen() {
       // Clear stored invite
       await AsyncStorage.removeItem(PENDING_INVITE_KEY);
       
-      // Force reload auth to get updated coach data
-      console.log('[JoinTeam] Waiting for data sync...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // **CRITICAL**: Refresh AuthContext to get updated coach data
+      console.log('[JoinTeam] Refreshing coach profile to update UI...');
+      await refreshProfile();
+      
+      // Small delay to ensure state updates propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Navigate to dashboard - TeamInvitationMonitor will show the slider
       console.log('[JoinTeam] Navigating to dashboard - TeamInvitationMonitor will handle welcome');
