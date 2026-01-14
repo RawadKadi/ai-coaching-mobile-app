@@ -24,7 +24,11 @@ function RootLayoutNav() {
 
     if (!session && !inAuthGroup) {
       // Redirect to the sign-in page.
-      router.replace('/(auth)/login');
+      try {
+        router.replace('/(auth)/login');
+      } catch (e) {
+        console.log('[Routing] Navigation not ready yet');
+      }
     } else if (session && profile) {
       // Redirect to dashboard if in auth group or root
       if (inAuthGroup || segments.length === 0 || (segments.length === 1 && segments[0] === 'index')) {
@@ -62,6 +66,7 @@ function RootLayoutNav() {
     <>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="join-team" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(client)" />
         <Stack.Screen name="(coach)" />
