@@ -1,10 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Clock, ChevronRight } from 'lucide-react-native';
+import { useAuth } from '@/contexts/AuthContext';
+import { useBrand } from '@/contexts/BrandContext';
+import { ArrowLeft, Clock, ChevronRight, Palette, Brain } from 'lucide-react-native';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { coach } = useAuth();
+  const { canManageBrand } = useBrand();
 
   return (
     <View style={styles.container}>
@@ -27,6 +31,41 @@ export default function SettingsScreen() {
                 <Clock size={20} color="#3B82F6" />
               </View>
               <Text style={styles.menuItemText}>Availability</Text>
+            </View>
+            <ChevronRight size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          {/* Brand Settings - Only show if coach has brand_id or can manage brand */}
+          {(coach?.brand_id || coach?.can_manage_brand) && (
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => router.push('/(coach)/settings/branding')}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: '#FFF7ED' }]}>
+                  <Palette size={20} color="#F59E0B" />
+                </View>
+                <View>
+                  <Text style={styles.menuItemText}>Brand Settings</Text>
+                  {canManageBrand && (
+                    <Text style={styles.badgeText}>Manage brand colors & logo</Text>
+                  )}
+                </View>
+              </View>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
+
+          {/* AI Brain */}
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => router.push('/(coach)/(tabs)/ai-brain')}
+          >
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: '#F5F3FF' }]}>
+                <Brain size={20} color="#8B5CF6" />
+              </View>
+              <Text style={styles.menuItemText}>AI Brain</Text>
             </View>
             <ChevronRight size={20} color="#9CA3AF" />
           </TouchableOpacity>
@@ -104,5 +143,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
     fontWeight: '500',
+  },
+  badgeText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
 });

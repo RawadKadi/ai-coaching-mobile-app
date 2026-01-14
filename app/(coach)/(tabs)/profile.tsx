@@ -39,20 +39,6 @@ export default function CoachProfileScreen() {
             <Text style={styles.menuItemText}>Settings</Text>
           </TouchableOpacity>
 
-          {/* Brand Settings - Only show if coach has brand_id or can manage brand */}
-          {(coach?.brand_id || coach?.can_manage_brand) && (
-            <TouchableOpacity 
-              style={styles.menuItem} 
-              onPress={() => router.push('/(coach)/settings/branding')}
-            >
-              <Palette size={20} color="#F59E0B" />
-              <Text style={styles.menuItemText}>
-                Brand Settings
-                {canManageBrand && <Text style={styles.badgeText}> • Manage</Text>}
-              </Text>
-            </TouchableOpacity>
-          )}
-
           {/* Team Management - Only for parent coaches */}
           {coach?.is_parent_coach && (
             <TouchableOpacity 
@@ -76,13 +62,8 @@ export default function CoachProfileScreen() {
             <Text style={styles.menuItemText}>Invite Client</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/(tabs)/ai-brain')}>
-            <Brain size={20} color="#8B5CF6" />
-            <Text style={[styles.menuItemText, styles.aiBrainText]}>AI Brain</Text>
-          </TouchableOpacity>
-
           {/* TEST: Deep Link Tester (Remove after testing) */}
-          <TouchableOpacity 
+          {/* <TouchableOpacity 
             style={[styles.menuItem, { backgroundColor: '#FFF7ED' }]} 
             onPress={() => router.push('/(coach)/test-deeplink')}
           >
@@ -90,7 +71,7 @@ export default function CoachProfileScreen() {
             <Text style={[styles.menuItemText, { color: '#F97316' }]}>
               🧪 Test Deep Links
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
             <LogOut size={20} color="#EF4444" />

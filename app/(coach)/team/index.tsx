@@ -222,6 +222,8 @@ export default function TeamManagementScreen() {
     <SafeAreaView style={styles.container}>
       <BrandedHeader 
         title="Team Management" 
+        showBackButton
+        onBackPress={() => router.back()}
         showLogo 
         rightComponent={
           <TouchableOpacity onPress={() => router.push('/(coach)/team/add')}>
