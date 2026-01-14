@@ -200,8 +200,7 @@ export default function SubCoachDetailsScreen() {
                 key={client.id}
                 style={styles.clientCard}
                 onPress={() => {
-                  // TODO: Navigate to client details
-                  Alert.alert('Client Details', `View details for ${client.full_name}`);
+                  router.push(`/(coach)/clients/${client.id}`);
                 }}
               >
                 <View style={styles.clientInfo}>
