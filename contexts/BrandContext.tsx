@@ -4,15 +4,23 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import {
   hexToRGB,
+  lightenColor,
+  darkenColor,
+  getContrastRatio,
+  getContrastColor,
   generateHoverColor,
   generatePressedColor,
   generateDisabledColor,
   generateDarkTheme,
   getShadowStyle,
   getBorderRadiusFromShape,
+  scaleBorderRadius,
+  scaleSpacing,
   generateTypographySizes,
-  getContrastColor,
   ensureValidColor,
+  isDarkColor,
+  generateSurfaceColors,
+  generateTextColors,
 } from '@/lib/theme-utils';
 
 // ============================================================================
@@ -62,6 +70,7 @@ export interface Brand {
 // ============================================================================
 
 export interface ThemeColors {
+  // Brand colors
   primary: string;
   primaryHover: string;
   primaryPressed: string;
@@ -71,13 +80,26 @@ export interface ThemeColors {
   secondaryPressed: string;
   accent: string;
   accentHover: string;
+  
+  // Background and surfaces (NEW: auto-generated)
   background: string;
-  surface: string;
-  surfaceAlt: string;
-  border: string;
-  text: string;
-  textSecondary: string;
-  textDisabled: string;
+  surface: string;           // Cards, modals, headers
+  surfaceHover: string;      // Interactive card hover state
+  surfacePressed: string;    // Interactive card pressed state
+  surfaceAlt: string;        // Alternate surface (kept for compatibility)
+  border: string;            // Borders and dividers
+  inputBackground: string;   // Search and text input backgrounds
+  
+  // Text colors (NEW: auto-contrast)
+  text: string;              // Primary text
+  textSecondary: string;     // Secondary text
+  textTertiary: string;      // Tertiary text (placeholders)
+  textOnSurface: string;     // Text on cards/surfaces
+  textOnPrimary: string;     // Text on primary color backgrounds
+  textOnSecondary: string;   // Text on secondary color backgrounds
+  textDisabled: string;      // Disabled text
+  
+  // Semantic colors
   error: string;
   success: string;
   warning: string;
@@ -189,7 +211,18 @@ function generateThemeColors(brand: Brand | null, isDark: boolean): ThemeColors 
     }
   }
   
+  // CRITICAL FIX: Always check if the final background is actually dark,
+  // regardless of dark_mode_enabled flag. This ensures proper surface colors.
+  const backgroundIsDark = isDarkColor(finalBackground);
+  
+  // Generate surface colors using actual background brightness
+  const surfaceColors = generateSurfaceColors(finalBackground, backgroundIsDark);
+  
+  // Generate text colors using actual background brightness
+  const textColors = generateTextColors(finalBackground, surfaceColors.surface);
+  
   return {
+    // Brand colors
     primary: finalPrimary,
     primaryHover: generateHoverColor(finalPrimary, isDark),
     primaryPressed: generatePressedColor(finalPrimary, isDark),
@@ -199,13 +232,26 @@ function generateThemeColors(brand: Brand | null, isDark: boolean): ThemeColors 
     secondaryPressed: generatePressedColor(finalSecondary, isDark),
     accent: finalAccent,
     accentHover: generateHoverColor(finalAccent, isDark),
+    
+    // Background and surfaces (auto-generated from background color)
     background: finalBackground,
-    surface: isDark ? '#1F2937' : '#FFFFFF',
-    surfaceAlt: isDark ? '#374151' : '#F3F4F6',
-    border: isDark ? '#4B5563' : '#E5E7EB',
-    text: isDark ? '#F9FAFB' : '#111827',
-    textSecondary: isDark ? '#D1D5DB' : '#6B7280',
+    surface: surfaceColors.surface,
+    surfaceHover: surfaceColors.surfaceHover,
+    surfacePressed: surfaceColors.surfacePressed,
+    surfaceAlt: isDark ? lightenColor(finalBackground, 0.12) : '#F3F4F6', // Kept for compatibility
+    border: surfaceColors.border,
+    inputBackground: surfaceColors.inputBackground,
+    
+    // Text colors (auto-generated for perfect contrast)
+    text: textColors.text,
+    textSecondary: textColors.textSecondary,
+    textTertiary: textColors.textTertiary,
+    textOnSurface: textColors.textOnSurface,
+    textOnPrimary: getContrastColor(finalPrimary),
+    textOnSecondary: getContrastColor(finalSecondary),
     textDisabled: isDark ? '#9CA3AF' : '#D1D5DB',
+    
+    // Semantic colors
     error: '#EF4444',
     success: '#10B981',
     warning: '#F59E0B',

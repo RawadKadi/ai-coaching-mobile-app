@@ -12,12 +12,14 @@ import {
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { AICoachBrain } from '@/types/database';
 
 export default function AIBrainScreen() {
   const router = useRouter();
   const { coach } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [brainConfig, setBrainConfig] = useState<AICoachBrain | null>(null);
@@ -118,9 +120,9 @@ export default function AIBrainScreen() {
       </View>
 
       <View style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.label}>Tone</Text>
-          <Text style={styles.description}>
+        <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Tone</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
             How should the AI communicate? (e.g., professional, friendly,
             motivating)
           </Text>
@@ -129,28 +131,28 @@ export default function AIBrainScreen() {
             value={tone}
             onChangeText={setTone}
             placeholder="professional and motivating"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.colors.textTertiary}
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Style</Text>
-          <Text style={styles.description}>
+          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Style</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
             What approach should the AI take? (e.g., supportive, educational,
             direct)
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             value={style}
             onChangeText={setStyle}
             placeholder="supportive and educational"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.colors.textTertiary}
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Philosophy</Text>
-          <Text style={styles.description}>
+          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Philosophy</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
             What are your core coaching principles?
           </Text>
           <TextInput
@@ -164,9 +166,9 @@ export default function AIBrainScreen() {
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Specialty Focus</Text>
-          <Text style={styles.description}>
+          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Specialty Focus</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
             What area do you specialize in? (e.g., weight loss, muscle
             building, mindset)
           </Text>

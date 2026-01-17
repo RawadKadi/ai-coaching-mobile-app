@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Users, Plus, TrendingUp, UserCheck, Award } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBrand, useBrandColors } from '@/contexts/BrandContext';
+import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { BrandedHeader } from '@/components/BrandedHeader';
 import { BrandedButton } from '@/components/BrandedButton';
@@ -32,6 +32,7 @@ export default function TeamManagementScreen() {
   const { coach } = useAuth();
   const { brand } = useBrand();
   const { primary, secondary } = useBrandColors();
+  const theme = useTheme();
   
   const [subCoaches, setSubCoaches] = useState<SubCoach[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +123,12 @@ export default function TeamManagementScreen() {
     <TouchableOpacity
       style={[
         styles.coachCard,
-        item.status === 'pending' && styles.pendingCard
+        { 
+          backgroundColor: theme.colors.surface, 
+          borderColor: item.status === 'pending' ? theme.colors.accent : theme.colors.border,
+          borderStyle: item.status === 'pending' ? 'dashed' : 'solid',
+          borderWidth: item.status === 'pending' ? 2 : 1,
+        },
       ]}
       onPress={() => {
         console.log('[TeamManagement] Card clicked:', { status: item.status, coach_id: item.coach_id });
@@ -155,14 +161,14 @@ export default function TeamManagementScreen() {
         </View>
         <View style={styles.coachInfo}>
           <View style={styles.nameRow}>
-            <Text style={styles.coachName}>{item.full_name}</Text>
+            <Text style={[styles.coachName, { color: theme.colors.text }]}>{item.full_name}</Text>
             {item.status === 'pending' && (
-              <View style={styles.pendingBadge}>
-                <Text style={styles.pendingBadgeText}>Pending</Text>
+              <View style={[styles.pendingBadge, { backgroundColor: `${theme.colors.accent}20`, borderColor: theme.colors.accent }]}>
+                <Text style={[styles.pendingBadgeText, { color: theme.colors.accent }]}>PENDING</Text>
               </View>
             )}
           </View>
-          <Text style={styles.coachEmail}>{item.email}</Text>
+          <Text style={[styles.coachEmail, { color: theme.colors.textSecondary }]}>{item.email}</Text>
         </View>
       </View>
 
@@ -219,7 +225,7 @@ export default function TeamManagementScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <BrandedHeader 
         title="Team Management" 
         showBackButton
@@ -233,24 +239,24 @@ export default function TeamManagementScreen() {
       />
 
       {/* Brand Stats Card */}
-      <View style={[styles.statsCard, { borderLeftColor: primary }]}>
+      <View style={[styles.statsCard, { borderLeftColor: primary, backgroundColor: theme.colors.surface }]}>
         <View style={styles.statsHeader}>
-          <Text style={styles.statsTitle}>{brand?.name || 'Your Brand'}</Text>
+          <Text style={[styles.statsTitle, { color: theme.colors.text }]}>{brand?.name || 'Your Brand'}</Text>
         </View>
         <View style={styles.statsGrid}>
           <View style={styles.statsItem}>
-            <Text style={styles.statsValue}>{subCoaches.length}</Text>
-            <Text style={styles.statsLabel}>Sub-Coaches</Text>
+            <Text style={[styles.statsValue, { color: theme.colors.text }]}>{subCoaches.length}</Text>
+            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>Sub-Coaches</Text>
           </View>
           <View style={styles.statsItem}>
-            <Text style={styles.statsValue}>{totalClients}</Text>
-            <Text style={styles.statsLabel}>Total Clients</Text>
+            <Text style={[styles.statsValue, { color: theme.colors.text }]}>{totalClients}</Text>
+            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>Total Clients</Text>
           </View>
           <View style={styles.statsItem}>
             <Text style={[styles.statsValue, { color: secondary }]}>
               {subCoaches.reduce((sum, coach) => sum + coach.client_count, 0)}
             </Text>
-            <Text style={styles.statsLabel}>Assigned</Text>
+            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>Assigned</Text>
           </View>
         </View>
       </View>
@@ -293,10 +299,8 @@ export default function TeamManagementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   statsCard: {
-    backgroundColor: '#FFFFFF',
     margin: 16,
     borderRadius: 12,
     padding: 16,

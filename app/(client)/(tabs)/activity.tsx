@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
 import { Utensils, Dumbbell, Calendar as CalendarIcon, CheckCircle, Circle, Camera } from 'lucide-react-native';
@@ -12,6 +13,7 @@ import { decode } from 'base64-arraybuffer';
 export default function ActivityScreen() {
   const router = useRouter();
   const { client } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -340,9 +342,9 @@ export default function ActivityScreen() {
   const completedHabits = habitLogs.filter((log) => log.completed).length;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Activity</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Activity</Text>
         <Text style={styles.date}>
           {new Date(selectedDate).toLocaleDateString('en-US', {
             weekday: 'long',
@@ -353,23 +355,23 @@ export default function ActivityScreen() {
       </View>
 
       <View style={styles.summaryContainer}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{totalCalories}</Text>
-          <Text style={styles.summaryLabel}>Calories</Text>
+        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{totalCalories}</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Calories</Text>
         </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{totalWorkoutMinutes}m</Text>
-          <Text style={styles.summaryLabel}>Active Time</Text>
+        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{totalWorkoutMinutes}m</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Active Time</Text>
         </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{completedHabits}/{habits.length}</Text>
-          <Text style={styles.summaryLabel}>Habits</Text>
+        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{completedHabits}/{habits.length}</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Habits</Text>
         </View>
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
         <ScrollView style={styles.content}>
@@ -457,19 +459,15 @@ export default function ActivityScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#FFFFFF',
     padding: 24,
     paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
   },
   date: {
     fontSize: 14,
@@ -483,12 +481,10 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   summaryValue: {
     fontSize: 20,
@@ -520,13 +516,11 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   cardCompleted: {
     backgroundColor: '#ECFDF5',

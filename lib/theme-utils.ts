@@ -304,3 +304,66 @@ export function blendColors(color1: string, color2: string, ratio: number = 0.5)
 
     return rgbToHex(r, g, b);
 }
+
+/**
+ * Generate surface colors from background color
+ * Creates card, modal, header, and input background colors
+ */
+export function generateSurfaceColors(backgroundColor: string, isDark: boolean): {
+    surface: string;
+    surfaceHover: string;
+    surfacePressed: string;
+    border: string;
+    inputBackground: string;
+} {
+    if (isDark) {
+        // Dark mode: lighten background for surfaces
+        return {
+            surface: lightenColor(backgroundColor, 0.08),
+            surfaceHover: lightenColor(backgroundColor, 0.12),
+            surfacePressed: lightenColor(backgroundColor, 0.06),
+            border: lightenColor(backgroundColor, 0.15),
+            inputBackground: lightenColor(backgroundColor, 0.10),
+        };
+    } else {
+        // Light mode: keep surfaces white/light
+        return {
+            surface: '#FFFFFF',
+            surfaceHover: darkenColor('#FFFFFF', 0.02),
+            surfacePressed: darkenColor('#FFFFFF', 0.04),
+            border: '#E5E7EB',
+            inputBackground: '#F9FAFB',
+        };
+    }
+}
+
+/**
+ * Generate text colors with auto-contrast
+ */
+export function generateTextColors(
+    backgroundColor: string,
+    surfaceColor: string
+): {
+    text: string;
+    textSecondary: string;
+    textTertiary: string;
+    textOnSurface: string;
+} {
+    const isDark = isDarkColor(backgroundColor);
+
+    if (isDark) {
+        return {
+            text: '#FFFFFF',
+            textSecondary: 'rgba(255, 255, 255, 0.7)',
+            textTertiary: 'rgba(255, 255, 255, 0.5)',
+            textOnSurface: '#FFFFFF',
+        };
+    } else {
+        return {
+            text: '#111827',
+            textSecondary: '#6B7280',
+            textTertiary: '#9CA3AF',
+            textOnSurface: '#111827',
+        };
+    }
+}

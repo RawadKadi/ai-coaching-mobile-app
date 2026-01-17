@@ -1,13 +1,14 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBrand } from '@/contexts/BrandContext';
+import { useBrand, useTheme } from '@/contexts/BrandContext';
 import { LogOut, User, Settings, Brain, Palette, Users, UserPlus, Link } from 'lucide-react-native';
 
 export default function CoachProfileScreen() {
   const router = useRouter();
   const { profile, signOut, coach } = useAuth();
   const { brand, canManageBrand } = useBrand();
+  const theme = useTheme();
 
   const handleSignOut = async () => {
     try {
@@ -19,34 +20,34 @@ export default function CoachProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Profile</Text>
       </View>
 
       <View style={styles.content}>
-        <View style={styles.profileCard}>
+        <View style={[styles.profileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.avatarContainer}>
-            <User size={48} color="#3B82F6" />
+            <User size={48} color={theme.colors.primary} />
           </View>
-          <Text style={styles.name}>{profile?.full_name}</Text>
-          <Text style={styles.role}>Coach Account</Text>
+          <Text style={[styles.name, { color: theme.colors.text }]}>{profile?.full_name}</Text>
+          <Text style={[styles.role, { color: theme.colors.textSecondary }]}>Coach Account</Text>
         </View>
 
-        <View style={styles.menuSection}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/settings')}>
-            <Settings size={20} color="#6B7280" />
-            <Text style={styles.menuItemText}>Settings</Text>
+        <View style={[styles.menuSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <TouchableOpacity style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} onPress={() => router.push('/(coach)/settings')}>
+            <Settings size={20} color={theme.colors.textSecondary} />
+            <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Settings</Text>
           </TouchableOpacity>
 
           {/* Team Management - Only for parent coaches */}
           {coach?.is_parent_coach && (
             <TouchableOpacity 
-              style={styles.menuItem} 
+              style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} 
               onPress={() => router.push('/(coach)/team')}
             >
-              <Users size={20} color="#10B981" />
-              <Text style={styles.menuItemText}>
+              <Users size={20} color={theme.colors.secondary} />
+              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>
                 Team Management
                 <Text style={styles.parentBadge}> • Parent</Text>
               </Text>
@@ -55,11 +56,11 @@ export default function CoachProfileScreen() {
 
           {/* Invite Client - For all coaches */}
           <TouchableOpacity 
-            style={styles.menuItem} 
+            style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} 
             onPress={() => router.push('/(coach)/invite-client')}
           >
-            <UserPlus size={20} color="#8B5CF6" />
-            <Text style={styles.menuItemText}>Invite Client</Text>
+            <UserPlus size={20} color={theme.colors.accent} />
+            <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Invite Client</Text>
           </TouchableOpacity>
 
           {/* TEST: Deep Link Tester (Remove after testing) */}
@@ -73,9 +74,9 @@ export default function CoachProfileScreen() {
             </Text>
           </TouchableOpacity> */}
 
-          <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
-            <LogOut size={20} color="#EF4444" />
-            <Text style={[styles.menuItemText, styles.signOutText]}>
+          <TouchableOpacity style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} onPress={handleSignOut}>
+            <LogOut size={20} color={theme.colors.error} />
+            <Text style={[styles.menuItemText, { color: theme.colors.error }]}>
               Sign Out
             </Text>
           </TouchableOpacity>
@@ -88,30 +89,24 @@ export default function CoachProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#FFFFFF',
     padding: 24,
     paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
   },
   content: {
     padding: 16,
   },
   profileCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     marginBottom: 16,
   },
   avatarContainer: {
@@ -134,10 +129,8 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   menuSection: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     overflow: 'hidden',
   },
   menuItem: {

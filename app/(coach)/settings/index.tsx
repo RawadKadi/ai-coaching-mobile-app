@@ -2,26 +2,27 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBrand } from '@/contexts/BrandContext';
+import { useBrand, useTheme } from '@/contexts/BrandContext';
 import { ArrowLeft, Clock, ChevronRight, Palette, Brain } from 'lucide-react-native';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { coach } = useAuth();
   const { canManageBrand } = useBrand();
+  const theme = useTheme();
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#111827" />
+          <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Settings</Text>
       </View>
 
       <ScrollView style={styles.content}>
-        <Text style={styles.sectionTitle}>General</Text>
-        <View style={styles.menuContainer}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>General</Text>
+        <View style={[styles.menuContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <TouchableOpacity 
             style={styles.menuItem} 
             onPress={() => router.push('/(coach)/settings/availability')}
@@ -30,9 +31,9 @@ export default function SettingsScreen() {
               <View style={[styles.iconContainer, { backgroundColor: '#EFF6FF' }]}>
                 <Clock size={20} color="#3B82F6" />
               </View>
-              <Text style={styles.menuItemText}>Availability</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Availability</Text>
             </View>
-            <ChevronRight size={20} color="#9CA3AF" />
+            <ChevronRight size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
 
           {/* Brand Settings - Only show if coach has brand_id or can manage brand */}
@@ -46,13 +47,13 @@ export default function SettingsScreen() {
                   <Palette size={20} color="#F59E0B" />
                 </View>
                 <View>
-                  <Text style={styles.menuItemText}>Brand Settings</Text>
+                  <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Brand Settings</Text>
                   {canManageBrand && (
-                    <Text style={styles.badgeText}>Manage brand colors & logo</Text>
+                    <Text style={[styles.badgeText, { color: theme.colors.textSecondary }]}>Manage brand colors & logo</Text>
                   )}
                 </View>
               </View>
-              <ChevronRight size={20} color="#9CA3AF" />
+              <ChevronRight size={20} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           )}
 
@@ -65,9 +66,9 @@ export default function SettingsScreen() {
               <View style={[styles.iconContainer, { backgroundColor: '#F5F3FF' }]}>
                 <Brain size={20} color="#8B5CF6" />
               </View>
-              <Text style={styles.menuItemText}>AI Brain</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>AI Brain</Text>
             </View>
-            <ChevronRight size={20} color="#9CA3AF" />
+            <ChevronRight size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
           
           {/* Future settings can be added here */}

@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Link, QrCode, Copy, MessageCircle, Mail, Calendar, Users } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBrand, useBrandColors } from '@/contexts/BrandContext';
+import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { generateInviteCode } from '@/lib/brand-service';
 import { BrandedHeader } from '@/components/BrandedHeader';
 import { BrandedButton } from '@/components/BrandedButton';
@@ -25,6 +25,7 @@ export default function InviteClientScreen() {
   const { coach } = useAuth();
   const { brand } = useBrand();
   const { primary, secondary } = useBrandColors();
+  const theme = useTheme();
   
   const [loading, setLoading] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
@@ -125,7 +126,7 @@ export default function InviteClientScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <BrandedHeader
         title="Invite Client"
         showBackButton
@@ -135,19 +136,20 @@ export default function InviteClientScreen() {
       <ScrollView style={styles.content}>
         {/* Invite Settings */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Invite Settings</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Invite Settings</Text>
           
           {/* Max Uses */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Maximum Uses</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Maximum Uses</Text>
             <View style={styles.row}>
               <TextInput
-                style={[styles.input, unlimited && styles.inputDisabled]}
+                style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }, unlimited && styles.inputDisabled]}
                 value={maxUses}
                 onChangeText={setMaxUses}
                 keyboardType="number-pad"
                 editable={!unlimited}
                 placeholder="1"
+                placeholderTextColor={theme.colors.textTertiary}
               />
               <TouchableOpacity
                 style={[styles.checkbox, unlimited && styles.checkboxActive]}
@@ -162,13 +164,14 @@ export default function InviteClientScreen() {
 
           {/* Expiration */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Expires In (Days)</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Expires In (Days)</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
               value={expiresInDays}
               onChangeText={setExpiresInDays}
               keyboardType="number-pad"
               placeholder="7"
+              placeholderTextColor={theme.colors.textTertiary}
             />
           </View>
 
@@ -186,7 +189,7 @@ export default function InviteClientScreen() {
 
         {/* Generated Invite */}
         {inviteCode && (
-          <View style={[styles.inviteCard, { borderColor: primary }]}>
+          <View style={[styles.inviteCard, { borderColor: primary, backgroundColor: theme.colors.surface }]}>
             <View style={styles.inviteHeader}>
               <Link size={24} color={primary} />
               <Text style={styles.inviteTitle}>Your Invite Link</Text>
@@ -255,8 +258,8 @@ export default function InviteClientScreen() {
         )}
 
         {/* How It Works */}
-        <View style={styles.howItWorks}>
-          <Text style={styles.howTitle}>How It Works:</Text>
+        <View style={[styles.howItWorks, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.howTitle, { color: theme.colors.text }]}>How It Works:</Text>
           <View style={styles.step}>
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>1</Text>

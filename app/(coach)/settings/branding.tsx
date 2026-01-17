@@ -386,21 +386,21 @@ export default function BrandSettingsScreen() {
       case 'identity':
         return (
           <>
-            <View style={styles.section}>
-              <Text style={styles.label}>Brand Name *</Text>
+            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
+              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Brand Name *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border, color: currentTheme.colors.text }]}
                 placeholder="e.g., Elite Fitness Gym"
                 value={brandName}
                 onChangeText={setBrandName}
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={currentTheme.colors.textTertiary}
               />
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.label}>Brand Logo</Text>
+            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
+              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Brand Logo</Text>
               <TouchableOpacity
-                style={styles.uploadButton}
+                style={[styles.uploadButton, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}
                 onPress={pickImage}
                 disabled={uploading}
               >
@@ -423,21 +423,21 @@ export default function BrandSettingsScreen() {
               )}
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.label}>Quick Presets</Text>
-              <Text style={styles.helperText}>Apply a preset theme to get started quickly</Text>
+            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
+              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Quick Presets</Text>
+              <Text style={[styles.helperText, { color: currentTheme.colors.textSecondary }]}>Apply a preset theme to get started quickly</Text>
               <View style={styles.presetGrid}>
                 {Object.entries(PRESET_THEMES).map(([key, preset]) => (
                   <TouchableOpacity
                     key={key}
-                    style={styles.presetCard}
+                    style={[styles.presetCard, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}
                     onPress={() => applyPreset(key as keyof typeof PRESET_THEMES)}
                   >
                     <View style={styles.presetColors}>
                       <View style={[styles.presetColorDot, { backgroundColor: preset.primary_color }]} />
                       <View style={[styles.presetColorDot, { backgroundColor: preset.secondary_color }]} />
                     </View>
-                    <Text style={styles.presetName}>{preset.name}</Text>
+                    <Text style={[styles.presetName, { color: currentTheme.colors.text }]}>{preset.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -478,16 +478,16 @@ export default function BrandSettingsScreen() {
       case 'typography':
         return (
           <>
-            <View style={styles.section}>
-              <Text style={styles.label}>Font Family</Text>
+            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
+              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Font Family</Text>
               <View style={styles.buttonRow}>
                 {['System', 'Inter', 'Roboto', 'Outfit'].map((font) => (
                   <TouchableOpacity
                     key={font}
-                    style={[styles.optionButton, fontFamily === font && styles.optionButtonActive]}
+                    style={[styles.optionButton, { backgroundColor: fontFamily === font ? currentTheme.colors.primary : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, fontFamily === font && styles.optionButtonActive]}
                     onPress={() => setFontFamily(font)}
                   >
-                    <Text style={[styles.optionButtonText, fontFamily === font && styles.optionButtonTextActive]}>
+                    <Text style={[styles.optionButtonText, { color: fontFamily === font ? '#FFFFFF' : currentTheme.colors.text }, fontFamily === font && styles.optionButtonTextActive]}>>
                       {font}
                     </Text>
                   </TouchableOpacity>
@@ -495,16 +495,16 @@ export default function BrandSettingsScreen() {
               </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.label}>Heading Weight</Text>
+            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
+              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Heading Weight</Text>
               <View style={styles.buttonRow}>
                 {['400', '500', '600', '700', '800', '900'].map((weight) => (
                   <TouchableOpacity
                     key={weight}
-                    style={[styles.optionButton, headingWeight === weight && styles.optionButtonActive]}
+                    style={[styles.optionButton, { backgroundColor: headingWeight === weight ? currentTheme.colors.primary : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, headingWeight === weight && styles.optionButtonActive]}
                     onPress={() => setHeadingWeight(weight)}
                   >
-                    <Text style={[styles.optionButtonText, headingWeight === weight && styles.optionButtonTextActive]}>
+                    <Text style={[styles.optionButtonText, { color: headingWeight === weight ? '#FFFFFF' : currentTheme.colors.text }, headingWeight === weight && styles.optionButtonTextActive]}>
                       {weight}
                     </Text>
                   </TouchableOpacity>
@@ -512,16 +512,16 @@ export default function BrandSettingsScreen() {
               </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.label}>Body Weight</Text>
+            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
+              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Body Weight</Text>
               <View style={styles.buttonRow}>
                 {['400', '500', '600', '700'].map((weight) => (
                   <TouchableOpacity
                     key={weight}
-                    style={[styles.optionButton, bodyWeight === weight && styles.optionButtonActive]}
+                    style={[styles.optionButton, { backgroundColor: bodyWeight === weight ? currentTheme.colors.primary : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, bodyWeight === weight && styles.optionButtonActive]}
                     onPress={() => setBodyWeight(weight)}
                   >
-                    <Text style={[styles.optionButtonText, bodyWeight === weight && styles.optionButtonTextActive]}>
+                    <Text style={[styles.optionButtonText, { color: bodyWeight === weight ? '#FFFFFF' : currentTheme.colors.text }, bodyWeight === weight && styles.optionButtonTextActive]}>
                       {weight}
                     </Text>
                   </TouchableOpacity>
@@ -738,43 +738,43 @@ export default function BrandSettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: currentTheme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: currentTheme.colors.surface, borderBottomColor: currentTheme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#111827" />
+          <ArrowLeft size={24} color={currentTheme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Brand Settings</Text>
+        <Text style={[styles.headerTitle, { color: currentTheme.colors.text }]}>Brand Settings</Text>
         <TouchableOpacity onPress={() => setShowPreview(!showPreview)} style={styles.headerPreviewButton}>
           <Eye size={20} color={showPreview ? "#3B82F6" : "#6B7280"} />
         </TouchableOpacity>
       </View>
 
       {/* Tab Navigation */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.tabBar, { backgroundColor: currentTheme.colors.surface }]}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'identity' && styles.tabActive]}
           onPress={() => setActiveTab('identity')}
         >
-          <Text style={[styles.tabText, activeTab === 'identity' && styles.tabTextActive]}>Identity</Text>
+          <Text style={[styles.tabText, { color: activeTab === 'identity' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'identity' && styles.tabTextActive]}>Identity</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'colors' && styles.tabActive]}
           onPress={() => setActiveTab('colors')}
         >
-          <Text style={[styles.tabText, activeTab === 'colors' && styles.tabTextActive]}>Colors</Text>
+          <Text style={[styles.tabText, { color: activeTab === 'colors' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'colors' && styles.tabTextActive]}>Colors</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'typography' && styles.tabActive]}
           onPress={() => setActiveTab('typography')}
         >
-          <Text style={[styles.tabText, activeTab === 'typography' && styles.tabTextActive]}>Typography</Text>
+          <Text style={[styles.tabText, { color: activeTab === 'typography' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'typography' && styles.tabTextActive]}>Typography</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'buttons' && styles.tabActive]}
           onPress={() => setActiveTab('buttons')}
         >
-          <Text style={[styles.tabText, activeTab === 'buttons' && styles.tabTextActive]}>Buttons</Text>
+          <Text style={[styles.tabText, { color: activeTab === 'buttons' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'buttons' && styles.tabTextActive]}>Buttons</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'spacing' && styles.tabActive]}
@@ -885,16 +885,17 @@ export default function BrandSettingsScreen() {
 
 // Visual Color Picker Component (Button that opens modal)
 function VisualColorPicker({ label, value, onPress, helper }: { label: string; value: string; onPress: () => void; helper?: string }) {
+  const theme = useTheme();
   return (
-    <View style={styles.section}>
-      <Text style={styles.label}>{label}</Text>
-      {helper && <Text style={styles.helperText}>{helper}</Text>}
+    <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      <Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text>
+      {helper && <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>{helper}</Text>}
       <TouchableOpacity
-        style={styles.colorPickerButton}
+        style={[styles.colorPickerButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
         onPress={onPress}
       >
         <View style={[styles.colorPreviewLarge, { backgroundColor: value }]} />
-        <Text style={styles.colorPickerButtonText}>{value.toUpperCase()}</Text>
+        <Text style={[styles.colorPickerButtonText, { color: theme.colors.text }]}>{value.toUpperCase()}</Text>
       </TouchableOpacity>
     </View>
   );

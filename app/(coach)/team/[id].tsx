@@ -12,7 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { UserCheck, Mail, Calendar, Users, TrendingUp, Award, ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { BrandedHeader } from '@/components/BrandedHeader';
 import { AssignClientsModal } from '@/components/AssignClientsModal';
@@ -36,6 +36,7 @@ export default function SubCoachDetailsScreen() {
   const { id } = useLocalSearchParams();
   const { coach } = useAuth();
   const { primary, secondary } = useBrandColors();
+  const theme = useTheme();
   
   const [subCoach, setSubCoach] = useState<SubCoachDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,7 +133,7 @@ export default function SubCoachDetailsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <BrandedHeader 
         title="Sub-Coach Details" 
         showBackButton 
@@ -141,21 +142,21 @@ export default function SubCoachDetailsScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Profile Card */}
-        <View style={[styles.profileCard, { borderTopColor: primary }]}>
+        <View style={[styles.profileCard, { borderTopColor: primary, backgroundColor: theme.colors.surface }]}>
           <View style={[styles.avatar, { backgroundColor: `${primary}20` }]}>
             <UserCheck size={40} color={primary} />
           </View>
           
-          <Text style={styles.name}>{subCoach.full_name}</Text>
+          <Text style={[styles.name, { color: theme.colors.text }]}>{subCoach.full_name}</Text>
           
           <View style={styles.infoRow}>
             <Mail size={16} color="#6B7280" />
-            <Text style={styles.email}>{subCoach.email}</Text>
+            <Text style={[styles.email, { color: theme.colors.textSecondary }]}>{subCoach.email}</Text>
           </View>
           
           <View style={styles.infoRow}>
             <Calendar size={16} color="#6B7280" />
-            <Text style={styles.joinedText}>
+            <Text style={[styles.joinedText, { color: theme.colors.textSecondary }]}>
               Joined {new Date(subCoach.joined_at).toLocaleDateString()}
             </Text>
           </View>
@@ -163,23 +164,23 @@ export default function SubCoachDetailsScreen() {
 
         {/* Stats Card */}
         <View style={styles.statsCard}>
-          <View style={styles.statBox}>
+          <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
             <Users size={24} color={primary} />
-            <Text style={styles.statValue}>{subCoach.client_count}</Text>
-            <Text style={styles.statLabel}>Assigned Clients</Text>
+            <Text style={[styles.statValue, { color: theme.colors.text }]}>{subCoach.client_count}</Text>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Assigned Clients</Text>
           </View>
           
-          <View style={styles.statBox}>
+          <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
             <TrendingUp size={24} color={secondary} />
             <Text style={[styles.statValue, { color: secondary }]}>Active</Text>
-            <Text style={styles.statLabel}>Status</Text>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Status</Text>
           </View>
         </View>
 
         {/* Clients List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Assigned Clients ({subCoach.client_count})</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Assigned Clients ({subCoach.client_count})</Text>
             <TouchableOpacity
               style={[styles.assignButton, { backgroundColor: primary }]}
               onPress={() => setShowAssignModal(true)}
@@ -190,15 +191,15 @@ export default function SubCoachDetailsScreen() {
           </View>
           
           {subCoach.clients.length === 0 ? (
-            <View style={styles.emptyClientsCard}>
-              <Users size={32} color="#D1D5DB" />
-              <Text style={styles.emptyClientsText}>No clients assigned yet</Text>
+            <View style={[styles.emptyClientsCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <Users size={32} color={theme.colors.textTertiary} />
+              <Text style={[styles.emptyClientsText, { color: theme.colors.textSecondary }]}>No clients assigned yet</Text>
             </View>
           ) : (
             subCoach.clients.map((client) => (
               <TouchableOpacity
                 key={client.id}
-                style={styles.clientCard}
+                style={[styles.clientCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
                 onPress={() => {
                   router.push(`/(coach)/clients/${client.id}`);
                 }}
@@ -210,9 +211,9 @@ export default function SubCoachDetailsScreen() {
                     </Text>
                   </View>
                   <View style={styles.clientDetails}>
-                    <Text style={styles.clientName}>{client.full_name}</Text>
-                    <Text style={styles.clientEmail}>{client.email}</Text>
-                    <Text style={styles.clientDate}>
+                    <Text style={[styles.clientName, { color: theme.colors.text }]}>{client.full_name}</Text>
+                    <Text style={[styles.clientEmail, { color: theme.colors.textSecondary }]}>{client.email}</Text>
+                    <Text style={[styles.clientDate, { color: theme.colors.textTertiary }]}>
                       Added {new Date(client.added_at).toLocaleDateString()}
                     </Text>
                   </View>

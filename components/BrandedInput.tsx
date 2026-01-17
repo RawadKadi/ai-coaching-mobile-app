@@ -15,7 +15,7 @@ export function BrandedInput({ error, style, ...props }: BrandedInputProps) {
       style={[
         styles.input,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.colors.inputBackground,
           borderColor: error ? theme.colors.error : theme.colors.border,
           borderRadius: scaleBorderRadius(12, theme.spacing.borderRadiusScale),
           color: theme.colors.text,
@@ -25,7 +25,7 @@ export function BrandedInput({ error, style, ...props }: BrandedInputProps) {
         },
         style,
       ]}
-      placeholderTextColor={theme.colors.textSecondary}
+      placeholderTextColor={theme.colors.textTertiary}
       {...props}
     />
   );
