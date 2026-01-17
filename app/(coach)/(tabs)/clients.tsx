@@ -10,8 +10,13 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { Search, ChevronRight, Users } from 'lucide-react-native';
+import { BrandedText } from '@/components/BrandedText';
+import { BrandedCard } from '@/components/BrandedCard';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { BrandedInput } from '@/components/BrandedInput';
 
 interface ClientWithProfile {
   id: string;
@@ -25,6 +30,7 @@ interface ClientWithProfile {
 export default function ClientsScreen() {
   const router = useRouter();
   const { coach } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<ClientWithProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -97,71 +103,88 @@ export default function ClientsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Clients</Text>
-        <Text style={styles.subtitle}>{clients.length} total</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View 
+        style={[
+          styles.header, 
+          { 
+            backgroundColor: theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+            paddingHorizontal: 24 * theme.spacing.scale,
+            paddingTop: 60 * theme.spacing.scale,
+            paddingBottom: 24 * theme.spacing.scale,
+          }
+        ]}
+      >
+        <BrandedText variant="xxl" weight="heading">Clients</BrandedText>
+        <BrandedText variant="sm" color="secondary" style={styles.subtitle}>
+          {clients.length} total
+        </BrandedText>
       </View>
 
       {clients.length > 0 && (
-        <View style={styles.searchContainer}>
-          <Search size={20} color="#9CA3AF" style={styles.searchIcon} />
-          <TextInput
+        <View style={[styles.searchContainer, { margin: 16 * theme.spacing.scale }]}>
+          <Search size={20} color={theme.colors.textSecondary} style={styles.searchIcon} />
+          <BrandedInput
             style={styles.searchInput}
             placeholder="Search clients..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor="#9CA3AF"
           />
         </View>
       )}
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={[styles.content, { paddingHorizontal: 16 * theme.spacing.scale }]}>
         {filteredClients.length === 0 ? (
           <View style={styles.emptyState}>
-            <Users size={48} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>
+            <Users size={48} color={theme.colors.border} />
+            <BrandedText variant="lg" weight="heading" style={styles.emptyTitle}>
               {searchQuery ? 'No results found' : 'No clients yet'}
-            </Text>
-            <Text style={styles.emptyText}>
+            </BrandedText>
+            <BrandedText variant="sm" color="secondary" style={styles.emptyText}>
               {searchQuery
                 ? 'Try adjusting your search'
                 : 'Clients will appear here once they\'re linked to your account'}
-            </Text>
+            </BrandedText>
           </View>
         ) : (
           filteredClients.map((client) => (
             <TouchableOpacity
               key={client.id}
-              style={styles.clientCard}
               onPress={() => router.push(`/(coach)/clients/${client.id}`)}
             >
-              <View style={styles.clientInfo}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {client.profiles?.full_name?.charAt(0).toUpperCase() || 'C'}
-                  </Text>
+              <BrandedCard variant="elevated" style={styles.clientCard}>
+                <View style={styles.clientInfo}>
+                  <BrandedAvatar 
+                    name={client.profiles?.full_name || 'Client'}
+                    size={48}
+                    useBrandColor={true}
+                  />
+                  <View style={styles.clientDetails}>
+                    <BrandedText variant="base" weight="heading" style={styles.clientName}>
+                      {client.profiles?.full_name || 'Unknown'}
+                    </BrandedText>
+                    {client.goal && (
+                      <BrandedText variant="xs" color="secondary">
+                        Goal: {client.goal}
+                      </BrandedText>
+                    )}
+                    {client.experience_level && (
+                      <BrandedText variant="xs" color="secondary">
+                        {client.experience_level}
+                      </BrandedText>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.clientDetails}>
-                  <Text style={styles.clientName}>
-                    {client.profiles?.full_name || 'Unknown'}
-                  </Text>
-                  {client.goal && (
-                    <Text style={styles.clientMeta}>Goal: {client.goal}</Text>
-                  )}
-                  {client.experience_level && (
-                    <Text style={styles.clientMeta}>{client.experience_level}</Text>
-                  )}
-                </View>
-              </View>
-              <ChevronRight size={20} color="#9CA3AF" />
+                <ChevronRight size={20} color={theme.colors.textSecondary} />
+              </BrandedCard>
             </TouchableOpacity>
           ))
         )}
@@ -173,53 +196,31 @@ export default function ClientsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
     marginTop: 4,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    margin: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#111827',
+    paddingVertical: 0,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
   },
   emptyState: {
     alignItems: 'center',
@@ -227,15 +228,10 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
-    fontSize: 14,
-    color: '#9CA3AF',
     textAlign: 'center',
     paddingHorizontal: 32,
   },
@@ -243,43 +239,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 12,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   clientInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#3B82F6',
+    gap: 12,
   },
   clientDetails: {
     flex: 1,
   },
   clientName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
     marginBottom: 4,
-  },
-  clientMeta: {
-    fontSize: 12,
-    color: '#6B7280',
   },
 });

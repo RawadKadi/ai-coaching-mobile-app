@@ -1,43 +1,42 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
-import { useBrandColors } from '@/contexts/BrandContext';
+import { View, StyleSheet } from 'react-native';
+import { useTheme } from '@/contexts/BrandContext';
+import { scaleBorderRadius } from '@/lib/theme-utils';
 
 interface BrandedProgressBarProps {
-  progress: number; // 0-100
+  progress: number; // 0 to 100
+  showGradient?: boolean;
   height?: number;
-  backgroundColor?: string;
-  style?: ViewStyle;
-  animated?: boolean;
 }
 
 export function BrandedProgressBar({
   progress,
+  showGradient = false,
   height = 8,
-  backgroundColor = '#E5E7EB',
-  style,
-  animated = true,
 }: BrandedProgressBarProps) {
-  const { primary } = useBrandColors();
-
-  const clampedProgress = Math.min(Math.max(progress, 0), 100);
-
+  const theme = useTheme();
+  
+  const useGradient = showGradient && theme.button.style === 'gradient';
+  const clampedProgress = Math.max(0, Math.min(100, progress));
+  
   return (
     <View
       style={[
         styles.container,
         {
           height,
-          backgroundColor,
+          backgroundColor: theme.colors.border,
+          borderRadius: scaleBorderRadius(height / 2, theme.spacing.borderRadiusScale),
         },
-        style,
       ]}
     >
       <View
         style={[
-          styles.fill,
+          styles.bar,
           {
             width: `${clampedProgress}%`,
-            backgroundColor: primary,
+            backgroundColor: theme.colors.primary,
+            borderRadius: scaleBorderRadius(height / 2, theme.spacing.borderRadiusScale),
           },
         ]}
       />
@@ -48,11 +47,9 @@ export function BrandedProgressBar({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    borderRadius: 999,
     overflow: 'hidden',
   },
-  fill: {
+  bar: {
     height: '100%',
-    borderRadius: 999,
   },
 });

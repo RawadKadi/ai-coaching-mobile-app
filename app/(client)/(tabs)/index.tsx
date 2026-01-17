@@ -9,13 +9,17 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { CheckIn, Habit, HabitLog } from '@/types/database';
 import { Calendar, TrendingUp, Target, Heart } from 'lucide-react-native';
+import { BrandedText } from '@/components/BrandedText';
+import { BrandedCard } from '@/components/BrandedCard';
 
 export default function ClientDashboard() {
   const router = useRouter();
   const { profile, client, loading: authLoading } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [todayCheckIn, setTodayCheckIn] = useState<CheckIn | null>(null);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -69,8 +73,8 @@ export default function ClientDashboard() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -78,92 +82,165 @@ export default function ClientDashboard() {
   const completedHabits = todayHabitLogs.filter((log) => log.completed).length;
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Hello, {profile?.full_name}!</Text>
-        <Text style={styles.date}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View 
+        style={[
+          styles.header, 
+          { 
+            backgroundColor: theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+            paddingHorizontal: 24 * theme.spacing.scale,
+            paddingTop: 60 * theme.spacing.scale,
+            paddingBottom: 24 * theme.spacing.scale,
+          }
+        ]}
+      >
+        <BrandedText variant="xxl" weight="heading" style={styles.greeting}>
+          Hello, {profile?.full_name}!
+        </BrandedText>
+        <BrandedText variant="sm" color="secondary">
           {new Date().toLocaleDateString('en-US', {
             weekday: 'long',
             month: 'long',
             day: 'numeric',
           })}
-        </Text>
+        </BrandedText>
       </View>
 
-      <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Calendar size={24} color="#3B82F6" />
+      <View style={[styles.statsGrid, { padding: 16 * theme.spacing.scale, gap: 12 * theme.spacing.scale }]}>
+        <BrandedCard style={styles.statCard} variant="elevated">
+          <View 
+            style={[
+              styles.statIconContainer, 
+              { backgroundColor: theme.colors.surfaceAlt }
+            ]}
+          >
+            <Calendar size={24} color={theme.colors.primary} />
           </View>
-          <Text style={styles.statValue}>
+          <BrandedText variant="xl" weight="heading" style={styles.statValue}>
             {todayCheckIn ? 'Done' : 'Pending'}
-          </Text>
-          <Text style={styles.statLabel}>Daily Check-in</Text>
-        </View>
+          </BrandedText>
+          <BrandedText variant="xs" color="secondary" style={styles.statLabel}>
+            Daily Check-in
+          </BrandedText>
+        </BrandedCard>
 
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Target size={24} color="#10B981" />
+        <BrandedCard style={styles.statCard} variant="elevated">
+          <View 
+            style={[
+              styles.statIconContainer, 
+              { backgroundColor: theme.colors.surfaceAlt }
+            ]}
+          >
+            <Target size={24} color={theme.colors.secondary} />
           </View>
-          <Text style={styles.statValue}>
+          <BrandedText variant="xl" weight="heading" style={styles.statValue}>
             {completedHabits}/{habits.length}
-          </Text>
-          <Text style={styles.statLabel}>Habits</Text>
-        </View>
+          </BrandedText>
+          <BrandedText variant="xs" color="secondary" style={styles.statLabel}>
+            Habits
+          </BrandedText>
+        </BrandedCard>
 
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <TrendingUp size={24} color="#F59E0B" />
+        <BrandedCard style={styles.statCard} variant="elevated">
+          <View 
+            style={[
+              styles.statIconContainer, 
+              { backgroundColor: theme.colors.surfaceAlt }
+            ]}
+          >
+            <TrendingUp size={24} color={theme.colors.accent} />
           </View>
-          <Text style={styles.statValue}>
+          <BrandedText variant="xl" weight="heading" style={styles.statValue}>
             {todayCheckIn?.weight_kg || '--'}
-          </Text>
-          <Text style={styles.statLabel}>Weight (kg)</Text>
-        </View>
+          </BrandedText>
+          <BrandedText variant="xs" color="secondary" style={styles.statLabel}>
+            Weight (kg)
+          </BrandedText>
+        </BrandedCard>
 
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Heart size={24} color="#EF4444" />
+        <BrandedCard style={styles.statCard} variant="elevated">
+          <View 
+            style={[
+              styles.statIconContainer, 
+              { backgroundColor: theme.colors.surfaceAlt }
+            ]}
+          >
+            <Heart size={24} color={theme.colors.error} />
           </View>
-          <Text style={styles.statValue}>
+          <BrandedText variant="xl" weight="heading" style={styles.statValue}>
             {todayCheckIn?.energy_level || '--'}/10
-          </Text>
-          <Text style={styles.statLabel}>Energy</Text>
-        </View>
+          </BrandedText>
+          <BrandedText variant="xs" color="secondary" style={styles.statLabel}>
+            Energy
+          </BrandedText>
+        </BrandedCard>
       </View>
 
       {!todayCheckIn && (
-        <TouchableOpacity style={styles.checkInPrompt}>
-          <Text style={styles.checkInPromptTitle}>
+        <TouchableOpacity 
+          style={[
+            styles.checkInPrompt, 
+            { 
+              backgroundColor: theme.colors.primary,
+              margin: 16 * theme.spacing.scale,
+              padding: 20 * theme.spacing.scale,
+            }
+          ]}
+        >
+          <BrandedText variant="lg" weight="heading" style={styles.checkInPromptTitle}>
             Complete Your Daily Check-in
-          </Text>
-          <Text style={styles.checkInPromptText}>
+          </BrandedText>
+          <Text style={[styles.checkInPromptText, { color: theme.colors.surface, opacity: 0.9 }]}>
             Track your progress and get personalized insights
           </Text>
         </TouchableOpacity>
       )}
 
       {todayCheckIn?.ai_analysis && (
-        <View style={styles.aiInsightCard}>
-          <Text style={styles.aiInsightTitle}>Today's Insights</Text>
-          <Text style={styles.aiInsightText}>{todayCheckIn.ai_analysis}</Text>
-        </View>
+        <BrandedCard 
+          variant="elevated"
+          style={{ margin: 16 * theme.spacing.scale, padding: 20 * theme.spacing.scale }}
+        >
+          <BrandedText variant="base" weight="heading" style={styles.aiInsightTitle}>
+            Today's Insights
+          </BrandedText>
+          <BrandedText variant="sm" color="secondary" style={styles.aiInsightText}>
+            {todayCheckIn.ai_analysis}
+          </BrandedText>
+        </BrandedCard>
       )}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionGrid}>
+      <View style={[styles.section, { padding: 16 * theme.spacing.scale }]}>
+        <BrandedText variant="lg" weight="heading" style={styles.sectionTitle}>
+          Quick Actions
+        </BrandedText>
+        <View style={[styles.actionGrid, { gap: 12 * theme.spacing.scale }]}>
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={[
+              styles.actionCard,
+              { borderColor: theme.colors.border }
+            ]}
             onPress={() => router.push('/(client)/log-meal')}
           >
-            <Text style={styles.actionCardText}>Log Meal</Text>
+            <BrandedCard variant="flat" style={styles.actionCardInner}>
+              <BrandedText variant="sm" weight="heading" color="primary">
+                Log Meal
+              </BrandedText>
+            </BrandedCard>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={[
+              styles.actionCard,
+              { borderColor: theme.colors.border }
+            ]}
             onPress={() => router.push('/(client)/challenges')}
           >
-            <Text style={styles.actionCardText}>View Challenges</Text>
+            <BrandedCard variant="flat" style={styles.actionCardInner}>
+              <BrandedText variant="sm" weight="heading" color="primary">
+                View Challenges
+              </BrandedText>
+            </BrandedCard>
           </TouchableOpacity>
         </View>
       </View>
@@ -174,128 +251,72 @@ export default function ClientDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   greeting: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
     marginBottom: 4,
-  },
-  date: {
-    fontSize: 14,
-    color: '#6B7280',
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 16,
-    gap: 12,
   },
   statCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   statIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
     textAlign: 'center',
   },
   checkInPrompt: {
-    backgroundColor: '#3B82F6',
-    margin: 16,
-    padding: 20,
     borderRadius: 16,
   },
   checkInPromptTitle: {
-    fontSize: 18,
-    fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: 8,
   },
   checkInPromptText: {
     fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-  },
-  aiInsightCard: {
-    backgroundColor: '#FFFFFF',
-    margin: 16,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   aiInsightTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
     marginBottom: 12,
   },
   aiInsightText: {
-    fontSize: 14,
-    color: '#6B7280',
     lineHeight: 20,
   },
   section: {
-    padding: 16,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
     marginBottom: 16,
   },
   actionGrid: {
     flexDirection: 'row',
-    gap: 12,
   },
   actionCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
+  },
+  actionCardInner: {
     padding: 20,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  actionCardText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#3B82F6',
   },
 });

@@ -1,98 +1,70 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
-import { useBrand, useBrandColors } from '@/contexts/BrandContext';
-import { ArrowLeft } from 'lucide-react-native';
+import { View, Image, StyleSheet } from 'react-native';
+import { useBrand, useTheme } from '@/contexts/BrandContext';
+import { BrandedText } from './BrandedText';
+import { scaleBorderRadius } from '@/lib/theme-utils';
 
 interface BrandedHeaderProps {
   title?: string;
+  subtitle?: string;
   showLogo?: boolean;
-  showBackButton?: boolean;
-  onBackPress?: () => void;
-  rightComponent?: React.ReactNode;
 }
 
-export function BrandedHeader({
-  title,
-  showLogo = false,
-  showBackButton = false,
-  onBackPress,
-  rightComponent,
-}: BrandedHeaderProps) {
+export function BrandedHeader({ title, subtitle, showLogo = true }: BrandedHeaderProps) {
   const { brand } = useBrand();
-  const { primary } = useBrandColors();
-
+  const theme = useTheme();
+  
   return (
-    <View style={[styles.header, { borderBottomColor: `${primary}20` }]}>
-      {/* Left Side */}
-      <View style={styles.leftSection}>
-        {showBackButton && onBackPress && (
-          <TouchableOpacity onPress={onBackPress} style={styles.backButton}>
-            <ArrowLeft size={24} color="#111827" />
-          </TouchableOpacity>
-        )}
-        
-        {showLogo && brand?.logo_url && (
-          <Image source={{ uri: brand.logo_url }} style={styles.logo} />
-        )}
-      </View>
-
-      {/* Center - Title or Brand Name */}
-      <View style={styles.centerSection}>
-        {title ? (
-          <Text style={styles.title}>{title}</Text>
-        ) : brand?.name ? (
-          <Text style={[styles.brandName, { color: primary }]}>{brand.name}</Text>
-        ) : null}
-      </View>
-
-      {/* Right Side */}
-      <View style={styles.rightSection}>
-        {rightComponent}
-      </View>
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: theme.colors.surface,
+          borderBottomColor: theme.colors.border,
+          paddingHorizontal: 16 * theme.spacing.scale,
+          paddingVertical: 20 * theme.spacing.scale,
+        },
+      ]}
+    >
+      {showLogo && brand?.logo_url && (
+        <Image
+          source={{ uri: brand.logo_url }}
+          style={[
+            styles.logo,
+            {
+              borderRadius: scaleBorderRadius(12, theme.spacing.borderRadiusScale),
+            },
+          ]}
+        />
+      )}
+      
+      <BrandedText variant="xl" weight="heading" style={styles.title}>
+        {title || brand?.name || 'Coaching App'}
+      </BrandedText>
+      
+      {subtitle && (
+        <BrandedText variant="sm" color="secondary" style={styles.subtitle}>
+          {subtitle}
+        </BrandedText>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-  },
-  leftSection: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  centerSection: {
-    flex: 2,
-    alignItems: 'center',
-  },
-  rightSection: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  backButton: {
-    padding: 4,
   },
   logo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 80,
+    height: 80,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+    marginBottom: 4,
   },
-  brandName: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+  subtitle: {
+    marginTop: 4,
   },
 });
