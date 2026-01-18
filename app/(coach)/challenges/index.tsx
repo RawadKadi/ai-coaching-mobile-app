@@ -18,10 +18,12 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Plus, Target, Sparkles, Clock } from 'lucide-react-native';
 import type { MotherChallengeWithProgress } from '@/types/challenges-v3';
+import { useTheme } from '@/contexts/BrandContext';
 
 export default function CoachChallengesDashboard() {
   const router = useRouter();
   const { user } = useAuth();
+  const theme = useTheme();
 
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [loading, setLoading] = useState(true);
@@ -115,7 +117,7 @@ export default function CoachChallengesDashboard() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -123,33 +125,33 @@ export default function CoachChallengesDashboard() {
   const challenges = activeTab === 'active' ? activeChallenges : historyChallenges;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Challenges</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Challenges</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.aiButton} onPress={navigateToAIGenerate}>
+          <TouchableOpacity style={[styles.aiButton, { backgroundColor: theme.colors.primary }]} onPress={navigateToAIGenerate}>
             <Sparkles size={20} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton} onPress={navigateToCreate}>
+          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.accent }]} onPress={navigateToCreate}>
             <Plus size={20} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.tabs}>
+      <View style={[styles.tabs, { backgroundColor: theme.colors.surface }]}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'active' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'active' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('active')}
         >
-          <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>
+          <Text style={[styles.tabText, { color: activeTab === 'active' ? theme.colors.primary : theme.colors.textSecondary }]}>
             Active
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'history' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'history' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('history')}
         >
-          <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>
+          <Text style={[styles.tabText, { color: activeTab === 'history' ? theme.colors.primary : theme.colors.textSecondary }]}>
             History
           </Text>
         </TouchableOpacity>
@@ -162,10 +164,10 @@ export default function CoachChallengesDashboard() {
         {challenges.length === 0 ? (
           <View style={styles.emptyState}>
             <Target size={64} color="#ccc" />
-            <Text style={styles.emptyTitle}>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
               {activeTab === 'active' ? 'No Active Challenges' : 'No Challenge History'}
             </Text>
-            <Text style={styles.emptyDescription}>
+            <Text style={[styles.emptyDescription, { color: theme.colors.textSecondary }]}>
               {activeTab === 'active'
                 ? 'Create a new challenge or use AI to generate one for your clients.'
                 : 'Completed and cancelled challenges will appear here.'}
@@ -175,12 +177,12 @@ export default function CoachChallengesDashboard() {
           challenges.map((challenge) => (
             <TouchableOpacity
               key={challenge.id}
-              style={styles.challengeCard}
+              style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
               onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
             >
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleRow}>
-                  <Text style={styles.cardTitle}>{challenge.name}</Text>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{challenge.name}</Text>
                   {challenge.created_by === 'ai' && (
                     <View style={styles.aiTag}>
                       <Sparkles size={12} color="#6366f1" />
@@ -188,11 +190,11 @@ export default function CoachChallengesDashboard() {
                     </View>
                   )}
                 </View>
-                <Text style={styles.clientName}>👤 {challenge.client_name}</Text>
+                <Text style={[styles.clientName, { color: theme.colors.textSecondary }]}>👤 {challenge.client_name}</Text>
               </View>
 
               {challenge.description && (
-                <Text style={styles.cardDescription} numberOfLines={2}>
+                <Text style={[styles.cardDescription, { color: theme.colors.textSecondary }]} numberOfLines={2}>
                   {challenge.description}
                 </Text>
               )}
@@ -215,7 +217,7 @@ export default function CoachChallengesDashboard() {
                   <Text style={styles.progressText}>
                     {challenge.completed_subs} / {challenge.total_subs} tasks completed
                   </Text>
-                  <Text style={styles.progressPercent}>{challenge.completion_rate}%</Text>
+                  <Text style={[styles.progressPercent, { color: theme.colors.primary }]}>{challenge.completion_rate}%</Text>
                 </View>
                 <View style={styles.progressBar}>
                   <View

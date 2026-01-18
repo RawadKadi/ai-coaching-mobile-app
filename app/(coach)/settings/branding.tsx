@@ -753,40 +753,40 @@ export default function BrandSettingsScreen() {
       {/* Tab Navigation */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.tabBar, { backgroundColor: currentTheme.colors.surface }]}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'identity' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'identity' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('identity')}
         >
           <Text style={[styles.tabText, { color: activeTab === 'identity' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'identity' && styles.tabTextActive]}>Identity</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'colors' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'colors' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('colors')}
         >
           <Text style={[styles.tabText, { color: activeTab === 'colors' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'colors' && styles.tabTextActive]}>Colors</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'typography' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'typography' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('typography')}
         >
           <Text style={[styles.tabText, { color: activeTab === 'typography' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'typography' && styles.tabTextActive]}>Typography</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'buttons' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'buttons' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('buttons')}
         >
           <Text style={[styles.tabText, { color: activeTab === 'buttons' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'buttons' && styles.tabTextActive]}>Buttons</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'spacing' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'spacing' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('spacing')}
         >
-          <Text style={[styles.tabText, activeTab === 'spacing' && styles.tabTextActive]}>Spacing</Text>
+          <Text style={[styles.tabText, { color: activeTab === 'spacing' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'spacing' && styles.tabTextActive]}>Spacing</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'dark' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'dark' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('dark')}
         >
-          <Text style={[styles.tabText, activeTab === 'dark' && styles.tabTextActive]}>Dark Mode</Text>
+          <Text style={[styles.tabText, { color: activeTab === 'dark' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'dark' && styles.tabTextActive]}>Dark Mode</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -848,7 +848,7 @@ export default function BrandSettingsScreen() {
 
         {/* Save Button */}
         <TouchableOpacity
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+          style={[styles.saveButton, { backgroundColor: currentTheme.colors.primary }, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={loading}
         >

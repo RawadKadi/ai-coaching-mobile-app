@@ -354,18 +354,19 @@ export default function AvailabilitySettings() {
               "I work Monday to Friday from 9am to 5pm, and Saturdays from 10am to 2pm."
             </Text>
             <TextInput
-              style={styles.aiInput}
+              style={[styles.aiInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
               multiline
               placeholder="Type your schedule here..."
+              placeholderTextColor={theme.colors.textTertiary}
               value={aiInput}
               onChangeText={setAiInput}
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setAiModalVisible(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+              <TouchableOpacity style={[styles.cancelButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} onPress={() => setAiModalVisible(false)}>
+                <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.generateButton, aiLoading && styles.disabledButton]} 
+                style={[styles.generateButton, { backgroundColor: theme.colors.primary }, aiLoading && styles.disabledButton]} 
                 onPress={handleAiGenerate}
                 disabled={aiLoading}
               >

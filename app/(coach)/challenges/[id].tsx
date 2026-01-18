@@ -12,6 +12,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, X, AlertCircle, CheckCircle, Calendar, Target } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
 
 /**
  * Mother Challenge Detail Screen V3 (Coach View)
@@ -22,6 +23,7 @@ export default function ChallengeDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
+  const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [challenge, setChallenge] = useState<any>(null);
@@ -134,7 +136,7 @@ export default function ChallengeDetailScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -162,9 +164,9 @@ export default function ChallengeDetailScreen() {
   const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color="#111" />
         </TouchableOpacity>
@@ -174,16 +176,16 @@ export default function ChallengeDetailScreen() {
 
       <ScrollView style={styles.scrollView}>
         {/* Challenge Info Card */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.cardHeader}>
-            <Text style={styles.challengeName}>{challenge.name}</Text>
+            <Text style={[styles.challengeName, { color: theme.colors.text }]}>{challenge.name}</Text>
             <View style={[styles.statusBadge, challenge.status === 'active' && styles.statusActive]}>
               <Text style={styles.statusText}>{challenge.status}</Text>
             </View>
           </View>
 
           {challenge.description && (
-            <Text style={styles.description}>{challenge.description}</Text>
+            <Text style={[styles.description, { color: theme.colors.textSecondary }]}>{challenge.description}</Text>
           )}
 
           <View style={styles.infoRow}>
@@ -203,8 +205,8 @@ export default function ChallengeDetailScreen() {
           {/* Progress */}
           <View style={styles.progressSection}>
             <View style={styles.progressHeader}>
-              <Text style={styles.progressLabel}>Overall Progress</Text>
-              <Text style={styles.progressPercent}>{completionRate}%</Text>
+              <Text style={[styles.progressLabel, { color: theme.colors.text }]}>Overall Progress</Text>
+              <Text style={[styles.progressPercent, { color: theme.colors.primary }]}>{completionRate}%</Text>
             </View>
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${completionRate}%` }]} />
@@ -216,9 +218,9 @@ export default function ChallengeDetailScreen() {
         </View>
 
         {/* Sub-Challenges List */}
-        <Text style={styles.sectionTitle}>Daily Tasks ({totalCount})</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Daily Tasks ({totalCount})</Text>
         {challenge.sub_challenges?.map((sub: any, index: number) => (
-          <View key={sub.id} style={styles.subChallengeCard}>
+          <View key={sub.id} style={[styles.subChallengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <View style={styles.subHeader}>
               <View style={styles.subHeaderLeft}>
                 <Text style={styles.subDate}>
@@ -241,9 +243,9 @@ export default function ChallengeDetailScreen() {
               )}
             </View>
 
-            <Text style={styles.subName}>{sub.name}</Text>
+            <Text style={[styles.subName, { color: theme.colors.text }]}>{sub.name}</Text>
             {sub.description && (
-              <Text style={styles.subDescription}>{sub.description}</Text>
+              <Text style={[styles.subDescription, { color: theme.colors.textSecondary }]}>{sub.description}</Text>
             )}
 
             <View style={styles.subFooter}>
@@ -255,7 +257,7 @@ export default function ChallengeDetailScreen() {
 
       {/* Cancel Button */}
       {challenge.status === 'active' && (
-        <View style={styles.footer}>
+        <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
             <X size={20} color="#ef4444" />
             <Text style={styles.cancelButtonText}>Cancel Challenge</Text>

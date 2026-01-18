@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChallengeFocusType } from '@/types/database';
 import { X, Plus, Calendar, Target, Trash2 } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
 
 /**
  * V3 Challenge Creation Screen
@@ -38,6 +39,7 @@ export default function CreateChallengeScreen() {
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { coach } = useAuth();
+  const theme = useTheme();
 
   // Form State
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -182,25 +184,25 @@ export default function CreateChallengeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
             <X size={24} color="#666" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Challenge</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Create Challenge</Text>
           <View style={{ width: 24 }} />
         </View>
 
         {/* Client Selection */}
         <View style={styles.section}>
-          <Text style={styles.label}>Client *</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Client *</Text>
           <TouchableOpacity
-            style={styles.clientSelector}
+            style={[styles.clientSelector, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}
             onPress={() => setShowClientPicker(!showClientPicker)}
           >
-            <Text style={selectedClient ? styles.clientText : styles.placeholderText}>
+            <Text style={selectedClient ? [styles.clientText, { color: theme.colors.text }] : [styles.placeholderText, { color: theme.colors.textTertiary }]}>
               {selectedClient ? selectedClient.full_name : 'Select a client'}
             </Text>
           </TouchableOpacity>
@@ -225,10 +227,11 @@ export default function CreateChallengeScreen() {
 
         {/* Challenge Name */}
         <View style={styles.section}>
-          <Text style={styles.label}>Challenge Name *</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Challenge Name *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             placeholder="e.g., 7-Day Wellness Challenge"
+            placeholderTextColor={theme.colors.textTertiary}
             value={name}
             onChangeText={setName}
             maxLength={100}
@@ -237,10 +240,11 @@ export default function CreateChallengeScreen() {
 
         {/* Description */}
         <View style={styles.section}>
-          <Text style={styles.label}>Description</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Description</Text>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[styles.input, styles.textArea, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             placeholder="Explain what this challenge is about..."
+            placeholderTextColor={theme.colors.textTertiary}
             value={description}
             onChangeText={setDescription}
             multiline
@@ -250,59 +254,63 @@ export default function CreateChallengeScreen() {
 
         {/* Duration */}
         <View style={styles.section}>
-          <Text style={styles.label}>Duration (3-14 days) *</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Duration (3-14 days) *</Text>
           <View style={styles.durationRow}>
             <TextInput
-              style={[styles.input, styles.durationInput]}
+              style={[styles.input, styles.durationInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
               placeholder="7"
+              placeholderTextColor={theme.colors.textTertiary}
               value={durationDays}
               onChangeText={setDurationDays}
               keyboardType="number-pad"
               maxLength={2}
             />
-            <Text style={styles.durationText}>days</Text>
+            <Text style={[styles.durationText, { color: theme.colors.text }]}>days</Text>
           </View>
         </View>
 
         {/* Start Date */}
         <View style={styles.section}>
-          <Text style={styles.label}>Start Date *</Text>
-          <View style={styles.dateRow}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Start Date *</Text>
+          <View style={[styles.dateRow, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
             <Calendar size={20} color="#666" />
             <TextInput
-              style={[styles.input, styles.dateInput]}
+              style={[styles.input, styles.dateInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
               value={startDate}
               onChangeText={setStartDate}
               placeholder="YYYY-MM-DD"
+              placeholderTextColor={theme.colors.textTertiary}
             />
           </View>
         </View>
 
         {/* Sub-Challenges */}
         <View style={styles.section}>
-          <Text style={styles.label}>Daily Tasks ({subChallenges.length})</Text>
-          <Text style={styles.helperText}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Daily Tasks ({subChallenges.length})</Text>
+          <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
             Customize the daily tasks for each day of the challenge
           </Text>
           
           {subChallenges.map((sub, index) => (
-            <View key={index} style={styles.subChallengeCard }>
+            <View key={index} style={[styles.subChallengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
               <View style={styles.subChallengeHeader}>
-                <Text style={styles.subChallengeDay}>
+                <Text style={[styles.subChallengeDay, { color: theme.colors.primary }]}>
                   Day {index + 1} - {sub.assigned_date}
                 </Text>
               </View>
               
               <TextInput
-                style={[styles.input, styles.subInput]}
+                style={[styles.input, styles.subInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
                 placeholder={`Day ${index + 1} task name`}
+                placeholderTextColor={theme.colors.textTertiary}
                 value={sub.name}
                 onChangeText={(value) => updateSubChallenge(index, 'name', value)}
               />
               
               <TextInput
-                style={[styles.input, styles.textArea, { marginTop: 8 }]}
+                style={[styles.input, styles.textArea, { marginTop: 8, backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
                 placeholder="Task description (optional)"
+                placeholderTextColor={theme.colors.textTertiary}
                 value={sub.description}
                 onChangeText={(value) => updateSubChallenge(index, 'description', value)}
                 multiline
@@ -311,22 +319,22 @@ export default function CreateChallengeScreen() {
 
               <View style={styles.subMeta}>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Focus:</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.text }]}>Focus:</Text>
                   <View style={styles.focusButtons}>
                     {(['training', 'nutrition', 'recovery', 'consistency'] as ChallengeFocusType[]).map(
                       (type) => (
                         <TouchableOpacity
                           key={type}
-                          style={[
-                            styles.metaChip,
-                            sub.focus_type === type && styles.metaChipActive,
-                          ]}
+                            style={[
+                              styles.metaChip,
+                              { backgroundColor: sub.focus_type === type ? theme.colors.primary : theme.colors.surface, borderColor: sub.focus_type === type ? theme.colors.primary : theme.colors.border },
+                            ]}
                           onPress={() => updateSubChallenge(index, 'focus_type', type)}
                         >
                           <Text
                             style={[
                               styles.metaChipText,
-                              sub.focus_type === type && styles.metaChipTextActive,
+                              { color: sub.focus_type === type ? '#FFFFFF' : theme.colors.text },
                             ]}
                           >
                             {type}
@@ -338,21 +346,21 @@ export default function CreateChallengeScreen() {
                 </View>
 
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Intensity:</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.text }]}>Intensity:</Text>
                   <View style={styles.focusButtons}>
                     {(['light', 'moderate', 'intense'] as const).map((intensity) => (
                       <TouchableOpacity
                         key={intensity}
-                        style={[
-                          styles.metaChip,
-                          sub.intensity === intensity && styles.metaChipActive,
-                        ]}
+                          style={[
+                            styles.metaChip,
+                            { backgroundColor: sub.intensity === intensity ? theme.colors.primary : theme.colors.surface, borderColor: sub.intensity === intensity ? theme.colors.primary : theme.colors.border },
+                          ]}
                         onPress={() => updateSubChallenge(index, 'intensity', intensity)}
                       >
                         <Text
                           style={[
                             styles.metaChipText,
-                            sub.intensity === intensity && styles.metaChipTextActive,
+                            { color: sub.intensity === intensity ? '#FFFFFF' : theme.colors.text },
                           ]}
                         >
                           {intensity}
@@ -368,17 +376,17 @@ export default function CreateChallengeScreen() {
       </ScrollView>
 
       {/* Footer */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
         <TouchableOpacity
-          style={styles.cancelButton}
+          style={[styles.cancelButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
           onPress={() => router.back()}
           disabled={loading}
         >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
+          <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>Cancel</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.createButton, loading && styles.createButtonDisabled]}
+          style={[styles.createButton, { backgroundColor: theme.colors.primary }, loading && styles.createButtonDisabled]}
           onPress={handleCreate}
           disabled={loading}
         >

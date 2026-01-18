@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { X, Check, UserCheck, AlertTriangle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 
 interface Client {
   client_id: string;
@@ -40,6 +40,7 @@ export function AssignClientsModal({
   onSuccess,
 }: AssignClientsModalProps) {
   const { primary, secondary } = useBrandColors();
+  const theme = useTheme();
   
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
@@ -172,6 +173,7 @@ export function AssignClientsModal({
       <TouchableOpacity
         style={[
           styles.clientCard,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
           isSelected && { borderColor: primary, backgroundColor: `${primary}10` },
         ]}
         onPress={() => toggleClient(item.client_id)}
@@ -186,8 +188,8 @@ export function AssignClientsModal({
           </View>
           
           <View style={styles.clientDetails}>
-            <Text style={styles.clientName}>{item.client_name}</Text>
-            <Text style={styles.clientEmail}>{item.client_email}</Text>
+            <Text style={[styles.clientName, { color: theme.colors.text }]}>{item.client_name}</Text>
+            <Text style={[styles.clientEmail, { color: theme.colors.textSecondary }]}>{item.client_email}</Text>
             
             {item.is_assigned && (
               <View style={styles.assignmentBadge}>
@@ -210,15 +212,15 @@ export function AssignClientsModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: primary }]}>
+        <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
           <View>
-            <Text style={styles.title}>Assign Clients</Text>
-            <Text style={styles.subtitle}>to {subCoachName}</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>Assign Clients</Text>
+            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>to {subCoachName}</Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <X size={24} color="#6B7280" />
+            <X size={24} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -226,13 +228,13 @@ export function AssignClientsModal({
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={primary} />
-            <Text style={styles.loadingText}>Loading clients...</Text>
+            <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading clients...</Text>
           </View>
         ) : clients.length === 0 ? (
           <View style={styles.emptyContainer}>
             <UserCheck size={48} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>All Clients Assigned</Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>All Clients Assigned</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
               All available clients are already assigned to {subCoachName}.
             </Text>
           </View>
@@ -256,8 +258,8 @@ export function AssignClientsModal({
 
         {/* Footer */}
         {!loading && clients.length > 0 && (
-          <View style={styles.footer}>
-            <Text style={styles.selectionCount}>
+          <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
+            <Text style={[styles.selectionCount, { color: theme.colors.textSecondary }]}>
               {selectedClients.size} selected
             </Text>
             <TouchableOpacity

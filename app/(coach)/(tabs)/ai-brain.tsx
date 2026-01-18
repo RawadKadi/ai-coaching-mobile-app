@@ -105,16 +105,16 @@ export default function AIBrainScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#111827" />
+          <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>AI Brain Configuration</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>AI Brain Configuration</Text>
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
           Customize how AI communicates with your clients
         </Text>
       </View>
@@ -127,7 +127,7 @@ export default function AIBrainScreen() {
             motivating)
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             value={tone}
             onChangeText={setTone}
             placeholder="professional and motivating"
@@ -156,11 +156,11 @@ export default function AIBrainScreen() {
             What are your core coaching principles?
           </Text>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[styles.input, styles.textArea, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             value={philosophy}
             onChangeText={setPhilosophy}
             placeholder="Describe your coaching philosophy..."
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.colors.textTertiary}
             multiline
             numberOfLines={4}
           />
@@ -173,11 +173,11 @@ export default function AIBrainScreen() {
             building, mindset)
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             value={specialtyFocus}
             onChangeText={setSpecialtyFocus}
             placeholder="weight loss and nutrition"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.colors.textTertiary}
           />
         </View>
 
