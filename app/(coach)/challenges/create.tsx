@@ -208,17 +208,17 @@ export default function CreateChallengeScreen() {
           </TouchableOpacity>
 
           {showClientPicker && (
-            <View style={styles.clientPicker}>
+            <View style={[styles.clientPicker, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
               {clients.map((client) => (
                 <TouchableOpacity
                   key={client.id}
-                  style={styles.clientOption}
+                  style={[styles.clientOption, { borderBottomColor: theme.colors.border }]}
                   onPress={() => {
                     setSelectedClient(client);
                     setShowClientPicker(false);
                   }}
                 >
-                  <Text style={styles.clientOptionText}>{client.full_name}</Text>
+                  <Text style={[styles.clientOptionText, { color: theme.colors.text }]}>{client.full_name}</Text>
                 </TouchableOpacity>
               ))}
             </View>

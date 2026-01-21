@@ -168,9 +168,9 @@ export default function ChallengeDetailScreen() {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#111" />
+          <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Challenge Details</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Challenge Details</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -223,7 +223,7 @@ export default function ChallengeDetailScreen() {
           <View key={sub.id} style={[styles.subChallengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <View style={styles.subHeader}>
               <View style={styles.subHeaderLeft}>
-                <Text style={styles.subDate}>
+                <Text style={[styles.subDate, { color: theme.colors.text }]}>
                   {new Date(sub.assigned_date).toLocaleDateString('en-US', {
                     weekday: 'short',
                     month: 'short',
