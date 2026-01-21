@@ -14,11 +14,13 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Check, RefreshCw, Plus, Trash2, Edit3 } from 'lucide-react-native';
 import { SubChallengeTemplate } from '@/lib/ai-challenge-service';
+import { useTheme } from '@/contexts/BrandContext';
 
 export default function ReviewChallengesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { coach } = useAuth();
+  const theme = useTheme();
 
   // Parse challenges from route params
   const initialChallenges: SubChallengeTemplate[] = params.challenges 
@@ -127,21 +129,21 @@ export default function ReviewChallengesScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color="#111" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Review & Edit</Text>
-          <Text style={styles.headerSubtitle}>{clientName}</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Review & Edit</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.textSecondary }]}>{clientName}</Text>
         </View>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.scrollView}>
-        <Text style={styles.infoText}>
+        <Text style={[styles.infoText, { color: theme.colors.textSecondary, backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
           {challenges.length} tasks across 7 days. Edit any task before approving.
         </Text>
 
@@ -155,30 +157,32 @@ export default function ReviewChallengesScreen() {
 
           return (
             <View key={date} style={styles.daySection}>
-              <View style={styles.dayHeader}>
-                <Text style={styles.dayTitle}>{dayName}</Text>
-                <TouchableOpacity onPress={() => handleAdd(date)} style={styles.addButton}>
-                  <Plus size={16} color="#6366f1" />
-                  <Text style={styles.addButtonText}>Add</Text>
+              <View style={[styles.dayHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+                <Text style={[styles.dayTitle, { color: theme.colors.text }]}>{dayName}</Text>
+                <TouchableOpacity onPress={() => handleAdd(date)} style={[styles.addButton, { backgroundColor: `${theme.colors.primary}20` }]}>
+                  <Plus size={16} color={theme.colors.primary} />
+                  <Text style={[styles.addButtonText, { color: theme.colors.primary }]}>Add</Text>
                 </TouchableOpacity>
               </View>
 
               {dayChallenges.map((challenge) => (
-                <View key={challenge.index} style={styles.challengeCard}>
+                <View key={challenge.index} style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                   {editingId === challenge.index ? (
                     // Edit Mode
                     <View style={styles.editForm}>
                       <TextInput
-                        style={styles.editInput}
+                        style={[styles.editInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
                         value={challenge.name}
                         onChangeText={(v) => handleEdit(challenge.index, 'name', v)}
                         placeholder="Task name"
+                        placeholderTextColor={theme.colors.textTertiary}
                       />
                       <TextInput
-                        style={[styles.editInput, styles.editTextarea]}
+                        style={[styles.editInput, styles.editTextarea, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
                         value={challenge.description}
                         onChangeText={(v) => handleEdit(challenge.index, 'description', v)}
                         placeholder="Description"
+                        placeholderTextColor={theme.colors.textTertiary}
                         multiline
                       />
                       <View style={styles.editRow}>
@@ -226,7 +230,7 @@ export default function ReviewChallengesScreen() {
                         </View>
                       </View>
                       <TouchableOpacity
-                        style={styles.doneButton}
+                        style={[styles.doneButton, { backgroundColor: theme.colors.accent }]}
                         onPress={() => setEditingId(null)}
                       >
                         <Check size={16} color="#fff" />
@@ -237,7 +241,7 @@ export default function ReviewChallengesScreen() {
                     // View Mode
                     <>
                       <View style={styles.challengeHeader}>
-                        <Text style={styles.challengeName}>{challenge.name}</Text>
+                        <Text style={[styles.challengeName, { color: theme.colors.text }]}>{challenge.name}</Text>
                         <View style={styles.challengeActions}>
                           <TouchableOpacity onPress={() => setEditingId(challenge.index)}>
                             <Edit3 size={18} color="#6366f1" />
@@ -247,7 +251,7 @@ export default function ReviewChallengesScreen() {
                           </TouchableOpacity>
                         </View>
                       </View>
-                      <Text style={styles.challengeDescription}>{challenge.description}</Text>
+                      <Text style={[styles.challengeDescription, { color: theme.colors.textSecondary }]}>{challenge.description}</Text>
                       <View style={styles.challengeMeta}>
                         <View style={[styles.badge, { backgroundColor: getFocusColor(challenge.focus_type) }]}>
                           <Text style={styles.badgeText}>{challenge.focus_type}</Text>
@@ -266,8 +270,8 @@ export default function ReviewChallengesScreen() {
       </ScrollView>
 
       {/* Footer Actions */}
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.approveButton} onPress={handleApprove} disabled={creating}>
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
+        <TouchableOpacity style={[styles.approveButton, { backgroundColor: theme.colors.primary }]} onPress={handleApprove} disabled={creating}>
           {creating ? (
             <ActivityIndicator color="#fff" />
           ) : (
