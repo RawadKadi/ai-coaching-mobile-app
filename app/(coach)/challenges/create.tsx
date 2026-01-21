@@ -43,6 +43,7 @@ export default function CreateChallengeScreen() {
 
   // Form State
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [mode, setMode] = useState<'relative' | 'fixed'>('relative');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -161,6 +162,7 @@ export default function CreateChallengeScreen() {
         p_end_date: endDate.toISOString().split('T')[0],
         p_sub_challenges: subChallenges,
         p_created_by: 'coach',
+        p_mode: mode,
       });
 
       if (error) throw error;
@@ -225,6 +227,42 @@ export default function CreateChallengeScreen() {
           )}
         </View>
 
+        {/* Mode Selection */}
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Challenge Mode</Text>
+          <View style={styles.modeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.modeOption,
+                mode === 'relative' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+                mode !== 'relative' && { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
+              ]}
+              onPress={() => setMode('relative')}
+            >
+              <Target size={18} color={mode === 'relative' ? '#fff' : theme.colors.textSecondary} />
+              <View>
+                <Text style={[styles.modeTitle, { color: mode === 'relative' ? '#fff' : theme.colors.text }]}>Client</Text>
+                <Text style={[styles.modeDesc, { color: mode === 'relative' ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }]}>Starts today/on assign</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modeOption,
+                mode === 'fixed' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+                mode !== 'fixed' && { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
+              ]}
+              onPress={() => setMode('fixed')}
+            >
+              <Calendar size={18} color={mode === 'fixed' ? '#fff' : theme.colors.textSecondary} />
+              <View>
+                <Text style={[styles.modeTitle, { color: mode === 'fixed' ? '#fff' : theme.colors.text }]}>Campaign</Text>
+                <Text style={[styles.modeDesc, { color: mode === 'fixed' ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }]}>Fixed calendar dates</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Challenge Name */}
         <View style={styles.section}>
           <Text style={[styles.label, { color: theme.colors.text }]}>Challenge Name *</Text>
@@ -269,20 +307,24 @@ export default function CreateChallengeScreen() {
           </View>
         </View>
 
-        {/* Start Date */}
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Start Date *</Text>
-          <View style={[styles.dateRow, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
-            <Calendar size={20} color="#666" />
-            <TextInput
-              style={[styles.input, styles.dateInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-              value={startDate}
-              onChangeText={setStartDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.textTertiary}
-            />
+
+
+        {/* Start Date (Only for Campaign Mode) */}
+        {mode === 'fixed' && (
+          <View style={styles.section}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Start Date *</Text>
+            <View style={[styles.dateRow, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
+              <Calendar size={20} color="#666" />
+              <TextInput
+                style={[styles.input, styles.dateInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
+                value={startDate}
+                onChangeText={setStartDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={theme.colors.textTertiary}
+              />
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Sub-Challenges */}
         <View style={styles.section}>
@@ -557,6 +599,26 @@ const styles = StyleSheet.create({
   clientOptionText: {
     fontSize: 14,
     color: '#111',
+  },
+  modeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  modeTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modeDesc: {
+    fontSize: 11,
   },
   focusGrid: {
     flexDirection: 'row',

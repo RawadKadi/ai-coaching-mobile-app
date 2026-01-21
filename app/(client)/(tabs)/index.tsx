@@ -107,6 +107,13 @@ export default function ClientDashboard() {
         </BrandedText>
       </View>
 
+      {/* DEBUG: Show brand colors being used */}
+      <View style={{ backgroundColor: '#FF0000', padding: 8 }}>
+        <BrandedText variant="xs" style={{ color: '#FFF' }}>
+          DEBUG: BG={theme.colors.background} | Primary={theme.colors.primary} | Surface={theme.colors.surface}
+        </BrandedText>
+      </View>
+
       <View style={[styles.statsGrid, { padding: 16 * theme.spacing.scale, gap: 12 * theme.spacing.scale }]}>
         <BrandedCard style={styles.statCard} variant="elevated">
           <View 

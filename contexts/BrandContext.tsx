@@ -164,55 +164,19 @@ const BrandContext = createContext<BrandContextType | undefined>(undefined);
 // ============================================================================
 
 function generateThemeColors(brand: Brand | null, isDark: boolean): ThemeColors {
-  // Use brand colors or defaults
+  // Use brand colors EXACTLY as the coach configured them - no modifications
   const primaryColor = ensureValidColor(brand?.primary_color, '#3B82F6');
   const secondaryColor = ensureValidColor(brand?.secondary_color, '#10B981');
   const accentColor = ensureValidColor(brand?.accent_color, '#F59E0B');
   const backgroundColor = ensureValidColor(brand?.background_color, '#F9FAFB');
   
-  // If dark mode is enabled and we have dark colors, use them
-  let finalPrimary = primaryColor;
-  let finalSecondary = secondaryColor;
-  let finalAccent = accentColor;
-  let finalBackground = backgroundColor;
+  // Use the configured colors directly - NO dark mode overrides
+  const finalPrimary = primaryColor;
+  const finalSecondary = secondaryColor;
+  const finalAccent = accentColor;
+  const finalBackground = backgroundColor;
   
-  if (isDark) {
-    if (brand?.dark_mode_enabled) {
-      // Use custom dark colors if provided, otherwise auto-generate
-      if (brand.dark_primary_color || brand.dark_secondary_color) {
-        const darkTheme = generateDarkTheme({
-          primary: primaryColor,
-          secondary: secondaryColor,
-          accent: accentColor,
-          background: backgroundColor,
-        });
-        
-        finalPrimary = ensureValidColor(brand.dark_primary_color, darkTheme.primary);
-        finalSecondary = ensureValidColor(brand.dark_secondary_color, darkTheme.secondary);
-        finalAccent = ensureValidColor(brand.dark_accent_color, darkTheme.accent);
-        finalBackground = ensureValidColor(brand.dark_background_color, darkTheme.background);
-      } else {
-        // Auto-generate entire dark theme
-        const darkTheme = generateDarkTheme({
-          primary: primaryColor,
-          secondary: secondaryColor,
-          accent: accentColor,
-          background: backgroundColor,
-        });
-        
-        finalPrimary = darkTheme.primary;
-        finalSecondary = darkTheme.secondary;
-        finalAccent = darkTheme.accent;
-        finalBackground = darkTheme.background;
-      }
-    } else {
-      // Dark mode not enabled for this brand, use light colors
-      isDark = false;
-    }
-  }
-  
-  // CRITICAL FIX: Always check if the final background is actually dark,
-  // regardless of dark_mode_enabled flag. This ensures proper surface colors.
+  // Auto-detect if background is dark to ensure proper text contrast
   const backgroundIsDark = isDarkColor(finalBackground);
   
   // Generate surface colors using actual background brightness
@@ -297,42 +261,82 @@ function generateTheme(brand: Brand | null, isDark: boolean): Theme {
 // ============================================================================
 
 export function BrandProvider({ children }: { children: React.ReactNode }) {
-  const { coach } = useAuth();
+  const { coach, client } = useAuth();
   const systemColorScheme = useColorScheme();
   const [brand, setBrand] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
   const [canManageBrand, setCanManageBrand] = useState(false);
   const [userDarkModePreference, setUserDarkModePreference] = useState<boolean | null>(null);
 
-  // Determine if dark mode should be active
-  const isDarkMode = (() => {
-    // If brand doesn't support dark mode, always use light
-    if (!brand?.dark_mode_enabled) return false;
-    
-    // If user has explicit preference, use it
-    if (userDarkModePreference !== null) return userDarkModePreference;
-    
-    // Otherwise, follow system preference
-    return systemColorScheme === 'dark';
-  })();
+  // Always use false for isDark - we use the brand's configured colors directly
+  // Text contrast is auto-calculated based on the actual background color brightness
+  const isDarkMode = false;
 
   // Generate theme based on brand and dark mode
   const theme = generateTheme(brand, isDarkMode);
 
   // Load brand data
   const loadBrand = async () => {
-    if (!coach?.brand_id) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      console.log('[BrandContext] Loading brand:', coach.brand_id);
+      setLoading(true);
+
+      let brandId: string | null = null;
+      
+      // COACH: Load their own brand
+      if (coach?.brand_id) {
+        brandId = coach.brand_id;
+        setCanManageBrand(coach.can_manage_brand || false);
+      } 
+      // CLIENT: Load their main coach's brand
+      else if (client) {
+        console.log('[BrandContext] Client detected, fetching coach link for:', client.id);
+        
+        // 1. Get the active coach link
+        const { data: linkData, error: linkError } = await supabase
+          .from('coach_client_links')
+          .select('coach_id')
+          .eq('client_id', client.id)
+          .in('status', ['active', 'pending'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (linkError) {
+           console.error('[BrandContext] Error fetching coach link:', linkError);
+        } else if (linkData?.coach_id) {
+           console.log('[BrandContext] Found active coach:', linkData.coach_id);
+           
+           // 2. Fetch the coach's brand_id
+           const { data: coachData, error: coachError } = await supabase
+             .from('coaches')
+             .select('brand_id')
+             .eq('id', linkData.coach_id)
+             .single();
+
+           if (coachError) {
+             console.error('[BrandContext] Error fetching coach brand:', coachError);
+           } else if (coachData?.brand_id) {
+             brandId = coachData.brand_id;
+             setCanManageBrand(false);
+             console.log('[BrandContext] Client will use coach brand:', brandId);
+           }
+        } else {
+           console.log('[BrandContext] No active coach link found for client');
+        }
+      }
+
+      if (!brandId) {
+        console.log('[BrandContext] No brand ID found, utilizing default theme');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[BrandContext] Loading brand:', brandId);
       
       const { data, error } = await supabase
         .from('brands')
         .select('*')
-        .eq('id', coach.brand_id)
+        .eq('id', brandId)
         .single();
 
       if (error) {
@@ -342,7 +346,6 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
 
       console.log('[BrandContext] Brand loaded:', data);
       setBrand(data);
-      setCanManageBrand(coach.can_manage_brand || false);
     } catch (error) {
       console.error('[BrandContext] Failed to load brand:', error);
     } finally {
@@ -418,15 +421,10 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Load brand when coach changes
+  // Load brand when coach or client changes
   useEffect(() => {
-    if (coach) {
-      loadBrand();
-    } else {
-      setBrand(null);
-      setLoading(false);
-    }
-  }, [coach?.brand_id]);
+    loadBrand();
+  }, [coach?.brand_id, client?.id]);
 
   return (
     <BrandContext.Provider

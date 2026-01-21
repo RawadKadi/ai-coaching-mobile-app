@@ -40,6 +40,7 @@ export interface Coach {
 export interface Client {
     id: string;
     user_id: string;
+    coach_id: string;
     date_of_birth?: string;
     gender?: string;
     height_cm?: number;

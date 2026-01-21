@@ -375,7 +375,7 @@ export default function ActivityScreen() {
         </View>
       ) : (
         <ScrollView style={styles.content}>
-          <Text style={styles.sectionTitle}>Challenges</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Challenges</Text>
           {challenges.length === 0 ? (
             <Text style={styles.emptyText}>No active challenges</Text>
           ) : (
@@ -385,12 +385,16 @@ export default function ActivityScreen() {
               return (
                 <TouchableOpacity
                   key={challenge.id}
-                  style={[styles.card, isCompleted && styles.cardCompleted]}
+                  style={[
+                    styles.card,
+                    { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+                    isCompleted && { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }
+                  ]}
                   onPress={() => handleToggleChallenge(challenge)}
                 >
                   <View style={styles.cardContent}>
                     <View style={styles.challengeHeader}>
-                      <Text style={[styles.cardTitle, isCompleted && styles.textCompleted]}>
+                      <Text style={[styles.cardTitle, { color: theme.colors.text }, isCompleted && { color: theme.colors.primary, textDecorationLine: 'line-through' }]}>
                         {challenge.name}
                       </Text>
                       <Text style={styles.challengeBadge}>
@@ -398,7 +402,7 @@ export default function ActivityScreen() {
                       </Text>
                     </View>
                     {challenge.description && (
-                      <Text style={styles.cardSubtitle} numberOfLines={1}>
+                      <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
                         {challenge.description}
                       </Text>
                     )}
@@ -413,18 +417,18 @@ export default function ActivityScreen() {
             })
           )}
 
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Meals</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.text }]}>Meals</Text>
           {meals.length === 0 ? (
-            <Text style={styles.emptyText}>No meals logged today</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>No meals logged today</Text>
           ) : (
             meals.map((meal) => (
-              <View key={meal.id} style={styles.card}>
+              <View key={meal.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                 <View style={styles.iconContainer}>
                   <Utensils size={20} color="#F59E0B" />
                 </View>
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>{meal.name}</Text>
-                  <Text style={styles.cardSubtitle}>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{meal.name}</Text>
+                  <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
                     {meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} • {meal.calories} kcal
                   </Text>
                 </View>
@@ -432,18 +436,18 @@ export default function ActivityScreen() {
             ))
           )}
 
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Workouts</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.text }]}>Workouts</Text>
           {workouts.length === 0 ? (
-            <Text style={styles.emptyText}>No workouts logged today</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>No workouts logged today</Text>
           ) : (
             workouts.map((workout) => (
-              <View key={workout.id} style={styles.card}>
+              <View key={workout.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                 <View style={[styles.iconContainer, { backgroundColor: '#ECFDF5' }]}>
                   <Dumbbell size={20} color="#10B981" />
                 </View>
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>{workout.name}</Text>
-                  <Text style={styles.cardSubtitle}>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{workout.name}</Text>
+                  <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
                     {workout.duration_minutes} min • {workout.exercises?.length || 0} exercises
                   </Text>
                 </View>
