@@ -188,14 +188,14 @@ export default function CoachMessagesScreen() {
   const renderClient = ({ item }: { item: ClientPreview }) => (
     <TouchableOpacity 
       style={[styles.clientCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-      onPress={() => router.push(`/(coach)/chat/${item.id}`)}
+      onPress={() => router.push({ pathname: '/(coach)/(tabs)/chat/[id]', params: { id: item.id } })}
     >
       <View style={styles.avatarContainer}>
         {item.avatar_url ? (
           <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
         ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarInitials}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceAlt }]}>
+            <Text style={[styles.avatarInitials, { color: theme.colors.primary }]}>
               {item.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
             </Text>
           </View>
@@ -204,27 +204,27 @@ export default function CoachMessagesScreen() {
       
       <View style={styles.clientInfo}>
         <View style={styles.nameRow}>
-          <Text style={styles.clientName}>{item.full_name}</Text>
+          <Text style={[styles.clientName, { color: theme.colors.text }]}>{item.full_name}</Text>
           {item.last_message_time && (
-            <Text style={styles.timeText}>
+            <Text style={[styles.timeText, { color: theme.colors.textSecondary }]}>
               {new Date(item.last_message_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             </Text>
           )}
         </View>
         
         <View style={styles.messageRow}>
-          <Text style={[styles.lastMessage, item.unread_count ? styles.unreadMessage : null]} numberOfLines={1}>
+          <Text style={[styles.lastMessage, { color: theme.colors.textSecondary }, item.unread_count ? { color: theme.colors.text, fontWeight: '600' } : null]} numberOfLines={1}>
             {item.last_message || 'No messages yet'}
           </Text>
           {item.unread_count ? (
-            <View style={styles.badge}>
+            <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
               <Text style={styles.badgeText}>{item.unread_count}</Text>
             </View>
           ) : null}
         </View>
       </View>
       
-      <ChevronRight size={20} color="#9CA3AF" />
+      <ChevronRight size={20} color={theme.colors.textSecondary} />
     </TouchableOpacity>
   );
 

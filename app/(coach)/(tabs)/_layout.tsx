@@ -17,9 +17,9 @@ export default function CoachTabLayout() {
           backgroundColor: theme.colors.surface,
           borderTopWidth: 1,
           borderTopColor: theme.colors.border,
-          paddingBottom: 8,
+          paddingBottom: 24,
           paddingTop: 8,
-          height: 60,
+          height: 80,
         },
       }}
     >
@@ -69,6 +69,13 @@ export default function CoachTabLayout() {
       {/* Challenges - hide from tabs, accessible via navigation */}
       <Tabs.Screen
         name="challenges"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      {/* Client Chat - hide from tabs, keeps navbar visible */}
+      <Tabs.Screen
+        name="chat/[id]"
         options={{
           href: null, // Hide from tab bar
         }}

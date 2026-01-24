@@ -4,6 +4,7 @@ import SchedulerModal from '@/components/SchedulerModal';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image, Modal, Pressable, Dimensions, Linking, Alert, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft, X, Calendar, Video, ArrowDown, MoreVertical, Activity } from 'lucide-react-native';
@@ -1149,6 +1150,7 @@ export default function CoachChat() {
   const { id, suggestedMessage } = useLocalSearchParams();
   const router = useRouter();
   const { user: profile } = useAuth();
+  const theme = useTheme();
   const { refreshUnreadCount } = useUnread();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState(suggestedMessage as string || '');
@@ -1680,18 +1682,21 @@ export default function CoachChat() {
       }
 
       return (
-        <View style={[styles.messageContainer, isOwn ? styles.myMessage : styles.theirMessage]}>
-          <Text style={[styles.messageText, isOwn ? styles.myMessageText : styles.theirMessageText]}>
+        <View style={[styles.messageContainer, isOwn 
+          ? [styles.myMessage, { backgroundColor: theme.colors.primary }] 
+          : [styles.theirMessage, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+        ]}>
+          <Text style={[styles.messageText, isOwn ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
             {item.content}
           </Text>
           <View style={styles.messageFooter}>
-            <Text style={[styles.timestamp, isOwn ? styles.sentTimestamp : styles.receivedTimestamp]}>
+            <Text style={[styles.timestamp, isOwn ? { color: theme.colors.textOnPrimary, opacity: 0.7 } : { color: theme.colors.textSecondary }]}>
               {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
             {isOwn && (
               item.read ? 
-                <CheckCheck size={14} color="rgba(255, 255, 255, 0.7)" /> : 
-                <Check size={14} color="rgba(255, 255, 255, 0.7)" />
+                <CheckCheck size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} /> : 
+                <Check size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
             )}
           </View>
         </View>
@@ -1702,13 +1707,13 @@ export default function CoachChat() {
       <View>
         {showUnreadSeparator && (
           <View style={styles.unreadSeparator}>
-            <View style={styles.unreadSeparatorLine} />
-            <View style={styles.unreadSeparatorBadge}>
-              <Text style={styles.unreadSeparatorText}>
+            <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
+            <View style={[styles.unreadSeparatorBadge, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }]}>
+              <Text style={[styles.unreadSeparatorText, { color: theme.colors.primary }]}>
                 {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
               </Text>
             </View>
-            <View style={styles.unreadSeparatorLine} />
+            <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
           </View>
         )}
         {renderContent()}
@@ -1717,21 +1722,21 @@ export default function CoachChat() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>
           {clientProfile?.profiles?.full_name || 'Chat'}
         </Text>
         <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.scheduleButton}>
-          <MoreVertical size={24} color="#3B82F6" />
+          <MoreVertical size={24} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
       {nextSession && (
-        <View style={styles.sessionBanner}>
+        <View style={[styles.sessionBanner, { backgroundColor: theme.colors.primary }]}>
           <View style={styles.sessionInfo}>
             <Video size={20} color="#FFFFFF" />
             <View>
@@ -1745,8 +1750,8 @@ export default function CoachChat() {
             <TouchableOpacity style={styles.actionButton} onPress={cancelSession}>
               <Text style={styles.actionButtonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.joinButton} onPress={joinSession}>
-              <Text style={styles.joinButtonText}>Join Now</Text>
+            <TouchableOpacity style={[styles.joinButton, { backgroundColor: theme.colors.background }]} onPress={joinSession}>
+              <Text style={[styles.joinButtonText, { color: theme.colors.primary }]}>Join Now</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1754,7 +1759,7 @@ export default function CoachChat() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -1777,13 +1782,13 @@ export default function CoachChat() {
 
       {showScrollButton && (
         <TouchableOpacity 
-          style={styles.scrollButton} 
+          style={[styles.scrollButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} 
           onPress={scrollToBottom}
           activeOpacity={0.8}
         >
-          <ArrowDown size={20} color="#3B82F6" />
+          <ArrowDown size={20} color={theme.colors.primary} />
           {firstUnreadIndex !== -1 && (
-            <View style={styles.scrollButtonBadge}>
+            <View style={[styles.scrollButtonBadge, { backgroundColor: theme.colors.error }]}>
               <Text style={styles.scrollButtonBadgeText}>
                 {messages.length - firstUnreadIndex}
               </Text>
@@ -1793,26 +1798,27 @@ export default function CoachChat() {
       )}
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        style={styles.inputContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        style={[styles.inputContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Platform.OS === 'ios' ? 10 : 16 }]}
       >
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme.colors.inputBackground, color: theme.colors.text }]}
           placeholder="Type a message..."
+          placeholderTextColor={theme.colors.textSecondary}
           value={newMessage}
           onChangeText={setNewMessage}
           multiline
         />
         <TouchableOpacity 
-          style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]} 
+          style={[styles.sendButton, { backgroundColor: theme.colors.primary }, !newMessage.trim() && { opacity: 0.6 }]} 
           onPress={sendMessage}
           disabled={!newMessage.trim() || sending}
         >
           {sending ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color={theme.colors.textOnPrimary} />
           ) : (
-            <Send size={20} color="#FFFFFF" />
+            <Send size={20} color={theme.colors.textOnPrimary} />
           )}
         </TouchableOpacity>
       </KeyboardAvoidingView>
@@ -1843,38 +1849,38 @@ export default function CoachChat() {
           style={styles.menuOverlay} 
           onPress={() => setMenuVisible(false)}
         >
-          <View style={styles.menuContent} onStartShouldSetResponder={() => true}>
+          <View style={[styles.menuContent, { backgroundColor: theme.colors.surface }]} onStartShouldSetResponder={() => true}>
             <View style={styles.menuHeader}>
-              <Text style={styles.menuTitle}>Options</Text>
+              <Text style={[styles.menuTitle, { color: theme.colors.text }]}>Options</Text>
               <TouchableOpacity onPress={() => setMenuVisible(false)}>
-                <X size={24} color="#6B7280" />
+                <X size={24} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity 
-              style={styles.menuItem}
+              style={[styles.menuItem, { borderBottomColor: theme.colors.border }]}
               onPress={() => {
                 setMenuVisible(false);
                 setSchedulerVisible(true);
               }}
             >
-              <View style={styles.menuItemIcon}>
-                <Calendar size={20} color="#3B82F6" />
+              <View style={[styles.menuItemIcon, { backgroundColor: theme.colors.surfaceAlt }]}>
+                <Calendar size={20} color={theme.colors.primary} />
               </View>
-              <Text style={styles.menuItemText}>AI Scheduler</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>AI Scheduler</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={styles.menuItem}
+              style={[styles.menuItem, { borderBottomColor: theme.colors.border }]}
               onPress={() => {
                 setMenuVisible(false);
                 router.push(`/(coach)/clients/${id}`);
               }}
             >
-              <View style={styles.menuItemIcon}>
-                <Activity size={20} color="#10B981" />
+              <View style={[styles.menuItemIcon, { backgroundColor: theme.colors.surfaceAlt }]}>
+                <Activity size={20} color={theme.colors.secondary} />
               </View>
-              <Text style={styles.menuItemText}>Activity</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Activity</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

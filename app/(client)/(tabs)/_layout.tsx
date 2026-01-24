@@ -19,9 +19,9 @@ export default function ClientTabLayout() {
           backgroundColor: theme.colors.surface,
           borderTopWidth: 1,
           borderTopColor: theme.colors.border,
-          paddingBottom: 8,
+          paddingBottom: 24,
           paddingTop: 8,
-          height: 60,
+          height: 80,
         },
       }}
     >

@@ -268,11 +268,10 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   const [canManageBrand, setCanManageBrand] = useState(false);
   const [userDarkModePreference, setUserDarkModePreference] = useState<boolean | null>(null);
 
-  // Always use false for isDark - we use the brand's configured colors directly
-  // Text contrast is auto-calculated based on the actual background color brightness
-  const isDarkMode = false;
+  // Detect if the brand's background is dark to set the overall theme mode
+  const isDarkMode = brand ? isDarkColor(brand.background_color) : false;
 
-  // Generate theme based on brand and dark mode
+  // Generate theme based on brand and detected mode
   const theme = generateTheme(brand, isDarkMode);
 
   // Load brand data
