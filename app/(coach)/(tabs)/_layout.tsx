@@ -1,23 +1,25 @@
 import { Tabs } from 'expo-router';
 import { Home, Users, User, Calendar, MessageSquare } from 'lucide-react-native';
 import { useUnread } from '@/contexts/UnreadContext';
+import { useTheme } from '@/contexts/BrandContext';
 
 export default function CoachTabLayout() {
   const { unreadCount } = useUnread();
+  const theme = useTheme();
   
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#3B82F6',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
+          backgroundColor: theme.colors.surface,
           borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
-          paddingBottom: 8,
+          borderTopColor: theme.colors.border,
+          paddingBottom: 24,
           paddingTop: 8,
-          height: 60,
+          height: 80,
         },
       }}
     >
@@ -67,6 +69,13 @@ export default function CoachTabLayout() {
       {/* Challenges - hide from tabs, accessible via navigation */}
       <Tabs.Screen
         name="challenges"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      {/* Client Chat - hide from tabs, keeps navbar visible */}
+      <Tabs.Screen
+        name="chat/[id]"
         options={{
           href: null, // Hide from tab bar
         }}

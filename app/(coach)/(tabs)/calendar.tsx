@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Platform, UIManager, LayoutAnimation } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -37,6 +38,7 @@ type Session = {
 
 export default function CalendarScreen() {
   const { profile, coach } = useAuth();
+  const theme = useTheme();
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,7 +157,7 @@ export default function CalendarScreen() {
     
     return (
       <TouchableOpacity 
-        style={styles.card}
+        style={[styles.card, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}
         onPress={() => router.push({
           pathname: '/(coach)/chat/[id]',
           params: { id: item.client_id }
@@ -163,8 +165,8 @@ export default function CalendarScreen() {
       >
         <View style={styles.cardHeader}>
           <View style={styles.timeContainer}>
-            <Clock size={16} color="#3B82F6" />
-            <Text style={styles.timeText}>
+            <Clock size={16} color={theme.colors.primary} />
+            <Text style={[styles.timeText, { color: theme.colors.primary }]}>
               {sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
@@ -177,20 +179,20 @@ export default function CalendarScreen() {
 
         <View style={styles.clientInfo}>
           <View style={styles.avatarPlaceholder}>
-            <User size={20} color="#9CA3AF" />
+            <User size={20} color={theme.colors.textSecondary} />
           </View>
           <View>
-            <Text style={styles.clientName}>
+            <Text style={[styles.clientName, { color: theme.colors.text }]}>
               {item.client?.profiles?.full_name || 'Unknown Client'}
             </Text>
-            <Text style={styles.durationText}>{item.duration_minutes} min session</Text>
+            <Text style={[styles.durationText, { color: theme.colors.textSecondary }]}>{item.duration_minutes} min session</Text>
           </View>
         </View>
 
         <View style={styles.cardFooter}>
           <View style={styles.linkContainer}>
-            <Video size={16} color="#6B7280" />
-            <Text style={styles.linkText} numberOfLines={1}>
+            <Video size={16} color={theme.colors.textSecondary} />
+            <Text style={[styles.linkText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
               Video Call
             </Text>
           </View>
@@ -208,12 +210,12 @@ export default function CalendarScreen() {
   });
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Schedule</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Schedule</Text>
       </View>
 
-      <View style={styles.calendarStrip}>
+      <View style={[styles.calendarStrip, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -226,17 +228,21 @@ export default function CalendarScreen() {
             
             return (
               <TouchableOpacity
-                style={[styles.dateItem, isSelected && styles.dateItemSelected]}
+                style={[
+                  styles.dateItem,
+                  { backgroundColor: isSelected ? theme.colors.primary : theme.colors.inputBackground },
+                  isSelected && styles.dateItemSelected
+                ]}
                 onPress={() => setSelectedDate(item)}
               >
-                <Text style={[styles.dayName, isSelected && styles.dateTextSelected]}>
+                <Text style={[styles.dayName, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.textSecondary }]}>
                   {item.toLocaleDateString('en-US', { weekday: 'short' })}
                 </Text>
-                <Text style={[styles.dayNumber, isSelected && styles.dateTextSelected]}>
+                <Text style={[styles.dayNumber, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.text }]}>
                   {item.getDate()}
                 </Text>
                 {hasSession && (
-                  <View style={[styles.dot, isSelected && styles.dotSelected]} />
+                  <View style={[styles.dot, { backgroundColor: isSelected ? theme.colors.textOnPrimary : theme.colors.primary }]} />
                 )}
               </TouchableOpacity>
             );
@@ -245,12 +251,12 @@ export default function CalendarScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.sectionTitle}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </Text>
         
         {loading ? (
-          <ActivityIndicator size="large" color="#3B82F6" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 40 }} />
         ) : (
           <FlatList
             data={getSessionsForDate(selectedDate)}
@@ -259,8 +265,8 @@ export default function CalendarScreen() {
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <CalendarIcon size={48} color="#D1D5DB" />
-                <Text style={styles.emptyText}>No sessions scheduled</Text>
+                <CalendarIcon size={48} color={theme.colors.border} />
+                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No sessions scheduled</Text>
               </View>
             }
           />
@@ -269,7 +275,7 @@ export default function CalendarScreen() {
 
       {/* Floating Action Button */}
       <TouchableOpacity 
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]}
         onPress={() => {
           // For now, open modal without client selection
           // TODO: Add client selector before opening modal
@@ -315,10 +321,8 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   calendarStrip: {
-    backgroundColor: '#FFFFFF',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   calendarContent: {
     paddingHorizontal: 16,
@@ -328,13 +332,12 @@ const styles = StyleSheet.create({
     width: 60,
     height: 70,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
   },
   dateItemSelected: {
-    backgroundColor: '#3B82F6',
+    // Applied via inline style
   },
   dayName: {
     fontSize: 12,
@@ -353,11 +356,10 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#3B82F6',
     marginTop: 2,
   },
   dotSelected: {
-    backgroundColor: '#FFFFFF',
+    // Applied via inline style
   },
   content: {
     flex: 1,
@@ -373,7 +375,6 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   card: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     shadowColor: '#000',
@@ -470,7 +471,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#3B82F6',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

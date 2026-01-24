@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Sparkles, Calendar } from 'lucide-react-native';
 import { generateWeeklyChallenges } from '@/lib/ai-challenge-service';
+import { useTheme } from '@/contexts/BrandContext';
 
 /**
  * AI Challenge Generation Screen V3 with Memory
@@ -28,6 +29,7 @@ export default function AISuggestChallengeScreen() {
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { user } = useAuth();
+  const theme = useTheme();
 
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
@@ -114,32 +116,32 @@ export default function AISuggestChallengeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#111" />
+          <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>AI Generate Challenge</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>AI Generate Challenge</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.scrollView}>
         {/* Info Banner */}
-        <View style={styles.infoBanner}>
+        <View style={[styles.infoBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <Sparkles size={20} color="#6366f1" />
           <View style={styles.infoText}>
-            <Text style={styles.infoTitle}>AI-Powered Weekly Challenges</Text>
-            <Text style={styles.infoDescription}>
+            <Text style={[styles.infoTitle, { color: theme.colors.primary }]}>AI-Powered Weekly Challenges</Text>
+            <Text style={[styles.infoDescription, { color: theme.colors.textSecondary }]}>
               AI analyzes client history to generate personalized, non-repetitive challenges for the week ahead.
             </Text>
           </View>
         </View>
 
         {/* Date Info */}
-        <View style={styles.dateInfo}>
+        <View style={[styles.dateInfo, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <Calendar size={18} color="#666" />
-          <Text style={styles.dateText}>
+          <Text style={[styles.dateText, { color: theme.colors.text }]}>
             Week starting: {getNextMonday().toLocaleDateString('en-US', {
               weekday: 'short',
               month: 'short',
@@ -149,40 +151,42 @@ export default function AISuggestChallengeScreen() {
         </View>
 
         {/* Client Selection */}
-        <Text style={styles.sectionTitle}>Select Client</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Select Client</Text>
         {clients.map((client) => (
           <TouchableOpacity
             key={client.id}
-            style={[
-              styles.clientCard,
-              selectedClient?.id === client.id && styles.clientCardSelected
-            ]}
+              style={[
+                styles.clientCard,
+                { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+                selectedClient?.id === client.id && { borderColor: theme.colors.primary, borderWidth: 2, backgroundColor: `${theme.colors.primary}10` }
+              ]}
             onPress={() => setSelectedClient(client)}
           >
             <View style={styles.clientInfo}>
               <View style={[
                 styles.radioOuter,
-                selectedClient?.id === client.id && styles.radioOuterSelected
-              ]}>
-                {selectedClient?.id === client.id && <View style={styles.radioInner} />}
+                  { borderColor: selectedClient?.id === client.id ? theme.colors.primary : theme.colors.border },
+                  selectedClient?.id === client.id && { borderColor: theme.colors.primary }
+                ]}>
+                  {selectedClient?.id === client.id && <View style={[styles.radioInner, { backgroundColor: theme.colors.primary }]} />}
               </View>
-              <Text style={styles.clientName}>{client.full_name}</Text>
+              <Text style={[styles.clientName, { color: theme.colors.text }]}>{client.full_name}</Text>
             </View>
           </TouchableOpacity>
         ))}
 
         {clients.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No clients found</Text>
-            <Text style={styles.emptySubtext}>Add clients to generate challenges</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No clients found</Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.textTertiary }]}>Add clients to generate challenges</Text>
           </View>
         )}
       </ScrollView>
 
       {/* Generate Button */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
         <TouchableOpacity
-          style={[styles.generateButton, (!selectedClient || generating) && styles.generateButtonDisabled]}
+          style={[styles.generateButton, { backgroundColor: theme.colors.primary }, (!selectedClient || generating) && styles.generateButtonDisabled]}
           onPress={handleGenerate}
           disabled={!selectedClient || generating}
         >

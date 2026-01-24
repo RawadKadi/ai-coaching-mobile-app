@@ -13,6 +13,9 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Eye, EyeOff } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const PENDING_INVITE_KEY = '@pending_invite_token';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -34,6 +37,15 @@ export default function LoginScreen() {
 
     try {
       await signIn(email, password);
+      
+      // Check for pending invite
+      const pendingInvite = await AsyncStorage.getItem(PENDING_INVITE_KEY);
+      if (pendingInvite) {
+        console.log('[Login] Found pending invite, processing:', pendingInvite);
+        // Navigate to join-team to process it
+        router.replace(`/join-team?invite=${pendingInvite}`);
+      }
+      // If no pending invite, navigation will be handled by AuthContext
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
     } finally {

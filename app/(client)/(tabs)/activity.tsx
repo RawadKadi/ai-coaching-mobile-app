@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
 import { Utensils, Dumbbell, Calendar as CalendarIcon, CheckCircle, Circle, Camera } from 'lucide-react-native';
@@ -12,6 +13,7 @@ import { decode } from 'base64-arraybuffer';
 export default function ActivityScreen() {
   const router = useRouter();
   const { client } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -340,9 +342,9 @@ export default function ActivityScreen() {
   const completedHabits = habitLogs.filter((log) => log.completed).length;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Activity</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Activity</Text>
         <Text style={styles.date}>
           {new Date(selectedDate).toLocaleDateString('en-US', {
             weekday: 'long',
@@ -353,27 +355,27 @@ export default function ActivityScreen() {
       </View>
 
       <View style={styles.summaryContainer}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{totalCalories}</Text>
-          <Text style={styles.summaryLabel}>Calories</Text>
+        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{totalCalories}</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Calories</Text>
         </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{totalWorkoutMinutes}m</Text>
-          <Text style={styles.summaryLabel}>Active Time</Text>
+        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{totalWorkoutMinutes}m</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Active Time</Text>
         </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{completedHabits}/{habits.length}</Text>
-          <Text style={styles.summaryLabel}>Habits</Text>
+        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{completedHabits}/{habits.length}</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Habits</Text>
         </View>
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
         <ScrollView style={styles.content}>
-          <Text style={styles.sectionTitle}>Challenges</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Challenges</Text>
           {challenges.length === 0 ? (
             <Text style={styles.emptyText}>No active challenges</Text>
           ) : (
@@ -383,12 +385,16 @@ export default function ActivityScreen() {
               return (
                 <TouchableOpacity
                   key={challenge.id}
-                  style={[styles.card, isCompleted && styles.cardCompleted]}
+                  style={[
+                    styles.card,
+                    { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+                    isCompleted && { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }
+                  ]}
                   onPress={() => handleToggleChallenge(challenge)}
                 >
                   <View style={styles.cardContent}>
                     <View style={styles.challengeHeader}>
-                      <Text style={[styles.cardTitle, isCompleted && styles.textCompleted]}>
+                      <Text style={[styles.cardTitle, { color: theme.colors.text }, isCompleted && { color: theme.colors.primary, textDecorationLine: 'line-through' }]}>
                         {challenge.name}
                       </Text>
                       <Text style={styles.challengeBadge}>
@@ -396,7 +402,7 @@ export default function ActivityScreen() {
                       </Text>
                     </View>
                     {challenge.description && (
-                      <Text style={styles.cardSubtitle} numberOfLines={1}>
+                      <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
                         {challenge.description}
                       </Text>
                     )}
@@ -411,18 +417,18 @@ export default function ActivityScreen() {
             })
           )}
 
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Meals</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.text }]}>Meals</Text>
           {meals.length === 0 ? (
-            <Text style={styles.emptyText}>No meals logged today</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>No meals logged today</Text>
           ) : (
             meals.map((meal) => (
-              <View key={meal.id} style={styles.card}>
+              <View key={meal.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                 <View style={styles.iconContainer}>
                   <Utensils size={20} color="#F59E0B" />
                 </View>
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>{meal.name}</Text>
-                  <Text style={styles.cardSubtitle}>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{meal.name}</Text>
+                  <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
                     {meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} • {meal.calories} kcal
                   </Text>
                 </View>
@@ -430,18 +436,18 @@ export default function ActivityScreen() {
             ))
           )}
 
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Workouts</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.text }]}>Workouts</Text>
           {workouts.length === 0 ? (
-            <Text style={styles.emptyText}>No workouts logged today</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>No workouts logged today</Text>
           ) : (
             workouts.map((workout) => (
-              <View key={workout.id} style={styles.card}>
+              <View key={workout.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                 <View style={[styles.iconContainer, { backgroundColor: '#ECFDF5' }]}>
                   <Dumbbell size={20} color="#10B981" />
                 </View>
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>{workout.name}</Text>
-                  <Text style={styles.cardSubtitle}>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{workout.name}</Text>
+                  <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
                     {workout.duration_minutes} min • {workout.exercises?.length || 0} exercises
                   </Text>
                 </View>
@@ -457,19 +463,15 @@ export default function ActivityScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#FFFFFF',
     padding: 24,
     paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
   },
   date: {
     fontSize: 14,
@@ -483,12 +485,10 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   summaryValue: {
     fontSize: 20,
@@ -520,13 +520,11 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   cardCompleted: {
     backgroundColor: '#ECFDF5',

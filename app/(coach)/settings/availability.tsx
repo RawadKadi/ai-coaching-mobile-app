@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Modal, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { availabilityService, AvailabilitySlot, DayOfWeek, BlockedDate } from '@/lib/availability-service';
 import { ArrowLeft, Plus, Trash2, Sparkles, Calendar as CalendarIcon, Clock } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -12,6 +13,7 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 export default function AvailabilitySettings() {
   const router = useRouter();
   const { coach } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [availability, setAvailability] = useState<Record<number, AvailabilitySlot[]>>({});
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
@@ -227,15 +229,15 @@ export default function AvailabilitySettings() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#111827" />
+          <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Availability</Text>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Availability</Text>
         <TouchableOpacity 
             onPress={handleSaveAll} 
-            style={[styles.saveButton, !hasChanges && styles.disabledButton]}
+            style={[styles.saveButton, { backgroundColor: !hasChanges ? theme.colors.primaryDisabled : theme.colors.primary }, !hasChanges && styles.disabledButton]}
             disabled={!hasChanges}
         >
           <Text style={styles.saveButtonText}>Save</Text>
@@ -243,11 +245,11 @@ export default function AvailabilitySettings() {
       </View>
 
       <ScrollView style={styles.content}>
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.sectionHeaderRow}>
              <View>
-                <Text style={styles.sectionTitle}>Weekly Schedule</Text>
-                <Text style={styles.sectionSubtitle}>Set your standard working hours.</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Weekly Schedule</Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary }]}>Set your standard working hours.</Text>
              </View>
              <TouchableOpacity onPress={() => setAiModalVisible(true)} style={styles.aiButton}>
                 <Sparkles size={16} color="#FFFFFF" />
@@ -258,7 +260,7 @@ export default function AvailabilitySettings() {
           {DAYS.map((day, index) => (
             <View key={index} style={styles.dayContainer}>
               <View style={styles.dayHeader}>
-                <Text style={styles.dayName}>{day}</Text>
+                <Text style={[styles.dayName, { color: theme.colors.text }]}>{day}</Text>
                 <TouchableOpacity onPress={() => addSlot(index)} style={styles.addButton}>
                   <Plus size={16} color="#3B82F6" />
                   <Text style={styles.addButtonText}>Add Hours</Text>
@@ -307,11 +309,11 @@ export default function AvailabilitySettings() {
         </View>
 
 
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.sectionHeaderRow}>
              <View>
-                <Text style={styles.sectionTitle}>Blocked Dates</Text>
-                <Text style={styles.sectionSubtitle}>Vacations, holidays, or days off.</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Blocked Dates</Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary }]}>Vacations, holidays, or days off.</Text>
              </View>
              <TouchableOpacity onPress={() => setBlockModalVisible(true)} style={styles.blockButton}>
                 <Plus size={16} color="#FFFFFF" />
@@ -342,28 +344,29 @@ export default function AvailabilitySettings() {
       {/* AI Modal */}
       <Modal visible={aiModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
-                <Sparkles size={24} color="#3B82F6" />
-                <Text style={styles.modalTitle}>AI Schedule Assistant</Text>
+                <Sparkles size={24} color={theme.colors.primary} />
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>AI Schedule Assistant</Text>
             </View>
-            <Text style={styles.modalDescription}>
+            <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
               Tell me your working hours naturally. For example:
               "I work Monday to Friday from 9am to 5pm, and Saturdays from 10am to 2pm."
             </Text>
             <TextInput
-              style={styles.aiInput}
+              style={[styles.aiInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
               multiline
               placeholder="Type your schedule here..."
+              placeholderTextColor={theme.colors.textTertiary}
               value={aiInput}
               onChangeText={setAiInput}
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setAiModalVisible(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+              <TouchableOpacity style={[styles.cancelButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} onPress={() => setAiModalVisible(false)}>
+                <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.generateButton, aiLoading && styles.disabledButton]} 
+                style={[styles.generateButton, { backgroundColor: theme.colors.primary }, aiLoading && styles.disabledButton]} 
                 onPress={handleAiGenerate}
                 disabled={aiLoading}
               >

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Target, CheckCircle, Circle } from 'lucide-react-native';
+import { Target, CheckCircle, Circle, Calendar } from 'lucide-react-native';
 import type { TodaysSubChallenge } from '@/types/challenges-v3';
 
 /**
@@ -24,7 +24,8 @@ export default function ClientChallengesScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [subChallenges, setSubChallenges] = useState<TodaysSubChallenge[]>([]);
+  const [todaysChallenges, setTodaysChallenges] = useState<TodaysSubChallenge[]>([]);
+  const [upcomingChallenges, setUpcomingChallenges] = useState<any[]>([]);
   const [coachName, setCoachName] = useState('');
 
   useEffect(() => {
@@ -46,20 +47,28 @@ export default function ClientChallengesScreen() {
 
       if (!clientData) return;
 
-      // Get TODAY'S sub-challenges
+      // 1. Get TODAY'S sub-challenges
       const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase.rpc('get_todays_sub_challenges', {
+      const { data: todaysData, error: todaysError } = await supabase.rpc('get_todays_sub_challenges', {
         p_client_id: clientData.id,
         p_date: today,
       });
 
-      if (error) throw error;
+      if (todaysError) throw todaysError;
+      setTodaysChallenges(todaysData || []);
 
-      setSubChallenges(data || []);
+      // 2. Get UPCOMING challenges (Mother Challenges)
+      const { data: upcomingData, error: upcomingError } = await supabase.rpc('get_client_mother_challenges', {
+        p_client_id: clientData.id,
+        p_status: 'upcoming'
+      });
 
-      // Get coach name
-      if (data && data.length > 0) {
-        const firstSub = data[0];
+      if (upcomingError) throw upcomingError;
+      setUpcomingChallenges(upcomingData || []);
+
+      // Get coach name (approximate from first challenge)
+      if (todaysData && todaysData.length > 0) {
+        const firstSub = todaysData[0];
         const { data: motherData } = await supabase
           .from('mother_challenges')
           .select('coach_id')
@@ -74,8 +83,8 @@ export default function ClientChallengesScreen() {
             .single();
 
           if (coachData) {
-            const profiles = Array.isArray(coachData.profiles)
-              ? coachData.profiles[0]
+            const profiles = Array.isArray(coachData.profiles) 
+              ? coachData.profiles[0] 
               : coachData.profiles;
             setCoachName(profiles?.full_name || 'Your Coach');
           }
@@ -100,7 +109,7 @@ export default function ClientChallengesScreen() {
       const newCompleted = !sub.completed;
 
       // Optimistic update
-      setSubChallenges((prev) =>
+      setTodaysChallenges((prev) =>
         prev.map((s) => (s.id === sub.id ? { ...s, completed: newCompleted } : s))
       );
 
@@ -138,7 +147,7 @@ export default function ClientChallengesScreen() {
   }
 
   // Group by mother challenge
-  const grouped = subChallenges.reduce((acc, sub) => {
+  const grouped = todaysChallenges.reduce((acc, sub) => {
     const key = sub.mother_challenge_id;
     if (!acc[key]) {
       acc[key] = {
@@ -152,7 +161,11 @@ export default function ClientChallengesScreen() {
 
   const motherChallenges = Object.values(grouped);
 
-  if (motherChallenges.length === 0) {
+
+
+  const hasContent = motherChallenges.length > 0 || upcomingChallenges.length > 0;
+
+  if (!hasContent) {
     return (
       <ScrollView
         style={styles.container}
@@ -181,8 +194,8 @@ export default function ClientChallengesScreen() {
     );
   }
 
-  const completedCount = subChallenges.filter((s) => s.completed).length;
-  const totalCount = subChallenges.length;
+  const completedCount = todaysChallenges.filter((s) => s.completed).length;
+  const totalCount = todaysChallenges.length;
 
   return (
     <ScrollView
@@ -228,7 +241,7 @@ export default function ClientChallengesScreen() {
               >
                 <View style={styles.subContent}>
                   <View style={styles.focusEmoji}>
-                    <Text>{getFocusEmoji(sub.focus_type)}</Text>
+                    <Text style={{ fontSize: 24 }}>{getFocusEmoji(sub.focus_type)}</Text>
                   </View>
                   <View style={styles.subInfo}>
                     <Text style={[styles.subName, sub.completed && styles.subNameCompleted]}>
@@ -258,6 +271,31 @@ export default function ClientChallengesScreen() {
           </View>
         );
       })}
+
+      {/* Upcoming Challenges (Locked) */}
+      {upcomingChallenges.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Starting Soon</Text>
+          {upcomingChallenges.map((challenge) => (
+            <View key={challenge.id} style={[styles.motherCard, styles.lockedCard]}>
+              <View style={styles.lockedContent}>
+                <View style={styles.lockedInfo}>
+                  <Text style={styles.lockedTitle}>{challenge.name}</Text>
+                  <View style={styles.lockedMeta}>
+                    <Calendar size={14} color="#666" />
+                    <Text style={styles.lockedDate}>
+                      Starts {new Date(challenge.start_date).toLocaleDateString()}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.lockedBadge}>
+                  <Text style={styles.lockedText}>Locked</Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Coach Message */}
       {coachName && (
@@ -443,5 +481,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#047857',
     lineHeight: 18,
+  },
+  section: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+    marginBottom: 12,
+  },
+  lockedCard: {
+    opacity: 0.8,
+  },
+  lockedContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  lockedInfo: {
+    flex: 1,
+  },
+  lockedTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  lockedMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  lockedDate: {
+    fontSize: 13,
+    color: '#666',
+  },
+  lockedBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  lockedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
   },
 });

@@ -9,6 +9,7 @@ import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown, Check, CheckCheck } 
 import MealMessageCard from '@/components/MealMessageCard';
 import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
 import { useFocusEffect } from 'expo-router';
+import { useTheme } from '@/contexts/BrandContext';
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -129,6 +130,7 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
   const [showImageModal, setShowImageModal] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [modalImageLoading, setModalImageLoading] = useState(true);
+  const theme = useTheme();
   
   const data = typeof content === 'string' ? JSON.parse(content) : content;
 
@@ -142,8 +144,8 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
 
   // Colors based on type
   const containerStyle = isUndo 
-    ? { backgroundColor: '#FFFBEB', borderColor: '#F59E0B' } 
-    : { backgroundColor: '#ECFDF5', borderColor: '#10B981' };
+    ? { backgroundColor: theme.colors.surface, borderColor: theme.colors.warning } 
+    : { backgroundColor: theme.colors.surface, borderColor: theme.colors.success };
     
   const headerStyle = isUndo
     ? { backgroundColor: '#FEF3C7', borderBottomColor: '#F59E0B' }
@@ -157,8 +159,11 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
 
   return (
     <View style={[styles.taskMessageContainer, containerStyle, { alignSelf: isOwn ? 'flex-end' : 'flex-start' }]}>
-      <View style={[styles.taskHeader, headerStyle]}>
-        <Text style={[styles.taskTitle, { color: titleColor }]}>
+      <View style={[styles.taskHeader, { 
+        backgroundColor: isUndo ? theme.colors.surfaceAlt : theme.colors.success + '20', 
+        borderBottomColor: isUndo ? theme.colors.warning : theme.colors.success 
+      }]}>
+        <Text style={[styles.taskTitle, { color: isUndo ? theme.colors.warning : theme.colors.success }]}>
           {isUndo ? `${data.clientName} undid this task` : `${data.clientName} finished this task`}
         </Text>
       </View>
@@ -249,6 +254,7 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
 
 const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolean }) => {
   const [expanded, setExpanded] = useState(false);
+  const theme = useTheme();
   
   let data;
   try {
@@ -268,14 +274,14 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
 
   return (
     <View style={{ width: '100%', alignItems: isOwn ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
-      <View style={[challengeStyles.container]}>
-        <View style={challengeStyles.header}>
-          <Text style={challengeStyles.headerText}>{data.title || 'Client finished this task'}</Text>
+      <View style={[challengeStyles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.success }]}>
+        <View style={[challengeStyles.header, { backgroundColor: theme.colors.success + '20', borderBottomColor: theme.colors.success }]}>
+          <Text style={[challengeStyles.headerText, { color: theme.colors.success }]}>{data.title || 'Client finished this task'}</Text>
         </View>
         
         <View style={challengeStyles.body}>
-          <Text style={challengeStyles.taskName}>{data.taskName}</Text>
-          <Text style={challengeStyles.completedAt}>
+          <Text style={[challengeStyles.taskName, { color: theme.colors.text }]}>{data.taskName}</Text>
+          <Text style={[challengeStyles.completedAt, { color: theme.colors.textSecondary }]}>
             Completed at: {data.completedAt}
           </Text>
           
@@ -283,29 +289,29 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
             style={challengeStyles.viewDetailsButton}
             onPress={toggleExpand}
           >
-            <Text style={challengeStyles.viewDetailsText}>View Details</Text>
+            <Text style={[challengeStyles.viewDetailsText, { color: theme.colors.primary }]}>View Details</Text>
             {expanded ? (
-              <ChevronUp size={16} color="#059669" />
+              <ChevronUp size={16} color={theme.colors.primary} />
             ) : (
-              <ChevronDown size={16} color="#059669" />
+              <ChevronDown size={16} color={theme.colors.primary} />
             )}
           </TouchableOpacity>
 
           {expanded && (
-            <View style={challengeStyles.expandedDetails}>
+            <View style={[challengeStyles.expandedDetails, { borderTopColor: theme.colors.border }]}>
               {data.taskDescription && (
                 <>
-                  <Text style={challengeStyles.detailLabel}>Description:</Text>
-                  <Text style={challengeStyles.detailText}>{data.taskDescription}</Text>
+                  <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Description:</Text>
+                  <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.taskDescription}</Text>
                 </>
               )}
               <View style={challengeStyles.detailRow}>
-                <Text style={challengeStyles.detailLabel}>Focus: </Text>
-                <Text style={challengeStyles.detailText}>{data.focusType}</Text>
+                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Focus: </Text>
+                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.focusType}</Text>
               </View>
               <View style={challengeStyles.detailRow}>
-                <Text style={challengeStyles.detailLabel}>Intensity: </Text>
-                <Text style={challengeStyles.detailText}>{data.intensity}</Text>
+                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Intensity: </Text>
+                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.intensity}</Text>
               </View>
             </View>
           )}
@@ -391,6 +397,7 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
   onJoin: () => void, 
   onPostpone: () => void 
 }) => {
+  const theme = useTheme();
   const data = typeof content === 'string' ? JSON.parse(content) : content;
   const isCancelled = status === 'cancelled';
   const isPostponed = isCancelled && !!data.cancellationReason;
@@ -398,7 +405,11 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
   return (
     <View style={[
       styles.inviteContainer, 
-      { alignSelf: isOwn ? 'flex-end' : 'flex-start' },
+      { 
+        alignSelf: isOwn ? 'flex-end' : 'flex-start',
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.border
+      },
       isPostponed ? styles.invitePostponed : (isCancelled ? styles.inviteCancelled : null)
     ]}>
       <View style={styles.inviteHeader}>
@@ -408,7 +419,7 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
           contentFit="contain"
           transition={200}
         />
-        <Text style={styles.inviteTitle}>Coaching Session</Text>
+        <Text style={[styles.inviteTitle, { color: theme.colors.text }]}>Coaching Session</Text>
         {isCancelled && (
           <View style={isPostponed ? styles.postponedTag : styles.cancelledTag}>
             <Text style={styles.cancelledTagText}>{isPostponed ? 'Postponed' : 'Cancelled'}</Text>
@@ -417,29 +428,35 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
       </View>
       
       <View style={styles.inviteBody}>
-        <Text style={styles.inviteDescription}>
+        <Text style={[styles.inviteDescription, { color: theme.colors.text }]}>
           {data.description || 'Instant Meeting'}
         </Text>
-        <Text style={styles.inviteTime}>
+        <Text style={[styles.inviteTime, { color: theme.colors.textSecondary }]}>
           {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
         {isCancelled && data.cancellationReason && (
-          <View style={styles.cancellationReasonContainer}>
-            <Text style={styles.cancellationReasonLabel}>Reason:</Text>
-            <Text style={styles.cancellationReasonText}>{data.cancellationReason}</Text>
+          <View style={[styles.cancellationReasonContainer, { borderTopColor: theme.colors.border }]}>
+            <Text style={[styles.cancellationReasonLabel, { color: theme.colors.warning }]}>Reason:</Text>
+            <Text style={[styles.cancellationReasonText, { color: theme.colors.textSecondary }]}>{data.cancellationReason}</Text>
           </View>
         )}
       </View>
 
       {!isCancelled && (
-        <View style={styles.inviteActions}>
+        <View style={[styles.inviteActions, { borderTopColor: theme.colors.border }]}>
           {isClient && (
-            <TouchableOpacity style={styles.invitePostponeButton} onPress={onPostpone}>
-              <Text style={styles.invitePostponeText}>Postpone</Text>
+            <TouchableOpacity 
+              style={[styles.invitePostponeButton, { borderRightColor: theme.colors.border }]} 
+              onPress={onPostpone}
+            >
+              <Text style={[styles.invitePostponeText, { color: theme.colors.warning }]}>Postpone</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.inviteJoinButton} onPress={onJoin}>
-            <Text style={styles.inviteJoinText}>Join Now</Text>
+          <TouchableOpacity 
+            style={[styles.inviteJoinButton, { backgroundColor: theme.colors.primary + '10' }]} 
+            onPress={onJoin}
+          >
+            <Text style={[styles.inviteJoinText, { color: theme.colors.primary }]}>Join Now</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -538,6 +555,7 @@ const SessionInviteMessageWrapper = ({
 
 export default function MessagesScreen() {
   const { client, user } = useAuth();
+  const theme = useTheme();
   const { refreshUnreadCount } = useUnread();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -890,18 +908,21 @@ export default function MessagesScreen() {
       if (isMealLog) return <MealMessageCard content={item.content} isOwn={isMe} />;
 
       return (
-        <View style={[styles.messageBubble, isMe ? styles.ownBubble : styles.receivedBubble]}>
-          <Text style={[styles.messageText, isMe ? styles.ownText : styles.receivedText]}>
+        <View style={[styles.messageBubble, isMe 
+          ? [styles.ownBubble, { backgroundColor: theme.colors.primary }] 
+          : [styles.receivedBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+        ]}>
+          <Text style={[styles.messageText, isMe ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
             {item.content}
           </Text>
           <View style={styles.messageFooter}>
-            <Text style={[styles.timestamp, isMe ? styles.sentTimestamp : styles.receivedTimestamp]}>
+            <Text style={[styles.timestamp, isMe ? { color: theme.colors.textOnPrimary, opacity: 0.7 } : { color: theme.colors.textSecondary }]}>
               {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
             {isMe && (
               item.read ? 
-                <CheckCheck size={14} color="rgba(255, 255, 255, 0.7)" /> : 
-                <Check size={14} color="rgba(255, 255, 255, 0.7)" />
+                <CheckCheck size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} /> : 
+                <Check size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
             )}
           </View>
         </View>
@@ -912,13 +933,13 @@ export default function MessagesScreen() {
       <View>
         {showUnreadSeparator && (
           <View style={styles.unreadSeparator}>
-            <View style={styles.unreadSeparatorLine} />
-            <View style={styles.unreadSeparatorBadge}>
-              <Text style={styles.unreadSeparatorText}>
+            <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
+            <View style={[styles.unreadSeparatorBadge, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }]}>
+              <Text style={[styles.unreadSeparatorText, { color: theme.colors.primary }]}>
                 {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
               </Text>
             </View>
-            <View style={styles.unreadSeparatorLine} />
+            <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
           </View>
         )}
         {renderContent()}
@@ -927,9 +948,9 @@ export default function MessagesScreen() {
   };
 
   return (
-    <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Messages</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Messages</Text>
         </View>
 
         <KeyboardAvoidingView 
@@ -949,25 +970,36 @@ export default function MessagesScreen() {
             />
             
             {showScrollButton && (
-              <TouchableOpacity style={styles.scrollToBottomButton} onPress={scrollToBottom}>
-                <ArrowDown size={20} color="#3B82F6" />
+              <TouchableOpacity 
+                style={[
+                  styles.scrollToBottomButton, 
+                  { 
+                    backgroundColor: theme.colors.surface, 
+                    borderColor: theme.colors.border,
+                    shadowColor: theme.colors.text 
+                  }
+                ]} 
+                onPress={scrollToBottom}
+              >
+                <ArrowDown size={20} color={theme.colors.primary} />
               </TouchableOpacity>
             )}
             
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Platform.OS === 'ios' ? 10 : 16 }]}>
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, { backgroundColor: theme.colors.inputBackground, color: theme.colors.text }]}
                     placeholder="Type a message..."
+                    placeholderTextColor={theme.colors.textSecondary}
                     value={newMessage}
                     onChangeText={setNewMessage}
                     multiline
                 />
                 <TouchableOpacity 
-                    style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]} 
+                    style={[styles.sendButton, { backgroundColor: theme.colors.primary }, !newMessage.trim() && { opacity: 0.6 }]} 
                     onPress={sendMessage}
                     disabled={!newMessage.trim()}
                 >
-                    <Send size={20} color="#FFFFFF" />
+                    <Send size={20} color={theme.colors.textOnPrimary} />
                 </TouchableOpacity>
             </View>
         </KeyboardAvoidingView>
@@ -1103,10 +1135,8 @@ const styles = StyleSheet.create({
   taskMessageContainer: {
     width: '100%',
     marginVertical: 4,
-    backgroundColor: '#ECFDF5', // Light green
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#10B981', // Green border
     overflow: 'hidden',
   },
   taskHeader: {
@@ -1255,7 +1285,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   joinButtonText: {
-    color: '#3B82F6',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1395,16 +1424,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   unreadSeparatorBadge: {
-    backgroundColor: '#EFF6FF',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     marginHorizontal: 8,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
   },
   unreadSeparatorText: {
-    color: '#3B82F6',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1415,7 +1441,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -1424,7 +1449,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   scrollToBottomButton: {
     position: 'absolute',

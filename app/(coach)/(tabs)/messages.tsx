@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { ChevronRight, MessageCircle } from 'lucide-react-native';
 
@@ -18,6 +19,7 @@ type ClientPreview = {
 export default function CoachMessagesScreen() {
   const router = useRouter();
   const { coach, user } = useAuth();
+  const theme = useTheme();
   const [clients, setClients] = useState<ClientPreview[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -185,15 +187,15 @@ export default function CoachMessagesScreen() {
 
   const renderClient = ({ item }: { item: ClientPreview }) => (
     <TouchableOpacity 
-      style={styles.clientCard}
-      onPress={() => router.push(`/(coach)/chat/${item.id}`)}
+      style={[styles.clientCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+      onPress={() => router.push({ pathname: '/(coach)/(tabs)/chat/[id]', params: { id: item.id } })}
     >
       <View style={styles.avatarContainer}>
         {item.avatar_url ? (
           <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
         ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarInitials}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceAlt }]}>
+            <Text style={[styles.avatarInitials, { color: theme.colors.primary }]}>
               {item.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
             </Text>
           </View>
@@ -202,39 +204,39 @@ export default function CoachMessagesScreen() {
       
       <View style={styles.clientInfo}>
         <View style={styles.nameRow}>
-          <Text style={styles.clientName}>{item.full_name}</Text>
+          <Text style={[styles.clientName, { color: theme.colors.text }]}>{item.full_name}</Text>
           {item.last_message_time && (
-            <Text style={styles.timeText}>
+            <Text style={[styles.timeText, { color: theme.colors.textSecondary }]}>
               {new Date(item.last_message_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             </Text>
           )}
         </View>
         
         <View style={styles.messageRow}>
-          <Text style={[styles.lastMessage, item.unread_count ? styles.unreadMessage : null]} numberOfLines={1}>
+          <Text style={[styles.lastMessage, { color: theme.colors.textSecondary }, item.unread_count ? { color: theme.colors.text, fontWeight: '600' } : null]} numberOfLines={1}>
             {item.last_message || 'No messages yet'}
           </Text>
           {item.unread_count ? (
-            <View style={styles.badge}>
+            <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
               <Text style={styles.badgeText}>{item.unread_count}</Text>
             </View>
           ) : null}
         </View>
       </View>
       
-      <ChevronRight size={20} color="#9CA3AF" />
+      <ChevronRight size={20} color={theme.colors.textSecondary} />
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Messages</Text>
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -244,8 +246,8 @@ export default function CoachMessagesScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <MessageCircle size={48} color="#D1D5DB" />
-              <Text style={styles.emptyText}>No active clients found</Text>
+              <MessageCircle size={48} color={theme.colors.border} />
+              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No active clients found</Text>
             </View>
           }
         />
@@ -257,19 +259,15 @@ export default function CoachMessagesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#FFFFFF',
     padding: 24,
     paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
   },
   loadingContainer: {
     flex: 1,
@@ -282,12 +280,10 @@ const styles = StyleSheet.create({
   clientCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   avatarContainer: {
     marginRight: 12,

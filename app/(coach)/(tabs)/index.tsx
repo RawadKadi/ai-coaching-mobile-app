@@ -9,16 +9,20 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { Users, TrendingUp, MessageCircle, CheckCircle, Target, Sparkles } from 'lucide-react-native';
 import NewClientModal from '@/components/NewClientModal';
 import SchedulerModal from '@/components/SchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
+import { BrandedText } from '@/components/BrandedText';
+import { BrandedCard } from '@/components/BrandedCard';
 
 export default function CoachDashboard() {
   const router = useRouter();
   const { profile, coach } = useAuth();
+  const theme = useTheme();
   const { unreadCount } = useUnread();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -226,80 +230,121 @@ export default function CoachDashboard() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Welcome back, {profile?.full_name}!</Text>
-        <Text style={styles.subtitle}>Coach Dashboard</Text>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View 
+        style={[
+          styles.header, 
+          { 
+            backgroundColor: theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+            paddingHorizontal: 24 * theme.spacing.scale,
+            paddingTop: 60 * theme.spacing.scale,
+            paddingBottom: 24 * theme.spacing.scale,
+          }
+        ]}
+      >
+        <BrandedText variant="xxl" weight="heading" style={styles.greeting}>
+          Welcome back, {profile?.full_name}!
+        </BrandedText>
+        <BrandedText variant="sm" color="secondary">
+          Coach Dashboard
+        </BrandedText>
       </View>
 
-      <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Users size={24} color="#3B82F6" />
+      <View style={[styles.statsGrid, { padding: 16 * theme.spacing.scale, gap: 12 * theme.spacing.scale }]}>
+        <BrandedCard style={styles.statCard} variant="elevated">
+          <View style={[styles.statIconContainer, { backgroundColor: theme.colors.surfaceAlt }]}>
+            <Users size={24} color={theme.colors.primary} />
           </View>
-          <Text style={styles.statValue}>{stats.totalClients}</Text>
-          <Text style={styles.statLabel}>Total Clients</Text>
-        </View>
+          <BrandedText variant="xl" weight="heading" style={styles.statValue}>
+            {stats.totalClients}
+          </BrandedText>
+          <BrandedText variant="xs" color="secondary" style={styles.statLabel}>
+            Total Clients
+          </BrandedText>
+        </BrandedCard>
 
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <TrendingUp size={24} color="#10B981" />
+        <BrandedCard style={styles.statCard} variant="elevated">
+          <View style={[styles.statIconContainer, { backgroundColor: theme.colors.surfaceAlt }]}>
+            <TrendingUp size={24} color={theme.colors.secondary} />
           </View>
-          <Text style={styles.statValue}>{stats.activeClients}</Text>
-          <Text style={styles.statLabel}>Active Clients</Text>
-        </View>
+          <BrandedText variant="xl" weight="heading" style={styles.statValue}>
+            {stats.activeClients}
+          </BrandedText>
+          <BrandedText variant="xs" color="secondary" style={styles.statLabel}>
+            Active Clients
+          </BrandedText>
+        </BrandedCard>
 
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <CheckCircle size={24} color="#F59E0B" />
+        <BrandedCard style={styles.statCard} variant="elevated">
+          <View style={[styles.statIconContainer, { backgroundColor: theme.colors.surfaceAlt }]}>
+            <CheckCircle size={24} color={theme.colors.accent} />
           </View>
-          <Text style={styles.statValue}>{stats.pendingCheckIns}</Text>
-          <Text style={styles.statLabel}>Pending Check-ins</Text>
-        </View>
+          <BrandedText variant="xl" weight="heading" style={styles.statValue}>
+            {stats.pendingCheckIns}
+          </BrandedText>
+          <BrandedText variant="xs" color="secondary" style={styles.statLabel}>
+            Pending Check-ins
+          </BrandedText>
+        </BrandedCard>
 
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <MessageCircle size={24} color="#EF4444" />
+        <BrandedCard style={styles.statCard} variant="elevated">
+          <View style={[styles.statIconContainer, { backgroundColor: theme.colors.surfaceAlt }]}>
+            <MessageCircle size={24} color={theme.colors.error} />
           </View>
-          <Text style={styles.statValue}>{unreadCount}</Text>
-          <Text style={styles.statLabel}>Unread Messages</Text>
-        </View>
+          <BrandedText variant="xl" weight="heading" style={styles.statValue}>
+            {unreadCount}
+          </BrandedText>
+          <BrandedText variant="xs" color="secondary" style={styles.statLabel}>
+            Unread Messages
+          </BrandedText>
+        </BrandedCard>
       </View>
 
       {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <View style={[styles.section, { padding: 16 * theme.spacing.scale }]}>
+        <BrandedText variant="lg" weight="heading" style={styles.sectionTitle}>
+          Quick Actions
+        </BrandedText>
         <TouchableOpacity 
-          style={styles.actionCard}
+          style={[styles.actionCard, { borderColor: theme.colors.border }]}
           onPress={() => router.push('/challenges')}
         >
-          <View style={styles.actionIconContainer}>
-            <Target size={28} color="#6366f1" />
-          </View>
-          <View style={styles.actionContent}>
-            <Text style={styles.actionTitle}>Challenges</Text>
-            <Text style={styles.actionDescription}>
-              Manage client challenges and AI suggestions
-            </Text>
-          </View>
-          <View style={styles.aiIndicator}>
-            <Sparkles size={16} color="#6366f1" />
-          </View>
+          <BrandedCard variant="flat" style={styles.actionCardInner}>
+            <View style={[styles.actionIconContainer, { backgroundColor: theme.colors.surfaceAlt }]}>
+              <Target size={28} color={theme.colors.primary} />
+            </View>
+            <View style={styles.actionContent}>
+              <BrandedText variant="base" weight="heading">
+                Challenges
+              </BrandedText>
+              <BrandedText variant="sm" color="secondary" style={styles.actionDescription}>
+                Manage client challenges and AI suggestions
+              </BrandedText>
+            </View>
+            <View style={[styles.aiIndicator, { backgroundColor: theme.colors.surfaceAlt }]}>
+              <Sparkles size={16} color={theme.colors.primary} />
+            </View>
+          </BrandedCard>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No recent activity</Text>
-        </View>
+      <View style={[styles.section, { padding: 16 * theme.spacing.scale }]}>
+        <BrandedText variant="lg" weight="heading" style={styles.sectionTitle}>
+          Recent Activity
+        </BrandedText>
+        <BrandedCard variant="elevated" style={styles.emptyState}>
+          <BrandedText variant="sm" color="secondary">
+            No recent activity
+          </BrandedText>
+        </BrandedCard>
       </View>
 
       {/* New Client Modal */}
@@ -332,124 +377,77 @@ export default function CoachDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   greeting: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
     marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 16,
-    gap: 12,
   },
   statCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   statIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
     textAlign: 'center',
   },
   section: {
-    padding: 16,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
     marginBottom: 16,
   },
   emptyState: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
     padding: 40,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#9CA3AF',
   },
   actionCard: {
+    borderRadius: 16,
+  },
+  actionCardInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
     gap: 12,
   },
   actionIconContainer: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#EDE9FE',
     justifyContent: 'center',
     alignItems: 'center',
   },
   actionContent: {
     flex: 1,
   },
-  actionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
-  },
   actionDescription: {
-    fontSize: 13,
-    color: '#6B7280',
+    marginTop: 2,
   },
   aiIndicator: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#EDE9FE',
     justifyContent: 'center',
     alignItems: 'center',
   },

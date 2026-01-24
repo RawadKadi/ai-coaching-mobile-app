@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
 import { parseScheduleRequest, ProposedSession, RateLimitError, extractSchedulingIntent } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
 import ConflictResolutionModal from './ConflictResolutionModal';
@@ -21,6 +22,7 @@ interface SchedulerModalProps {
 }
 
 export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId }: SchedulerModalProps) {
+    const theme = useTheme();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [proposedSessions, setProposedSessions] = useState<ProposedSession[]>([]);
@@ -607,9 +609,9 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-            <View style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>AI Scheduler</Text>
+            <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+                <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+                    <Text style={[styles.title, { color: theme.colors.text }]}>AI Scheduler</Text>
                     <TouchableOpacity onPress={() => { 
                         if (proposedSessions.length > 0 && step === 'review') {
                             Alert.alert(
@@ -625,31 +627,36 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             onClose(); 
                         }
                     }}>
-                        <X size={24} color="#374151" />
+                        <X size={24} color={theme.colors.text} />
                     </TouchableOpacity>
                 </View>
 
                 {step === 'input' ? (
                     <View style={styles.content}>
-                        <Text style={styles.label}>
+                        <Text style={[styles.label, { color: theme.colors.text }]}>
                             Tell me when you want to schedule sessions with {clientContext.name}...
                         </Text>
                         
-                        <View style={styles.inputContainer}>
+                        <View style={[styles.inputContainer, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
                             <TextInput
-                                style={styles.textInput}
+                                style={[styles.textInput, { color: theme.colors.text }]}
                                 multiline
                                 placeholder="e.g., 'Schedule training every Monday at 10am for 1 hour'"
+                                placeholderTextColor={theme.colors.textTertiary}
                                 value={input}
                                 onChangeText={setInput}
                             />
                             <TouchableOpacity style={styles.micButton} onPress={handleMicPress}>
-                                <Mic size={24} color="#6B7280" />
+                                <Mic size={24} color={theme.colors.textSecondary} />
                             </TouchableOpacity>
                         </View>
 
                         <TouchableOpacity 
-                            style={[styles.button, (!input.trim() || loading) && styles.buttonDisabled]} 
+                            style={[
+                                styles.button,
+                                { backgroundColor: (!input.trim() || loading) ? theme.colors.primaryDisabled : theme.colors.primary },
+                                (!input.trim() || loading) && styles.buttonDisabled
+                            ]} 
                             onPress={handleAnalyze}
                             disabled={!input.trim() || loading}
                         >
