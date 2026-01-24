@@ -109,7 +109,8 @@ export default function ReviewChallengesScreen() {
                   focus_type: c.focus_type,
                   intensity: c.intensity
                 })),
-                p_created_by: 'coach'
+                p_created_by: 'coach',
+                p_mode: 'relative'
               });
 
               if (error) throw error;

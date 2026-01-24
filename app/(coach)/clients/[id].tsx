@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Client, Habit } from '@/types/database';
 import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon, Target, Scale, Award, Info, User, Sparkles } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
 import SchedulerModal from '@/components/SchedulerModal';
 import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
@@ -24,6 +25,7 @@ export default function ClientDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { coach } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [client, setClient] = useState<any>(null);
   const [challenges, setChallenges] = useState<any[]>([]);
@@ -404,8 +406,8 @@ export default function ClientDetailsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -419,65 +421,65 @@ export default function ClientDetailsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#111827" />
+          <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>{(client as any).profiles?.full_name || 'Client'}</Text>
+        <Text style={[styles.title, { color: theme.colors.text }]}>{(client as any).profiles?.full_name || 'Client'}</Text>
         <TouchableOpacity style={styles.headerButton} onPress={() => setSchedulerVisible(true)}>
-          <CalendarIcon size={24} color="#3B82F6" />
+          <CalendarIcon size={24} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
       {pendingResolutions.length > 0 && (
         <TouchableOpacity 
-          style={styles.pendingBanner}
+          style={[styles.pendingBanner, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}
           onPress={() => {
             setPendingModalVisible(true);
           }}
         >
-            <Text style={styles.pendingBannerText}>
+            <Text style={[styles.pendingBannerText, { color: theme.colors.warning }]}>
                 ⚠️ {pendingResolutions.length} Proposed Resolution{pendingResolutions.length > 1 ? 's' : ''} Pending
             </Text>
-            <Text style={styles.pendingBannerSubtext}>Tap to review</Text>
+            <Text style={[styles.pendingBannerSubtext, { color: theme.colors.warning }]}>Tap to review</Text>
         </TouchableOpacity>
       )}
 
       <ScrollView style={styles.content}>
         {/* Client Info Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Client Information</Text>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Client Information</Text>
           <View style={styles.infoGrid}>
             <View style={styles.infoRowFull}>
-              <User size={16} color="#6B7280" />
-              <Text style={styles.infoLabel}>Goal:</Text>
-              <Text style={styles.infoValue}>{client.goal || 'Not set'}</Text>
+              <User size={16} color={theme.colors.textSecondary} />
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Goal:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.goal || 'Not set'}</Text>
             </View>
             
             <View style={styles.infoRowHalf}>
-              <Award size={16} color="#6B7280" />
-              <Text style={styles.infoLabel}>Exp:</Text>
-              <Text style={styles.infoValue}>{client.experience_level || 'Not set'}</Text>
+              <Award size={16} color={theme.colors.textSecondary} />
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Exp:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.experience_level || 'Not set'}</Text>
             </View>
 
             <View style={styles.infoRowHalf}>
-              <Scale size={16} color="#6B7280" />
-              <Text style={styles.infoLabel}>Weight:</Text>
-              <Text style={styles.infoValue}>{client.latest_weight ? `${client.latest_weight} kg` : 'Not set'}</Text>
+              <Scale size={16} color={theme.colors.textSecondary} />
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Weight:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.latest_weight ? `${client.latest_weight} kg` : 'Not set'}</Text>
             </View>
 
             <View style={styles.infoRowHalf}>
-              <Target size={16} color="#6B7280" />
-              <Text style={styles.infoLabel}>Height:</Text>
-              <Text style={styles.infoValue}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
+              <Target size={16} color={theme.colors.textSecondary} />
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Height:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
             </View>
 
             <View style={styles.infoRowHalf}>
-              <Info size={16} color="#6B7280" />
-              <Text style={styles.infoLabel}>Age:</Text>
-              <Text style={styles.infoValue}>
+              <Info size={16} color={theme.colors.textSecondary} />
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Age:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>
                 {client.date_of_birth ? 
                   Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : 
                   'Not set'}
@@ -486,17 +488,17 @@ export default function ClientDetailsScreen() {
 
             {client.dietary_restrictions?.length > 0 && (
               <View style={styles.infoRowFull}>
-                <Info size={16} color="#6B7280" />
-                <Text style={styles.infoLabel}>Dietary:</Text>
-                <Text style={styles.infoValue}>{client.dietary_restrictions.join(', ')}</Text>
+                <Info size={16} color={theme.colors.textSecondary} />
+                <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Dietary:</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.dietary_restrictions.join(', ')}</Text>
               </View>
             )}
 
             {client.medical_conditions?.length > 0 && (
               <View style={styles.infoRowFull}>
-                <Info size={16} color="#6B7280" />
-                <Text style={styles.infoLabel}>Medical:</Text>
-                <Text style={styles.infoValue}>{client.medical_conditions.join(', ')}</Text>
+                <Info size={16} color={theme.colors.textSecondary} />
+                <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Medical:</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.medical_conditions.join(', ')}</Text>
               </View>
             )}
           </View>
@@ -505,62 +507,66 @@ export default function ClientDetailsScreen() {
         {/* Challenges Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Active Challenges</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Active Challenges</Text>
             <View style={styles.buttonGroup}>
               <TouchableOpacity 
-                style={styles.aiButton} 
+                style={[styles.aiButton, { backgroundColor: theme.colors.secondary, shadowColor: theme.colors.secondary }]} 
                 onPress={() => router.push(`/(coach)/challenges/suggest?clientId=${id}`)}
               >
-                <Sparkles size={20} color="#FFFFFF" />
+                <Sparkles size={20} color={theme.colors.textOnPrimary} />
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.addButton} 
+                style={[styles.addButton, { backgroundColor: theme.colors.primary }]} 
                 onPress={() => router.push(`/(coach)/challenges/create?clientId=${id}`)}
               >
-                <Plus size={20} color="#FFFFFF" />
-                <Text style={styles.addButtonText}>Create</Text>
+                <Plus size={20} color={theme.colors.textOnPrimary} />
+                <Text style={[styles.addButtonText, { color: theme.colors.textOnPrimary }]}>Create</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {challenges.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No active challenges found.</Text>
+            <View style={[styles.emptyState, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No active challenges found.</Text>
             </View>
           ) : (
             challenges.map((challenge) => (
               <TouchableOpacity 
                 key={challenge.id} 
-                style={[styles.challengeCard, challenge.status !== 'active' && styles.challengeInactive]}
+                style={[
+                  styles.challengeCard, 
+                  { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+                  challenge.status !== 'active' && { opacity: 0.6 }
+                ]}
                 onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
               >
                 <View style={styles.challengeHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.challengeName}>{challenge.name}</Text>
-                    <Text style={styles.challengeDates}>
+                    <Text style={[styles.challengeName, { color: theme.colors.text }]}>{challenge.name}</Text>
+                    <Text style={[styles.challengeDates, { color: theme.colors.textSecondary }]}>
                       {new Date(challenge.start_date).toLocaleDateString()} - {new Date(challenge.end_date).toLocaleDateString()}
                     </Text>
                   </View>
-                  <View style={styles.completionBadge}>
-                    <Text style={styles.completionText}>{challenge.completion_rate}%</Text>
+                  <View style={[styles.completionBadge, { backgroundColor: theme.colors.primary + '20' }]}>
+                    <Text style={[styles.completionText, { color: theme.colors.primary }]}>{challenge.completion_rate}%</Text>
                   </View>
                 </View>
                 
                 {challenge.description && (
-                  <Text style={styles.challengeDescription} numberOfLines={2}>
+                  <Text style={[styles.challengeDescription, { color: theme.colors.textSecondary }]} numberOfLines={2}>
                     {challenge.description}
                   </Text>
                 )}
 
-                <View style={styles.progressBarContainer}>
-                  <View style={[styles.progressBar, { width: `${challenge.completion_rate}%` }]} />
+                <View style={[styles.progressBarContainer, { backgroundColor: theme.colors.surfaceAlt }]}>
+                  <View style={[styles.progressBar, { width: `${challenge.completion_rate}%`, backgroundColor: theme.colors.primary }]} />
                 </View>
 
                 <View style={styles.challengeMeta}>
-                  <Text style={styles.metaText}>
+                  <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
                     {challenge.completed_subs} / {challenge.total_subs} Tasks Completed
                   </Text>
-                  <Text style={styles.metaStatus}>{challenge.status}</Text>
+                  <Text style={[styles.metaStatus, { color: theme.colors.primary }]}>{challenge.status}</Text>
                 </View>
               </TouchableOpacity>
             ))

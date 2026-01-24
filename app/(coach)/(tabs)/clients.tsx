@@ -217,7 +217,9 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 0,
+    paddingVertical: 12,
+    borderRadius: 12,
+    paddingHorizontal: 16
   },
   content: {
     flex: 1,

@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Target, CheckCircle, Circle, Calendar } from 'lucide-react-native';
+import { Target, X, Check, Calendar as CalendarIcon, TrendingUp, CheckCircle, Circle, Calendar } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
 import type { TodaysSubChallenge } from '@/types/challenges-v3';
 
 /**
@@ -21,6 +22,7 @@ import type { TodaysSubChallenge } from '@/types/challenges-v3';
 
 export default function ClientChallengesScreen() {
   const { user } = useAuth();
+  const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,8 +142,8 @@ export default function ClientChallengesScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366f1" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -168,13 +170,13 @@ export default function ClientChallengesScreen() {
   if (!hasContent) {
     return (
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Today's Challenges</Text>
-          <Text style={styles.subtitle}>
+        <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Today's Challenges</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long',
               month: 'long',
@@ -184,9 +186,9 @@ export default function ClientChallengesScreen() {
         </View>
 
         <View style={styles.emptyState}>
-          <Target size={64} color="#ccc" />
-          <Text style={styles.emptyTitle}>No Challenges Today</Text>
-          <Text style={styles.emptyDescription}>
+          <Target size={64} color={theme.colors.textSecondary} style={{ opacity: 0.5 }} />
+          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No Challenges Today</Text>
+          <Text style={[styles.emptyDescription, { color: theme.colors.textSecondary }]}>
             No challenges assigned for today. Check back tomorrow or talk to your coach!
           </Text>
         </View>
@@ -199,22 +201,23 @@ export default function ClientChallengesScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Today's Challenges</Text>
-        <Text style={styles.subtitle}>
-          {new Date().toLocaleDateString('en-US', {
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Today's Challenges</Text>
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+          <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>{new Date().toLocaleDateString('en-US', {
             weekday: 'long',
+            year: 'numeric',
             month: 'long',
             day: 'numeric',
-          })}
+          })}</Text>
         </Text>
       </View>
 
-      <View style={styles.statsBox}>
-        <Text style={styles.statsText}>
+      <View style={[styles.statsBox, { backgroundColor: theme.colors.primary }]}>
+        <Text style={[styles.statsText, { color: theme.colors.textOnPrimary }]}>
           {completedCount} of {totalCount} completed
         </Text>
       </View>
@@ -225,10 +228,10 @@ export default function ClientChallengesScreen() {
         const motherTotal = mother.subs.length;
 
         return (
-          <View key={mother.motherName} style={styles.motherCard}>
-            <View style={styles.motherHeader}>
-              <Text style={styles.motherName}>{mother.motherName}</Text>
-              <Text style={styles.motherProgress}>
+          <View key={mother.motherName} style={[styles.motherCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={[styles.motherHeader, { backgroundColor: theme.colors.surfaceAlt, borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.motherName, { color: theme.colors.text }]}>{mother.motherName}</Text>
+              <Text style={[styles.motherProgress, { color: theme.colors.primary }]}>
                 {motherCompleted}/{motherTotal}
               </Text>
             </View>
@@ -236,7 +239,11 @@ export default function ClientChallengesScreen() {
             {mother.subs.map((sub) => (
               <TouchableOpacity
                 key={sub.id}
-                style={[styles.subCard, sub.completed && styles.subCardCompleted]}
+                style={[
+                  styles.subCard, 
+                  { borderBottomColor: theme.colors.border },
+                  sub.completed && { backgroundColor: theme.colors.primary + '10' }
+                ]}
                 onPress={() => toggleSubChallenge(sub)}
               >
                 <View style={styles.subContent}>
@@ -244,25 +251,25 @@ export default function ClientChallengesScreen() {
                     <Text style={{ fontSize: 24 }}>{getFocusEmoji(sub.focus_type)}</Text>
                   </View>
                   <View style={styles.subInfo}>
-                    <Text style={[styles.subName, sub.completed && styles.subNameCompleted]}>
+                    <Text style={[styles.subName, { color: theme.colors.text }, sub.completed && { color: theme.colors.primary, textDecorationLine: 'line-through', opacity: 0.7 }]}>
                       {sub.name}
                     </Text>
                     {sub.description && (
-                      <Text style={styles.subDescription} numberOfLines={2}>
+                      <Text style={[styles.subDescription, { color: theme.colors.textSecondary }]} numberOfLines={2}>
                         {sub.description}
                       </Text>
                     )}
                     <View style={styles.subMeta}>
-                      <Text style={styles.metaText}>{sub.focus_type}</Text>
-                      <Text style={styles.metaBullet}>•</Text>
-                      <Text style={styles.metaText}>{sub.intensity} intensity</Text>
+                      <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>{sub.focus_type}</Text>
+                      <Text style={[styles.metaBullet, { color: theme.colors.textSecondary }]}>•</Text>
+                      <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>{sub.intensity} intensity</Text>
                     </View>
                   </View>
                   <View style={styles.checkbox}>
                     {sub.completed ? (
-                      <CheckCircle size={28} color="#10b981" />
+                      <CheckCircle size={28} color={theme.colors.primary} />
                     ) : (
-                      <Circle size={28} color="#d1d5db" />
+                      <Circle size={28} color={theme.colors.border} />
                     )}
                   </View>
                 </View>
@@ -275,21 +282,21 @@ export default function ClientChallengesScreen() {
       {/* Upcoming Challenges (Locked) */}
       {upcomingChallenges.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Starting Soon</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Starting Soon</Text>
           {upcomingChallenges.map((challenge) => (
-            <View key={challenge.id} style={[styles.motherCard, styles.lockedCard]}>
+            <View key={challenge.id} style={[styles.motherCard, styles.lockedCard, { backgroundColor: theme.colors.surface, opacity: 0.6 }]}>
               <View style={styles.lockedContent}>
                 <View style={styles.lockedInfo}>
-                  <Text style={styles.lockedTitle}>{challenge.name}</Text>
+                  <Text style={[styles.lockedTitle, { color: theme.colors.text }]}>{challenge.name}</Text>
                   <View style={styles.lockedMeta}>
-                    <Calendar size={14} color="#666" />
-                    <Text style={styles.lockedDate}>
+                    <Calendar size={14} color={theme.colors.textSecondary} />
+                    <Text style={[styles.lockedDate, { color: theme.colors.textSecondary }]}>
                       Starts {new Date(challenge.start_date).toLocaleDateString()}
                     </Text>
                   </View>
                 </View>
-                <View style={styles.lockedBadge}>
-                  <Text style={styles.lockedText}>Locked</Text>
+                <View style={[styles.lockedBadge, { backgroundColor: theme.colors.surfaceAlt }]}>
+                  <Text style={[styles.lockedText, { color: theme.colors.textSecondary }]}>Locked</Text>
                 </View>
               </View>
             </View>
@@ -299,9 +306,9 @@ export default function ClientChallengesScreen() {
 
       {/* Coach Message */}
       {coachName && (
-        <View style={styles.coachMessage}>
-          <Text style={styles.coachMessageTitle}>💪 Message from {coachName}</Text>
-          <Text style={styles.coachMessageText}>
+        <View style={[styles.coachMessage, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+          <Text style={[styles.coachMessageTitle, { color: theme.colors.primary }]}>💪 Message from {coachName}</Text>
+          <Text style={[styles.coachMessageText, { color: theme.colors.text, opacity: 0.9 }]}>
             You've got this! Take it one challenge at a time today.
           </Text>
         </View>
@@ -351,8 +358,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
+  dateText: {
+    fontSize: 14,
+  },
   statsBox: {
-    backgroundColor: '#6366f1',
     margin: 16,
     padding: 16,
     borderRadius: 12,
@@ -361,7 +370,6 @@ const styles = StyleSheet.create({
   statsText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
   },
   emptyState: {
     flex: 1,
@@ -416,7 +424,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e7eb',
   },
   subCardCompleted: {
-    backgroundColor: '#ecfdf5',
+    // Background color handled dynamically
   },
   subContent: {
     flexDirection: 'row',
@@ -424,7 +432,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   focusEmoji: {
-    fontSize: 24,
+    // Moved to inline Text style to avoid View-Text style conflict
   },
   subInfo: {
     flex: 1,
