@@ -164,21 +164,21 @@ export default function CalendarScreen() {
         })}
       >
         <View style={styles.cardHeader}>
-          <View style={styles.timeContainer}>
+          <View style={[styles.timeContainer, { backgroundColor: theme.colors.primary + '15' }]}>
             <Clock size={16} color={theme.colors.primary} />
             <Text style={[styles.timeText, { color: theme.colors.primary }]}>
               {sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
           {isToday && (
-            <View style={styles.todayBadge}>
-              <Text style={styles.todayText}>TODAY</Text>
+            <View style={[styles.todayBadge, { backgroundColor: theme.colors.primary + '15' }]}>
+              <Text style={[styles.todayText, { color: theme.colors.primary }]}>TODAY</Text>
             </View>
           )}
         </View>
 
         <View style={styles.clientInfo}>
-          <View style={styles.avatarPlaceholder}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceAlt }]}>
             <User size={20} color={theme.colors.textSecondary} />
           </View>
           <View>
@@ -189,14 +189,14 @@ export default function CalendarScreen() {
           </View>
         </View>
 
-        <View style={styles.cardFooter}>
+        <View style={[styles.cardFooter, { borderTopColor: theme.colors.border }]}>
           <View style={styles.linkContainer}>
             <Video size={16} color={theme.colors.textSecondary} />
             <Text style={[styles.linkText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
               Video Call
             </Text>
           </View>
-          <ChevronRight size={20} color="#9CA3AF" />
+          <ChevronRight size={20} color={theme.colors.textTertiary} />
         </View>
       </TouchableOpacity>
     );
@@ -443,7 +443,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
   },
   linkContainer: {
     flexDirection: 'row',
