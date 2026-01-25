@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { X, Calendar as CalendarIcon, Clock, ChevronRight, Check, ChevronLeft } from 'lucide-react-native';
 import { availabilityService } from '@/lib/availability-service';
+import { useTheme } from '@/contexts/BrandContext';
 
 type PostponeReason = 'Sickness' | 'Family Emergency' | 'Schedule Conflict' | 'Personal Emergency' | 'Other';
 
@@ -18,6 +19,7 @@ interface PostponeModalProps {
 }
 
 export default function PostponeModal({ visible, onClose, onConfirm, coachId, initialDate, clientId, sessionId }: PostponeModalProps) {
+  const theme = useTheme();
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1=Reason, 2=Day Selection, 3=Slot Selection
   const [reason, setReason] = useState<string>('');
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
@@ -130,23 +132,23 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
           
           {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.title, { color: theme.colors.text }]}>
               {step === 1 && 'Why are you postponing?'}
               {step === 2 && 'Select a Day'}
               {step === 3 && 'Select a Time'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color="#6B7280" />
+              <X size={24} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { width: `${(step / 3) * 100}%` }]} />
+          <View style={[styles.progressContainer, { backgroundColor: theme.colors.border }]}>
+            <View style={[styles.progressBar, { width: `${(step / 3) * 100}%`, backgroundColor: theme.colors.primary }]} />
           </View>
 
           <ScrollView style={styles.content}>
@@ -157,11 +159,11 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
                 {['Sickness', 'Family Emergency', 'Schedule Conflict', 'Personal Emergency', 'Other'].map((r) => (
                   <TouchableOpacity 
                     key={r} 
-                    style={[styles.optionButton, reason === r && styles.selectedOption]}
+                    style={[styles.optionButton, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }, reason === r && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary }]}
                     onPress={() => handleReasonSelect(r)}
                   >
-                    <Text style={[styles.optionText, reason === r && styles.selectedOptionText]}>{r}</Text>
-                    {reason === r && <Check size={20} color="#3B82F6" />}
+                    <Text style={[styles.optionText, { color: theme.colors.text }, reason === r && { color: theme.colors.primary, fontWeight: '600' }]}>{r}</Text>
+                    {reason === r && <Check size={20} color={theme.colors.primary} />}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -172,17 +174,17 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
               <View>
                 {loadingSlots ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                    <Text style={styles.loadingText}>Finding best available days...</Text>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                    <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Finding best available days...</Text>
                   </View>
                 ) : availableDays.length === 0 ? (
                   <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyTitle}>No Available Days</Text>
-                    <Text style={styles.emptyText}>
+                    <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No Available Days</Text>
+                    <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
                         Your schedule or the coach's schedule is full for the next 2 weeks.
                     </Text>
-                    <TouchableOpacity onPress={handleCancelSession} style={styles.cancelLinkButton}>
-                      <Text style={styles.cancelLinkText}>Cancel Session Instead</Text>
+                    <TouchableOpacity onPress={handleCancelSession} style={[styles.cancelLinkButton, { backgroundColor: theme.colors.warning + '10', borderColor: theme.colors.warning + '40' }]}>
+                      <Text style={[styles.cancelLinkText, { color: theme.colors.warning }]}>Cancel Session Instead</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -190,20 +192,20 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
                     {availableDays.map((day) => (
                       <TouchableOpacity
                         key={day}
-                        style={styles.optionButton}
+                        style={[styles.optionButton, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}
                         onPress={() => handleDaySelect(day)}
                       >
                         <View style={styles.optionRow}>
-                            <CalendarIcon size={20} color="#4B5563" />
-                            <Text style={styles.optionText}>{formatDayLabel(day)}</Text>
+                            <CalendarIcon size={20} color={theme.colors.textSecondary} />
+                            <Text style={[styles.optionText, { color: theme.colors.text }]}>{formatDayLabel(day)}</Text>
                         </View>
-                        <ChevronRight size={20} color="#9CA3AF" />
+                        <ChevronRight size={20} color={theme.colors.textTertiary} />
                       </TouchableOpacity>
                     ))}
                     
-                    <View style={styles.cantDoTodayContainer}>
-                        <TouchableOpacity onPress={handleCancelSession} style={styles.cancelLinkButton}>
-                            <Text style={styles.cancelLinkText}>Cancel Session Instead</Text>
+                    <View style={[styles.cantDoTodayContainer, { borderTopColor: theme.colors.border }]}>
+                        <TouchableOpacity onPress={handleCancelSession} style={[styles.cancelLinkButton, { backgroundColor: theme.colors.warning + '10', borderColor: theme.colors.warning + '40' }]}>
+                            <Text style={[styles.cancelLinkText, { color: theme.colors.warning }]}>Cancel Session Instead</Text>
                         </TouchableOpacity>
                     </View>
                   </View>
@@ -214,15 +216,15 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
             {/* STEP 3: Slot Selection */}
             {step === 3 && selectedDay && (
                 <View>
-                    <Text style={styles.dayHeader}>{formatDayLabel(selectedDay)}</Text>
+                    <Text style={[styles.dayHeader, { color: theme.colors.text }]}>{formatDayLabel(selectedDay)}</Text>
                     <View style={styles.slotsGrid}>
                         {groupedSlots[selectedDay]?.map((slot) => (
                             <TouchableOpacity
                                 key={slot}
-                                style={[styles.slotButton, selectedSlot === slot && styles.selectedSlot]}
+                                style={[styles.slotButton, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }, selectedSlot === slot && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary }]}
                                 onPress={() => setSelectedSlot(slot)}
                             >
-                                <Text style={[styles.slotText, selectedSlot === slot && styles.selectedSlotText]}>
+                                <Text style={[styles.slotText, { color: theme.colors.text }, selectedSlot === slot && { color: theme.colors.primary, fontWeight: '600' }]}>
                                     {formatSlotTime(slot)}
                                 </Text>
                             </TouchableOpacity>
@@ -234,24 +236,24 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
           </ScrollView>
 
           {/* Footer Actions */}
-          <View style={styles.footer}>
+          <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
             {step > 1 && (
               <TouchableOpacity 
                 style={styles.backButton} 
                 onPress={() => setStep(prev => (prev - 1) as 1 | 2 | 3)}
                 disabled={submitting}
               >
-                <Text style={styles.backButtonText}>Back</Text>
+                <Text style={[styles.backButtonText, { color: theme.colors.textSecondary }]}>Back</Text>
               </TouchableOpacity>
             )}
             
             {step === 3 && selectedSlot && (
               <TouchableOpacity 
-                style={[styles.confirmButton, submitting && styles.disabledButton]} 
+                style={[styles.confirmButton, { backgroundColor: theme.colors.primary }, submitting && styles.disabledButton]} 
                 onPress={handleConfirm}
                 disabled={submitting}
               >
-                {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmButtonText}>Confirm Change</Text>}
+                {submitting ? <ActivityIndicator color={theme.colors.textOnPrimary} /> : <Text style={[styles.confirmButtonText, { color: theme.colors.textOnPrimary }]}>Confirm Change</Text>}
               </TouchableOpacity>
             )}
           </View>

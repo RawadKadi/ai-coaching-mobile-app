@@ -16,7 +16,6 @@ export default function TeamInvitationMonitor() {
   const [invitationFound, setInvitationFound] = useState(false); // NEW: Track if we found an invitation
   const checkTimeoutRef = useRef<any>(null);
 
-  console.log('[TeamInvitationMonitor] Rendered with coach:', coach?.id);
 
   // Check if coach has unacknowledged team membership
   const checkForPendingInvitation = async () => {
@@ -29,11 +28,9 @@ export default function TeamInvitationMonitor() {
       return;
     }
 
-    console.log('[TeamInvitationMonitor] 🔍 Checking for pending invitations for coach:', coach.id);
 
     try {
       // 1. First check by ID (already linked)
-      console.log('[TeamInvitationMonitor] 🔍 Checking by ID for coach:', coach.id);
       const { data: idData, error: idError } = await supabase
         .from('coach_hierarchy')
         .select('id, parent_coach_name, acknowledged_at, created_at')
@@ -56,7 +53,6 @@ export default function TeamInvitationMonitor() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) return;
 
-      console.log('[TeamInvitationMonitor] 📧 Checking by email for coach:', user.email);
       const { data: emailData, error: emailError } = await supabase
         .from('coach_hierarchy')
         .select('id, parent_coach_name, invite_token')
@@ -72,7 +68,6 @@ export default function TeamInvitationMonitor() {
       }
 
       if (emailData && emailData.invite_token) {
-        console.log('[TeamInvitationMonitor] 🔄 Automatic linking starting for invite:', emailData.id);
         
         const { data: acceptData, error: acceptError } = await supabase.rpc('accept_subcoach_invite', {
           p_invite_token: emailData.invite_token,
@@ -82,14 +77,12 @@ export default function TeamInvitationMonitor() {
         if (acceptError) {
           console.error('[TeamInvitationMonitor] ❌ Auto-link RPC failed:', acceptError);
         } else {
-          console.log('[TeamInvitationMonitor] ✅ Auto-linked successfully!', acceptData);
           handleFoundInvitation({
             id: emailData.id,
             parent_coach_name: emailData.parent_coach_name || acceptData.parent_coach_name
           });
         }
       } else {
-        console.log('[TeamInvitationMonitor] No pending invitations found by ID or Email');
         setHasChecked(true);
       }
     } catch (err) {
@@ -98,13 +91,11 @@ export default function TeamInvitationMonitor() {
   };
 
   const handleFoundInvitation = (data: any) => {
-    console.log('[TeamInvitationMonitor] ✅ PROCESSING INVITATION!', data);
     setHasChecked(true);
     setInvitationFound(true); // STOP all further checks!
     
     // Navigate to welcome screen
     setTimeout(() => {
-      console.log('[TeamInvitationMonitor] 🚀 Navigating to welcome screen...');
       router.push({
         pathname: '/(coach)/team-welcome',
         params: {
@@ -118,7 +109,6 @@ export default function TeamInvitationMonitor() {
   // Check whenever coach ID becomes available or changes
   useEffect(() => {
     if (!coach?.id) {
-      console.log('[TeamInvitationMonitor] Waiting for coach to load...');
       setHasChecked(false);
       return;
     }
@@ -127,7 +117,6 @@ export default function TeamInvitationMonitor() {
       return;
     }
 
-    console.log('[TeamInvitationMonitor] 🎯 Coach loaded! Setting up monitoring...');
 
     if (checkTimeoutRef.current) {
       clearTimeout(checkTimeoutRef.current);
@@ -150,7 +139,6 @@ export default function TeamInvitationMonitor() {
       return;
     }
 
-    console.log('[TeamInvitationMonitor] 📡 Subscribing to real-time updates for coach:', coach.id);
     
     let pollInterval: any = null;
     
@@ -167,7 +155,6 @@ export default function TeamInvitationMonitor() {
         (payload) => {
           if (invitationFound) return; // Don't handle if already found
           
-          console.log('[TeamInvitationMonitor] 🔥 REAL-TIME INVITATION DETECTED!', payload);
           
           const newRecord = payload.new as any;
           setInvitationFound(true); // STOP polling!
@@ -179,7 +166,6 @@ export default function TeamInvitationMonitor() {
           }
           
           setTimeout(() => {
-            console.log('[TeamInvitationMonitor] 🚀 Navigating to welcome (real-time)...');
             router.push({
               pathname: '/(coach)/team-welcome',
               params: {
@@ -191,41 +177,34 @@ export default function TeamInvitationMonitor() {
         }
       )
       .subscribe((status, err) => {
-        console.log('[TeamInvitationMonitor] 📡 Subscription status:', status);
         
         if (status === 'SUBSCRIBED') {
-          console.log('[TeamInvitationMonitor] ✅ Connected - starting periodic backup checks');
           
           // Start periodic polling as backup (every 5 seconds)
           if (pollInterval) clearInterval(pollInterval);
           pollInterval = setInterval(() => {
             if (invitationFound) {
               // STOP polling if we found an invitation!
-              console.log('[TeamInvitationMonitor] ⏹️ Stopping polling - invitation found');
               if (pollInterval) {
                 clearInterval(pollInterval);
                 pollInterval = null;
               }
               return;
             }
-            console.log('[TeamInvitationMonitor] 🔄 Periodic check...');
             checkForPendingInvitation();
           }, 5000); // Increased to 5 seconds (less spammy)
           
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('[TeamInvitationMonitor] ❌ Channel error, rechecking...', err);
           if (!invitationFound) {
             setTimeout(() => checkForPendingInvitation(), 1000);
           }
           
         } else if (status === 'CLOSED') {
-          console.log('[TeamInvitationMonitor] 🔌 Channel closed');
           if (pollInterval) clearInterval(pollInterval);
         }
       });
 
     return () => {
-      console.log('[TeamInvitationMonitor] Unsubscribing from real-time updates');
       if (pollInterval) clearInterval(pollInterval);
       subscription.unsubscribe();
     };

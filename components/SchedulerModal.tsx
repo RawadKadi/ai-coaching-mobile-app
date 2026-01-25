@@ -660,10 +660,10 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             onPress={handleAnalyze}
                             disabled={!input.trim() || loading}
                         >
-                            {loading ? <ActivityIndicator color="#FFF" /> : (
+                            {loading ? <ActivityIndicator color={theme.colors.textOnPrimary} /> : (
                                 <>
-                                    <Text style={styles.buttonText}>Analyze Schedule</Text>
-                                    <Send size={20} color="#FFF" />
+                                    <Text style={[styles.buttonText, { color: theme.colors.textOnPrimary }]}>Analyze Schedule</Text>
+                                    <Send size={20} color={theme.colors.textOnPrimary} />
                                 </>
                             )}
                         </TouchableOpacity>
@@ -671,27 +671,27 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 ) : step === 'form' ? (
                     <View style={styles.content}>
                         <View style={styles.conversationalHeader}>
-                            <Text style={styles.conversationalLabel}>
+                            <Text style={[styles.conversationalLabel, { color: theme.colors.textSecondary }]}>
                                 {formDates.length > 0 
                                     ? `You didn't mention the time for ${formDates.length === 1 ? formDates[0] : 'these days'}.` 
                                     : "You didn't mention the days or time."
                                 }
                             </Text>
-                            <Text style={styles.label}>
+                            <Text style={[styles.label, { color: theme.colors.text }]}>
                                 What time do you want to schedule? 
-                                {formDates.length > 1 && <Text style={styles.subLabel}> (Mention individual days if they are different)</Text>}
+                                {formDates.length > 1 && <Text style={[styles.subLabel, { color: theme.colors.textSecondary }]}> (Mention individual days if they are different)</Text>}
                             </Text>
                         </View>
                         
                         {/* Selected Days Summary */}
                         {formDates.length > 0 && (
-                            <View style={styles.summaryContainer}>
-                                <Text style={styles.summaryLabel}>Selected Days:</Text>
+                            <View style={[styles.summaryContainer, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}>
+                                <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Selected Days:</Text>
                                 <View style={styles.summaryTags}>
                                     {formDates.map(day => (
-                                        <View key={day} style={styles.summaryTag}>
-                                            <Calendar size={12} color="#3B82F6" />
-                                            <Text style={styles.summaryTagText}>{day.charAt(0).toUpperCase() + day.slice(1)}</Text>
+                                        <View key={day} style={[styles.summaryTag, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                                            <Calendar size={12} color={theme.colors.primary} />
+                                            <Text style={[styles.summaryTagText, { color: theme.colors.text }]}>{day.charAt(0).toUpperCase() + day.slice(1)}</Text>
                                         </View>
                                     ))}
                                 </View>
@@ -700,18 +700,19 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                         {/* Natural Language Input */}
                         <View style={styles.formGroup}>
-                            <Text style={styles.formLabel}>Time or Details</Text>
+                            <Text style={[styles.formLabel, { color: theme.colors.text }]}>Time or Details</Text>
                             <TextInput
-                                style={[styles.formInput, !formTime && styles.inputHighlight]}
+                                style={[styles.formInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }, !formTime && { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary + '10' }]}
                                 placeholder={formDates.length > 1 
                                     ? "e.g., '1pm' or 'Mon at 1 and Tue at 4'"
                                     : "e.g., '10am' or '7:25pm'"
                                 }
+                                placeholderTextColor={theme.colors.textTertiary}
                                 value={formTime}
                                 autoFocus={!formTime}
                                 onChangeText={setFormTime}
                             />
-                            <Text style={styles.inputHint}>
+                            <Text style={[styles.inputHint, { color: theme.colors.textSecondary }]}>
                                 Tip: You can say "All days at 1pm" or specify times per day.
                             </Text>
                         </View>
@@ -722,16 +723,16 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 style={styles.editDatesToggle}
                                 onPress={() => setFormDates([])}
                             >
-                                <Text style={styles.editDatesText}>+ Add or Change Dates</Text>
+                                <Text style={[styles.editDatesText, { color: theme.colors.primary }]}>+ Add or Change Dates</Text>
                             </TouchableOpacity>
                         ) : (
                             <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>Select Dates</Text>
+                                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Select Dates</Text>
                                 <View style={styles.dateButtons}>
                                     {['today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
                                         <TouchableOpacity
                                             key={day}
-                                            style={[styles.dayButton, formDates.includes(day) && styles.dayButtonActive]}
+                                            style={[styles.dayButton, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }, formDates.includes(day) && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary }]}
                                             onPress={() => {
                                                 if (formDates.includes(day)) {
                                                     setFormDates(formDates.filter(d => d !== day));
@@ -740,7 +741,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                 }
                                             }}
                                         >
-                                            <Text style={[styles.dayButtonText, formDates.includes(day) && styles.dayButtonTextActive]}>
+                                            <Text style={[styles.dayButtonText, { color: theme.colors.textSecondary }, formDates.includes(day) && { color: theme.colors.primary, fontWeight: '600' }]}>
                                                 {day.charAt(0).toUpperCase() + day.slice(1)}
                                             </Text>
                                         </TouchableOpacity>
@@ -751,26 +752,26 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                         {/* Recurrence (Shown only if we have a basic input or if user wants to set global recurrence) */}
                         <View style={styles.formGroup}>
-                            <Text style={styles.formLabel}>Recurrence</Text>
+                            <Text style={[styles.formLabel, { color: theme.colors.text }]}>Recurrence</Text>
                             <View style={styles.recurrenceButtons}>
                                 <TouchableOpacity
-                                    style={[styles.optionButton, (formRecurrence === 'once' || !formRecurrence) && styles.optionButtonActive]}
+                                    style={[styles.optionButton, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '40' }, (formRecurrence === 'once' || !formRecurrence) && { backgroundColor: theme.colors.primary + '25', borderColor: theme.colors.primary }]}
                                     onPress={() => setFormRecurrence('once')}
                                 >
-                                    <Calendar size={20} color={formRecurrence === 'once' ? '#3B82F6' : '#6B7280'} />
+                                    <Calendar size={20} color={formRecurrence === 'once' ? theme.colors.primary : theme.colors.textSecondary} />
                                     <View>
-                                        <Text style={[styles.optionButtonText, (formRecurrence === 'once' || !formRecurrence) && styles.optionButtonTextActive]}>One-time</Text>
-                                        <Text style={styles.optionSubText}>Just for the days mentioned</Text>
+                                        <Text style={[styles.optionButtonText, { color: theme.colors.primary }, (formRecurrence === 'once' || !formRecurrence) && { fontWeight: '700' }]}>One-time</Text>
+                                        <Text style={[styles.optionSubText, { color: theme.colors.textSecondary }]}>Just for the days mentioned</Text>
                                     </View>
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                    style={[styles.optionButton, formRecurrence === 'weekly' && styles.optionButtonActive]}
+                                    style={[styles.optionButton, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '40' }, formRecurrence === 'weekly' && { backgroundColor: theme.colors.primary + '25', borderColor: theme.colors.primary }]}
                                     onPress={() => setFormRecurrence('weekly')}
                                 >
-                                    <Repeat size={20} color={formRecurrence === 'weekly' ? '#3B82F6' : '#6B7280'} />
+                                    <Repeat size={20} color={formRecurrence === 'weekly' ? theme.colors.primary : theme.colors.textSecondary} />
                                     <View>
-                                        <Text style={[styles.optionButtonText, formRecurrence === 'weekly' && styles.optionButtonTextActive]}>Weekly</Text>
-                                        <Text style={styles.optionSubText}>Repeating every week</Text>
+                                        <Text style={[styles.optionButtonText, { color: theme.colors.primary }, formRecurrence === 'weekly' && { fontWeight: '700' }]}>Weekly</Text>
+                                        <Text style={[styles.optionSubText, { color: theme.colors.textSecondary }]}>Repeating every week</Text>
                                     </View>
                                 </TouchableOpacity>
                             </View>
@@ -778,26 +779,26 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                         <View style={styles.buttonGroup}>
                             <TouchableOpacity
-                                style={[styles.button, (!formTime || formDates.length === 0 || loading) && styles.buttonDisabled]}
+                                style={[styles.button, { backgroundColor: theme.colors.primary }, (!formTime || formDates.length === 0 || loading) && styles.buttonDisabled]}
                                 onPress={handleFormSubmit}
                                 disabled={!formTime || formDates.length === 0 || loading}
                             >
-                                {loading ? <ActivityIndicator color="#FFF" /> : (
+                                {loading ? <ActivityIndicator color={theme.colors.textOnPrimary} /> : (
                                     <>
-                                        <Text style={styles.buttonText}>Review Schedule</Text>
-                                        <Check size={20} color="#FFF" />
+                                        <Text style={[styles.buttonText, { color: theme.colors.textOnPrimary }]}>Review Schedule</Text>
+                                        <Check size={20} color={theme.colors.textOnPrimary} />
                                     </>
                                 )}
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.secondaryButton} onPress={resetForm}>
-                                <Text style={styles.secondaryButtonText}>Back</Text>
+                            <TouchableOpacity style={[styles.secondaryButton, { borderColor: theme.colors.border }]} onPress={resetForm}>
+                                <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Back</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 ) : (
                     <View style={styles.content}>
-                        <Text style={styles.label}>Review Proposed Sessions</Text>
+                        <Text style={[styles.label, { color: theme.colors.text }]}>Review Proposed Sessions</Text>
                         <ScrollView style={styles.list}>
                             {proposedSessions.map((session, index) => {
                                 const isPending = session.status === 'pending_resolution';
@@ -806,38 +807,40 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                                 if (isEditing && editForm) {
                                     return (
-                                        <View key={index} style={styles.card}>
-                                            <Text style={styles.editLabel}>Edit Session</Text>
+                                        <View key={index} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                                            <Text style={[styles.editLabel, { color: theme.colors.text }]}>Edit Session</Text>
                                             
                                             <View style={styles.formGroup}>
-                                                <Text style={styles.fieldLabel}>Time (24h format)</Text>
+                                                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Time (24h format)</Text>
                                                 <TextInput
-                                                    style={styles.editInput}
+                                                    style={[styles.editInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, color: theme.colors.text }]}
                                                     value={formatTimeToHHmm(editForm.scheduled_at)}
                                                     onChangeText={(text) => {
                                                         const updatedTime = updateSessionTime(editForm.scheduled_at, text);
                                                         setEditForm({ ...editForm, scheduled_at: updatedTime });
                                                     }}
                                                     placeholder="HH:mm"
+                                                    placeholderTextColor={theme.colors.textTertiary}
                                                 />
                                             </View>
 
                                             <View style={styles.formGroup}>
-                                                <Text style={styles.fieldLabel}>Notes</Text>
+                                                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Notes</Text>
                                                 <TextInput
-                                                    style={styles.editInput}
+                                                    style={[styles.editInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, color: theme.colors.text }]}
                                                     value={editForm.notes}
                                                     onChangeText={(text) => setEditForm({...editForm, notes: text})}
                                                     placeholder="Notes"
+                                                    placeholderTextColor={theme.colors.textTertiary}
                                                 />
                                             </View>
 
                                             <View style={styles.editActions}>
                                                 <TouchableOpacity style={styles.iconButton} onPress={() => setEditingIndex(null)}>
-                                                    <X size={20} color="#6B7280" />
+                                                    <X size={20} color={theme.colors.textSecondary} />
                                                 </TouchableOpacity>
                                                 <TouchableOpacity style={styles.iconButton} onPress={saveEdit}>
-                                                    <Save size={20} color="#3B82F6" />
+                                                    <Save size={20} color={theme.colors.primary} />
                                                 </TouchableOpacity>
                                             </View>
                                         </View>
@@ -845,11 +848,11 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 }
 
                                 return (
-                                    <View key={index} style={[styles.card, conflict && styles.cardConflict]}>
+                                    <View key={index} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }, conflict && { borderColor: theme.colors.warning + '80', backgroundColor: theme.colors.warning + '10' }]}>
                                         <View style={styles.cardHeader}>
                                             <View style={styles.row}>
-                                                <Calendar size={16} color="#4B5563" />
-                                                <Text style={styles.date}>
+                                                <Calendar size={16} color={theme.colors.textSecondary} />
+                                                <Text style={[styles.date, { color: theme.colors.text }]}>
                                                     {session.recurrence === 'weekly' 
                                                         ? `Every ${session.day_of_week || 'Week'}`
                                                         : new Date(session.scheduled_at).toLocaleDateString()
@@ -858,46 +861,46 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                             </View>
                                             <View style={styles.cardActions}>
                                                 <TouchableOpacity onPress={() => startEditing(index)}>
-                                                    <Pencil size={16} color="#6B7280" />
+                                                    <Pencil size={16} color={theme.colors.textSecondary} />
                                                 </TouchableOpacity>
                                                 <TouchableOpacity onPress={() => deleteSession(index)}>
-                                                    <Trash2 size={16} color="#EF4444" />
+                                                    <Trash2 size={16} color={theme.colors.warning} />
                                                 </TouchableOpacity>
                                             </View>
                                         </View>
                                         
                                         {isPending ? (
-                                            <View style={[styles.conflictBadge, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
-                                                <Clock size={12} color="#B45309" />
-                                                <Text style={[styles.conflictText, { color: '#B45309' }]}>Pending Resolution</Text>
+                                            <View style={[styles.conflictBadge, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}>
+                                                <Clock size={12} color={theme.colors.warning} />
+                                                <Text style={[styles.conflictText, { color: theme.colors.warning }]}>Pending Resolution</Text>
                                             </View>
                                         ) : conflict && (
                                             <TouchableOpacity 
-                                                style={styles.conflictBadge}
+                                                style={[styles.conflictBadge, { backgroundColor: theme.colors.warning + '20' }]}
                                                 onPress={() => handleConflictDetected(session, conflict)}
                                             >
-                                                <AlertTriangle size={12} color="#B91C1C" />
-                                                <Text style={styles.conflictText}>Conflict Detected • Tap to Resolve</Text>
+                                                <AlertTriangle size={12} color={theme.colors.warning} />
+                                                <Text style={[styles.conflictText, { color: theme.colors.warning }]}>Conflict Detected • Tap to Resolve</Text>
                                             </TouchableOpacity>
                                         )}
 
                                         <View style={styles.row}>
-                                            <Clock size={16} color="#4B5563" />
-                                            <Text style={styles.time}>
+                                            <Clock size={16} color={theme.colors.textSecondary} />
+                                            <Text style={[styles.time, { color: theme.colors.textSecondary }]}>
                                                 {new Date(session.scheduled_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
                                                 {' '}({session.duration_minutes} min)
                                             </Text>
                                         </View>
-                                        <Text style={styles.type}>{session.session_type.toUpperCase()}</Text>
-                                        {session.notes && <Text style={styles.notes}>{session.notes}</Text>}
+                                        <Text style={[styles.type, { color: theme.colors.primary }]}>{session.session_type.toUpperCase()}</Text>
+                                        {session.notes && <Text style={[styles.notes, { color: theme.colors.textSecondary }]}>{session.notes}</Text>}
 
                                         {/* Recurrence Toggle */}
                                         <TouchableOpacity 
-                                            style={[styles.recurrenceToggle, session.recurrence === 'weekly' && styles.recurrenceActive]} 
+                                            style={[styles.recurrenceToggle, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }, session.recurrence === 'weekly' && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '60' }]} 
                                             onPress={() => toggleRecurrence(index)}
                                         >
-                                            <Repeat size={14} color={session.recurrence === 'weekly' ? '#2563EB' : '#6B7280'} />
-                                            <Text style={[styles.recurrenceText, session.recurrence === 'weekly' && styles.recurrenceTextActive]}>
+                                            <Repeat size={14} color={session.recurrence === 'weekly' ? theme.colors.primary : theme.colors.textSecondary} />
+                                            <Text style={[styles.recurrenceText, { color: theme.colors.textSecondary }, session.recurrence === 'weekly' && { color: theme.colors.primary, fontWeight: '600' }]}>
                                                 {session.recurrence === 'weekly' ? 'Recurring (Weekly)' : 'One-time Session'}
                                             </Text>
                                         </TouchableOpacity>
@@ -907,20 +910,20 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         </ScrollView>
 
                         <View style={styles.footer}>
-                            <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('form')}>
-                                <Text style={styles.secondaryButtonText}>Back</Text>
+                            <TouchableOpacity style={[styles.secondaryButton, { borderColor: theme.colors.border }]} onPress={() => setStep('form')}>
+                                <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Back</Text>
                             </TouchableOpacity>
                             <TouchableOpacity 
-                                style={[styles.button, (loading || hasAnyConflict) && styles.buttonDisabled]} 
+                                style={[styles.button, { backgroundColor: theme.colors.primary }, (loading || hasAnyConflict) && styles.buttonDisabled]} 
                                 onPress={handleConfirm} 
                                 disabled={loading || hasAnyConflict}
                             >
-                                {loading ? <ActivityIndicator color="#FFF" /> : (
+                                {loading ? <ActivityIndicator color={theme.colors.textOnPrimary} /> : (
                                     <>
-                                        <Text style={styles.buttonText}>
+                                        <Text style={[styles.buttonText, { color: theme.colors.textOnPrimary }]}>
                                             {hasAnyConflict ? 'Resolve Conflicts' : proposedSessions.every(s => s.status === 'pending_resolution') ? 'Done' : 'Confirm & Lock'}
                                         </Text>
-                                        {!hasAnyConflict && <Check size={20} color="#FFF" />}
+                                        {!hasAnyConflict && <Check size={20} color={theme.colors.textOnPrimary} />}
                                     </>
                                 )}
                             </TouchableOpacity>
@@ -941,7 +944,6 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9FAFB',
         paddingTop: 20,
     },
     header: {
@@ -950,12 +952,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
     },
     title: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#111827',
     },
     content: {
         flex: 1,
@@ -963,15 +963,12 @@ const styles = StyleSheet.create({
     },
     label: {
         fontSize: 16,
-        color: '#374151',
         marginBottom: 12,
         fontWeight: '500',
     },
     inputContainer: {
-        backgroundColor: '#FFF',
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#D1D5DB',
         padding: 12,
         height: 150,
         marginBottom: 20,
@@ -979,7 +976,6 @@ const styles = StyleSheet.create({
     textInput: {
         flex: 1,
         fontSize: 16,
-        color: '#111827',
         textAlignVertical: 'top',
     },
     micButton: {
@@ -989,7 +985,6 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     button: {
-        backgroundColor: '#3B82F6',
         padding: 16,
         borderRadius: 12,
         flexDirection: 'row',
@@ -1001,7 +996,6 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     buttonText: {
-        color: '#FFF',
         fontSize: 16,
         fontWeight: '600',
     },
@@ -1009,16 +1003,10 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     card: {
-        backgroundColor: '#FFF',
         padding: 16,
         borderRadius: 12,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
-    },
-    cardConflict: {
-        borderColor: '#FECACA',
-        backgroundColor: '#FEF2F2',
     },
     cardHeader: {
         flexDirection: 'row',
@@ -1038,21 +1026,17 @@ const styles = StyleSheet.create({
     date: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#111827',
     },
     time: {
         fontSize: 14,
-        color: '#4B5563',
     },
     type: {
         fontSize: 12,
         fontWeight: '700',
-        color: '#3B82F6',
         marginTop: 4,
     },
     notes: {
         fontSize: 14,
-        color: '#6B7280',
         marginTop: 4,
         fontStyle: 'italic',
     },
@@ -1060,14 +1044,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: '#FEE2E2',
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 12,
         marginBottom: 8,
     },
     conflictText: {
-        color: '#B91C1C',
         fontSize: 12,
         fontWeight: '600',
     },
@@ -1081,24 +1063,20 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         marginTop:10,
-        borderColor: '#D1D5DB',
         alignItems: 'center',
         justifyContent: 'center',
     },
     secondaryButtonText: {
-        color: '#374151',
         fontSize: 16,
         fontWeight: '600',
     },
     editLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#374151',
         marginBottom: 8,
     },
     editInput: {
         borderWidth: 1,
-        borderColor: '#E5E7EB',
         borderRadius: 8,
         padding: 12,
         marginBottom: 12,
@@ -1112,7 +1090,6 @@ const styles = StyleSheet.create({
     fieldLabel: {
         fontSize: 12,
         fontWeight: '500',
-        color: '#6B7280',
         marginBottom: 4,
     },
     iconButton: {
@@ -1125,24 +1102,13 @@ const styles = StyleSheet.create({
         marginTop: 12,
         paddingVertical: 6,
         paddingHorizontal: 10,
-        backgroundColor: '#F3F4F6',
         borderRadius: 8,
         alignSelf: 'flex-start',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
-    },
-    recurrenceActive: {
-        backgroundColor: '#EFF6FF',
-        borderColor: '#BFDBFE',
     },
     recurrenceText: {
         fontSize: 12,
-        color: '#6B7280',
         fontWeight: '500',
-    },
-    recurrenceTextActive: {
-        color: '#2563EB',
-        fontWeight: '600',
     },
     clarificationOptions: {
         gap: 12,
@@ -1152,16 +1118,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        backgroundColor: '#EFF6FF',
         padding: 16,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#BFDBFE',
     },
     optionButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#2563EB',
     },
     formGroup: {
         marginBottom: 24,
@@ -1169,17 +1132,13 @@ const styles = StyleSheet.create({
     formLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#374151',
         marginBottom: 8,
     },
     formInput: {
-        backgroundColor: '#FFF',
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#D1D5DB',
         padding: 12,
         fontSize: 16,
-        color: '#111827',
     },
     dateButtons: {
         flexDirection: 'row',
@@ -1190,33 +1149,14 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         paddingHorizontal: 12,
         borderRadius: 8,
-        backgroundColor: '#F3F4F6',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
-    },
-    dayButtonActive: {
-        backgroundColor: '#EFF6FF',
-        borderColor: '#3B82F6',
     },
     dayButtonText: {
         fontSize: 14,
         fontWeight: '500',
-        color: '#6B7280',
-    },
-    dayButtonTextActive: {
-        color: '#3B82F6',
-        fontWeight: '600',
     },
     recurrenceButtons: {
         gap: 12,
-    },
-    optionButtonActive: {
-        backgroundColor: '#DBEAFE',
-        borderColor: '#3B82F6',
-    },
-    optionButtonTextActive: {
-        color: '#1E40AF',
-        fontWeight: '700',
     },
     buttonGroup: {
         flexDirection: 'column',
@@ -1224,16 +1164,13 @@ const styles = StyleSheet.create({
     },
     summaryContainer: {
         marginBottom: 20,
-        backgroundColor: '#F9FAFB',
         padding: 12,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#F3F4F6',
     },
     summaryLabel: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#6B7280',
         marginBottom: 8,
         textTransform: 'uppercase',
     },
@@ -1246,21 +1183,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: '#FFF',
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
     },
     summaryTagText: {
         fontSize: 13,
         fontWeight: '500',
-        color: '#374151',
-    },
-    inputHighlight: {
-        borderColor: '#3B82F6',
-        backgroundColor: '#EFF6FF',
     },
     editDatesToggle: {
         marginTop: -16,
@@ -1269,7 +1199,6 @@ const styles = StyleSheet.create({
     },
     editDatesText: {
         fontSize: 13,
-        color: '#3B82F6',
         fontWeight: '500',
     },
     conversationalHeader: {
@@ -1277,24 +1206,20 @@ const styles = StyleSheet.create({
     },
     conversationalLabel: {
         fontSize: 15,
-        color: '#4B5563',
         marginBottom: 4,
         lineHeight: 20,
     },
     subLabel: {
         fontSize: 13,
-        color: '#6B7280',
         fontWeight: '400',
     },
     inputHint: {
         fontSize: 12,
-        color: '#6B7280',
         marginTop: 6,
         fontStyle: 'italic',
     },
     optionSubText: {
         fontSize: 12,
-        color: '#6B7280',
         marginTop: 2,
     },
 });

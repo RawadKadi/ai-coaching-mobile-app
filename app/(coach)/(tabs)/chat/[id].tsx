@@ -743,6 +743,7 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
 };
 
 const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolean }) => {
+  const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   
   console.log('[ChallengeCompletionMessage] Component called with:', typeof content);
@@ -768,14 +769,14 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
 
   return (
     <View style={{ width: '100%', alignItems: isOwn ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
-      <View style={[challengeStyles.container]}>
-        <View style={challengeStyles.header}>
-          <Text style={challengeStyles.headerText}>{data.title || 'Client finished this task'}</Text>
+      <View style={[challengeStyles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.primary }]}>
+        <View style={[challengeStyles.header, { backgroundColor: theme.colors.primary + '20', borderBottomColor: theme.colors.primary }]}>
+          <Text style={[challengeStyles.headerText, { color: theme.colors.primary }]}>{data.title || 'Client finished this task'}</Text>
         </View>
         
         <View style={challengeStyles.body}>
-          <Text style={challengeStyles.taskName}>{data.taskName}</Text>
-          <Text style={challengeStyles.completedAt}>
+          <Text style={[challengeStyles.taskName, { color: theme.colors.text }]}>{data.taskName}</Text>
+          <Text style={[challengeStyles.completedAt, { color: theme.colors.textSecondary }]}>
             Completed at: {data.completedAt}
           </Text>
           
@@ -783,29 +784,29 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
             style={challengeStyles.viewDetailsButton}
             onPress={toggleExpand}
           >
-            <Text style={challengeStyles.viewDetailsText}>View Details</Text>
+            <Text style={[challengeStyles.viewDetailsText, { color: theme.colors.primary }]}>View Details</Text>
             {expanded ? (
-              <ChevronUp size={16} color="#059669" />
+              <ChevronUp size={16} color={theme.colors.primary} />
             ) : (
-              <ChevronDown size={16} color="#059669" />
+              <ChevronDown size={16} color={theme.colors.primary} />
             )}
           </TouchableOpacity>
 
           {expanded && (
-            <View style={challengeStyles.expandedDetails}>
+            <View style={[challengeStyles.expandedDetails, { borderTopColor: theme.colors.border }]}>
               {data.taskDescription && (
                 <>
-                  <Text style={challengeStyles.detailLabel}>Description:</Text>
-                  <Text style={challengeStyles.detailText}>{data.taskDescription}</Text>
+                  <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Description:</Text>
+                  <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.taskDescription}</Text>
                 </>
               )}
               <View style={challengeStyles.detailRow}>
-                <Text style={challengeStyles.detailLabel}>Focus: </Text>
-                <Text style={challengeStyles.detailText}>{data.focusType}</Text>
+                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Focus: </Text>
+                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.focusType}</Text>
               </View>
               <View style={challengeStyles.detailRow}>
-                <Text style={challengeStyles.detailLabel}>Intensity: </Text>
-                <Text style={challengeStyles.detailText}>{data.intensity}</Text>
+                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Intensity: </Text>
+                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.intensity}</Text>
               </View>
             </View>
           )}
@@ -963,6 +964,7 @@ const ZoomableImage = ({ imageUrl, onClose, onLoadStart, onLoadEnd }: {
   );
 };
 const SessionInviteMessage = ({ content, isOwn, status, onJoin, onCancel }: { content: any, isOwn: boolean, status?: string, onJoin: () => void, onCancel: () => void }) => {
+  const theme = useTheme();
   const data = typeof content === 'string' ? JSON.parse(content) : content;
   const isCancelled = status === 'cancelled';
   const isPostponed = isCancelled && !!data.cancellationReason;
@@ -970,45 +972,46 @@ const SessionInviteMessage = ({ content, isOwn, status, onJoin, onCancel }: { co
   return (
     <View style={[
       styles.inviteContainer, 
+      { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
       { alignSelf: isOwn ? 'flex-end' : 'flex-start' },
-      isPostponed ? styles.invitePostponed : (isCancelled ? styles.inviteCancelled : null)
+      isPostponed ? { borderColor: theme.colors.warning, backgroundColor: theme.colors.warning + '10' } : (isCancelled ? { borderColor: theme.colors.warning, backgroundColor: theme.colors.warning + '08' } : null)
     ]}>
-      <View style={styles.inviteHeader}>
+      <View style={[styles.inviteHeader, { borderBottomColor: theme.colors.border }]}>
         <Image 
           source={{ uri: 'https://jitsi.org/wp-content/uploads/2020/03/favicon.png' }} 
           style={styles.meetLogo}
           resizeMode="contain"
         />
-        <Text style={styles.inviteTitle}>Coaching Session</Text>
+        <Text style={[styles.inviteTitle, { color: theme.colors.text }]}>Coaching Session</Text>
         {isCancelled && (
-          <View style={isPostponed ? styles.postponedTag : styles.cancelledTag}>
+          <View style={isPostponed ? [styles.postponedTag, { backgroundColor: theme.colors.warning }] : [styles.cancelledTag, { backgroundColor: theme.colors.warning }]}>
             <Text style={styles.cancelledTagText}>{isPostponed ? 'Postponed' : 'Cancelled'}</Text>
           </View>
         )}
       </View>
       
       <View style={styles.inviteBody}>
-        <Text style={styles.inviteDescription}>
+        <Text style={[styles.inviteDescription, { color: theme.colors.text }]}>
           {data.description || 'Instant Meeting'}
         </Text>
-        <Text style={styles.inviteTime}>
+        <Text style={[styles.inviteTime, { color: theme.colors.textSecondary }]}>
           {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
         {isCancelled && data.cancellationReason && (
           <View style={styles.cancellationReasonContainer}>
-            <Text style={styles.cancellationReasonLabel}>Reason:</Text>
-            <Text style={styles.cancellationReasonText}>{data.cancellationReason}</Text>
+            <Text style={[styles.cancellationReasonLabel, { color: theme.colors.textSecondary }]}>Reason:</Text>
+            <Text style={[styles.cancellationReasonText, { color: theme.colors.textSecondary }]}>{data.cancellationReason}</Text>
           </View>
         )}
       </View>
 
       {!isCancelled && (
-        <View style={styles.inviteActions}>
-          <TouchableOpacity style={styles.inviteCancelButton} onPress={onCancel}>
-            <Text style={styles.inviteCancelText}>Cancel</Text>
+        <View style={[styles.inviteActions, { borderTopColor: theme.colors.border }]}>
+          <TouchableOpacity style={[styles.inviteCancelButton, { borderRightColor: theme.colors.border }]} onPress={onCancel}>
+            <Text style={[styles.inviteCancelText, { color: theme.colors.warning }]}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.inviteJoinButton} onPress={onJoin}>
-            <Text style={styles.inviteJoinText}>Join Now</Text>
+          <TouchableOpacity style={[styles.inviteJoinButton, { backgroundColor: theme.colors.primary + '15' }]} onPress={onJoin}>
+            <Text style={[styles.inviteJoinText, { color: theme.colors.primary }]}>Join Now</Text>
           </TouchableOpacity>
         </View>
       )}

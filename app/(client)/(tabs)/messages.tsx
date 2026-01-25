@@ -274,9 +274,9 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
 
   return (
     <View style={{ width: '100%', alignItems: isOwn ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
-      <View style={[challengeStyles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.success }]}>
-        <View style={[challengeStyles.header, { backgroundColor: theme.colors.success + '20', borderBottomColor: theme.colors.success }]}>
-          <Text style={[challengeStyles.headerText, { color: theme.colors.success }]}>{data.title || 'Client finished this task'}</Text>
+      <View style={[challengeStyles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.primary }]}>
+        <View style={[challengeStyles.header, { backgroundColor: theme.colors.primary + '20', borderBottomColor: theme.colors.primary }]}>
+          <Text style={[challengeStyles.headerText, { color: theme.colors.primary }]}>{data.title || 'Client finished this task'}</Text>
         </View>
         
         <View style={challengeStyles.body}>
@@ -410,7 +410,7 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
         backgroundColor: theme.colors.surface,
         borderColor: theme.colors.border
       },
-      isPostponed ? styles.invitePostponed : (isCancelled ? styles.inviteCancelled : null)
+      isPostponed ? { borderColor: theme.colors.warning, backgroundColor: theme.colors.warning + '10', borderWidth: 1 } : (isCancelled ? { borderColor: theme.colors.warning, backgroundColor: theme.colors.warning + '08', borderWidth: 1, opacity: 0.8 } : null)
     ]}>
       <View style={styles.inviteHeader}>
         <Image 
@@ -421,7 +421,7 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
         />
         <Text style={[styles.inviteTitle, { color: theme.colors.text }]}>Coaching Session</Text>
         {isCancelled && (
-          <View style={isPostponed ? styles.postponedTag : styles.cancelledTag}>
+          <View style={[styles.postponedTag, { backgroundColor: theme.colors.warning }]}>
             <Text style={styles.cancelledTagText}>{isPostponed ? 'Postponed' : 'Cancelled'}</Text>
           </View>
         )}
