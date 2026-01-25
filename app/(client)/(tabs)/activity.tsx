@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
@@ -22,6 +22,8 @@ export default function ActivityScreen() {
   const [challenges, setChallenges] = useState<any[]>([]);
   const [challengeProgress, setChallengeProgress] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
     if (client) {
@@ -91,6 +93,11 @@ export default function ActivityScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenDetails = (challenge: any) => {
+    setSelectedChallenge(challenge);
+    setShowDetailsModal(true);
   };
 
   const handleToggleChallenge = async (challenge: any) => {
@@ -383,16 +390,19 @@ export default function ActivityScreen() {
               const isCompleted = challenge.completed || false;
 
               return (
-                <TouchableOpacity
+                <View
                   key={challenge.id}
                   style={[
                     styles.card,
                     { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
                     isCompleted && { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }
                   ]}
-                  onPress={() => handleToggleChallenge(challenge)}
                 >
-                  <View style={styles.cardContent}>
+                  <TouchableOpacity
+                    style={styles.cardContent}
+                    onPress={() => handleOpenDetails(challenge)}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.challengeHeader}>
                       <Text style={[styles.cardTitle, { color: theme.colors.text }, isCompleted && { color: theme.colors.primary, textDecorationLine: 'line-through' }]}>
                         {challenge.name}
@@ -406,13 +416,19 @@ export default function ActivityScreen() {
                         {challenge.description}
                       </Text>
                     )}
-                  </View>
-                  {isCompleted ? (
-                    <CheckCircle size={24} color="#10B981" />
-                  ) : (
-                    <Circle size={24} color="#6366f1" />
-                  )}
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleToggleChallenge(challenge)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.6}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle size={24} color={theme.colors.primary} />
+                    ) : (
+                      <Circle size={24} color={theme.colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                </View>
               );
             })
           )}
@@ -456,6 +472,65 @@ export default function ActivityScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Challenge Details Modal */}
+      <Modal
+        visible={showDetailsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDetailsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Challenge Details</Text>
+              <TouchableOpacity onPress={() => setShowDetailsModal(false)}>
+                <Text style={[styles.modalClose, { color: theme.colors.textSecondary }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {selectedChallenge && (
+              <ScrollView style={styles.modalContent}>
+                <Text style={[styles.modalChallengeName, { color: theme.colors.text }]}>
+                  {selectedChallenge.name}
+                </Text>
+                <View style={styles.modalBadgeContainer}>
+                  <View style={[styles.modalBadge, { backgroundColor: theme.colors.primary + '15' }]}>
+                    <Text style={[styles.modalBadgeText, { color: theme.colors.primary }]}>
+                      {selectedChallenge.focus_type}
+                    </Text>
+                  </View>
+                  {selectedChallenge.intensity && (
+                    <View style={[styles.modalBadge, { backgroundColor: theme.colors.primary + '15' }]}>
+                      <Text style={[styles.modalBadgeText, { color: theme.colors.primary }]}>
+                        {selectedChallenge.intensity}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {selectedChallenge.description && (
+                  <View style={styles.modalSection}>
+                    <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>Description</Text>
+                    <Text style={[styles.modalSectionText, { color: theme.colors.textSecondary }]}>
+                      {selectedChallenge.description}
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => {
+                    setShowDetailsModal(false);
+                    handleToggleChallenge(selectedChallenge);
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, { color: theme.colors.textOnPrimary }]}>
+                    {selectedChallenge.completed ? 'Mark as Incomplete' : 'Mark as Complete'}
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -583,5 +658,76 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#6366f1',
     borderRadius: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalClose: {
+    fontSize: 24,
+    padding: 4,
+  },
+  modalContent: {
+    padding: 20,
+  },
+  modalChallengeName: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  modalBadgeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 24,
+  },
+  modalBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  modalBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  modalSection: {
+    marginBottom: 24,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  modalSectionText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  modalButton: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
