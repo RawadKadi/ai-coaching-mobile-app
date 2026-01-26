@@ -66,7 +66,7 @@ const TimeSlotPicker = ({
 );
 
 export default function ConflictResolutionModal({ visible, conflictInfo, onResolve, onCancel }: ConflictResolutionModalProps) {
-    const [selectedOption, setSelectedOption] = useState<'keep' | 'reschedule' | null>(null);
+    const [selectedOption, setSelectedOption] = useState<'keep' | null>(null);
     const [selectedNewTime, setSelectedNewTime] = useState<string | null>(null);
     const [showTimePicker, setShowTimePicker] = useState(false);
 
@@ -88,22 +88,13 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
 
         try {
             if (selectedOption === 'keep') {
-                // Option 1: Propose new time to INCOMING client
+                // Option 1 (ONLY): Propose new time to INCOMING client
                 console.log('[ConflictModal] About to call onResolve with Option 1');
                 onResolve({
                     action: 'propose_new_time_for_incoming',
                     proposedSlots: availableSlots,
                 });
                 console.log('[ConflictModal] onResolve called successfully for Option 1');
-            } else if (selectedOption === 'reschedule') {
-                // Option 2: Propose reschedule to EXISTING client
-                console.log('[ConflictModal] About to call onResolve with Option 2');
-                onResolve({
-                    action: 'propose_reschedule_for_existing',
-                    targetSessionId: conflictInfo.existingSession.id,
-                    proposedSlots: availableSlots,
-                });
-                console.log('[ConflictModal] onResolve called successfully for Option 2');
             }
         } catch (error) {
             console.error('[ConflictModal] ERROR calling onResolve:', error);
@@ -230,26 +221,6 @@ export default function ConflictResolutionModal({ visible, conflictInfo, onResol
                             </Text>
 
 
-                        </TouchableOpacity>
-
-                        {/* Option 2: Propose to Existing */}
-                        <TouchableOpacity
-                            style={[styles.optionCard, styles.advancedOption, selectedOption === 'reschedule' && styles.optionCardSelected]}
-                            onPress={() => setSelectedOption('reschedule')}
-                        >
-                            <View style={styles.optionContent}>
-                                <View style={styles.optionHeader}>
-                                    <View style={[styles.radioOuter, selectedOption === 'reschedule' && styles.radioOuterSelected]}>
-                                        {selectedOption === 'reschedule' && <View style={styles.radioInner} />}
-                                    </View>
-                                    <View style={styles.optionTextContainer}>
-                                        <Text style={styles.optionTitle}>Ask {existingSession.client_name} to Reschedule</Text>
-                                        <Text style={styles.optionDescription}>
-                                            Request {existingSession.client_name} to move their session to accommodate {proposedSession.client_name}.
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>

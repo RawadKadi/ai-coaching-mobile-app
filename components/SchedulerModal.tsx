@@ -5,9 +5,11 @@ import { useTheme } from '@/contexts/BrandContext';
 import { parseScheduleRequest, ProposedSession, RateLimitError, extractSchedulingIntent } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
 import ConflictResolutionModal from './ConflictResolutionModal';
+import ManualSchedulerModal from './ManualSchedulerModal';
 import { ConflictInfo, Resolution } from '@/types/conflict';
 import { findAvailableSlots } from '@/lib/time-slot-finder';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SchedulerModalProps {
     visible: boolean;
@@ -38,6 +40,10 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     // Conflict resolution state
     const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
     const [showConflictModal, setShowConflictModal] = useState(false);
+    
+    // Manual scheduling mode
+    const [showManualMode, setShowManualMode] = useState(false);
+    const { coach } = useAuth();
     
     const resetForm = () => {
         setStep('input');
@@ -492,68 +498,6 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                 console.log('[SchedulerModal] Option 1: Message sent without creating conflicting session');
                 Alert.alert('Request Sent', `Resolution request sent to ${proposedSession.client_name}`);
-
-            } else if (resolution.action === 'propose_reschedule_for_existing') {
-                // Option 2: Propose to EXISTING client
-                
-                // 1. Get Existing Client User ID
-                const { data: clientData, error: clientError } = await supabase
-                    .from('clients')
-                    .select('user_id')
-                    .eq('id', existingSession.client_id)
-                    .single();
-
-                if (clientError || !clientData) throw new Error('Client not found');
-
-                // 2. Update existing session to mark it as pending reschedule
-                console.log('[SchedulerModal] Updating existing session for Option 2:', existingSession.id);
-                const { error: updateError } = await supabase
-                    .from('sessions')
-                    .update({
-                        invite_sent: true,
-                        cancellation_reason: 'pending_reschedule_for_' + proposedSession.client_id
-                    })
-                    .eq('id', existingSession.id);
-                
-                if (updateError) {
-                    console.error('[SchedulerModal] Error updating existing session:', updateError);
-                    throw updateError;
-                }
-
-                // 3. Send Message
-                const isWeekly = existingSession.recurrence === 'weekly';
-                const dayName = new Date(existingSession.scheduled_at).toLocaleDateString('en-US', { weekday: 'long' });
-                const dateStr = new Date(existingSession.scheduled_at).toLocaleDateString();
-
-                const messageText = isWeekly
-                    ? `Hi ${existingSession.client_name}, could we reschedule our weekly sessions on ${dayName}s to accommodate another client?`
-                    : `Hi ${existingSession.client_name}, could we reschedule our session on ${dayName}, ${dateStr} to accommodate another client?                `;
-
-                const messageContent = {
-                    type: 'reschedule_proposal',
-                    sessionId: existingSession.id,
-                    originalTime: existingSession.scheduled_at,
-                    availableSlots: resolution.proposedSlots,
-                    mode: 'confirm_reschedule',
-                    text: messageText,
-                    recurrence: existingSession.recurrence,
-                    dayOfWeek: dayName
-                };
-
-                await supabase.from('messages').insert({
-                    sender_id: currentUser.id,
-                    recipient_id: clientData.user_id,
-                    content: JSON.stringify(messageContent),
-                    read: false
-                });
-                console.log('[SchedulerModal] Message sent to existing client');
-
-                // NOTE: We do NOT create the incoming session here!
-                // The incoming client will get their session AFTER the existing client
-                // picks a new time and frees up the original slot.
-                // Their request stays in the queue as pending_resolution.
-
-                Alert.alert('Request Sent', `Reschedule request sent to ${existingSession.client_name}`);
             }
 
             // Cleanup: Mark as pending instead of removing
@@ -611,7 +555,15 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
             <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
                 <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-                    <Text style={[styles.title, { color: theme.colors.text }]}>AI Scheduler</Text>
+                    <View style={styles.headerLeft}>
+                        <Text style={[styles.title, { color: theme.colors.text }]}>AI Scheduler</Text>
+                        <TouchableOpacity 
+                            style={[styles.manualButton, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary }]}
+                            onPress={() => setShowManualMode(true)}
+                        >
+                            <Text style={[styles.manualButtonText, { color: theme.colors.primary }]}>Edit manually</Text>
+                        </TouchableOpacity>
+                    </View>
                     <TouchableOpacity onPress={() => { 
                         if (proposedSessions.length > 0 && step === 'review') {
                             Alert.alert(
@@ -937,6 +889,19 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 onResolve={handleResolution}
                 onCancel={() => setShowConflictModal(false)}
             />
+
+            {/* Manual Scheduler Modal */}
+            {showManualMode && coach && (
+                <ManualSchedulerModal
+                    visible={showManualMode}
+                    onClose={() => setShowManualMode(false)}
+                    onConfirm={onConfirm}
+                    clientContext={clientContext}
+                    existingSessions={existingSessions}
+                    targetClientId={targetClientId}
+                    coachId={coach.id}
+                />
+            )}
         </Modal>
     );
 }
@@ -956,6 +921,21 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 20,
         fontWeight: '700',
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    manualButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    manualButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
     },
     content: {
         flex: 1,
