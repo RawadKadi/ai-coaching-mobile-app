@@ -896,9 +896,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     visible={showManualMode}
                     onClose={() => setShowManualMode(false)}
                     onConfirm={onConfirm}
-                    clientContext={clientContext}
                     existingSessions={existingSessions}
-                    targetClientId={targetClientId}
                     coachId={coach.id}
                 />
             )}
