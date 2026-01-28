@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
+import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { Session as SessionType } from '@/types/database';
 
@@ -43,8 +44,32 @@ export default function CalendarScreen() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showScheduler, setShowScheduler] = useState(false);
+  const [showManualScheduler, setShowManualScheduler] = useState(false);
+  const [showAIScheduler, setShowAIScheduler] = useState(false);
   const [selectedClient, setSelectedClient] = useState<{id: string, name: string, timezone: string} | null>(null);
+  const [initialClientData, setInitialClientData] = useState<any>(null); // For passing to ManualSchedulerModal
+
+  // When switching back from AI scheduler, we need to fetch the full client data
+  useEffect(() => {
+    const fetchClientData = async () => {
+      if (selectedClient && showManualScheduler && !showAIScheduler) {
+        // Fetch full client data for ManualSchedulerModal
+        const { data } = await supabase
+          .from('clients')
+          .select('id, user_id, profiles(full_name, avatar_url)')
+          .eq('id', selectedClient.id)
+          .single();
+        
+        if (data) {
+          setInitialClientData(data);
+        }
+      } else if (!showManualScheduler) {
+        // Reset when modal closes
+        setInitialClientData(null);
+      }
+    };
+    fetchClientData();
+  }, [selectedClient, showManualScheduler, showAIScheduler]);
 
   useFocusEffect(
     useCallback(() => {
@@ -274,29 +299,63 @@ export default function CalendarScreen() {
       </View>
 
       {/* Floating Action Button */}
-      <TouchableOpacity 
-        style={[styles.fab, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]}
+      <TouchableOpacity
+        style={styles.fab}
         onPress={() => {
-          // For now, open modal without client selection
-          // TODO: Add client selector before opening modal
-          setSelectedClient({ id: 'temp-id', name: 'Client', timezone: 'UTC' });
-          setShowScheduler(true);
+          // Open manual scheduler for client selection first
+          setShowManualScheduler(true);
         }}
       >
         <Plus size={24} color="#FFF" />
       </TouchableOpacity>
 
-      {/* Scheduler Modal */}
+      {/* Manual Scheduler Modal */}
+      {coach && (
+        <ManualSchedulerModal
+          visible={showManualScheduler}
+          onClose={() => {
+            setShowManualScheduler(false);
+            setSelectedClient(null);
+          }}
+          onConfirm={async (sessions) => {
+            // Manual scheduler handles its own session creation
+            // Just reload sessions afterwards
+            loadSessions();
+          }}
+          existingSessions={sessions as any}
+          coachId={coach.id}
+          initialClient={initialClientData} // Pass the fetched client data
+          onSwitchToAI={(client) => {
+            // Client selected, user wants to use AI scheduler
+            setSelectedClient({
+              id: client.id,
+              name: client.profiles.full_name,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            });
+            setShowManualScheduler(false);
+            setShowAIScheduler(true);
+          }}
+        />
+      )}
+
+      {/* AI Scheduler Modal */}
       {selectedClient && (
         <SchedulerModal
-          visible={showScheduler}
+          visible={showAIScheduler}
           onClose={() => {
-            setShowScheduler(false);
+            setShowAIScheduler(false);
             setSelectedClient(null);
           }}
           onConfirm={handleConfirmSessions}
           clientContext={selectedClient}
+          targetClientId={selectedClient.id}
           existingSessions={sessions}
+          onSwitchToManual={() => {
+            // Switch back to manual scheduler, preserving the client
+            setShowAIScheduler(false);
+            setShowManualScheduler(true);
+            // Client context is already preserved in selectedClient state
+          }}
         />
       )}
     </View>

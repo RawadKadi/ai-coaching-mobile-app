@@ -21,9 +21,10 @@ interface SchedulerModalProps {
     };
     existingSessions: Session[];
     targetClientId: string;
+    onSwitchToManual?: () => void; // Optional callback to switch back to manual scheduler
 }
 
-export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId }: SchedulerModalProps) {
+export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId, onSwitchToManual }: SchedulerModalProps) {
     const theme = useTheme();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -559,7 +560,15 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         <Text style={[styles.title, { color: theme.colors.text }]}>AI Scheduler</Text>
                         <TouchableOpacity 
                             style={[styles.manualButton, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary }]}
-                            onPress={() => setShowManualMode(true)}
+                            onPress={() => {
+                                if (onSwitchToManual) {
+                                    // Use parent's manual scheduler to preserve client context
+                                    onSwitchToManual();
+                                } else {
+                                    // Fallback to internal manual mode
+                                    setShowManualMode(true);
+                                }
+                            }}
                         >
                             <Text style={[styles.manualButtonText, { color: theme.colors.primary }]}>Edit manually</Text>
                         </TouchableOpacity>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput } from 'react-native';
-import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat } from 'lucide-react-native';
+import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat, Sparkles } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
@@ -13,6 +13,8 @@ interface ManualSchedulerModalProps {
     onConfirm: (sessions: ProposedSession[]) => Promise<void>;
     existingSessions: Session[];
     coachId: string;
+    onSwitchToAI?: (client: Client) => void; // Optional callback to switch to AI scheduler
+    initialClient?: Client | null; // Optional initial client to preserve state
 }
 
 interface Client {
@@ -41,6 +43,8 @@ export default function ManualSchedulerModal({
     onConfirm,
     existingSessions,
     coachId,
+    onSwitchToAI,
+    initialClient,
 }: ManualSchedulerModalProps) {
     const theme = useTheme();
     const [loading, setLoading] = useState(false);
@@ -98,6 +102,14 @@ export default function ManualSchedulerModal({
             resetForm();
         }
     }, [visible]);
+
+    // Set initial client if provided (when switching from AI scheduler)
+    useEffect(() => {
+        if (visible && initialClient) {
+            setSelectedClient(initialClient);
+            setStep('days'); // Skip client selection, go to next step
+        }
+    }, [visible, initialClient]);
 
     useEffect(() => {
         if (step === 'time' && selectedClient) {
@@ -922,6 +934,21 @@ export default function ManualSchedulerModal({
                     )}
                 </ScrollView>
 
+                {/* Floating AI Scheduler Button - Shows when client is selected */}
+                {selectedClient && onSwitchToAI && (
+                    <TouchableOpacity
+                        style={[styles.floatingAIButton, { backgroundColor: theme.colors.primary }]}
+                        onPress={() => onSwitchToAI(selectedClient)}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Sparkles size={16} color={theme.colors.textOnPrimary} />
+                            <Text style={[styles.floatingAIButtonText, { color: theme.colors.textOnPrimary }]}>
+                                AI Scheduler
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
+
                 {/* Footer */}
                 <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
                     <View style={styles.footerButtons}>
@@ -1214,6 +1241,24 @@ const styles = StyleSheet.create({
     },
     secondaryButtonText: {
         fontSize: 16,
+        fontWeight: '600',
+    },
+    floatingAIButton: {
+        position: 'absolute',
+        bottom: 100, // Above the footer (footer height is ~80px)
+        right: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+        zIndex: 10,
+    },
+    floatingAIButtonText: {
+        fontSize: 14,
         fontWeight: '600',
     },
     primaryButton: {
