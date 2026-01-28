@@ -206,11 +206,25 @@ export default function ManualSchedulerModal({
                     let hour = startHour;
                     let minute = startMinute;
                     
+                    // Generate slots at 15-minute intervals
                     while (hour < endHour || (hour === endHour && minute < endMinute)) {
-                        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                        times.add(timeStr);
-                        allTimesSet.add(timeStr);
-                        minute += 30;
+                        // Check if a 60-minute session can fit starting from this time
+                        const slotEndHour = hour + (minute >= 0 ? 1 : 0);
+                        const slotEndMinute = (minute + 60) % 60;
+                        const actualEndHour = hour + Math.floor((minute + 60) / 60);
+                        
+                        // Only add this slot if the full 60-minute session fits within availability
+                        const sessionEndTime = actualEndHour * 60 + slotEndMinute;
+                        const availabilityEndTime = endHour * 60 + endMinute;
+                        
+                        if (sessionEndTime <= availabilityEndTime) {
+                            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                            times.add(timeStr);
+                            allTimesSet.add(timeStr);
+                        }
+                        
+                        // Increment by 15 minutes
+                        minute += 15;
                         if (minute >= 60) {
                             minute = 0;
                             hour += 1;
@@ -429,7 +443,8 @@ export default function ManualSchedulerModal({
 
         setLoading(true);
         try {
-            const sessions: ProposedSession[] = [];
+            const sessionsToInsert: any[] = [];
+            const WEEKS_TO_SCHEDULE = 4;
 
             if (recurrence === 'once') {
                 // Create one session for each selected date
@@ -437,36 +452,94 @@ export default function ManualSchedulerModal({
                     const sessionTime = new Date(date);
                     sessionTime.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
 
-                    sessions.push({
+                    sessionsToInsert.push({
+                        coach_id: coachId,
+                        client_id: selectedClient.id,
                         scheduled_at: sessionTime.toISOString(),
                         duration_minutes: duration,
                         session_type: sessionType,
                         notes: notes || `Manual session with ${selectedClient.profiles.full_name}`,
-                        recurrence: 'once',
-                        day_of_week: sessionTime.toLocaleDateString('en-US', { weekday: 'long' }),
+                        status: 'scheduled',
+                        is_locked: true,
+                        ai_generated: false, // Manually created by coach
+                        meet_link: `https://meet.jit.si/${coachId}-${selectedClient.id}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
                     });
                 }
             } else {
-                // Create recurring sessions
+                // Create recurring sessions (4 weeks worth)
                 const nextOccurrences = getNextOccurrencesOfWeekdays();
                 for (const date of nextOccurrences) {
-                    const sessionTime = new Date(date);
-                    sessionTime.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+                    const startDate = new Date(date);
+                    startDate.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
 
-                    sessions.push({
-                        scheduled_at: sessionTime.toISOString(),
-                        duration_minutes: duration,
-                        session_type: sessionType,
-                        notes: notes || `Recurring session with ${selectedClient.profiles.full_name}`,
-                        recurrence: 'weekly',
-                        day_of_week: sessionTime.toLocaleDateString('en-US', { weekday: 'long' }),
+                    for (let i = 0; i < WEEKS_TO_SCHEDULE; i++) {
+                        const sessionTime = new Date(startDate);
+                        sessionTime.setDate(startDate.getDate() + (i * 7));
+
+                        sessionsToInsert.push({
+                            coach_id: coachId,
+                            client_id: selectedClient.id,
+                            scheduled_at: sessionTime.toISOString(),
+                            duration_minutes: duration,
+                            session_type: sessionType,
+                            notes: notes || `Recurring session with ${selectedClient.profiles.full_name}`,
+                            status: 'scheduled',
+                            is_locked: true,
+                            ai_generated: false,
+                            meet_link: `https://meet.jit.si/${coachId}-${selectedClient.id}-${Date.now()}-${i}-${Math.random().toString(36).substring(7)}`,
+                        });
+                    }
+                }
+            }
+
+            // Insert sessions into database
+            const { data: insertedSessions, error } = await supabase
+                .from('sessions')
+                .insert(sessionsToInsert)
+                .select();
+
+            if (error) {
+                console.error('Database error:', error);
+                throw error;
+            }
+
+            // Send notification to client
+            const { data: clientUser } = await supabase
+                .from('clients')
+                .select('user_id')
+                .eq('id', selectedClient.id)
+                .single();
+
+            if (clientUser && insertedSessions) {
+                // Get current coach user ID from supabase auth
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                for (const session of insertedSessions) {
+                    const messageContent = JSON.stringify({
+                        type: 'session_invite',
+                        sessionId: session.id,
+                        link: session.meet_link,
+                        timestamp: session.scheduled_at,
+                        description: `${session.session_type} session`,
+                        status: 'scheduled',
+                    });
+
+                    await supabase.from('messages').insert({
+                        sender_id: user?.id,
+                        recipient_id: clientUser.user_id,
+                        content: messageContent,
+                        ai_generated: false,
                     });
                 }
             }
 
-            await onConfirm(sessions);
+            Alert.alert('Success', `Created ${insertedSessions?.length || 0} session(s) for ${selectedClient.profiles.full_name}`);
             resetForm();
             onClose();
+            
+            // Refresh parent's session list by calling onConfirm with empty array
+            // This signals that sessions were created and parent should reload
+            await onConfirm([]);
         } catch (error) {
             console.error('Error confirming sessions:', error);
             Alert.alert('Error', 'Failed to create sessions. Please try again.');
@@ -749,13 +822,11 @@ export default function ManualSchedulerModal({
 
                             <View style={styles.detailsForm}>
                                 <View style={styles.formGroup}>
-                                    <Text style={[styles.formLabel, { color: theme.colors.text }]}>Duration (minutes)</Text>
-                                    <TextInput
-                                        style={[styles.formInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-                                        value={duration.toString()}
-                                        onChangeText={(text) => setDuration(parseInt(text) || 60)}
-                                        keyboardType="number-pad"
-                                    />
+                                    <Text style={[styles.formLabel, { color: theme.colors.text }]}>Duration</Text>
+                                    <View style={[styles.formInputReadOnly, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}>
+                                        <Text style={[styles.formInputText, { color: theme.colors.text }]}>60 minutes</Text>
+                                    </View>
+                                    <Text style={[styles.formHint, { color: theme.colors.textTertiary }]}>Session duration is fixed at 60 minutes</Text>
                                 </View>
 
                                 <View style={styles.formGroup}>
@@ -1092,6 +1163,19 @@ const styles = StyleSheet.create({
     typeButtonText: {
         fontSize: 14,
         fontWeight: '500',
+    },
+    formInputReadOnly: {
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        fontSize: 16,
+    },
+    formInputText: {
+        fontSize: 16,
+    },
+    formHint: {
+        fontSize: 12,
+        marginTop: 4,
     },
     confirmCard: {
         padding: 20,
