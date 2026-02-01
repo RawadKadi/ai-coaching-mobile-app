@@ -1730,7 +1730,7 @@ export default function CoachChat() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ChevronLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text }]}>
+        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
           {clientProfile?.profiles?.full_name || 'Chat'}
         </Text>
         <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.scheduleButton}>
@@ -1743,18 +1743,18 @@ export default function CoachChat() {
           <View style={styles.sessionInfo}>
             <Video size={20} color="#FFFFFF" />
             <View>
-              <Text style={styles.sessionTitle}>Next Session</Text>
-              <Text style={styles.sessionTime}>
+              <Text style={[styles.sessionTitle, { fontFamily: theme.typography.fontFamily }]}>Next Session</Text>
+              <Text style={[styles.sessionTime, { fontFamily: theme.typography.fontFamily }]}>
                 {new Date(nextSession.scheduled_at).toLocaleDateString()} at {new Date(nextSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </View>
           </View>
           <View style={styles.bannerActions}>
             <TouchableOpacity style={styles.actionButton} onPress={cancelSession}>
-              <Text style={styles.actionButtonText}>Cancel</Text>
+              <Text style={[styles.actionButtonText, { fontFamily: theme.typography.fontFamily }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.joinButton, { backgroundColor: theme.colors.background }]} onPress={joinSession}>
-              <Text style={[styles.joinButtonText, { color: theme.colors.primary }]}>Join Now</Text>
+              <Text style={[styles.joinButtonText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Join Now</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1854,7 +1854,7 @@ export default function CoachChat() {
         >
           <View style={[styles.menuContent, { backgroundColor: theme.colors.surface }]} onStartShouldSetResponder={() => true}>
             <View style={styles.menuHeader}>
-              <Text style={[styles.menuTitle, { color: theme.colors.text }]}>Options</Text>
+              <Text style={[styles.menuTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Options</Text>
               <TouchableOpacity onPress={() => setMenuVisible(false)}>
                 <X size={24} color={theme.colors.textSecondary} />
               </TouchableOpacity>
@@ -1870,7 +1870,7 @@ export default function CoachChat() {
               <View style={[styles.menuItemIcon, { backgroundColor: theme.colors.surfaceAlt }]}>
                 <Calendar size={20} color={theme.colors.primary} />
               </View>
-              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>AI Scheduler</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>AI Scheduler</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -1883,7 +1883,7 @@ export default function CoachChat() {
               <View style={[styles.menuItemIcon, { backgroundColor: theme.colors.surfaceAlt }]}>
                 <Activity size={20} color={theme.colors.secondary} />
               </View>
-              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Activity</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Activity</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

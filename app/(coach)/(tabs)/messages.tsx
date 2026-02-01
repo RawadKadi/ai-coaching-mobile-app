@@ -195,7 +195,7 @@ export default function CoachMessagesScreen() {
           <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceAlt }]}>
-            <Text style={[styles.avatarInitials, { color: theme.colors.primary }]}>
+            <Text style={[styles.avatarInitials, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>
               {item.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
             </Text>
           </View>
@@ -204,16 +204,16 @@ export default function CoachMessagesScreen() {
       
       <View style={styles.clientInfo}>
         <View style={styles.nameRow}>
-          <Text style={[styles.clientName, { color: theme.colors.text }]}>{item.full_name}</Text>
+          <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{item.full_name}</Text>
           {item.last_message_time && (
-            <Text style={[styles.timeText, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.timeText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
               {new Date(item.last_message_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             </Text>
           )}
         </View>
         
         <View style={styles.messageRow}>
-          <Text style={[styles.lastMessage, { color: theme.colors.textSecondary }, item.unread_count ? { color: theme.colors.text, fontWeight: '600' } : null]} numberOfLines={1}>
+          <Text style={[styles.lastMessage, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }, item.unread_count ? { color: theme.colors.text, fontWeight: '600' } : null]} numberOfLines={1}>
             {item.last_message || 'No messages yet'}
           </Text>
           {item.unread_count ? (
@@ -231,7 +231,7 @@ export default function CoachMessagesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Messages</Text>
+        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Messages</Text>
       </View>
 
       {loading ? (
@@ -247,7 +247,7 @@ export default function CoachMessagesScreen() {
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <MessageCircle size={48} color={theme.colors.border} />
-              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No active clients found</Text>
+              <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No active clients found</Text>
             </View>
           }
         />

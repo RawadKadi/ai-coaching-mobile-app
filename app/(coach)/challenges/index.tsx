@@ -127,7 +127,7 @@ export default function CoachChallengesDashboard() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Challenges</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Challenges</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={[styles.aiButton, { backgroundColor: theme.colors.primary }]} onPress={navigateToAIGenerate}>
             <Sparkles size={20} color="#fff" />
@@ -143,7 +143,7 @@ export default function CoachChallengesDashboard() {
           style={[styles.tab, activeTab === 'active' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('active')}
         >
-          <Text style={[styles.tabText, { color: activeTab === 'active' ? theme.colors.primary : theme.colors.textSecondary }]}>
+          <Text style={[styles.tabText, { color: activeTab === 'active' ? theme.colors.primary : theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
             Active
           </Text>
         </TouchableOpacity>
@@ -151,7 +151,7 @@ export default function CoachChallengesDashboard() {
           style={[styles.tab, activeTab === 'history' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
           onPress={() => setActiveTab('history')}
         >
-          <Text style={[styles.tabText, { color: activeTab === 'history' ? theme.colors.primary : theme.colors.textSecondary }]}>
+          <Text style={[styles.tabText, { color: activeTab === 'history' ? theme.colors.primary : theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
             History
           </Text>
         </TouchableOpacity>
@@ -164,10 +164,10 @@ export default function CoachChallengesDashboard() {
         {challenges.length === 0 ? (
           <View style={styles.emptyState}>
             <Target size={64} color="#ccc" />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
               {activeTab === 'active' ? 'No Active Challenges' : 'No Challenge History'}
             </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.emptyDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
               {activeTab === 'active'
                 ? 'Create a new challenge or use AI to generate one for your clients.'
                 : 'Completed and cancelled challenges will appear here.'}
@@ -182,7 +182,7 @@ export default function CoachChallengesDashboard() {
             >
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleRow}>
-                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{challenge.name}</Text>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{challenge.name}</Text>
                   {challenge.created_by === 'ai' && (
                     <View style={styles.aiTag}>
                       <Sparkles size={12} color="#6366f1" />
@@ -190,11 +190,11 @@ export default function CoachChallengesDashboard() {
                     </View>
                   )}
                 </View>
-                <Text style={[styles.clientName, { color: theme.colors.textSecondary }]}>👤 {challenge.client_name}</Text>
+                <Text style={[styles.clientName, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>👤 {challenge.client_name}</Text>
               </View>
 
               {challenge.description && (
-                <Text style={[styles.cardDescription, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+                <Text style={[styles.cardDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>
                   {challenge.description}
                 </Text>
               )}
@@ -202,22 +202,22 @@ export default function CoachChallengesDashboard() {
               <View style={styles.cardMeta}>
                 <View style={styles.metaItem}>
                   <Clock size={14} color="#666" />
-                  <Text style={styles.metaText}>
+                  <Text style={[styles.metaText, { fontFamily: theme.typography.fontFamily }]}>
                     {new Date(challenge.start_date).toLocaleDateString()} -{' '}
                     {new Date(challenge.end_date).toLocaleDateString()}
                   </Text>
                 </View>
                 <View style={styles.metaItem}>
-                  <Text style={styles.metaText}>{challenge.duration_days} days</Text>
+                  <Text style={[styles.metaText, { fontFamily: theme.typography.fontFamily }]}>{challenge.duration_days} days</Text>
                 </View>
               </View>
 
               <View style={styles.progressContainer}>
                 <View style={styles.progressStats}>
-                  <Text style={styles.progressText}>
+                  <Text style={[styles.progressText, { fontFamily: theme.typography.fontFamily }]}>
                     {challenge.completed_subs} / {challenge.total_subs} tasks completed
                   </Text>
-                  <Text style={[styles.progressPercent, { color: theme.colors.primary }]}>{challenge.completion_rate}%</Text>
+                  <Text style={[styles.progressPercent, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>{challenge.completion_rate}%</Text>
                 </View>
                 <View style={styles.progressBar}>
                   <View

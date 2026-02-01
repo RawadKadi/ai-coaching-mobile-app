@@ -494,11 +494,11 @@ export default function BrandSettingsScreen() {
             <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
               <Text style={[styles.label, { color: currentTheme.colors.text }]}>Font Family</Text>
               <TouchableOpacity 
-                style={[styles.fontSelectButton, { borderColor: currentTheme.colors.border }]}
+                style={[styles.fontSelectButton, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}
                 onPress={() => setShowFontPicker(true)}
               >
                 <Text style={[styles.fontSelectButtonText, { fontFamily: getFontFamily(fontFamily), color: currentTheme.colors.text }]}>
-                  {fontFamily}
+                  {fontFamily || 'Select Font'}
                 </Text>
                 <Text style={[styles.fontSelectArrow, { color: currentTheme.colors.textSecondary }]}>▼</Text>
               </TouchableOpacity>
@@ -510,7 +510,7 @@ export default function BrandSettingsScreen() {
                 {['400', '500', '600', '700', '800', '900'].map((weight) => (
                   <TouchableOpacity
                     key={weight}
-                    style={[styles.optionButton, { backgroundColor: headingWeight === weight ? currentTheme.colors.primary : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, headingWeight === weight && styles.optionButtonActive]}
+                    style={[styles.optionButton, { backgroundColor: headingWeight === weight ? primaryColor : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, headingWeight === weight && styles.optionButtonActive]}
                     onPress={() => setHeadingWeight(weight)}
                   >
                     <Text style={[styles.optionButtonText, { color: headingWeight === weight ? '#FFFFFF' : currentTheme.colors.text }, headingWeight === weight && styles.optionButtonTextActive]}>
@@ -527,7 +527,7 @@ export default function BrandSettingsScreen() {
                 {['400', '500', '600', '700'].map((weight) => (
                   <TouchableOpacity
                     key={weight}
-                    style={[styles.optionButton, { backgroundColor: bodyWeight === weight ? currentTheme.colors.primary : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, bodyWeight === weight && styles.optionButtonActive]}
+                    style={[styles.optionButton, { backgroundColor: bodyWeight === weight ? primaryColor : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, bodyWeight === weight && styles.optionButtonActive]}
                     onPress={() => setBodyWeight(weight)}
                   >
                     <Text style={[styles.optionButtonText, { color: bodyWeight === weight ? '#FFFFFF' : currentTheme.colors.text }, bodyWeight === weight && styles.optionButtonTextActive]}>
@@ -856,13 +856,13 @@ export default function BrandSettingsScreen() {
         )}
 
         {/* Preview Dashboard Button */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[styles.previewDashboardButton, { borderColor: primaryColor }]}
           onPress={() => setShowFullPreview(true)}
         >
           <Eye size={20} color={primaryColor} />
           <Text style={[styles.previewDashboardButtonText, { color: primaryColor }]}>Preview Dashboard</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* Full-Page Dashboard Preview Modal */}
         <Modal visible={showFullPreview} animationType="slide" presentationStyle="fullScreen">
@@ -1769,7 +1769,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 16,

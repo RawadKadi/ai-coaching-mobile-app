@@ -122,7 +122,7 @@ export default function AISuggestChallengeScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>AI Generate Challenge</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>AI Generate Challenge</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -131,8 +131,8 @@ export default function AISuggestChallengeScreen() {
         <View style={[styles.infoBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <Sparkles size={20} color="#6366f1" />
           <View style={styles.infoText}>
-            <Text style={[styles.infoTitle, { color: theme.colors.primary }]}>AI-Powered Weekly Challenges</Text>
-            <Text style={[styles.infoDescription, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.infoTitle, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>AI-Powered Weekly Challenges</Text>
+            <Text style={[styles.infoDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
               AI analyzes client history to generate personalized, non-repetitive challenges for the week ahead.
             </Text>
           </View>
@@ -141,7 +141,7 @@ export default function AISuggestChallengeScreen() {
         {/* Date Info */}
         <View style={[styles.dateInfo, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <Calendar size={18} color="#666" />
-          <Text style={[styles.dateText, { color: theme.colors.text }]}>
+          <Text style={[styles.dateText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
             Week starting: {getNextMonday().toLocaleDateString('en-US', {
               weekday: 'short',
               month: 'short',
@@ -151,7 +151,7 @@ export default function AISuggestChallengeScreen() {
         </View>
 
         {/* Client Selection */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Select Client</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Select Client</Text>
         {clients.map((client) => (
           <TouchableOpacity
             key={client.id}
@@ -170,15 +170,15 @@ export default function AISuggestChallengeScreen() {
                 ]}>
                   {selectedClient?.id === client.id && <View style={[styles.radioInner, { backgroundColor: theme.colors.primary }]} />}
               </View>
-              <Text style={[styles.clientName, { color: theme.colors.text }]}>{client.full_name}</Text>
+              <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.full_name}</Text>
             </View>
           </TouchableOpacity>
         ))}
 
         {clients.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No clients found</Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.textTertiary }]}>Add clients to generate challenges</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No clients found</Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.textTertiary, fontFamily: theme.typography.fontFamily }]}>Add clients to generate challenges</Text>
           </View>
         )}
       </ScrollView>
@@ -193,12 +193,12 @@ export default function AISuggestChallengeScreen() {
           {generating ? (
             <>
               <ActivityIndicator color="#fff" />
-              <Text style={styles.generateButtonText}>Generating with AI...</Text>
+              <Text style={[styles.generateButtonText, { fontFamily: theme.typography.fontFamily }]}>Generating with AI...</Text>
             </>
           ) : (
             <>
               <Sparkles size={20} color="#fff" />
-              <Text style={styles.generateButtonText}>Generate Weekly Challenges</Text>
+              <Text style={[styles.generateButtonText, { fontFamily: theme.typography.fontFamily }]}>Generate Weekly Challenges</Text>
             </>
           )}
         </TouchableOpacity>

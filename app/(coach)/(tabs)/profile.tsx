@@ -22,7 +22,7 @@ export default function CoachProfileScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Profile</Text>
+        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Profile</Text>
       </View>
 
       <View style={styles.content}>
@@ -30,14 +30,14 @@ export default function CoachProfileScreen() {
           <View style={styles.avatarContainer}>
             <User size={48} color={theme.colors.primary} />
           </View>
-          <Text style={[styles.name, { color: theme.colors.text }]}>{profile?.full_name}</Text>
-          <Text style={[styles.role, { color: theme.colors.textSecondary }]}>Coach Account</Text>
+          <Text style={[styles.name, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{profile?.full_name}</Text>
+          <Text style={[styles.role, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Coach Account</Text>
         </View>
 
         <View style={[styles.menuSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <TouchableOpacity style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} onPress={() => router.push('/(coach)/settings')}>
             <Settings size={20} color={theme.colors.textSecondary} />
-            <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Settings</Text>
+            <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Settings</Text>
           </TouchableOpacity>
 
           {/* Team Management - Only for parent coaches */}
@@ -47,7 +47,7 @@ export default function CoachProfileScreen() {
               onPress={() => router.push('/(coach)/team')}
             >
               <Users size={20} color={theme.colors.secondary} />
-              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>
+              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
                 Team Management
                 <Text style={styles.parentBadge}> • Parent</Text>
               </Text>
@@ -60,7 +60,7 @@ export default function CoachProfileScreen() {
             onPress={() => router.push('/(coach)/invite-client')}
           >
             <UserPlus size={20} color={theme.colors.accent} />
-            <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Invite Client</Text>
+            <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Invite Client</Text>
           </TouchableOpacity>
 
           {/* TEST: Deep Link Tester (Remove after testing) */}
@@ -76,7 +76,7 @@ export default function CoachProfileScreen() {
 
           <TouchableOpacity style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} onPress={handleSignOut}>
             <LogOut size={20} color={theme.colors.error} />
-            <Text style={[styles.menuItemText, { color: theme.colors.error }]}>
+            <Text style={[styles.menuItemText, { color: theme.colors.error, fontFamily: theme.typography.fontFamily }]}>
               Sign Out
             </Text>
           </TouchableOpacity>

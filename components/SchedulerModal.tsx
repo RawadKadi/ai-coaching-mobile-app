@@ -557,7 +557,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
                 <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
                     <View style={styles.headerLeft}>
-                        <Text style={[styles.title, { color: theme.colors.text }]}>AI Scheduler</Text>
+                        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>AI Scheduler</Text>
                         <TouchableOpacity 
                             style={[styles.manualButton, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary }]}
                             onPress={() => {
@@ -570,7 +570,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 }
                             }}
                         >
-                            <Text style={[styles.manualButtonText, { color: theme.colors.primary }]}>Edit manually</Text>
+                            <Text style={[styles.manualButtonText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Edit manually</Text>
                         </TouchableOpacity>
                     </View>
                     <TouchableOpacity onPress={() => { 
@@ -594,7 +594,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                 {step === 'input' ? (
                     <View style={styles.content}>
-                        <Text style={[styles.label, { color: theme.colors.text }]}>
+                        <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
                             Tell me when you want to schedule sessions with {clientContext.name}...
                         </Text>
                         
@@ -623,7 +623,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         >
                             {loading ? <ActivityIndicator color={theme.colors.textOnPrimary} /> : (
                                 <>
-                                    <Text style={[styles.buttonText, { color: theme.colors.textOnPrimary }]}>Analyze Schedule</Text>
+                                    <Text style={[styles.buttonText, { color: theme.colors.textOnPrimary, fontFamily: theme.typography.fontFamily }]}>Analyze Schedule</Text>
                                     <Send size={20} color={theme.colors.textOnPrimary} />
                                 </>
                             )}
@@ -632,13 +632,13 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 ) : step === 'form' ? (
                     <View style={styles.content}>
                         <View style={styles.conversationalHeader}>
-                            <Text style={[styles.conversationalLabel, { color: theme.colors.textSecondary }]}>
+                            <Text style={[styles.conversationalLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                                 {formDates.length > 0 
                                     ? `You didn't mention the time for ${formDates.length === 1 ? formDates[0] : 'these days'}.` 
                                     : "You didn't mention the days or time."
                                 }
                             </Text>
-                            <Text style={[styles.label, { color: theme.colors.text }]}>
+                            <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
                                 What time do you want to schedule? 
                                 {formDates.length > 1 && <Text style={[styles.subLabel, { color: theme.colors.textSecondary }]}> (Mention individual days if they are different)</Text>}
                             </Text>
@@ -647,7 +647,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         {/* Selected Days Summary */}
                         {formDates.length > 0 && (
                             <View style={[styles.summaryContainer, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}>
-                                <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Selected Days:</Text>
+                                <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Selected Days:</Text>
                                 <View style={styles.summaryTags}>
                                     {formDates.map(day => (
                                         <View key={day} style={[styles.summaryTag, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -661,7 +661,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                         {/* Natural Language Input */}
                         <View style={styles.formGroup}>
-                            <Text style={[styles.formLabel, { color: theme.colors.text }]}>Time or Details</Text>
+                            <Text style={[styles.formLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Time or Details</Text>
                             <TextInput
                                 style={[styles.formInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }, !formTime && { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary + '10' }]}
                                 placeholder={formDates.length > 1 
@@ -673,7 +673,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 autoFocus={!formTime}
                                 onChangeText={setFormTime}
                             />
-                            <Text style={[styles.inputHint, { color: theme.colors.textSecondary }]}>
+                            <Text style={[styles.inputHint, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                                 Tip: You can say "All days at 1pm" or specify times per day.
                             </Text>
                         </View>
@@ -684,11 +684,11 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 style={styles.editDatesToggle}
                                 onPress={() => setFormDates([])}
                             >
-                                <Text style={[styles.editDatesText, { color: theme.colors.primary }]}>+ Add or Change Dates</Text>
+                                <Text style={[styles.editDatesText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>+ Add or Change Dates</Text>
                             </TouchableOpacity>
                         ) : (
                             <View style={styles.formGroup}>
-                                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Select Dates</Text>
+                                <Text style={[styles.formLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Select Dates</Text>
                                 <View style={styles.dateButtons}>
                                     {['today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
                                         <TouchableOpacity
@@ -702,7 +702,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                 }
                                             }}
                                         >
-                                            <Text style={[styles.dayButtonText, { color: theme.colors.textSecondary }, formDates.includes(day) && { color: theme.colors.primary, fontWeight: '600' }]}>
+                                            <Text style={[styles.dayButtonText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }, formDates.includes(day) && { color: theme.colors.primary, fontWeight: '600' }]}>
                                                 {day.charAt(0).toUpperCase() + day.slice(1)}
                                             </Text>
                                         </TouchableOpacity>
@@ -713,7 +713,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                         {/* Recurrence (Shown only if we have a basic input or if user wants to set global recurrence) */}
                         <View style={styles.formGroup}>
-                            <Text style={[styles.formLabel, { color: theme.colors.text }]}>Recurrence</Text>
+                            <Text style={[styles.formLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Recurrence</Text>
                             <View style={styles.recurrenceButtons}>
                                 <TouchableOpacity
                                     style={[styles.optionButton, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '40' }, (formRecurrence === 'once' || !formRecurrence) && { backgroundColor: theme.colors.primary + '25', borderColor: theme.colors.primary }]}
@@ -721,8 +721,8 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 >
                                     <Calendar size={20} color={formRecurrence === 'once' ? theme.colors.primary : theme.colors.textSecondary} />
                                     <View>
-                                        <Text style={[styles.optionButtonText, { color: theme.colors.primary }, (formRecurrence === 'once' || !formRecurrence) && { fontWeight: '700' }]}>One-time</Text>
-                                        <Text style={[styles.optionSubText, { color: theme.colors.textSecondary }]}>Just for the days mentioned</Text>
+                                        <Text style={[styles.optionButtonText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }, (formRecurrence === 'once' || !formRecurrence) && { fontWeight: '700' }]}>One-time</Text>
+                                        <Text style={[styles.optionSubText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Just for the days mentioned</Text>
                                     </View>
                                 </TouchableOpacity>
                                 <TouchableOpacity

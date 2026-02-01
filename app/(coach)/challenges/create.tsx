@@ -193,18 +193,18 @@ export default function CreateChallengeScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
             <X size={24} color="#666" />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Create Challenge</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Create Challenge</Text>
           <View style={{ width: 24 }} />
         </View>
 
         {/* Client Selection */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Client *</Text>
+          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Client *</Text>
           <TouchableOpacity
             style={[styles.clientSelector, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}
             onPress={() => setShowClientPicker(!showClientPicker)}
           >
-            <Text style={selectedClient ? [styles.clientText, { color: theme.colors.text }] : [styles.placeholderText, { color: theme.colors.textTertiary }]}>
+            <Text style={selectedClient ? [styles.clientText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }] : [styles.placeholderText, { color: theme.colors.textTertiary, fontFamily: theme.typography.fontFamily }]}>
               {selectedClient ? selectedClient.full_name : 'Select a client'}
             </Text>
           </TouchableOpacity>
@@ -220,7 +220,7 @@ export default function CreateChallengeScreen() {
                     setShowClientPicker(false);
                   }}
                 >
-                  <Text style={[styles.clientOptionText, { color: theme.colors.text }]}>{client.full_name}</Text>
+                  <Text style={[styles.clientOptionText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.full_name}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -229,7 +229,7 @@ export default function CreateChallengeScreen() {
 
         {/* Mode Selection */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Challenge Mode</Text>
+          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Challenge Mode</Text>
           <View style={styles.modeContainer}>
             <TouchableOpacity
               style={[
@@ -241,8 +241,8 @@ export default function CreateChallengeScreen() {
             >
               <Target size={18} color={mode === 'relative' ? '#fff' : theme.colors.textSecondary} />
               <View>
-                <Text style={[styles.modeTitle, { color: mode === 'relative' ? '#fff' : theme.colors.text }]}>Client</Text>
-                <Text style={[styles.modeDesc, { color: mode === 'relative' ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }]}>Starts today/on assign</Text>
+                <Text style={[styles.modeTitle, { color: mode === 'relative' ? '#fff' : theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Client</Text>
+                <Text style={[styles.modeDesc, { color: mode === 'relative' ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Starts today/on assign</Text>
               </View>
             </TouchableOpacity>
 
@@ -256,8 +256,8 @@ export default function CreateChallengeScreen() {
             >
               <Calendar size={18} color={mode === 'fixed' ? '#fff' : theme.colors.textSecondary} />
               <View>
-                <Text style={[styles.modeTitle, { color: mode === 'fixed' ? '#fff' : theme.colors.text }]}>Campaign</Text>
-                <Text style={[styles.modeDesc, { color: mode === 'fixed' ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }]}>Fixed calendar dates</Text>
+                <Text style={[styles.modeTitle, { color: mode === 'fixed' ? '#fff' : theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Campaign</Text>
+                <Text style={[styles.modeDesc, { color: mode === 'fixed' ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Fixed calendar dates</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -265,7 +265,7 @@ export default function CreateChallengeScreen() {
 
         {/* Challenge Name */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Challenge Name *</Text>
+          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Challenge Name *</Text>
           <TextInput
             style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             placeholder="e.g., 7-Day Wellness Challenge"
@@ -278,7 +278,7 @@ export default function CreateChallengeScreen() {
 
         {/* Description */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Description</Text>
+          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Description</Text>
           <TextInput
             style={[styles.input, styles.textArea, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             placeholder="Explain what this challenge is about..."
@@ -292,7 +292,7 @@ export default function CreateChallengeScreen() {
 
         {/* Duration */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Duration (3-14 days) *</Text>
+          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Duration (3-14 days) *</Text>
           <View style={styles.durationRow}>
             <TextInput
               style={[styles.input, styles.durationInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
@@ -303,7 +303,7 @@ export default function CreateChallengeScreen() {
               keyboardType="number-pad"
               maxLength={2}
             />
-            <Text style={[styles.durationText, { color: theme.colors.text }]}>days</Text>
+            <Text style={[styles.durationText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>days</Text>
           </View>
         </View>
 
@@ -312,7 +312,7 @@ export default function CreateChallengeScreen() {
         {/* Start Date (Only for Campaign Mode) */}
         {mode === 'fixed' && (
           <View style={styles.section}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Start Date *</Text>
+            <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Start Date *</Text>
             <View style={[styles.dateRow, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
               <Calendar size={20} color="#666" />
               <TextInput
@@ -328,15 +328,15 @@ export default function CreateChallengeScreen() {
 
         {/* Sub-Challenges */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Daily Tasks ({subChallenges.length})</Text>
-          <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Daily Tasks ({subChallenges.length})</Text>
+          <Text style={[styles.helperText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
             Customize the daily tasks for each day of the challenge
           </Text>
           
           {subChallenges.map((sub, index) => (
             <View key={index} style={[styles.subChallengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
               <View style={styles.subChallengeHeader}>
-                <Text style={[styles.subChallengeDay, { color: theme.colors.primary }]}>
+                <Text style={[styles.subChallengeDay, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>
                   Day {index + 1} - {sub.assigned_date}
                 </Text>
               </View>
@@ -424,7 +424,7 @@ export default function CreateChallengeScreen() {
           onPress={() => router.back()}
           disabled={loading}
         >
-          <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>Cancel</Text>
+          <Text style={[styles.cancelButtonText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Cancel</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -437,7 +437,7 @@ export default function CreateChallengeScreen() {
           ) : (
             <>
               <Target size={20} color="#fff" />
-              <Text style={styles.createButtonText}>Create Challenge</Text>
+              <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily }]}>Create Challenge</Text>
             </>
           )}
         </TouchableOpacity>

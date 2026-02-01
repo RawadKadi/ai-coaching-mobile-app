@@ -161,14 +161,14 @@ export default function TeamManagementScreen() {
         </View>
         <View style={styles.coachInfo}>
           <View style={styles.nameRow}>
-            <Text style={[styles.coachName, { color: theme.colors.text }]}>{item.full_name}</Text>
+            <Text style={[styles.coachName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{item.full_name}</Text>
             {item.status === 'pending' && (
               <View style={[styles.pendingBadge, { backgroundColor: `${theme.colors.accent}20`, borderColor: theme.colors.accent }]}>
-                <Text style={[styles.pendingBadgeText, { color: theme.colors.accent }]}>PENDING</Text>
+                <Text style={[styles.pendingBadgeText, { color: theme.colors.accent, fontFamily: theme.typography.fontFamily }]}>PENDING</Text>
               </View>
             )}
           </View>
-          <Text style={[styles.coachEmail, { color: theme.colors.textSecondary }]}>{item.email}</Text>
+          <Text style={[styles.coachEmail, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{item.email}</Text>
         </View>
       </View>
 
@@ -215,8 +215,8 @@ export default function TeamManagementScreen() {
         
         <View style={styles.noAccessContainer}>
           <Award size={64} color="#D1D5DB" />
-          <Text style={styles.noAccessTitle}>Parent Coach Only</Text>
-          <Text style={styles.noAccessText}>
+          <Text style={[styles.noAccessTitle, { fontFamily: theme.typography.fontFamily }]}>Parent Coach Only</Text>
+          <Text style={[styles.noAccessText, { fontFamily: theme.typography.fontFamily }]}>
             This feature is only available for parent coaches who manage teams.
           </Text>
         </View>
@@ -241,22 +241,22 @@ export default function TeamManagementScreen() {
       {/* Brand Stats Card */}
       <View style={[styles.statsCard, { borderLeftColor: primary, backgroundColor: theme.colors.surface }]}>
         <View style={styles.statsHeader}>
-          <Text style={[styles.statsTitle, { color: theme.colors.text }]}>{brand?.name || 'Your Brand'}</Text>
+          <Text style={[styles.statsTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{brand?.name || 'Your Brand'}</Text>
         </View>
         <View style={styles.statsGrid}>
           <View style={styles.statsItem}>
-            <Text style={[styles.statsValue, { color: theme.colors.text }]}>{subCoaches.length}</Text>
-            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>Sub-Coaches</Text>
+            <Text style={[styles.statsValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{subCoaches.length}</Text>
+            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Sub-Coaches</Text>
           </View>
           <View style={styles.statsItem}>
-            <Text style={[styles.statsValue, { color: theme.colors.text }]}>{totalClients}</Text>
-            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>Total Clients</Text>
+            <Text style={[styles.statsValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{totalClients}</Text>
+            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Total Clients</Text>
           </View>
           <View style={styles.statsItem}>
-            <Text style={[styles.statsValue, { color: secondary }]}>
+            <Text style={[styles.statsValue, { color: secondary, fontFamily: theme.typography.fontFamily }]}>
               {subCoaches.reduce((sum, coach) => sum + coach.client_count, 0)}
             </Text>
-            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>Assigned</Text>
+            <Text style={[styles.statsLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Assigned</Text>
           </View>
         </View>
       </View>
@@ -265,13 +265,13 @@ export default function TeamManagementScreen() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={primary} />
-          <Text style={styles.loadingText}>Loading team members...</Text>
+          <Text style={[styles.loadingText, { fontFamily: theme.typography.fontFamily }]}>Loading team members...</Text>
         </View>
       ) : subCoaches.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Users size={64} color="#D1D5DB" />
-          <Text style={styles.emptyTitle}>No Sub-Coaches Yet</Text>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyTitle, { fontFamily: theme.typography.fontFamily }]}>No Sub-Coaches Yet</Text>
+          <Text style={[styles.emptyText, { fontFamily: theme.typography.fontFamily }]}>
             Add coaches to your team to manage more clients and scale your business.
           </Text>
           <BrandedButton

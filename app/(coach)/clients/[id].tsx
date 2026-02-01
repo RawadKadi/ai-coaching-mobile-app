@@ -415,7 +415,7 @@ export default function ClientDetailsScreen() {
   if (!client) {
     return (
       <View style={styles.container}>
-        <Text>Client not found</Text>
+        <Text style={{ fontFamily: theme.typography.fontFamily }}>Client not found</Text>
       </View>
     );
   }
@@ -427,7 +427,7 @@ export default function ClientDetailsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text }]}>{(client as any).profiles?.full_name || 'Client'}</Text>
+        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{(client as any).profiles?.full_name || 'Client'}</Text>
         <TouchableOpacity style={styles.headerButton} onPress={() => setSchedulerVisible(true)}>
           <CalendarIcon size={24} color={theme.colors.primary} />
         </TouchableOpacity>
@@ -440,46 +440,46 @@ export default function ClientDetailsScreen() {
             setPendingModalVisible(true);
           }}
         >
-            <Text style={[styles.pendingBannerText, { color: theme.colors.warning }]}>
+            <Text style={[styles.pendingBannerText, { color: theme.colors.warning, fontFamily: theme.typography.fontFamily }]}>
                 ⚠️ {pendingResolutions.length} Proposed Resolution{pendingResolutions.length > 1 ? 's' : ''} Pending
             </Text>
-            <Text style={[styles.pendingBannerSubtext, { color: theme.colors.warning }]}>Tap to review</Text>
+            <Text style={[styles.pendingBannerSubtext, { color: theme.colors.warning, fontFamily: theme.typography.fontFamily }]}>Tap to review</Text>
         </TouchableOpacity>
       )}
 
       <ScrollView style={styles.content}>
         {/* Client Info Card */}
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Client Information</Text>
+          <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Client Information</Text>
           <View style={styles.infoGrid}>
             <View style={styles.infoRowFull}>
               <User size={16} color={theme.colors.textSecondary} />
-              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Goal:</Text>
-              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.goal || 'Not set'}</Text>
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Goal:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.goal || 'Not set'}</Text>
             </View>
             
             <View style={styles.infoRowHalf}>
               <Award size={16} color={theme.colors.textSecondary} />
-              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Exp:</Text>
-              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.experience_level || 'Not set'}</Text>
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Exp:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.experience_level || 'Not set'}</Text>
             </View>
 
             <View style={styles.infoRowHalf}>
               <Scale size={16} color={theme.colors.textSecondary} />
-              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Weight:</Text>
-              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.latest_weight ? `${client.latest_weight} kg` : 'Not set'}</Text>
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Weight:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.latest_weight ? `${client.latest_weight} kg` : 'Not set'}</Text>
             </View>
 
             <View style={styles.infoRowHalf}>
               <Target size={16} color={theme.colors.textSecondary} />
-              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Height:</Text>
-              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Height:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
             </View>
 
             <View style={styles.infoRowHalf}>
               <Info size={16} color={theme.colors.textSecondary} />
-              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Age:</Text>
-              <Text style={[styles.infoValue, { color: theme.colors.text }]}>
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Age:</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
                 {client.date_of_birth ? 
                   Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : 
                   'Not set'}
@@ -489,16 +489,16 @@ export default function ClientDetailsScreen() {
             {client.dietary_restrictions?.length > 0 && (
               <View style={styles.infoRowFull}>
                 <Info size={16} color={theme.colors.textSecondary} />
-                <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Dietary:</Text>
-                <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.dietary_restrictions.join(', ')}</Text>
+                <Text style={[styles.infoLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Dietary:</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.dietary_restrictions.join(', ')}</Text>
               </View>
             )}
 
             {client.medical_conditions?.length > 0 && (
               <View style={styles.infoRowFull}>
                 <Info size={16} color={theme.colors.textSecondary} />
-                <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Medical:</Text>
-                <Text style={[styles.infoValue, { color: theme.colors.text }]}>{client.medical_conditions.join(', ')}</Text>
+                <Text style={[styles.infoLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Medical:</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.medical_conditions.join(', ')}</Text>
               </View>
             )}
           </View>
@@ -507,7 +507,7 @@ export default function ClientDetailsScreen() {
         {/* Challenges Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Active Challenges</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Active Challenges</Text>
             <View style={styles.buttonGroup}>
               <TouchableOpacity 
                 style={[styles.aiButton, { backgroundColor: theme.colors.secondary, shadowColor: theme.colors.secondary }]} 
@@ -520,14 +520,14 @@ export default function ClientDetailsScreen() {
                 onPress={() => router.push(`/(coach)/challenges/create?clientId=${id}`)}
               >
                 <Plus size={20} color={theme.colors.textOnPrimary} />
-                <Text style={[styles.addButtonText, { color: theme.colors.textOnPrimary }]}>Create</Text>
+                <Text style={[styles.addButtonText, { color: theme.colors.textOnPrimary, fontFamily: theme.typography.fontFamily }]}>Create</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {challenges.length === 0 ? (
             <View style={[styles.emptyState, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No active challenges found.</Text>
+              <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No active challenges found.</Text>
             </View>
           ) : (
             challenges.map((challenge) => (
@@ -542,18 +542,18 @@ export default function ClientDetailsScreen() {
               >
                 <View style={styles.challengeHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.challengeName, { color: theme.colors.text }]}>{challenge.name}</Text>
-                    <Text style={[styles.challengeDates, { color: theme.colors.textSecondary }]}>
+                    <Text style={[styles.challengeName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{challenge.name}</Text>
+                    <Text style={[styles.challengeDates, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                       {new Date(challenge.start_date).toLocaleDateString()} - {new Date(challenge.end_date).toLocaleDateString()}
                     </Text>
                   </View>
                   <View style={[styles.completionBadge, { backgroundColor: theme.colors.primary + '20' }]}>
-                    <Text style={[styles.completionText, { color: theme.colors.primary }]}>{challenge.completion_rate}%</Text>
+                    <Text style={[styles.completionText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>{challenge.completion_rate}%</Text>
                   </View>
                 </View>
                 
                 {challenge.description && (
-                  <Text style={[styles.challengeDescription, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+                  <Text style={[styles.challengeDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>
                     {challenge.description}
                   </Text>
                 )}
@@ -563,10 +563,10 @@ export default function ClientDetailsScreen() {
                 </View>
 
                 <View style={styles.challengeMeta}>
-                  <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
+                  <Text style={[styles.metaText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                     {challenge.completed_subs} / {challenge.total_subs} Tasks Completed
                   </Text>
-                  <Text style={[styles.metaStatus, { color: theme.colors.primary }]}>{challenge.status}</Text>
+                  <Text style={[styles.metaStatus, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>{challenge.status}</Text>
                 </View>
               </TouchableOpacity>
             ))

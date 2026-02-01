@@ -136,11 +136,11 @@ export default function InviteClientScreen() {
       <ScrollView style={styles.content}>
         {/* Invite Settings */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Invite Settings</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Invite Settings</Text>
           
           {/* Max Uses */}
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Maximum Uses</Text>
+            <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Maximum Uses</Text>
             <View style={styles.row}>
               <TextInput
                 style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }, unlimited && styles.inputDisabled]}
@@ -155,7 +155,7 @@ export default function InviteClientScreen() {
                 style={[styles.checkbox, unlimited && styles.checkboxActive]}
                 onPress={() => setUnlimited(!unlimited)}
               >
-                <Text style={[styles.checkboxText, unlimited && styles.checkboxTextActive]}>
+                <Text style={[styles.checkboxText, unlimited && styles.checkboxTextActive, { fontFamily: theme.typography.fontFamily }]}>
                   Unlimited
                 </Text>
               </TouchableOpacity>
@@ -164,7 +164,7 @@ export default function InviteClientScreen() {
 
           {/* Expiration */}
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Expires In (Days)</Text>
+            <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Expires In (Days)</Text>
             <TextInput
               style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
               value={expiresInDays}
@@ -192,13 +192,13 @@ export default function InviteClientScreen() {
           <View style={[styles.inviteCard, { borderColor: primary, backgroundColor: theme.colors.surface }]}>
             <View style={styles.inviteHeader}>
               <Link size={24} color={primary} />
-              <Text style={styles.inviteTitle}>Your Invite Link</Text>
+              <Text style={[styles.inviteTitle, { fontFamily: theme.typography.fontFamily }]}>Your Invite Link</Text>
             </View>
 
             {/* Invite Code */}
             <View style={styles.codeBox}>
-              <Text style={styles.codeLabel}>Code:</Text>
-              <Text style={styles.codeText}>{inviteCode}</Text>
+              <Text style={[styles.codeLabel, { fontFamily: theme.typography.fontFamily }]}>Code:</Text>
+              <Text style={[styles.codeText, { fontFamily: theme.typography.fontFamily }]}>{inviteCode}</Text>
             </View>
 
             {/* Full Link */}
@@ -214,20 +214,20 @@ export default function InviteClientScreen() {
               onPress={handleCopyLink}
             >
               <Copy size={18} color={primary} />
-              <Text style={[styles.actionButtonText, { color: primary }]}>
+              <Text style={[styles.actionButtonText, { color: primary, fontFamily: theme.typography.fontFamily }]}>
                 Copy Link
               </Text>
             </TouchableOpacity>
 
             {/* Share Options */}
-            <Text style={styles.shareTitle}>Share via:</Text>
+            <Text style={[styles.shareTitle, { fontFamily: theme.typography.fontFamily }]}>Share via:</Text>
             <View style={styles.shareButtons}>
               <TouchableOpacity
                 style={[styles.shareButton, { backgroundColor: '#25D366' }]}
                 onPress={handleShareWhatsApp}
               >
                 <MessageCircle size={20} color="#FFFFFF" />
-                <Text style={styles.shareButtonText}>WhatsApp</Text>
+                <Text style={[styles.shareButtonText, { fontFamily: theme.typography.fontFamily }]}>WhatsApp</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -235,7 +235,7 @@ export default function InviteClientScreen() {
                 onPress={handleShareEmail}
               >
                 <Mail size={20} color="#FFFFFF" />
-                <Text style={styles.shareButtonText}>Email</Text>
+                <Text style={[styles.shareButtonText, { fontFamily: theme.typography.fontFamily }]}>Email</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -243,14 +243,14 @@ export default function InviteClientScreen() {
                 onPress={handleShareSMS}
               >
                 <MessageCircle size={20} color="#FFFFFF" />
-                <Text style={styles.shareButtonText}>SMS</Text>
+                <Text style={[styles.shareButtonText, { fontFamily: theme.typography.fontFamily }]}>SMS</Text>
               </TouchableOpacity>
             </View>
 
             {/* Info */}
             <View style={styles.infoBox}>
               <Calendar size={16} color="#6B7280" />
-              <Text style={styles.infoText}>
+              <Text style={[styles.infoText, { fontFamily: theme.typography.fontFamily }]}>
                 {unlimited ? 'Unlimited' : maxUses} use(s) • Expires in {expiresInDays} days
               </Text>
             </View>
@@ -259,12 +259,12 @@ export default function InviteClientScreen() {
 
         {/* How It Works */}
         <View style={[styles.howItWorks, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.howTitle, { color: theme.colors.text }]}>How It Works:</Text>
+          <Text style={[styles.howTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>How It Works:</Text>
           <View style={styles.step}>
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>1</Text>
             </View>
-            <Text style={styles.stepText}>
+            <Text style={[styles.stepText, { fontFamily: theme.typography.fontFamily }]}>
               Generate an invite code with your preferred settings
             </Text>
           </View>
@@ -272,7 +272,7 @@ export default function InviteClientScreen() {
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>2</Text>
             </View>
-            <Text style={styles.stepText}>
+            <Text style={[styles.stepText, { fontFamily: theme.typography.fontFamily }]}>
               Share the link via WhatsApp, email, or SMS
             </Text>
           </View>
@@ -280,7 +280,7 @@ export default function InviteClientScreen() {
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>3</Text>
             </View>
-            <Text style={styles.stepText}>
+            <Text style={[styles.stepText, { fontFamily: theme.typography.fontFamily }]}>
               Client clicks link, creates account, and joins your program
             </Text>
           </View>
@@ -288,7 +288,7 @@ export default function InviteClientScreen() {
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>4</Text>
             </View>
-            <Text style={styles.stepText}>
+            <Text style={[styles.stepText, { fontFamily: theme.typography.fontFamily }]}>
               They're automatically added to your client list!
             </Text>
           </View>

@@ -148,12 +148,12 @@ export default function ChallengeDetailScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={24} color="#111" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Challenge Details</Text>
+          <Text style={[styles.headerTitle, { fontFamily: theme.typography.fontFamily }]}>Challenge Details</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.emptyContainer}>
           <AlertCircle size={48} color="#999" />
-          <Text style={styles.emptyText}>Challenge not found</Text>
+          <Text style={[styles.emptyText, { fontFamily: theme.typography.fontFamily }]}>Challenge not found</Text>
         </View>
       </View>
     );
@@ -170,7 +170,7 @@ export default function ChallengeDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Challenge Details</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Challenge Details</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -178,26 +178,26 @@ export default function ChallengeDetailScreen() {
         {/* Challenge Info Card */}
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.cardHeader}>
-            <Text style={[styles.challengeName, { color: theme.colors.text }]}>{challenge.name}</Text>
+            <Text style={[styles.challengeName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{challenge.name}</Text>
             <View style={[styles.statusBadge, challenge.status === 'active' && styles.statusActive]}>
-              <Text style={styles.statusText}>{challenge.status}</Text>
+              <Text style={[styles.statusText, { fontFamily: theme.typography.fontFamily }]}>{challenge.status}</Text>
             </View>
           </View>
 
           {challenge.description && (
-            <Text style={[styles.description, { color: theme.colors.textSecondary }]}>{challenge.description}</Text>
+            <Text style={[styles.description, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{challenge.description}</Text>
           )}
 
           <View style={styles.infoRow}>
             <Calendar size={16} color="#666" />
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoText, { fontFamily: theme.typography.fontFamily }]}>
               {new Date(challenge.start_date).toLocaleDateString()} - {new Date(challenge.end_date).toLocaleDateString()}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
             <Target size={16} color="#666" />
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoText, { fontFamily: theme.typography.fontFamily }]}>
               {challenge.client_name}
             </Text>
           </View>
@@ -205,25 +205,25 @@ export default function ChallengeDetailScreen() {
           {/* Progress */}
           <View style={styles.progressSection}>
             <View style={styles.progressHeader}>
-              <Text style={[styles.progressLabel, { color: theme.colors.text }]}>Overall Progress</Text>
-              <Text style={[styles.progressPercent, { color: theme.colors.primary }]}>{completionRate}%</Text>
+              <Text style={[styles.progressLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Overall Progress</Text>
+              <Text style={[styles.progressPercent, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>{completionRate}%</Text>
             </View>
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${completionRate}%` }]} />
             </View>
-            <Text style={styles.progressText}>
+            <Text style={[styles.progressText, { fontFamily: theme.typography.fontFamily }]}>
               {completedCount} of {totalCount} tasks completed
             </Text>
           </View>
         </View>
 
         {/* Sub-Challenges List */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Daily Tasks ({totalCount})</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Daily Tasks ({totalCount})</Text>
         {challenge.sub_challenges?.map((sub: any, index: number) => (
           <View key={sub.id} style={[styles.subChallengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <View style={styles.subHeader}>
               <View style={styles.subHeaderLeft}>
-                <Text style={[styles.subDate, { color: theme.colors.text }]}>
+                <Text style={[styles.subDate, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
                   {new Date(sub.assigned_date).toLocaleDateString('en-US', {
                     weekday: 'short',
                     month: 'short',
@@ -231,25 +231,25 @@ export default function ChallengeDetailScreen() {
                   })}
                 </Text>
                 <View style={[styles.focusBadge, { backgroundColor: getFocusColor(sub.focus_type) }]}>
-                  <Text style={styles.focusText}>{sub.focus_type}</Text>
+                  <Text style={[styles.focusText, { fontFamily: theme.typography.fontFamily }]}>{sub.focus_type}</Text>
                 </View>
               </View>
               {sub.completed ? (
                 <CheckCircle size={24} color="#10b981" />
               ) : (
                 <View style={styles.incompleteBadge}>
-                  <Text style={styles.incompleteText}>Pending</Text>
+                  <Text style={[styles.incompleteText, { fontFamily: theme.typography.fontFamily }]}>Pending</Text>
                 </View>
               )}
             </View>
 
-            <Text style={[styles.subName, { color: theme.colors.text }]}>{sub.name}</Text>
+            <Text style={[styles.subName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{sub.name}</Text>
             {sub.description && (
-              <Text style={[styles.subDescription, { color: theme.colors.textSecondary }]}>{sub.description}</Text>
+              <Text style={[styles.subDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{sub.description}</Text>
             )}
 
             <View style={styles.subFooter}>
-              <Text style={styles.intensityText}>Intensity: {sub.intensity}</Text>
+              <Text style={[styles.intensityText, { fontFamily: theme.typography.fontFamily }]}>Intensity: {sub.intensity}</Text>
             </View>
           </View>
         ))}
@@ -260,7 +260,7 @@ export default function ChallengeDetailScreen() {
         <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
             <X size={20} color="#ef4444" />
-            <Text style={styles.cancelButtonText}>Cancel Challenge</Text>
+            <Text style={[styles.cancelButtonText, { fontFamily: theme.typography.fontFamily }]}>Cancel Challenge</Text>
           </TouchableOpacity>
         </View>
       )}

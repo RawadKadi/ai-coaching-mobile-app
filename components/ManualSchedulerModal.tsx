@@ -609,7 +609,7 @@ export default function ManualSchedulerModal({
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
             <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
                 <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-                    <Text style={[styles.title, { color: theme.colors.text }]}>{getStepTitle()}</Text>
+                    <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{getStepTitle()}</Text>
                     <TouchableOpacity onPress={onClose}>
                         <X size={24} color={theme.colors.text} />
                     </TouchableOpacity>
@@ -630,7 +630,7 @@ export default function ManualSchedulerModal({
                                 />
                             ))}
                         </View>
-                        <Text style={[styles.stepText, { color: theme.colors.textSecondary }]}>
+                        <Text style={[styles.stepText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                             Step {['client', 'days', 'time', 'details', 'confirm'].indexOf(step) + 1} of 5
                         </Text>
                     </View>
@@ -638,7 +638,7 @@ export default function ManualSchedulerModal({
                     {/* Step 1: Client Selection */}
                     {step === 'client' && (
                         <View style={styles.stepContent}>
-                            <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
+                            <Text style={[styles.description, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                                 Select which client to schedule a session for
                             </Text>
                             {clients.map(client => (
@@ -654,7 +654,7 @@ export default function ManualSchedulerModal({
                                     <View style={[styles.avatar, { backgroundColor: theme.colors.surfaceAlt }]}>
                                         <User size={24} color={theme.colors.textSecondary} />
                                     </View>
-                                    <Text style={[styles.clientName, { color: theme.colors.text }]}>
+                                    <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
                                         {client.profiles.full_name}
                                     </Text>
                                     {selectedClient?.id === client.id && (
@@ -668,7 +668,7 @@ export default function ManualSchedulerModal({
                     {/* Step 2: Day(s) Selection */}
                     {step === 'days' && (
                         <View style={styles.stepContent}>
-                            <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
+                            <Text style={[styles.description, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                                 Choose between a one-time session or recurring weekly sessions
                             </Text>
 
@@ -686,7 +686,7 @@ export default function ManualSchedulerModal({
                                     }}
                                 >
                                     <Calendar size={20} color={recurrence === 'once' ? theme.colors.textOnPrimary : theme.colors.text} />
-                                    <Text style={[styles.recurrenceText, { color: recurrence === 'once' ? theme.colors.textOnPrimary : theme.colors.text }]}>
+                                    <Text style={[styles.recurrenceText, { color: recurrence === 'once' ? theme.colors.textOnPrimary : theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
                                         One-time
                                     </Text>
                                 </TouchableOpacity>
@@ -702,7 +702,7 @@ export default function ManualSchedulerModal({
                                     }}
                                 >
                                     <Repeat size={20} color={recurrence === 'weekly' ? theme.colors.textOnPrimary : theme.colors.text} />
-                                    <Text style={[styles.recurrenceText, { color: recurrence === 'weekly' ? theme.colors.textOnPrimary : theme.colors.text }]}>
+                                    <Text style={[styles.recurrenceText, { color: recurrence === 'weekly' ? theme.colors.textOnPrimary : theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
                                         Recurring
                                     </Text>
                                 </TouchableOpacity>
@@ -710,7 +710,7 @@ export default function ManualSchedulerModal({
 
                             {recurrence === 'once' ? (
                                 <>
-                                    <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>Select date(s):</Text>
+                                    <Text style={[styles.sectionLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Select date(s):</Text>
                                     <View style={styles.datesGrid}>
                                         {next14Days.map(date => {
                                             const dateStr = date.toISOString().split('T')[0];
@@ -729,13 +729,13 @@ export default function ManualSchedulerModal({
                                                     onPress={() => !isBlocked && toggleDate(date)}
                                                     disabled={isBlocked}
                                                 >
-                                                    <Text style={[styles.dateWeekday, { color: theme.colors.textSecondary }, isSelected && { color: theme.colors.primary }]}>
+                                                    <Text style={[styles.dateWeekday, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }, isSelected && { color: theme.colors.primary }]}>
                                                         {date.toLocaleDateString('en-US', { weekday: 'short' })}
                                                     </Text>
-                                                    <Text style={[styles.dateDay, { color: theme.colors.text }, isSelected && { color: theme.colors.primary, fontWeight: '700' }]}>
+                                                    <Text style={[styles.dateDay, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }, isSelected && { color: theme.colors.primary, fontWeight: '700' }]}>
                                                         {date.getDate()}
                                                     </Text>
-                                                    <Text style={[styles.dateMonth, { color: theme.colors.textSecondary }, isSelected && { color: theme.colors.primary }]}>
+                                                    <Text style={[styles.dateMonth, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }, isSelected && { color: theme.colors.primary }]}>
                                                         {date.toLocaleDateString('en-US', { month: 'short' })}
                                                     </Text>
                                                 </TouchableOpacity>
@@ -745,7 +745,7 @@ export default function ManualSchedulerModal({
                                 </>
                             ) : (
                                 <>
-                                    <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>Select weekday(s):</Text>
+                                    <Text style={[styles.sectionLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Select weekday(s):</Text>
                                     <View style={styles.weekdaysGrid}>
                                         {weekdays.map(({ day, name, short }) => {
                                             const isSelected = selectedWeekdays.includes(day);
@@ -759,7 +759,7 @@ export default function ManualSchedulerModal({
                                                     ]}
                                                     onPress={() => toggleWeekday(day)}
                                                 >
-                                                    <Text style={[styles.weekdayText, { color: theme.colors.text }, isSelected && { color: theme.colors.primary, fontWeight: '700' }]}>
+                                                    <Text style={[styles.weekdayText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }, isSelected && { color: theme.colors.primary, fontWeight: '700' }]}>
                                                         {short}
                                                     </Text>
                                                 </TouchableOpacity>
@@ -774,7 +774,7 @@ export default function ManualSchedulerModal({
                     {/* Step 3: Time Selection */}
                     {step === 'time' && (
                         <View style={styles.stepContent}>
-                            <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
+                            <Text style={[styles.description, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                                 Select an available time slot
                             </Text>
                             
@@ -783,7 +783,7 @@ export default function ManualSchedulerModal({
                             ) : availableSlots.length === 0 ? (
                                 <View style={styles.emptyState}>
                                     <AlertCircle size={48} color={theme.colors.border} />
-                                    <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                                    <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
                                         No available time slots
                                     </Text>
                                 </View>

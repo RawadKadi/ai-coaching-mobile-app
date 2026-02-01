@@ -17,11 +17,11 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Settings</Text>
+        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Settings</Text>
       </View>
 
       <ScrollView style={styles.content}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>General</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>General</Text>
         <View style={[styles.menuContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <TouchableOpacity 
             style={styles.menuItem} 
@@ -31,7 +31,7 @@ export default function SettingsScreen() {
               <View style={[styles.iconContainer, { backgroundColor: '#EFF6FF' }]}>
                 <Clock size={20} color="#3B82F6" />
               </View>
-              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Availability</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Availability</Text>
             </View>
             <ChevronRight size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
@@ -47,9 +47,9 @@ export default function SettingsScreen() {
                   <Palette size={20} color="#F59E0B" />
                 </View>
                 <View>
-                  <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Brand Settings</Text>
+                  <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Brand Settings</Text>
                   {canManageBrand && (
-                    <Text style={[styles.badgeText, { color: theme.colors.textSecondary }]}>Manage brand colors & logo</Text>
+                    <Text style={[styles.badgeText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Manage brand colors & logo</Text>
                   )}
                 </View>
               </View>
@@ -66,7 +66,7 @@ export default function SettingsScreen() {
               <View style={[styles.iconContainer, { backgroundColor: '#F5F3FF' }]}>
                 <Brain size={20} color="#8B5CF6" />
               </View>
-              <Text style={[styles.menuItemText, { color: theme.colors.text }]}>AI Brain</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>AI Brain</Text>
             </View>
             <ChevronRight size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>

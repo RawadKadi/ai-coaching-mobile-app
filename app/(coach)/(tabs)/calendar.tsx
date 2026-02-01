@@ -191,13 +191,13 @@ export default function CalendarScreen() {
         <View style={styles.cardHeader}>
           <View style={[styles.timeContainer, { backgroundColor: theme.colors.primary + '15' }]}>
             <Clock size={16} color={theme.colors.primary} />
-            <Text style={[styles.timeText, { color: theme.colors.primary }]}>
+            <Text style={[styles.timeText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>
               {sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
           {isToday && (
             <View style={[styles.todayBadge, { backgroundColor: theme.colors.primary + '15' }]}>
-              <Text style={[styles.todayText, { color: theme.colors.primary }]}>TODAY</Text>
+              <Text style={[styles.todayText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>TODAY</Text>
             </View>
           )}
         </View>
@@ -207,17 +207,17 @@ export default function CalendarScreen() {
             <User size={20} color={theme.colors.textSecondary} />
           </View>
           <View>
-            <Text style={[styles.clientName, { color: theme.colors.text }]}>
+            <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
               {item.client?.profiles?.full_name || 'Unknown Client'}
             </Text>
-            <Text style={[styles.durationText, { color: theme.colors.textSecondary }]}>{item.duration_minutes} min session</Text>
+            <Text style={[styles.durationText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{item.duration_minutes} min session</Text>
           </View>
         </View>
 
         <View style={[styles.cardFooter, { borderTopColor: theme.colors.border }]}>
           <View style={styles.linkContainer}>
             <Video size={16} color={theme.colors.textSecondary} />
-            <Text style={[styles.linkText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            <Text style={[styles.linkText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]} numberOfLines={1}>
               Video Call
             </Text>
           </View>
@@ -260,10 +260,10 @@ export default function CalendarScreen() {
                 ]}
                 onPress={() => setSelectedDate(item)}
               >
-                <Text style={[styles.dayName, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.textSecondary }]}>
+                <Text style={[styles.dayName, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.textSecondary }, { fontFamily: theme.typography.fontFamily }]}>
                   {item.toLocaleDateString('en-US', { weekday: 'short' })}
                 </Text>
-                <Text style={[styles.dayNumber, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.text }]}>
+                <Text style={[styles.dayNumber, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.text }, { fontFamily: theme.typography.fontFamily }]}>
                   {item.getDate()}
                 </Text>
                 {hasSession && (
@@ -276,7 +276,7 @@ export default function CalendarScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
           {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </Text>
         
@@ -291,7 +291,7 @@ export default function CalendarScreen() {
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <CalendarIcon size={48} color={theme.colors.border} />
-                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No sessions scheduled</Text>
+                <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No sessions scheduled</Text>
               </View>
             }
           />
