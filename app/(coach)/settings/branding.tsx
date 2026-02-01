@@ -14,7 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Upload, Save, Eye, Palette } from 'lucide-react-native';
+import { ArrowLeft, Upload, Save, Eye, Palette, Check, Home, Users, MessageCircle, Calendar, Settings, X, TrendingUp, CheckCircle, Target, Sparkles } from 'lucide-react-native';
 import { useBrand, useTheme, Brand } from '@/contexts/BrandContext';
 import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +25,7 @@ import { BrandedText } from '@/components/BrandedText';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { generateDarkTheme } from '@/lib/theme-utils';
 import ColorPicker from 'react-native-wheel-color-picker';
+import { AVAILABLE_FONTS, getFontFamily } from '@/hooks/useAppFonts';
 
 // Preset themes
 const PRESET_THEMES = {
@@ -86,9 +87,11 @@ export default function BrandSettingsScreen() {
   const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'typography' | 'buttons' | 'spacing' | 'dark'>('identity');
   const [showPreview, setShowPreview] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [showFullPreview, setShowFullPreview] = useState(false);
   
-  // Color picker state
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showFontPicker, setShowFontPicker] = useState(false);
   const [activeColorField, setActiveColorField] = useState<'primary' | 'secondary' | 'accent' | 'background' | 'darkPrimary' | 'darkSecondary' | 'darkAccent' | 'darkBackground'>('primary');
   
   // Form state - Basic Identity
@@ -271,6 +274,7 @@ export default function BrandSettingsScreen() {
 
   const applyPreset = (presetKey: keyof typeof PRESET_THEMES) => {
     const preset = PRESET_THEMES[presetKey];
+    setSelectedPreset(presetKey);
     setPrimaryColor(preset.primary_color);
     setSecondaryColor(preset.secondary_color);
     setAccentColor(preset.accent_color);
@@ -430,9 +434,18 @@ export default function BrandSettingsScreen() {
                 {Object.entries(PRESET_THEMES).map(([key, preset]) => (
                   <TouchableOpacity
                     key={key}
-                    style={[styles.presetCard, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}
+                    style={[
+                      styles.presetCard,
+                      { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border },
+                      selectedPreset === key && { borderColor: primaryColor, borderWidth: 2 }
+                    ]}
                     onPress={() => applyPreset(key as keyof typeof PRESET_THEMES)}
                   >
+                    {selectedPreset === key && (
+                      <View style={[styles.presetSelectedCheck, { backgroundColor: primaryColor }]}>
+                        <Check size={12} color="#FFFFFF" />
+                      </View>
+                    )}
                     <View style={styles.presetColors}>
                       <View style={[styles.presetColorDot, { backgroundColor: preset.primary_color }]} />
                       <View style={[styles.presetColorDot, { backgroundColor: preset.secondary_color }]} />
@@ -480,19 +493,15 @@ export default function BrandSettingsScreen() {
           <>
             <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
               <Text style={[styles.label, { color: currentTheme.colors.text }]}>Font Family</Text>
-              <View style={styles.buttonRow}>
-                {['System', 'Inter', 'Roboto', 'Outfit'].map((font) => (
-                  <TouchableOpacity
-                    key={font}
-                    style={[styles.optionButton, { backgroundColor: fontFamily === font ? currentTheme.colors.primary : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, fontFamily === font && styles.optionButtonActive]}
-                    onPress={() => setFontFamily(font)}
-                  >
-                    <Text style={[styles.optionButtonText, { color: fontFamily === font ? '#FFFFFF' : currentTheme.colors.text }, fontFamily === font && styles.optionButtonTextActive]}>>
-                      {font}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TouchableOpacity 
+                style={[styles.fontSelectButton, { borderColor: currentTheme.colors.border }]}
+                onPress={() => setShowFontPicker(true)}
+              >
+                <Text style={[styles.fontSelectButtonText, { fontFamily: getFontFamily(fontFamily), color: currentTheme.colors.text }]}>
+                  {fontFamily}
+                </Text>
+                <Text style={[styles.fontSelectArrow, { color: currentTheme.colors.textSecondary }]}>▼</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
@@ -745,8 +754,8 @@ export default function BrandSettingsScreen() {
           <ArrowLeft size={24} color={currentTheme.colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: currentTheme.colors.text }]}>Brand Settings</Text>
-        <TouchableOpacity onPress={() => setShowPreview(!showPreview)} style={styles.headerPreviewButton}>
-          <Eye size={20} color={showPreview ? "#3B82F6" : "#6B7280"} />
+        <TouchableOpacity onPress={() => setShowFullPreview(true)} style={styles.headerPreviewButton}>
+          <Eye size={20} color={primaryColor} />
         </TouchableOpacity>
       </View>
 
@@ -846,6 +855,136 @@ export default function BrandSettingsScreen() {
           </View>
         )}
 
+        {/* Preview Dashboard Button */}
+        <TouchableOpacity
+          style={[styles.previewDashboardButton, { borderColor: primaryColor }]}
+          onPress={() => setShowFullPreview(true)}
+        >
+          <Eye size={20} color={primaryColor} />
+          <Text style={[styles.previewDashboardButtonText, { color: primaryColor }]}>Preview Dashboard</Text>
+        </TouchableOpacity>
+
+        {/* Full-Page Dashboard Preview Modal */}
+        <Modal visible={showFullPreview} animationType="slide" presentationStyle="fullScreen">
+          <SafeAreaView style={[styles.fullPreviewContainer, { backgroundColor: backgroundColor }]}>
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.fullPreviewCloseButton}
+              onPress={() => setShowFullPreview(false)}
+            >
+              <View style={[styles.fullPreviewCloseIcon, { backgroundColor: primaryColor }]}>
+                <X size={20} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Dashboard Header */}
+            <View style={[styles.fullPreviewHeader, { backgroundColor: darkModeEnabled ? '#1F2937' : '#FFFFFF', borderBottomColor: darkModeEnabled ? '#374151' : '#E5E7EB' }]}>
+              <Text style={[styles.fullPreviewGreeting, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
+                Welcome back, Coach!
+              </Text>
+              <Text style={[styles.fullPreviewSubtitle, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>
+                Coach Dashboard
+              </Text>
+            </View>
+
+            <ScrollView style={styles.fullPreviewContent}>
+              {/* Stats Grid */}
+              <View style={styles.fullPreviewStatsGrid}>
+                <View style={[styles.fullPreviewStatCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
+                  <View style={[styles.fullPreviewStatIcon, { backgroundColor: primaryColor + '20' }]}>
+                    <Users size={24} color={primaryColor} />
+                  </View>
+                  <Text style={[styles.fullPreviewStatValue, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>12</Text>
+                  <Text style={[styles.fullPreviewStatLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Total Clients</Text>
+                </View>
+
+                <View style={[styles.fullPreviewStatCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
+                  <View style={[styles.fullPreviewStatIcon, { backgroundColor: secondaryColor + '20' }]}>
+                    <TrendingUp size={24} color={secondaryColor} />
+                  </View>
+                  <Text style={[styles.fullPreviewStatValue, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>8</Text>
+                  <Text style={[styles.fullPreviewStatLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Active Clients</Text>
+                </View>
+
+                <View style={[styles.fullPreviewStatCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
+                  <View style={[styles.fullPreviewStatIcon, { backgroundColor: accentColor + '20' }]}>
+                    <CheckCircle size={24} color={accentColor} />
+                  </View>
+                  <Text style={[styles.fullPreviewStatValue, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>5</Text>
+                  <Text style={[styles.fullPreviewStatLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Pending Check-ins</Text>
+                </View>
+
+                <View style={[styles.fullPreviewStatCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
+                  <View style={[styles.fullPreviewStatIcon, { backgroundColor: '#EF4444' + '20' }]}>
+                    <MessageCircle size={24} color="#EF4444" />
+                  </View>
+                  <Text style={[styles.fullPreviewStatValue, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>3</Text>
+                  <Text style={[styles.fullPreviewStatLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Unread Messages</Text>
+                </View>
+              </View>
+
+              {/* Quick Actions */}
+              <View style={styles.fullPreviewSection}>
+                <Text style={[styles.fullPreviewSectionTitle, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
+                  Quick Actions
+                </Text>
+                <View style={[styles.fullPreviewActionCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
+                  <View style={[styles.fullPreviewActionIcon, { backgroundColor: primaryColor + '20' }]}>
+                    <Target size={28} color={primaryColor} />
+                  </View>
+                  <View style={styles.fullPreviewActionContent}>
+                    <Text style={[styles.fullPreviewActionTitle, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
+                      Challenges
+                    </Text>
+                    <Text style={[styles.fullPreviewActionSubtitle, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>
+                      Manage client challenges and AI suggestions
+                    </Text>
+                  </View>
+                  <View style={[styles.fullPreviewAIIndicator, { backgroundColor: primaryColor + '20' }]}>
+                    <Sparkles size={16} color={primaryColor} />
+                  </View>
+                </View>
+              </View>
+
+              {/* Recent Activity */}
+              <View style={styles.fullPreviewSection}>
+                <Text style={[styles.fullPreviewSectionTitle, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
+                  Recent Activity
+                </Text>
+                <View style={[styles.fullPreviewEmptyState, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
+                  <Text style={[styles.fullPreviewEmptyText, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>
+                    No recent activity
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Bottom Navigation Preview */}
+            <View style={[styles.fullPreviewNavBar, { backgroundColor: darkModeEnabled ? '#1F2937' : '#FFFFFF', borderTopColor: darkModeEnabled ? '#374151' : '#E5E7EB' }]}>
+              <View style={styles.fullPreviewNavItem}>
+                <Home size={24} color={primaryColor} />
+                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: primaryColor }]}>Home</Text>
+              </View>
+              <View style={styles.fullPreviewNavItem}>
+                <Users size={24} color={darkModeEnabled ? '#9CA3AF' : '#6B7280'} />
+                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Clients</Text>
+              </View>
+              <View style={styles.fullPreviewNavItem}>
+                <MessageCircle size={24} color={darkModeEnabled ? '#9CA3AF' : '#6B7280'} />
+                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Messages</Text>
+              </View>
+              <View style={styles.fullPreviewNavItem}>
+                <Calendar size={24} color={darkModeEnabled ? '#9CA3AF' : '#6B7280'} />
+                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Calendar</Text>
+              </View>
+              <View style={styles.fullPreviewNavItem}>
+                <Settings size={24} color={darkModeEnabled ? '#9CA3AF' : '#6B7280'} />
+                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Settings</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </Modal>
+
         {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: currentTheme.colors.primary }, loading && styles.saveButtonDisabled]}
@@ -878,6 +1017,51 @@ export default function BrandSettingsScreen() {
           onClose={() => setShowColorPicker(false)}
           onColorSelected={handleColorChange}
         />
+
+        {/* Font Picker Modal */}
+        <Modal visible={showFontPicker} animationType="slide" transparent>
+          <View style={styles.fontPickerOverlay}>
+            <View style={[styles.fontPickerContainer, { backgroundColor: currentTheme.colors.background }]}>
+              <View style={styles.fontPickerHeader}>
+                <Text style={[styles.fontPickerTitle, { color: currentTheme.colors.text }]}>Select Font</Text>
+                <TouchableOpacity onPress={() => setShowFontPicker(false)}>
+                  <X size={24} color={currentTheme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.fontPickerList} showsVerticalScrollIndicator={false}>
+                {AVAILABLE_FONTS.map((font) => (
+                  <TouchableOpacity
+                    key={font.name}
+                    style={[
+                      styles.fontPickerItem,
+                      { borderBottomColor: currentTheme.colors.border },
+                      fontFamily === font.name && { backgroundColor: primaryColor + '15' }
+                    ]}
+                    onPress={() => {
+                      setFontFamily(font.name);
+                      setShowFontPicker(false);
+                    }}
+                  >
+                    <Text 
+                      style={[
+                        styles.fontPickerItemText,
+                        { 
+                          fontFamily: font.fontFamily !== 'System' ? font.fontFamily : undefined,
+                          color: fontFamily === font.name ? primaryColor : currentTheme.colors.text,
+                        }
+                      ]}
+                    >
+                      {font.name}
+                    </Text>
+                    {fontFamily === font.name && (
+                      <Check size={20} color={primaryColor} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1182,6 +1366,16 @@ const styles = StyleSheet.create({
     color: '#374151',
     textAlign: 'center',
   },
+  presetSelectedCheck: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   autoGenerateButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1415,5 +1609,216 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Preview Dashboard Button
+  previewDashboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    gap: 8,
+  },
+  previewDashboardButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Full Preview Modal Styles
+  fullPreviewContainer: {
+    flex: 1,
+  },
+  fullPreviewCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 16,
+    zIndex: 100,
+  },
+  fullPreviewCloseIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullPreviewHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+  },
+  fullPreviewGreeting: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  fullPreviewSubtitle: {
+    fontSize: 14,
+  },
+  fullPreviewContent: {
+    flex: 1,
+    padding: 16,
+  },
+  fullPreviewStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
+  },
+  fullPreviewStatCard: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  fullPreviewStatIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  fullPreviewStatValue: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  fullPreviewStatLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  fullPreviewSection: {
+    marginBottom: 24,
+  },
+  fullPreviewSectionTitle: {
+    fontSize: 18,
+    marginBottom: 16,
+  },
+  fullPreviewActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  fullPreviewActionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullPreviewActionContent: {
+    flex: 1,
+  },
+  fullPreviewActionTitle: {
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  fullPreviewActionSubtitle: {
+    fontSize: 14,
+  },
+  fullPreviewAIIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullPreviewEmptyState: {
+    padding: 40,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  fullPreviewEmptyText: {
+    fontSize: 14,
+  },
+  fullPreviewNavBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 12,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+  },
+  fullPreviewNavItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  fullPreviewNavLabel: {
+    fontSize: 10,
+  },
+  // Font Select Button
+  fontSelectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  fontSelectButtonText: {
+    fontSize: 16,
+  },
+  fontSelectArrow: {
+    fontSize: 12,
+  },
+  // Font Picker Modal
+  fontPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  fontPickerContainer: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 8,
+    maxHeight: '70%',
+  },
+  fontPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  fontPickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  fontPickerList: {
+    paddingHorizontal: 8,
+  },
+  fontPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    marginHorizontal: 8,
+  },
+  fontPickerItemText: {
+    fontSize: 18,
   },
 });

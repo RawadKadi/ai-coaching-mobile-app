@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+import { useAppFonts } from '@/hooks/useAppFonts';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { BrandProvider } from '@/contexts/BrandContext';
 import { UnreadProvider } from '@/contexts/UnreadContext';
@@ -90,6 +91,7 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   useFrameworkReady();
+  const fontsLoaded = useAppFonts();
 
   // Load notification sound on app start
   useEffect(() => {
@@ -99,6 +101,15 @@ export default function RootLayout() {
       unloadNotificationSound();
     };
   }, []);
+
+  // Wait for fonts to load
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
 
   return (
     <AuthProvider>

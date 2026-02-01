@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
+import { getFontFamily } from '@/hooks/useAppFonts';
 import {
   hexToRGB,
   lightenColor,
@@ -225,10 +226,14 @@ function generateThemeColors(brand: Brand | null, isDark: boolean): ThemeColors 
 function generateTheme(brand: Brand | null, isDark: boolean): Theme {
   const colors = generateThemeColors(brand, isDark);
   
+  const fontDisplayName = brand?.font_family || 'System';
+  const headingWeight = brand?.heading_font_weight || '700';
+  const bodyWeight = brand?.body_font_weight || '400';
+  
   const typography: ThemeTypography = {
-    fontFamily: brand?.font_family || 'System',
-    headingWeight: brand?.heading_font_weight || '700',
-    bodyWeight: brand?.body_font_weight || '400',
+    fontFamily: getFontFamily(fontDisplayName, bodyWeight),
+    headingWeight,
+    bodyWeight,
     scale: brand?.font_scale || 1.0,
     sizes: generateTypographySizes(brand?.font_scale || 1.0),
   };
