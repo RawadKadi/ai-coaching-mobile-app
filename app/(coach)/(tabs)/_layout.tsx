@@ -21,6 +21,11 @@ export default function CoachTabLayout() {
           paddingTop: 8,
           height: 80,
         },
+        tabBarLabelStyle: {
+          fontFamily: theme.typography.fontFamily,
+          fontSize: 12,
+          fontWeight: '500',
+        },
       }}
     >
       <Tabs.Screen

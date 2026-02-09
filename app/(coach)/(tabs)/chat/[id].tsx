@@ -1689,7 +1689,7 @@ export default function CoachChat() {
           ? [styles.myMessage, { backgroundColor: theme.colors.primary }] 
           : [styles.theirMessage, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
         ]}>
-          <Text style={[styles.messageText, isOwn ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
+          <Text style={[styles.messageText, { fontFamily: theme.typography.fontFamily }, isOwn ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
             {item.content}
           </Text>
           <View style={styles.messageFooter}>
@@ -1806,7 +1806,7 @@ export default function CoachChat() {
         style={[styles.inputContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Platform.OS === 'ios' ? 10 : 16 }]}
       >
         <TextInput
-          style={[styles.input, { backgroundColor: theme.colors.inputBackground, color: theme.colors.text }]}
+          style={[styles.input, { backgroundColor: theme.colors.inputBackground, color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}
           placeholder="Type a message..."
           placeholderTextColor={theme.colors.textSecondary}
           value={newMessage}

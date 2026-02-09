@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Image, StyleSheet } from 'react-native';
+import { View, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { useBrand, useTheme } from '@/contexts/BrandContext';
 import { BrandedText } from './BrandedText';
 import { scaleBorderRadius } from '@/lib/theme-utils';
@@ -8,9 +9,11 @@ interface BrandedHeaderProps {
   title?: string;
   subtitle?: string;
   showLogo?: boolean;
+  showBackButton?: boolean;
+  onBackPress?: () => void;
 }
 
-export function BrandedHeader({ title, subtitle, showLogo = true }: BrandedHeaderProps) {
+export function BrandedHeader({ title, subtitle, showLogo = true, showBackButton, onBackPress }: BrandedHeaderProps) {
   const { brand } = useBrand();
   const theme = useTheme();
   
@@ -26,6 +29,16 @@ export function BrandedHeader({ title, subtitle, showLogo = true }: BrandedHeade
         },
       ]}
     >
+      {showBackButton && (
+        <TouchableOpacity 
+          onPress={onBackPress}
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ChevronLeft size={24} color={theme.colors.text} />
+        </TouchableOpacity>
+      )}
+
       {showLogo && brand?.logo_url && (
         <Image
           source={{ uri: brand.logo_url }}
@@ -60,6 +73,12 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     marginBottom: 12,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    top: 20,
+    zIndex: 10,
   },
   title: {
     marginBottom: 4,

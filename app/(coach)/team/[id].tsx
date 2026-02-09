@@ -109,13 +109,44 @@ export default function SubCoachDetailsScreen() {
     }
   };
 
+  const handleTerminate = () => {
+    Alert.alert(
+      'Terminate Sub-Coach?',
+      'This action will remove the sub-coach from your team. They will lose access to your brand and all assigned clients will be unassigned. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Terminate',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const { error } = await supabase.rpc('terminate_sub_coach', {
+                p_sub_coach_id: id,
+                p_reason: 'Terminated by main coach'
+              });
+
+              if (error) throw error;
+
+              Alert.alert('Success', 'Sub-coach has been terminated.');
+              router.back();
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to terminate sub-coach');
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <BrandedHeader title="Sub-Coach Details" showBackButton onBackPress={() => router.back()} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={primary} />
-          <Text style={styles.loadingText}>Loading details...</Text>
+          <Text style={[styles.loadingText, { fontFamily: theme.typography.fontFamily }]}>Loading details...</Text>
         </View>
       </SafeAreaView>
     );
@@ -126,7 +157,7 @@ export default function SubCoachDetailsScreen() {
       <SafeAreaView style={styles.container}>
         <BrandedHeader title="Sub-Coach Details" showBackButton onBackPress={() => router.back()} />
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Sub-coach not found</Text>
+          <Text style={[styles.emptyText, { fontFamily: theme.typography.fontFamily }]}>Sub-coach not found</Text>
         </View>
       </SafeAreaView>
     );
@@ -147,16 +178,16 @@ export default function SubCoachDetailsScreen() {
             <UserCheck size={40} color={primary} />
           </View>
           
-          <Text style={[styles.name, { color: theme.colors.text }]}>{subCoach.full_name}</Text>
+          <Text style={[styles.name, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{subCoach.full_name}</Text>
           
           <View style={styles.infoRow}>
             <Mail size={16} color="#6B7280" />
-            <Text style={[styles.email, { color: theme.colors.textSecondary }]}>{subCoach.email}</Text>
+            <Text style={[styles.email, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{subCoach.email}</Text>
           </View>
           
           <View style={styles.infoRow}>
             <Calendar size={16} color="#6B7280" />
-            <Text style={[styles.joinedText, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.joinedText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
               Joined {new Date(subCoach.joined_at).toLocaleDateString()}
             </Text>
           </View>
@@ -166,34 +197,34 @@ export default function SubCoachDetailsScreen() {
         <View style={styles.statsCard}>
           <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
             <Users size={24} color={primary} />
-            <Text style={[styles.statValue, { color: theme.colors.text }]}>{subCoach.client_count}</Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Assigned Clients</Text>
+            <Text style={[styles.statValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{subCoach.client_count}</Text>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Assigned Clients</Text>
           </View>
           
           <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
             <TrendingUp size={24} color={secondary} />
-            <Text style={[styles.statValue, { color: secondary }]}>Active</Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Status</Text>
+            <Text style={[styles.statValue, { color: secondary, fontFamily: theme.typography.fontFamily }]}>Active</Text>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Status</Text>
           </View>
         </View>
 
         {/* Clients List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Assigned Clients ({subCoach.client_count})</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Assigned Clients ({subCoach.client_count})</Text>
             <TouchableOpacity
               style={[styles.assignButton, { backgroundColor: primary }]}
               onPress={() => setShowAssignModal(true)}
             >
               <Users size={16} color="#FFFFFF" />
-              <Text style={styles.assignButtonText}>Assign Clients</Text>
+              <Text style={[styles.assignButtonText, { fontFamily: theme.typography.fontFamily }]}>Assign Clients</Text>
             </TouchableOpacity>
           </View>
           
           {subCoach.clients.length === 0 ? (
             <View style={[styles.emptyClientsCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
               <Users size={32} color={theme.colors.textTertiary} />
-              <Text style={[styles.emptyClientsText, { color: theme.colors.textSecondary }]}>No clients assigned yet</Text>
+              <Text style={[styles.emptyClientsText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No clients assigned yet</Text>
             </View>
           ) : (
             subCoach.clients.map((client) => (
@@ -206,14 +237,14 @@ export default function SubCoachDetailsScreen() {
               >
                 <View style={styles.clientInfo}>
                   <View style={styles.clientAvatar}>
-                    <Text style={styles.clientInitial}>
+                    <Text style={[styles.clientInitial, { fontFamily: theme.typography.fontFamily }]}>
                       {client.full_name.charAt(0).toUpperCase()}
                     </Text>
                   </View>
                   <View style={styles.clientDetails}>
-                    <Text style={[styles.clientName, { color: theme.colors.text }]}>{client.full_name}</Text>
-                    <Text style={[styles.clientEmail, { color: theme.colors.textSecondary }]}>{client.email}</Text>
-                    <Text style={[styles.clientDate, { color: theme.colors.textTertiary }]}>
+                    <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.full_name}</Text>
+                    <Text style={[styles.clientEmail, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{client.email}</Text>
+                    <Text style={[styles.clientDate, { color: theme.colors.textTertiary, fontFamily: theme.typography.fontFamily }]}>
                       Added {new Date(client.added_at).toLocaleDateString()}
                     </Text>
                   </View>
@@ -223,6 +254,14 @@ export default function SubCoachDetailsScreen() {
             ))
           )}
         </View>
+
+        {/* Terminate Button */}
+        <TouchableOpacity
+          style={[styles.terminateButton, { borderColor: theme.colors.error }]}
+          onPress={handleTerminate}
+        >
+          <Text style={[styles.terminateButtonText, { color: theme.colors.error, fontFamily: theme.typography.fontFamily }]}>Terminate Coach</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Assignment Modal */}
@@ -425,5 +464,19 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: '#9CA3AF',
+  },
+  terminateButton: {
+    marginTop: 24,
+    marginBottom: 40,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  terminateButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

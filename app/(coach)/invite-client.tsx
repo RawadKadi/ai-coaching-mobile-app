@@ -259,12 +259,12 @@ export default function InviteClientScreen() {
 
         {/* How It Works */}
         <View style={[styles.howItWorks, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.howTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>How It Works:</Text>
+          <Text style={[styles.howTitle, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>How It Works:</Text>
           <View style={styles.step}>
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>1</Text>
             </View>
-            <Text style={[styles.stepText, { fontFamily: theme.typography.fontFamily }]}>
+            <Text style={[styles.stepText, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>
               Generate an invite code with your preferred settings
             </Text>
           </View>
@@ -272,7 +272,7 @@ export default function InviteClientScreen() {
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>2</Text>
             </View>
-            <Text style={[styles.stepText, { fontFamily: theme.typography.fontFamily }]}>
+            <Text style={[styles.stepText, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>
               Share the link via WhatsApp, email, or SMS
             </Text>
           </View>
@@ -280,7 +280,7 @@ export default function InviteClientScreen() {
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>3</Text>
             </View>
-            <Text style={[styles.stepText, { fontFamily: theme.typography.fontFamily }]}>
+            <Text style={[styles.stepText, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>
               Client clicks link, creates account, and joins your program
             </Text>
           </View>
@@ -288,7 +288,7 @@ export default function InviteClientScreen() {
             <View style={[styles.stepNumber, { backgroundColor: primary }]}>
               <Text style={styles.stepNumberText}>4</Text>
             </View>
-            <Text style={[styles.stepText, { fontFamily: theme.typography.fontFamily }]}>
+            <Text style={[styles.stepText, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>
               They're automatically added to your client list!
             </Text>
           </View>

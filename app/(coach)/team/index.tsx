@@ -161,7 +161,7 @@ export default function TeamManagementScreen() {
         </View>
         <View style={styles.coachInfo}>
           <View style={styles.nameRow}>
-            <Text style={[styles.coachName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{item.full_name}</Text>
+            <Text style={[styles.coachName, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>{item.full_name}</Text>
             {item.status === 'pending' && (
               <View style={[styles.pendingBadge, { backgroundColor: `${theme.colors.accent}20`, borderColor: theme.colors.accent }]}>
                 <Text style={[styles.pendingBadgeText, { color: theme.colors.accent, fontFamily: theme.typography.fontFamily }]}>PENDING</Text>
@@ -174,9 +174,9 @@ export default function TeamManagementScreen() {
 
       <View style={styles.statsRow}>
         <View style={styles.stat}>
-          <Users size={16} color="#6B7280" />
-          <Text style={styles.statValue}>{item.client_count}</Text>
-          <Text style={styles.statLabel}>Clients</Text>
+          <Users size={16} color={theme.colors.textSecondary} />
+          <Text style={[styles.statValue, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>{item.client_count}</Text>
+          <Text style={[styles.statLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Clients</Text>
         </View>
         
         <View style={styles.stat}>
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: 'transparent',
   },
   coachHeader: {
     flexDirection: 'row',
