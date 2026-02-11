@@ -8,7 +8,26 @@ ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP WITH TIME ZONE;
 -- Index for performance
 CREATE INDEX IF NOT EXISTS idx_coach_hierarchy_status ON coach_hierarchy(status);
 
--- 2. Create RPC Function to Terminate Sub-Coach
+-- 2. Add 'sub_coach_terminated' to allowed event types in analytics_events
+ALTER TABLE analytics_events 
+DROP CONSTRAINT IF EXISTS valid_event_type;
+
+ALTER TABLE analytics_events
+ADD CONSTRAINT valid_event_type CHECK (
+  event_type IN (
+    'login',
+    'challenge_complete',
+    'session_attend',
+    'meal_log',
+    'check_in',
+    'message_sent',
+    'invite_used',
+    'client_transferred',
+    'sub_coach_terminated'
+  )
+);
+
+-- 3. Create RPC Function to Terminate Sub-Coach
 CREATE OR REPLACE FUNCTION terminate_sub_coach(
   p_sub_coach_id UUID,
   p_reason TEXT DEFAULT NULL

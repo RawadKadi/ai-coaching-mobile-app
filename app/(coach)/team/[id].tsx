@@ -16,6 +16,7 @@ import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { BrandedHeader } from '@/components/BrandedHeader';
 import { AssignClientsModal } from '@/components/AssignClientsModal';
+import { TerminationSuccessModal } from '@/components/TerminationSuccessModal';
 
 interface SubCoachDetails {
   coach_id: string;
@@ -41,6 +42,8 @@ export default function SubCoachDetailsScreen() {
   const [subCoach, setSubCoach] = useState<SubCoachDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [unassignedClients, setUnassignedClients] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -121,6 +124,14 @@ export default function SubCoachDetailsScreen() {
           onPress: async () => {
             try {
               setLoading(true);
+              
+              // Capture clients before termination for the success modal
+              const clientsToReassign = subCoach?.clients.map(c => ({
+                id: c.id,
+                full_name: c.full_name,
+                email: c.email
+              })) || [];
+              
               const { error } = await supabase.rpc('terminate_sub_coach', {
                 p_sub_coach_id: id,
                 p_reason: 'Terminated by main coach'
@@ -128,16 +139,22 @@ export default function SubCoachDetailsScreen() {
 
               if (error) throw error;
 
-              Alert.alert('Success', 'Sub-coach has been terminated.');
-              router.back();
+              setUnassignedClients(clientsToReassign);
+              setLoading(false); // Stop loading to allow modal to show
+              setShowSuccessModal(true);
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to terminate sub-coach');
-              setLoading(false);
+              setLoading(false); // Only stop loading on error, keep loading on success until modal handling
             }
           }
         }
       ]
     );
+  };
+  
+  const handleAssignClientsNavigation = () => {
+    setShowSuccessModal(false);
+    router.replace('/(coach)/team/reassign');
   };
 
   if (loading) {
@@ -275,6 +292,13 @@ export default function SubCoachDetailsScreen() {
           onSuccess={() => loadSubCoachDetails()}
         />
       )}
+
+      {/* Termination Success Modal */}
+      <TerminationSuccessModal
+        visible={showSuccessModal}
+        unassignedClients={unassignedClients}
+        onAssignClients={handleAssignClientsNavigation}
+      />
     </SafeAreaView>
   );
 }
