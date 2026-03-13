@@ -52,25 +52,30 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
           // Don't show notification if user is on messages page
           if (isOnMessagesPage()) {
-            console.log('[Notification] User on messages page, skipping toast');
             return;
           }
 
-          console.log('[Notification] New message received, showing toast');
-
-          // Play notification sound
           playNotificationSound();
 
-          // Get sender info
           try {
+            let senderName = 'Someone';
+
+            // 1. Try direct profiles query (works for client → coach messages where RLS allows it)
             const { data: senderProfile } = await supabase
               .from('profiles')
               .select('full_name')
               .eq('id', newMessage.sender_id)
-              .single();
+              .maybeSingle();
 
-            const senderName = senderProfile?.full_name || 'Someone';
-            
+            if (senderProfile?.full_name) {
+              senderName = senderProfile.full_name;
+            } else {
+              // 2. RLS blocked profiles read (coach sender) — use get_team_coaches RPC which is SECURITY DEFINER
+              const { data: teammates } = await supabase.rpc('get_team_coaches');
+              const match = (teammates || []).find((tm: any) => tm.user_id === newMessage.sender_id);
+              if (match?.full_name) senderName = match.full_name;
+            }
+
             // Parse message content (could be JSON or plain text)
             let messageText = '';
             try {
@@ -83,19 +88,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                 messageText = 'Sent a message';
               }
             } catch {
-              // Plain text message
+              // Plain text message — show actual content preview
               messageText = newMessage.content.substring(0, 50);
               if (newMessage.content.length > 50) {
                 messageText += '...';
               }
             }
 
-            // Show toast
             setActiveToast({
               id: newMessage.id,
               senderName,
               message: messageText,
-              navigateTo: '/messages', // You can make this more specific
+              navigateTo: '/messages',
             });
           } catch (error) {
             console.error('Error fetching sender info:', error);

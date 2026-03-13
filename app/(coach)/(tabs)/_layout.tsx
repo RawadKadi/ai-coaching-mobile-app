@@ -85,6 +85,13 @@ export default function CoachTabLayout() {
           href: null, // Hide from tab bar
         }}
       />
+      {/* Coach-to-Coach Chat - hide from tabs */}
+      <Tabs.Screen
+        name="chat/coach/[coachId]"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }

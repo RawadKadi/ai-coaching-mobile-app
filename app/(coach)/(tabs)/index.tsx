@@ -37,7 +37,6 @@ export default function CoachDashboard() {
 
   useEffect(() => {
     if (coach) {
-      console.log('[Coach Dashboard] Setting up real-time subscription for coach:', coach.id);
       loadDashboardData();
 
       // Set up real-time listener for new client assignments
@@ -52,9 +51,6 @@ export default function CoachDashboard() {
             filter: `coach_id=eq.${coach.id}`,
           },
           async (payload) => {
-            console.log('[Real-time] ✅ New client assigned!', payload);
-            console.log('[Real-time] Client ID:', payload.new.client_id);
-            
             // Fetch client details
             const { data: clientData, error: clientError } = await supabase
               .from('clients')
@@ -74,37 +70,25 @@ export default function CoachDashboard() {
               return;
             }
 
-            console.log('[Real-time] Client data fetched:', clientData);
-
             if (clientData) {
               const profiles = Array.isArray(clientData.profiles) ? clientData.profiles[0] : clientData.profiles;
-              console.log('[Real-time] Showing modal for:', profiles?.full_name);
-              
               setNewClient({
                 id: clientData.id,
                 name: profiles?.full_name || 'New Client',
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
               });
               setShowNewClientModal(true);
-              // Refresh stats
-              console.log('[Real-time] Refreshing dashboard stats...');
               loadDashboardData();
             }
           }
         )
         .subscribe((status) => {
-          console.log('[Real-time] Subscription status:', status);
-          if (status === 'SUBSCRIBED') {
-            console.log('[Real-time] ✅ Successfully subscribed to new client notifications');
-          } else if (status === 'CLOSED') {
-            console.error('[Real-time] ❌ Subscription closed');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('[Real-time] ❌ Channel error');
+          if (status === 'CHANNEL_ERROR') {
+            console.error('[Real-time] Channel error on new_client_notifications');
           }
         });
 
       return () => {
-        console.log('[Coach Dashboard] Cleaning up real-time subscription');
         subscription.unsubscribe();
       };
     } else {

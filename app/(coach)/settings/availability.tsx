@@ -109,12 +109,14 @@ export default function AvailabilitySettings() {
 
       await Promise.all([...availabilityPromises, ...blockPromises, ...unblockPromises]);
       
-      Alert.alert('Success', 'All availability settings saved successfully');
-      
       // Refresh initial state to current state
       setInitialAvailability(JSON.parse(JSON.stringify(availability)));
       setInitialBlockedDates(JSON.parse(JSON.stringify(blockedDates)));
       setHasChanges(false);
+
+      Alert.alert('Success', 'All availability settings saved successfully', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
 
     } catch (error) {
       console.error('Save error:', error);
