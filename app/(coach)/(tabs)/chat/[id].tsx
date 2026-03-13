@@ -11,6 +11,8 @@ import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft
 import MealMessageCard from '@/components/MealMessageCard';
 import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
 import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
+import { ChatInputBar } from '@/components/ChatInputBar';
+import { ChatMediaMessage } from '@/components/ChatMediaMessage';
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -1581,24 +1583,43 @@ export default function CoachChat() {
     await supabase.from('messages').update({ read: true }).eq('id', messageId);
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !profile || !clientProfile) return;
+  const sendMediaMessage = async (jsonContent: string) => {
+    if (!profile || !clientProfile) return;
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: profile.id,
+          recipient_id: clientProfile.user_id,
+          content: jsonContent,
+          read: false,
+          ai_generated: false,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      setMessages(prev => [...prev, data]);
+    } catch (error) {
+      console.error('Error sending media:', error);
+      Alert.alert('Error', 'Failed to send file. Please try again.');
+    }
+  };
 
-    const messageText = newMessage.trim();
-    
+  const sendMessage = async (text: string) => {
+    if (!profile || !clientProfile) return;
+
     // Optimistic update - add to UI immediately
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = {
       id: tempId,
       sender_id: profile.id,
       recipient_id: clientProfile.user_id,
-      content: messageText,
+      content: text,
       created_at: new Date().toISOString(),
       read: false,
     };
     
-    setMessages([...messages, optimisticMessage]);
-    setNewMessage('');
+    setMessages(prev => [...prev, optimisticMessage]);
 
     // Send to backend in background
     try {
@@ -1607,7 +1628,7 @@ export default function CoachChat() {
       const message = {
         sender_id: profile.id,
         recipient_id: clientProfile.user_id,
-        content: messageText,
+        content: text,
         read: false,
         ai_generated: false,
       };
@@ -1628,7 +1649,7 @@ export default function CoachChat() {
       console.error('Error sending message:', error);
       // Remove optimistic message on error and restore text
       setMessages((current) => current.filter(m => m.id !== tempId));
-      setNewMessage(messageText);
+      Alert.alert('Error', 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -1640,6 +1661,8 @@ export default function CoachChat() {
     
     const renderContent = () => {
       let parsed: any = null;
+      let isMediaMessage = false;
+
       try {
         if (typeof item.content === 'object' && item.content !== null) {
           parsed = item.content;
@@ -1654,13 +1677,13 @@ export default function CoachChat() {
       }
 
       if (parsed && parsed.type) {
-        if (parsed.type === 'task_completion') {
+        if (['image', 'video', 'document', 'gif'].includes(parsed.type)) {
+          isMediaMessage = true;
+        } else if (parsed.type === 'task_completion') {
           return <TaskCompletionMessage content={item.content} isOwn={isOwn} />;
-        }
-        if (parsed.type === 'challenge_completed') {
+        } else if (parsed.type === 'challenge_completed') {
           return <ChallengeCompletionMessage content={item.content} isOwn={isOwn} />;
-        }
-        if (parsed.type === 'session_invite') {
+        } else if (parsed.type === 'session_invite') {
           return (
             <SessionInviteMessageWrapper 
               item={item}
@@ -1669,8 +1692,7 @@ export default function CoachChat() {
               loadNextSession={loadNextSession}
             />
           );
-        }
-        if (parsed.type === 'reschedule_proposal') {
+        } else if (parsed.type === 'reschedule_proposal') {
           return (
             <RescheduleProposalMessage 
               messageId={item.id}
@@ -1678,10 +1700,13 @@ export default function CoachChat() {
               isOwn={isOwn}
             />
           );
-        }
-        if (parsed.type === 'meal_log') {
+        } else if (parsed.type === 'meal_log') {
           return <MealMessageCard content={item.content} isOwn={isOwn} />;
         }
+      }
+
+      if (isMediaMessage) {
+        return <ChatMediaMessage content={item.content} isOwn={isOwn} />;
       }
 
       return (
@@ -1802,28 +1827,13 @@ export default function CoachChat() {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-        style={[styles.inputContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Platform.OS === 'ios' ? 10 : 16 }]}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.colors.inputBackground, color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}
-          placeholder="Type a message..."
-          placeholderTextColor={theme.colors.textSecondary}
-          value={newMessage}
-          onChangeText={setNewMessage}
-          multiline
+        <ChatInputBar
+          onSendText={sendMessage}
+          onSendMedia={sendMediaMessage}
+          sending={sending}
         />
-        <TouchableOpacity 
-          style={[styles.sendButton, { backgroundColor: theme.colors.primary }, !newMessage.trim() && { opacity: 0.6 }]} 
-          onPress={sendMessage}
-          disabled={!newMessage.trim() || sending}
-        >
-          {sending ? (
-            <ActivityIndicator size="small" color={theme.colors.textOnPrimary} />
-          ) : (
-            <Send size={20} color={theme.colors.textOnPrimary} />
-          )}
-        </TouchableOpacity>
       </KeyboardAvoidingView>
 
       {/* Scheduler Modal */}

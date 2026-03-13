@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList,
+  View, Text, StyleSheet, FlatList,
   KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert,
 } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
-import { Send, ChevronLeft, Check, CheckCheck, ArrowDown } from 'lucide-react-native';
+import { ChevronLeft, Check, CheckCheck, ArrowDown } from 'lucide-react-native';
+import { ChatInputBar } from '@/components/ChatInputBar';
+import { ChatMediaMessage } from '@/components/ChatMediaMessage';
 
 type Message = {
   id: string;
@@ -196,21 +199,42 @@ export default function CoachToCoachChat() {
     }
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !profile || !coachInfo) return;
-    const text = newMessage.trim();
+  const sendMediaMessage = async (jsonContent: string) => {
+    if (!profile || !coachInfo) return;
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: profile.id,
+          recipient_id: coachInfo.user_id,
+          content: jsonContent,
+          read: false,
+          ai_generated: false,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      setMessages(prev => [...prev, data]);
+    } catch (error) {
+      console.error('[CoachChat] Error sending media:', error);
+      Alert.alert('Error', 'Failed to send. Please try again.');
+    }
+  };
+
+  const sendMessage = async (text: string) => {
+    if (!profile || !coachInfo) return;
 
     // Optimistic update
     const tempId = `temp-${Date.now()}`;
-    setMessages(prev => [...prev, {
+    const optimistic = {
       id: tempId,
       sender_id: profile.id,
       recipient_id: coachInfo.user_id,
       content: text,
       created_at: new Date().toISOString(),
       read: false,
-    }]);
-    setNewMessage('');
+    };
+    setMessages(prev => [...prev, optimistic]);
 
     try {
       setSending(true);
@@ -231,7 +255,6 @@ export default function CoachToCoachChat() {
     } catch (error) {
       console.error('[CoachChat] Error sending message:', error);
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      setNewMessage(text);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
@@ -259,6 +282,13 @@ export default function CoachToCoachChat() {
     const isOwn = item.sender_id === profile?.id;
     const showSeparator = index === firstUnreadIndex;
 
+    // Detect media message
+    let isMedia = false;
+    try {
+      const p = JSON.parse(item.content);
+      if (p?.type && ['image', 'video', 'document', 'gif'].includes(p.type)) isMedia = true;
+    } catch {}
+
     return (
       <View>
         {showSeparator && (
@@ -273,36 +303,39 @@ export default function CoachToCoachChat() {
           </View>
         )}
 
-        <View style={[
-          styles.bubble,
-          isOwn
-            ? [styles.myBubble, { backgroundColor: theme.colors.primary }]
-            : [styles.theirBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }],
-        ]}>
-          <Text style={[
-            styles.bubbleText,
-            { fontFamily: theme.typography.fontFamily },
-            isOwn ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text },
+        {isMedia ? (
+          <ChatMediaMessage content={item.content} isOwn={isOwn} />
+        ) : (
+          <View style={[
+            styles.bubble,
+            isOwn
+              ? [styles.myBubble, { backgroundColor: theme.colors.primary }]
+              : [styles.theirBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }],
           ]}>
-            {item.content}
-          </Text>
-
-          <View style={styles.bubbleFooter}>
             <Text style={[
-              styles.timestamp,
-              isOwn
-                ? { color: theme.colors.textOnPrimary, opacity: 0.7 }
-                : { color: theme.colors.textSecondary },
+              styles.bubbleText,
+              { fontFamily: theme.typography.fontFamily },
+              isOwn ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text },
             ]}>
-              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {item.content}
             </Text>
-            {isOwn && (
-              item.read
-                ? <CheckCheck size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
-                : <Check size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
-            )}
+            <View style={styles.bubbleFooter}>
+              <Text style={[
+                styles.timestamp,
+                isOwn
+                  ? { color: theme.colors.textOnPrimary, opacity: 0.7 }
+                  : { color: theme.colors.textSecondary },
+              ]}>
+                {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {isOwn && (
+                item.read
+                  ? <CheckCheck size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
+                  : <Check size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
+              )}
+            </View>
           </View>
-        </View>
+        )}
       </View>
     );
   };
@@ -378,27 +411,13 @@ export default function CoachToCoachChat() {
       {/* Input */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-        style={[styles.inputContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Platform.OS === 'ios' ? 10 : 16 }]}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.colors.inputBackground, color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}
-          placeholder="Type a message..."
-          placeholderTextColor={theme.colors.textSecondary}
-          value={newMessage}
-          onChangeText={setNewMessage}
-          multiline
+        <ChatInputBar
+          onSendText={sendMessage}
+          onSendMedia={sendMediaMessage}
+          sending={sending}
         />
-        <TouchableOpacity
-          style={[styles.sendButton, { backgroundColor: theme.colors.primary }, !newMessage.trim() && { opacity: 0.6 }]}
-          onPress={sendMessage}
-          disabled={!newMessage.trim() || sending}
-        >
-          {sending
-            ? <ActivityIndicator size="small" color={theme.colors.textOnPrimary} />
-            : <Send size={20} color={theme.colors.textOnPrimary} />
-          }
-        </TouchableOpacity>
       </KeyboardAvoidingView>
     </View>
   );

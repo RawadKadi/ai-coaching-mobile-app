@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabase';
 import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown, Check, CheckCheck } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
 import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
+import { ChatMediaMessage } from '@/components/ChatMediaMessage';
+import { ChatInputBar } from '@/components/ChatInputBar';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/BrandContext';
 
@@ -761,10 +763,50 @@ export default function MessagesScreen() {
     markMessagesAsRead();
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !user || !client) return;
+  const sendMediaMessage = async (jsonContent: string) => {
+    if (!user || !client) return;
+    try {
+      const { data: coachLink, error: linkError } = await supabase
+        .from('coach_client_links')
+        .select('coach_id')
+        .eq('client_id', client.id)
+        .eq('status', 'active')
+        .single();
 
-    const messageText = newMessage.trim();
+      if (linkError || !coachLink) throw new Error('No active coach');
+
+      const { data: coach } = await supabase
+        .from('coaches')
+        .select('user_id')
+        .eq('id', coachLink.coach_id)
+        .single();
+
+      if (!coach) throw new Error('Coach not found');
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: user.id,
+          recipient_id: coach.user_id,
+          content: jsonContent,
+          read: false,
+          ai_generated: false,
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      setMessages(prev => [...prev, data]);
+    } catch (error) {
+      console.error('Error sending media:', error);
+      Alert.alert('Error', 'Failed to send file. Please try again.');
+    }
+  };
+
+  const sendMessage = async (textToSend?: string) => {
+    const messageText = (textToSend || "").trim();
+    if (!messageText || !user || !client) return;
+
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = {
       id: tempId,
@@ -777,7 +819,6 @@ export default function MessagesScreen() {
     };
     
     setMessages([...messages, optimisticMessage]);
-    setNewMessage('');
 
     try {
       setSending(true);
@@ -907,6 +948,13 @@ export default function MessagesScreen() {
       } catch (e) {}
       if (isMealLog) return <MealMessageCard content={item.content} isOwn={isMe} />;
 
+      let isMediaMessage = false;
+      try {
+        const parsed = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+        if (parsed && ['image', 'video', 'document', 'gif'].includes(parsed.type)) isMediaMessage = true;
+      } catch (e) {}
+      if (isMediaMessage) return <ChatMediaMessage content={item.content} isOwn={isMe} />;
+
       return (
         <View style={[styles.messageBubble, isMe 
           ? [styles.ownBubble, { backgroundColor: theme.colors.primary }] 
@@ -985,23 +1033,11 @@ export default function MessagesScreen() {
               </TouchableOpacity>
             )}
             
-            <View style={[styles.inputContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Platform.OS === 'ios' ? 10 : 16 }]}>
-                <TextInput
-                    style={[styles.input, { backgroundColor: theme.colors.inputBackground, color: theme.colors.text }]}
-                    placeholder="Type a message..."
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={newMessage}
-                    onChangeText={setNewMessage}
-                    multiline
-                />
-                <TouchableOpacity 
-                    style={[styles.sendButton, { backgroundColor: theme.colors.primary }, !newMessage.trim() && { opacity: 0.6 }]} 
-                    onPress={sendMessage}
-                    disabled={!newMessage.trim()}
-                >
-                    <Send size={20} color={theme.colors.textOnPrimary} />
-                </TouchableOpacity>
-            </View>
+            <ChatInputBar
+                onSendText={sendMessage}
+                onSendMedia={sendMediaMessage}
+                sending={sending}
+            />
         </KeyboardAvoidingView>
 
         {postponeData && (
