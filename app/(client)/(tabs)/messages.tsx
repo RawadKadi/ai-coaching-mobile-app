@@ -783,7 +783,7 @@ export default function MessagesScreen() {
 
       if (!coach) throw new Error('Coach not found');
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('messages')
         .insert({
           sender_id: user.id,
@@ -791,17 +791,16 @@ export default function MessagesScreen() {
           content: jsonContent,
           read: false,
           ai_generated: false,
-        })
-        .select()
-        .single();
+        });
         
       if (error) throw error;
-      setMessages(prev => [...prev, data]);
+      // Don't manually append — realtime subscription handles insertion with dedup
     } catch (error) {
       console.error('Error sending media:', error);
       Alert.alert('Error', 'Failed to send file. Please try again.');
     }
   };
+
 
   const sendMessage = async (textToSend?: string) => {
     const messageText = (textToSend || "").trim();

@@ -1,10 +1,12 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Keyboard, Animated, ScrollView, FlatList, Image,
+  Keyboard, Animated, ScrollView, FlatList,
   Platform, Dimensions, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Easing
+  KeyboardAvoidingView, Easing, PanResponder
 } from 'react-native';
+import { Image } from 'expo-image'; // disk-cached, hardware-accelerated
+import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '@/contexts/BrandContext';
@@ -12,8 +14,9 @@ import { Send, Paperclip, Smile, Camera, X, Search, Film, Image as ImageIcon, Fi
 import { EMOJIS_BY_CATEGORY, EMOJI_SEARCH } from '@/lib/emojiData';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PANEL_HEIGHT = 310;
+const PANEL_FULL_HEIGHT = SCREEN_HEIGHT * 0.9;
 const TENOR_KEY = process.env.EXPO_PUBLIC_TENOR_API_KEY;
 
 interface GifResult { id: string; previewUrl: string; url: string; }
@@ -42,25 +45,114 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
   const [gifHasMore, setGifHasMore] = useState(true);
   const [gifOffset, setGifOffset] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingMedia, setUploadingMedia] = useState<{ uri: string, type: string } | null>(null);
   const [selectedMedia, setSelectedMedia] = useState<{ uri: string, type: string, fileName?: string, mimeType?: string } | null>(null);
   const [hasClipboardImage, setHasClipboardImage] = useState(false);
+  const [deferRender, setDeferRender] = useState(false);
 
-  const panelAnim = useRef(new Animated.Value(0)).current;
+  const panelHeightAnim = useRef(new Animated.Value(0)).current;
+  const currentHeight = useRef(0);
+  const startHeight = useRef(0);
   const inputRef = useRef<TextInput>(null);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  React.useEffect(() => {
+    const id = panelHeightAnim.addListener(({ value }) => {
+      currentHeight.current = value;
+    });
+    
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+
+    return () => {
+      panelHeightAnim.removeListener(id);
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onPanResponderGrant: () => {
+        startHeight.current = currentHeight.current;
+        panelHeightAnim.extractOffset();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        let proposedTotalHeight = startHeight.current - gestureState.dy;
+        let animatedValue = -gestureState.dy;
+        
+        if (proposedTotalHeight > PANEL_FULL_HEIGHT) {
+           let excess = proposedTotalHeight - PANEL_FULL_HEIGHT;
+           proposedTotalHeight = PANEL_FULL_HEIGHT + excess * 0.3;
+           animatedValue = proposedTotalHeight - startHeight.current;
+        } else if (proposedTotalHeight < 0) {
+           animatedValue = -startHeight.current; // Prevent shrinking below 0 width
+        }
+        
+        panelHeightAnim.setValue(animatedValue);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        panelHeightAnim.flattenOffset();
+        const start = startHeight.current;
+        const dy = gestureState.dy; // positive = dragged down
+        const vy = gestureState.vy;
+
+        let target = PANEL_HEIGHT;
+
+        if (Math.abs(start - PANEL_FULL_HEIGHT) < 50) {
+          // Started from EXPANDED (Top)
+          if (dy > 300 || vy > 1.5) {
+             target = 0; // Dragged down a LOT -> Close
+          } else if (dy > 50 || vy > 0.3) {
+             target = PANEL_HEIGHT; // Dragged down a bit -> Middle
+          } else {
+             target = PANEL_FULL_HEIGHT; // Stay Expanded
+          }
+        } else {
+          // Started from MIDDLE
+          if (dy < -20 || vy < -0.1) {
+             target = PANEL_FULL_HEIGHT; // Dragged up even a bit -> Expand
+          } else if (dy > 50 || vy > 0.3) {
+             target = 0; // Dragged down -> Close
+          } else {
+             target = PANEL_HEIGHT; // Stay Middle
+          }
+        }
+
+        if (target === 0) {
+          closePanel();
+        } else {
+          Animated.spring(panelHeightAnim, {
+            toValue: target,
+            useNativeDriver: false,
+            tension: 50,
+            friction: 8,
+          }).start();
+        }
+      }
+    })
+  ).current;
 
   // ─── Panel open/close ─────────────────────────────────────────────────────
 
   const openPanel = (panel: Panel) => {
     Keyboard.dismiss();
     setActivePanel(panel);
-    Animated.spring(panelAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 9 }).start();
+    Animated.spring(panelHeightAnim, { toValue: PANEL_HEIGHT, useNativeDriver: false, tension: 50, friction: 8 }).start();
+    
+    // Defer heavy rendering until animation starts
+    setTimeout(() => setDeferRender(true), 50);
   };
 
   const closePanel = useCallback(() => {
-    Animated.timing(panelAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
+    Animated.timing(panelHeightAnim, { toValue: 0, duration: 200, useNativeDriver: false, easing: Easing.out(Easing.ease) }).start(() => {
       setActivePanel(null);
+      setDeferRender(false);
     });
-  }, [panelAnim]);
+  }, [panelHeightAnim]);
 
   const togglePanel = (panel: Panel) => {
     if (activePanel === panel) closePanel();
@@ -68,7 +160,11 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
   };
 
   const onInputFocus = () => {
-    if (activePanel) closePanel();
+    if (activePanel) {
+      panelHeightAnim.setValue(0);
+      setActivePanel(null);
+      setDeferRender(false);
+    }
   };
 
   // ─── Clipboard Listeners ───────────────────────────────────────────────────
@@ -90,28 +186,46 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
   const handleSend = async () => {
     const msg = text.trim();
     if ((!msg && !selectedMedia) || sending || uploading) return;
-    
+
     setText('');
     const mediaToUpload = selectedMedia;
     setSelectedMedia(null);
 
     if (mediaToUpload) {
       setUploading(true);
+      setUploadProgress(0);
+      // Show local preview immediately (optimistic bubble)
+      setUploadingMedia({ uri: mediaToUpload.uri, type: mediaToUpload.type });
       try {
         const isVideo = mediaToUpload.type === 'video';
         const isDoc = mediaToUpload.type === 'document';
-        const url = await uploadChatMedia(mediaToUpload.uri, isDoc ? 'documents' : isVideo ? 'videos' : 'images');
-        
+        const url = await uploadChatMedia(
+          mediaToUpload.uri,
+          isDoc ? 'documents' : isVideo ? 'videos' : 'images',
+          (pct) => setUploadProgress(pct),
+        );
+
+        // Upload is done — show 100% briefly, then tell parent to insert into DB
+        setUploadProgress(100);
         await onSendMedia(JSON.stringify({
           type: isDoc ? 'document' : isVideo ? 'video' : 'image',
           url,
           fileName: mediaToUpload.fileName,
           mimeType: mediaToUpload.mimeType
         }));
-      } catch (err) {
-        Alert.alert('Upload failed', 'Could not upload the file. Make sure the Supabase "chat-media" bucket exists and is public.');
+        // Realtime will deliver the real message within ~500ms;
+        // give it a moment before clearing the optimistic bubble
+        setTimeout(() => {
+          setUploadingMedia(null);
+          setUploadProgress(0);
+        }, 600);
+      } catch (error: any) {
+        console.error('Error sending media:', error);
+        Alert.alert('Upload failed', error?.message || 'Could not upload the file.');
         setSelectedMedia(mediaToUpload);
         setText(msg);
+        setUploadingMedia(null);
+        setUploadProgress(0);
       } finally {
         setUploading(false);
       }
@@ -281,13 +395,6 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
     togglePanel(null); // Changed closePanel() to togglePanel(null)
   };
 
-  // ─── Panel slide animation ─────────────────────────────────────────────────
-
-  const panelTranslateY = panelAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [PANEL_HEIGHT, 0],
-  });
-
   // ─── Render ────────────────────────────────────────────────────────────────
 
   const isDisabled = sending || uploading;
@@ -313,11 +420,47 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
         </View>
       )}
 
+      {/* ── Optimistic upload bubble (sender) ── */}
+      {uploadingMedia && (
+        <View style={styles.uploadBubbleContainer}>
+          <View style={styles.uploadBubble}>
+            {(uploadingMedia.type === 'image' || uploadingMedia.type === 'video') ? (
+              <Image
+                source={{ uri: uploadingMedia.uri }}
+                style={{ width: 200, height: 180 }}
+                contentFit="cover"
+                cachePolicy="memory"
+              />
+            ) : (
+              <View style={{ width: 200, height: 180, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a2e' }}>
+                <FileText size={32} color="#FFFFFF" />
+              </View>
+            )}
+
+            {/* Semi-transparent overlay + progress ring */}
+            <View style={[StyleSheet.absoluteFill, {
+              backgroundColor: uploadProgress >= 100 ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.45)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }]}>
+              {uploadProgress >= 100 ? (
+                // Sent! Show a subtle checkmark
+                <View style={styles.sentCheckmark}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 22 }}>✓</Text>
+                </View>
+              ) : (
+                <CircularProgress pct={uploadProgress} />
+              )}
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* ── Input row ──────────────────────────────────────────────────────── */}
       <View style={[
         styles.inputRow,
         { borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface },
-        Platform.OS === 'ios' ? { paddingBottom: activePanel ? 8 : 24 } : { paddingBottom: 12 },
+        Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 8 : 24 } : { paddingBottom: 12 },
       ]}>
 
         {/* Attach */}
@@ -399,11 +542,18 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
             {
               backgroundColor: theme.colors.surface,
               borderTopColor: theme.colors.border,
-              transform: [{ translateY: panelTranslateY }],
-              height: PANEL_HEIGHT,
+              height: panelHeightAnim,
             },
           ]}
         >
+          {/* ── Drag Handle ──────────────────────────────────────────────── */}
+          <View 
+            {...panResponder.panHandlers} 
+            style={styles.dragHandleContainer}
+          >
+            <View style={[styles.dragHandle, { backgroundColor: theme.colors.border }]} />
+          </View>
+
           {/* ── Attach panel ─────────────────────────────────────────────── */}
           {activePanel === 'attach' && (
             <View style={styles.attachList}>
@@ -508,7 +658,9 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
               {/* Emoji tab content */}
               {emojiTab === 'emoji' && (
                 <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                  {emojiSearch.trim() ? (
+                  {!deferRender ? (
+                    <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 20 }} />
+                  ) : emojiSearch.trim() ? (
                     /* Search results */
                     <View style={styles.emojiGrid}>
                       {filteredEmojis.length === 0 ? (
@@ -588,22 +740,55 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
   );
 }
 
+// ── Circular Upload Progress Ring ─────────────────────────────────────────────
+const RADIUS = 26;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+function CircularProgress({ pct }: { pct: number }) {
+  const strokeDashoffset = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={68} height={68}>
+        {/* Track */}
+        <Circle
+          cx="34" cy="34" r={RADIUS}
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth={5}
+          fill="none"
+        />
+        {/* Progress arc */}
+        <Circle
+          cx="34" cy="34" r={RADIUS}
+          stroke="#FFFFFF"
+          strokeWidth={5}
+          fill="none"
+          strokeDasharray={CIRCUMFERENCE}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          rotation="-90"
+          origin="34,34"
+        />
+      </Svg>
+      <Text style={{ position: 'absolute', color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>{pct}%</Text>
+    </View>
+  );
+}
+
 function GifImageItem({ item, onPress }: { item: GifResult, onPress: () => void }) {
   const theme = useTheme();
-  const [loaded, setLoaded] = useState(false);
 
-  // We show the skeleton background until the image onLoad fires
+  // expo-image handles its own loading skeleton internally — no extra state needed
   return (
     <TouchableOpacity style={styles.gifCell} onPress={onPress}>
       <View style={[styles.gifThumb, { backgroundColor: theme.colors.border ?? '#E5E7EB', overflow: 'hidden' }]}>
-        {!loaded && (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.border ?? '#E5E7EB' }]} />
-        )}
         <Image
           source={{ uri: item.previewUrl }}
-          style={[StyleSheet.absoluteFill, { opacity: loaded ? 1 : 0 }]}
-          resizeMode="cover"
-          onLoad={() => setLoaded(true)}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          autoplay
+          placeholder={{ thumbhash: undefined, blurhash: undefined }}
+          transition={200}
         />
       </View>
     </TouchableOpacity>
@@ -626,6 +811,40 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  uploadBubbleContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    alignItems: 'flex-end',
+  },
+  uploadBubble: {
+    width: 200,
+    height: 180,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#333',
+    position: 'relative',
+  },
+  sentCheckmark: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dragHandleContainer: {
+    width: '100%',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB', // fallback
   },
   mediaPreviewImage: {
     width: '100%',

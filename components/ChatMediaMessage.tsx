@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet,
-  Linking, ActivityIndicator,
+  View, Text, TouchableOpacity, StyleSheet,
+  Linking,
 } from 'react-native';
+import { Image } from 'expo-image';
+import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '@/contexts/BrandContext';
 import { FileText, Play, Download } from 'lucide-react-native';
 
@@ -19,9 +21,46 @@ interface Props {
   isOwn: boolean;
 }
 
+// ── Circular download progress ring ──────────────────────────────────────────
+const RADIUS = 22;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+function DownloadProgressRing({ pct }: { pct: number }) {
+  const strokeDashoffset = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={58} height={58}>
+        {/* Track */}
+        <Circle
+          cx="29" cy="29" r={RADIUS}
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth={4}
+          fill="none"
+        />
+        {/* Progress arc */}
+        <Circle
+          cx="29" cy="29" r={RADIUS}
+          stroke="#FFFFFF"
+          strokeWidth={4}
+          fill="none"
+          strokeDasharray={CIRCUMFERENCE}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          rotation="-90"
+          origin="29,29"
+        />
+      </Svg>
+      <Text style={{ position: 'absolute', color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+        {pct < 100 ? `${pct}%` : '✓'}
+      </Text>
+    </View>
+  );
+}
+
 export function ChatMediaMessage({ content, isOwn }: Props) {
   const theme = useTheme();
-  const [imgLoading, setImgLoading] = useState(true);
+  const [downloadPct, setDownloadPct] = useState(0);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
   let media: MediaContent | null = null;
@@ -45,48 +84,74 @@ export function ChatMediaMessage({ content, isOwn }: Props) {
   if (media.type === 'image' || media.type === 'gif') {
     return (
       <View style={[
-        styles.bubble, 
-        isOwn ? styles.myBubble : styles.theirBubble, 
-        { width: 220, height: 200, padding: 0, overflow: 'hidden', borderWidth: 0, backgroundColor: isOwn ? theme.colors.primary : theme.colors.surfaceAlt || '#E5E7EB', position: 'relative' }
+        styles.bubble,
+        isOwn ? styles.myBubble : styles.theirBubble,
+        {
+          width: 220,
+          height: 200,
+          padding: 0,
+          overflow: 'hidden',
+          borderWidth: 0,
+          backgroundColor: theme.colors.surfaceAlt || '#E5E7EB',
+          position: 'relative',
+        }
       ]}>
-        
-        {/* Main Image Layer (Standard Flow) */}
-        {!imgError ? (
+
+        {/* Blurred placeholder — shows immediately while the main image downloads */}
+        {!imgLoaded && !imgError && (
+          <Image
+            source={{ uri: media.previewUrl || media.url }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            blurRadius={isOwn ? 0 : 14}
+            cachePolicy="memory-disk"
+          />
+        )}
+
+        {/* Main image — streams in, tracked by onProgress */}
+        {!imgError && (
           <Image
             source={{ uri: media.url }}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-            onLoadStart={() => setImgLoading(true)}
-            onLoadEnd={() => setImgLoading(false)}
-            onError={() => { setImgError(true); }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            autoplay={media.type === 'gif'}
+            onProgress={(e) => {
+              if (e.loaded && e.total) {
+                setDownloadPct(Math.round((e.loaded / e.total) * 100));
+              }
+            }}
+            onLoadEnd={() => {
+              setDownloadPct(100);
+              // Small delay so user can see the "100%" for a moment
+              setTimeout(() => setImgLoaded(true), 300);
+            }}
+            onError={() => { setImgError(true); setImgLoaded(true); }}
           />
-        ) : (
-          /* Error Layer Flow */
+        )}
+
+        {/* Error */}
+        {imgError && (
           <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)' }}>
-            <Text style={{ color: isOwn ? '#FFFFFF' : theme.colors.textSecondary, fontSize: 12 }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 12 }}>
               {media.type === 'gif' ? '🎞 Failed to load GIF' : '🖼 Failed to load Image'}
             </Text>
           </View>
         )}
-        
-        {/* Loading Overlay Layer (Absolute) */}
-        {imgLoading && !imgError && (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: isOwn ? 'rgba(0,0,0,0.3)' : 'transparent', justifyContent: 'center', alignItems: 'center' }]}>
-            {/* If we have a preview URL, show it immediately under the spinner */}
-            {media.previewUrl && (
-              <Image 
-                source={{ uri: media.previewUrl }} 
-                style={[StyleSheet.absoluteFill, { opacity: 0.9 }]} 
-                blurRadius={4}
-                resizeMode="cover" 
-              />
-            )}
-            <ActivityIndicator color={isOwn ? '#FFFFFF' : theme.colors.primary} size="large" style={{ zIndex: 10 }} />
+
+        {/* Download progress overlay — shown while image is loading */}
+        {!imgLoaded && !imgError && (
+          <View style={[StyleSheet.absoluteFill, {
+            backgroundColor: 'rgba(0,0,0,0.35)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }]}>
+            <DownloadProgressRing pct={downloadPct} />
           </View>
         )}
-        
-        {/* GIF Badge Layer (Absolute) */}
-        {media.type === 'gif' && !imgLoading && !imgError && (
+
+        {/* GIF badge */}
+        {media.type === 'gif' && imgLoaded && !imgError && (
           <View style={styles.gifBadge}>
             <Text style={styles.gifBadgeText}>GIF</Text>
           </View>
@@ -164,11 +229,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 14,
   },
   gifBadge: {
     position: 'absolute',
