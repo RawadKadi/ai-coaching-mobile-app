@@ -11,7 +11,7 @@ import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { ChevronLeft, Check, CheckCheck, ArrowDown } from 'lucide-react-native';
 import { ChatInputBar } from '@/components/ChatInputBar';
-import { ChatMediaMessage } from '@/components/ChatMediaMessage';
+import ChatMediaMessage from '@/components/ChatMediaMessage';
 
 type Message = {
   id: string;

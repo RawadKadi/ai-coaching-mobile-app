@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Linking,
+  Linking, Modal, SafeAreaView, Animated, PanResponder, Dimensions
 } from 'react-native';
 import { Image } from 'expo-image';
+import Slider from '@react-native-community/slider';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '@/contexts/BrandContext';
-import { FileText, Play, Download } from 'lucide-react-native';
+import { FileText, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X } from 'lucide-react-native';
+import { ChatReplyContext } from './ChatReplyContext';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type MediaContent = {
   type: 'image' | 'video' | 'document' | 'gif';
@@ -19,6 +24,12 @@ type MediaContent = {
 interface Props {
   content: string; // JSON string
   isOwn: boolean;
+  createdAt?: string;
+  isRead?: boolean;
+  isUploading?: boolean;
+  progress?: number;
+  onCancel?: () => void;
+  replyTo?: any;
 }
 
 // ── Circular download progress ring ──────────────────────────────────────────
@@ -57,11 +68,406 @@ function DownloadProgressRing({ pct }: { pct: number }) {
   );
 }
 
-export function ChatMediaMessage({ content, isOwn }: Props) {
-  const theme = useTheme();
+// ── Shared formatting ────────────────────────────────────────────────────────
+const formatDuration = (millis: number) => {
+  const totalSeconds = Math.floor(millis / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+};
+
+// ── Custom Video Player ──────────────────────────────────────────────────────
+function CustomVideoPlayer({ 
+  uri, isUploading, progress, onCancel 
+}: { 
+  uri: string, isUploading?: boolean, progress?: number, onCancel?: () => void 
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Track inline video status just for the duration badge & thumbnail
+  const inlineVideoRef = useRef<Video>(null);
+  const [inlineStatus, setInlineStatus] = useState<AVPlaybackStatus | null>(null);
+
+  const durationMillis = inlineStatus?.isLoaded ? inlineStatus.durationMillis || 0 : 0;
+
+  return (
+    <>
+      {/* Inline Preview */}
+      <View style={StyleSheet.absoluteFill}>
+        {/* We keep a paused video instance just to generate the thumbnail and duration.
+            A future optimization could use expo-video-thumbnails instead. */}
+        <Video
+          ref={inlineVideoRef}
+          source={{ uri }}
+          style={StyleSheet.absoluteFill}
+          resizeMode={ResizeMode.COVER}
+          useNativeControls={false}
+          isLooping={false}
+          shouldPlay={false}
+          onPlaybackStatusUpdate={setInlineStatus}
+        />
+        
+        <TouchableOpacity 
+          activeOpacity={0.9} 
+          onPress={() => !isUploading && setIsExpanded(true)} 
+          style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}
+        >
+          {!isUploading && (
+            <View style={{
+              width: 50, height: 50, borderRadius: 25, 
+              backgroundColor: 'rgba(0,0,0,0.5)', 
+              justifyContent: 'center', alignItems: 'center'
+            }}>
+              <Play size={24} color="#FFFFFF" style={{ marginLeft: 3 }} />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Duration badge - Bottom Left */}
+        {durationMillis > 0 && !isUploading && (
+          <View style={{
+            position: 'absolute',
+            bottom: 6,
+            left: 6,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            paddingHorizontal: 6,
+            paddingVertical: 3,
+            borderRadius: 12,
+          }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '500' }}>
+              {formatDuration(durationMillis)}
+            </Text>
+          </View>
+        )}
+
+        {/* Uploading Overlay */}
+        {isUploading && (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }]}>
+            <DownloadProgressRing pct={progress || 0} />
+            {onCancel && (
+              <TouchableOpacity 
+                onPress={onCancel}
+                style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
+              >
+                <X size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Fullscreen Expanded View */}
+      <Modal visible={isExpanded} transparent={true} animationType="fade" onRequestClose={() => setIsExpanded(false)}>
+        <FullscreenVideoModal uri={uri} onClose={() => setIsExpanded(false)} />
+      </Modal>
+    </>
+  );
+}
+
+function FullscreenVideoModal({ uri, onClose }: { uri: string, onClose: () => void }) {
+  const videoRef = useRef<Video>(null);
+  const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
+  const [speed, setSpeed] = useState<number>(1.0);
+  
+  // Gesture handling for swipe-down to dismiss
+  const panY = useRef(new Animated.Value(0)).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, state) => Math.abs(state.dy) > 10,
+      onPanResponderMove: (_, state) => {
+        // Only allow dragging downwards
+        if (state.dy > 0) {
+          panY.setValue(state.dy);
+        }
+      },
+      onPanResponderRelease: (_, state) => {
+        if (state.dy > 150 || state.vy > 1.5) {
+          // Swipe down threshold met, dismiss
+          Animated.timing(panY, {
+            toValue: SCREEN_HEIGHT,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(onClose);
+        } else {
+          // Snap back
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 0,
+          }).start();
+        }
+      }
+    })
+  ).current;
+
+  // Derived playback status
+  const isLoaded = status?.isLoaded;
+  const isPlaying = isLoaded ? status.isPlaying : false;
+  const durationMillis = isLoaded ? status.durationMillis || 0 : 0;
+  const positionMillis = isLoaded ? status.positionMillis || 0 : 0;
+
+  const togglePlayPause = async () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      await videoRef.current.pauseAsync();
+    } else {
+      if (isLoaded && status.didJustFinish) {
+        await videoRef.current.replayAsync();
+      } else {
+        await videoRef.current.playAsync();
+      }
+    }
+  };
+
+  const toggleSpeed = async () => {
+    if (!videoRef.current) return;
+    const nextSpeed = speed === 1.0 ? 1.5 : (speed === 1.5 ? 2.0 : 1.0);
+    setSpeed(nextSpeed);
+    await videoRef.current.setRateAsync(nextSpeed, true);
+  };
+
+  const handleSlidingComplete = async (value: number) => {
+    if (!videoRef.current) return;
+    await videoRef.current.setPositionAsync(value);
+  };
+
+  return (
+    <Animated.View style={[
+      StyleSheet.absoluteFill, 
+      { backgroundColor: '#000000', transform: [{ translateY: panY }] }
+    ]} {...panResponder.panHandlers}>
+      <SafeAreaView style={{ flex: 1 }}>
+        
+        {/* Top Controls Bar */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 10, zIndex: 10 }}>
+          <TouchableOpacity onPress={onClose} style={{ padding: 8, marginLeft: -8 }}>
+            <ChevronLeft size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+          <Text style={{ color: '#FFFFFF', fontSize: 12, width: 40, textAlign: 'center' }}>
+            {formatDuration(positionMillis)}
+          </Text>
+          
+          <Slider
+            style={{ flex: 1, marginHorizontal: 10, height: 40 }}
+            minimumValue={0}
+            maximumValue={durationMillis}
+            value={positionMillis}
+            onSlidingComplete={handleSlidingComplete}
+            minimumTrackTintColor="#FFFFFF"
+            maximumTrackTintColor="rgba(255,255,255,0.3)"
+            thumbTintColor="#FFFFFF"
+          />
+          
+          <Text style={{ color: '#FFFFFF', fontSize: 12, width: 40, textAlign: 'center' }}>
+            {formatDuration(durationMillis)}
+          </Text>
+          
+          <TouchableOpacity onPress={toggleSpeed} style={{ padding: 8, marginLeft: 8 }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>{speed}x</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Video Area */}
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Video
+            ref={videoRef}
+            source={{ uri }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode={ResizeMode.CONTAIN}
+            useNativeControls={false}
+            isLooping={false}
+            shouldPlay={true}
+            onPlaybackStatusUpdate={setStatus}
+          />
+        </View>
+
+        {/* Bottom Bar: Play/Pause */}
+        <View style={{ paddingBottom: 30, paddingTop: 20, alignItems: 'center', justifyContent: 'center' }}>
+          <TouchableOpacity onPress={togglePlayPause} style={{ padding: 16 }}>
+            {isPlaying ? (
+              <Pause size={36} color="#FFFFFF" />
+            ) : (
+              <Play size={36} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            )}
+          </TouchableOpacity>
+        </View>
+        
+      </SafeAreaView>
+    </Animated.View>
+  );
+}
+
+// ── Custom Image Player ──────────────────────────────────────────────────────
+function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'image' | 'gif', onClose: () => void }) {
+  // Gesture handling for swipe-down to dismiss
+  const panY = useRef(new Animated.Value(0)).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, state) => Math.abs(state.dy) > 10,
+      onPanResponderMove: (_, state) => {
+        // Only allow dragging downwards
+        if (state.dy > 0) {
+          panY.setValue(state.dy);
+        }
+      },
+      onPanResponderRelease: (_, state) => {
+        if (state.dy > 150 || state.vy > 1.5) {
+          // Swipe down threshold met, dismiss
+          Animated.timing(panY, {
+            toValue: SCREEN_HEIGHT,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(onClose);
+        } else {
+          // Snap back
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 0,
+          }).start();
+        }
+      }
+    })
+  ).current;
+
+  return (
+    <Animated.View style={[
+      StyleSheet.absoluteFill, 
+      { backgroundColor: '#000000', transform: [{ translateY: panY }] }
+    ]} {...panResponder.panHandlers}>
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* Top Controls Bar */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 10, zIndex: 10 }}>
+          <TouchableOpacity onPress={onClose} style={{ padding: 8, marginLeft: -8 }}>
+            <ChevronLeft size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Image Area */}
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Image
+            source={{ uri }}
+            style={{ width: '100%', height: '100%' }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            autoplay={type === 'gif'}
+          />
+        </View>
+      </SafeAreaView>
+    </Animated.View>
+  );
+}
+
+// ── Custom Image Player ──────────────────────────────────────────────────────
+function CustomImagePlayer({
+  uri, previewUrl, type, isOwn, isUploading, progress, onCancel
+}: {
+  uri: string, previewUrl?: string, type: 'image' | 'gif', isOwn: boolean,
+  isUploading?: boolean, progress?: number, onCancel?: () => void
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [downloadPct, setDownloadPct] = useState(0);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+
+  return (
+    <>
+      <TouchableOpacity 
+        activeOpacity={0.9} 
+        onPress={() => !isUploading && setIsExpanded(true)} 
+        style={StyleSheet.absoluteFill}
+      >
+        {/* Blurred placeholder — shows immediately while the main image downloads */}
+        {(!imgLoaded && !imgError) || isUploading ? (
+          <Image
+            source={{ uri: previewUrl || uri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            blurRadius={isOwn ? 0 : 14}
+            cachePolicy="memory-disk"
+          />
+        ) : null}
+
+        {/* Main image — streams in, tracked by onProgress */}
+        {!imgError && !isUploading && (
+          <Image
+            source={{ uri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            autoplay={type === 'gif'}
+            onProgress={(e) => {
+              if (e.loaded && e.total) {
+                setDownloadPct(Math.round((e.loaded / e.total) * 100));
+              }
+            }}
+            onLoadEnd={() => {
+              setDownloadPct(100);
+              // Small delay so user can see the "100%" for a moment
+              setTimeout(() => setImgLoaded(true), 300);
+            }}
+            onError={() => { setImgError(true); setImgLoaded(true); }}
+          />
+        )}
+
+        {/* Error */}
+        {imgError && !isUploading && (
+          <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)' }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 12 }}>
+              {type === 'gif' ? '🎞 Failed to load GIF' : '🖼 Failed to load Image'}
+            </Text>
+          </View>
+        )}
+
+        {/* Download progress overlay — shown while image is loading */}
+        {!imgLoaded && !imgError && !isUploading && (
+          <View style={[StyleSheet.absoluteFill, {
+            backgroundColor: 'rgba(0,0,0,0.35)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }]}>
+            <DownloadProgressRing pct={downloadPct} />
+          </View>
+        )}
+
+        {/* Uploading Overlay */}
+        {isUploading && (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }]}>
+            <DownloadProgressRing pct={progress || 0} />
+            {onCancel && (
+              <TouchableOpacity 
+                onPress={onCancel}
+                style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
+              >
+                <X size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* GIF badge */}
+        {type === 'gif' && imgLoaded && !imgError && !isUploading && (
+          <View style={styles.gifBadge}>
+            <Text style={styles.gifBadgeText}>GIF</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* Fullscreen Expanded View */}
+      <Modal visible={isExpanded} transparent={true} animationType="fade" onRequestClose={() => setIsExpanded(false)}>
+        <FullscreenImageModal uri={uri} type={type} onClose={() => setIsExpanded(false)} />
+      </Modal>
+    </>
+  );
+}
+
+export default function ChatMediaMessage({ 
+  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo 
+}: Props) {
+  const theme = useTheme();
 
   let media: MediaContent | null = null;
   try {
@@ -88,7 +494,7 @@ export function ChatMediaMessage({ content, isOwn }: Props) {
         isOwn ? styles.myBubble : styles.theirBubble,
         {
           width: 220,
-          height: 200,
+          height: replyTo ? 240 : 200,
           padding: 0,
           overflow: 'hidden',
           borderWidth: 0,
@@ -96,64 +502,33 @@ export function ChatMediaMessage({ content, isOwn }: Props) {
           position: 'relative',
         }
       ]}>
-
-        {/* Blurred placeholder — shows immediately while the main image downloads */}
-        {!imgLoaded && !imgError && (
-          <Image
-            source={{ uri: media.previewUrl || media.url }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            blurRadius={isOwn ? 0 : 14}
-            cachePolicy="memory-disk"
-          />
+        {replyTo && (
+          <View style={{ padding: 4, backgroundColor: theme.colors.surface }}>
+            <ChatReplyContext message={replyTo} />
+          </View>
         )}
 
-        {/* Main image — streams in, tracked by onProgress */}
-        {!imgError && (
-          <Image
-            source={{ uri: media.url }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            autoplay={media.type === 'gif'}
-            onProgress={(e) => {
-              if (e.loaded && e.total) {
-                setDownloadPct(Math.round((e.loaded / e.total) * 100));
-              }
-            }}
-            onLoadEnd={() => {
-              setDownloadPct(100);
-              // Small delay so user can see the "100%" for a moment
-              setTimeout(() => setImgLoaded(true), 300);
-            }}
-            onError={() => { setImgError(true); setImgLoaded(true); }}
-          />
-        )}
+        <CustomImagePlayer 
+          uri={media.url} 
+          previewUrl={media.previewUrl} 
+          type={media.type as 'image' | 'gif'} 
+          isOwn={isOwn} 
+          isUploading={isUploading}
+          progress={progress}
+          onCancel={onCancel}
+        />
 
-        {/* Error */}
-        {imgError && (
-          <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)' }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 12 }}>
-              {media.type === 'gif' ? '🎞 Failed to load GIF' : '🖼 Failed to load Image'}
+        {/* Time Badge Overlay */}
+        {createdAt && (
+          <View style={styles.timeBadgeContainer} pointerEvents="none">
+            <Text style={styles.timeBadgeText}>
+              {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
-          </View>
-        )}
-
-        {/* Download progress overlay — shown while image is loading */}
-        {!imgLoaded && !imgError && (
-          <View style={[StyleSheet.absoluteFill, {
-            backgroundColor: 'rgba(0,0,0,0.35)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }]}>
-            <DownloadProgressRing pct={downloadPct} />
-          </View>
-        )}
-
-        {/* GIF badge */}
-        {media.type === 'gif' && imgLoaded && !imgError && (
-          <View style={styles.gifBadge}>
-            <Text style={styles.gifBadgeText}>GIF</Text>
+            {isOwn && (
+              isRead ? 
+                <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : 
+                <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            )}
           </View>
         )}
       </View>
@@ -162,33 +537,61 @@ export function ChatMediaMessage({ content, isOwn }: Props) {
 
   if (media.type === 'video') {
     return (
-      <TouchableOpacity
-        style={bubbleStyle}
-        onPress={() => media?.url && Linking.openURL(media.url)}
-        activeOpacity={0.8}
-      >
-        <View style={styles.videoContainer}>
-          <View style={styles.videoThumb}>
-            <Play size={32} color="#FFFFFF" />
+      <View style={[
+        styles.bubble,
+        isOwn ? styles.myBubble : styles.theirBubble,
+        {
+          width: 250,
+          height: replyTo ? 290 : 250,
+          padding: 0,
+          overflow: 'hidden',
+          borderWidth: 0,
+          backgroundColor: '#000000',
+        }
+      ]}>
+        {replyTo && (
+          <View style={{ padding: 4, backgroundColor: theme.colors.surface }}>
+            <ChatReplyContext message={replyTo} />
           </View>
-          <Text style={[
-            styles.videoLabel,
-            { color: isOwn ? '#FFFFFF' : theme.colors.text, fontFamily: theme.typography.fontFamily },
-          ]}>
-            Video — tap to open
-          </Text>
-        </View>
-      </TouchableOpacity>
+        )}
+        <CustomVideoPlayer 
+          uri={media.url} 
+          isUploading={isUploading}
+          progress={progress}
+          onCancel={onCancel}
+        />
+
+        {/* Time Badge Overlay */}
+        {createdAt && (
+          <View style={[styles.timeBadgeContainer, { bottom: 8, right: 8 }]} pointerEvents="none">
+            <Text style={styles.timeBadgeText}>
+              {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isOwn && (
+              isRead ? 
+                <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : 
+                <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            )}
+          </View>
+        )}
+      </View>
     );
   }
 
   if (media.type === 'document') {
+    const bubbleStyle = [
+      styles.bubble,
+      isOwn ? styles.myBubble : styles.theirBubble,
+      { backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface, borderColor: theme.colors.border }
+    ];
+
     return (
-      <TouchableOpacity
+      <TouchableOpacity 
         style={bubbleStyle}
-        onPress={() => media?.url && Linking.openURL(media.url)}
+        onPress={() => !isUploading && media?.url && Linking.openURL(media.url)}
         activeOpacity={0.8}
       >
+        {replyTo && <ChatReplyContext message={replyTo} />}
         <View style={styles.docContainer}>
           <FileText size={28} color={isOwn ? '#FFFFFF' : theme.colors.primary} />
           <View style={{ flex: 1, marginLeft: 10 }}>
@@ -199,14 +602,34 @@ export function ChatMediaMessage({ content, isOwn }: Props) {
               ]}
               numberOfLines={2}
             >
-              {media.fileName || 'Document'}
+              {media.fileName || (isUploading ? 'Uploading…' : 'Document')}
             </Text>
             <Text style={[styles.docHint, { color: isOwn ? 'rgba(255,255,255,0.7)' : theme.colors.textSecondary }]}>
-              Tap to open
+              {isUploading ? `Uploading… ${progress}%` : 'Tap to open'}
             </Text>
           </View>
-          <Download size={20} color={isOwn ? '#FFFFFF' : theme.colors.textSecondary} />
+          {!isUploading && (
+            <Download size={20} color={isOwn ? '#FFFFFF' : theme.colors.textSecondary} />
+          )}
         </View>
+
+        {isUploading && (
+          <View style={[StyleSheet.absoluteFill, { 
+            backgroundColor: isOwn ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.5)', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
+          }]}>
+            <DownloadProgressRing pct={progress} />
+            {onCancel && (
+              <TouchableOpacity 
+                onPress={onCancel}
+                style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, padding: 4 }}
+              >
+                <X size={14} color={isOwn ? '#FFFFFF' : theme.colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
     );
   }
@@ -275,5 +698,21 @@ const styles = StyleSheet.create({
   docHint: {
     fontSize: 11,
     marginTop: 2,
+  },
+  timeBadgeContainer: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  timeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '500',
   },
 });

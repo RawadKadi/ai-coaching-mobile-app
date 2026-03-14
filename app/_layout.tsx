@@ -11,6 +11,8 @@ import { NotificationProvider, useNotification } from '@/contexts/NotificationCo
 import NotificationToast from '@/components/NotificationToast';
 import { loadNotificationSound, unloadNotificationSound } from '@/lib/notification-sound';
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 function RootLayoutNav() {
   const { session, loading, profile } = useAuth();
   const segments = useSegments() as string[];
@@ -112,14 +114,16 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <BrandProvider>
-        <UnreadProvider>
-          <NotificationProvider>
-            <RootLayoutNav />
-          </NotificationProvider>
-        </UnreadProvider>
-      </BrandProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <BrandProvider>
+          <UnreadProvider>
+            <NotificationProvider>
+              <RootLayoutNav />
+            </NotificationProvider>
+          </UnreadProvider>
+        </BrandProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

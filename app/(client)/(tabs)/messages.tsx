@@ -8,10 +8,14 @@ import { supabase } from '@/lib/supabase';
 import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown, Check, CheckCheck } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
 import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
-import { ChatMediaMessage } from '@/components/ChatMediaMessage';
+import ChatMediaMessage from '@/components/ChatMediaMessage';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import { useFocusEffect } from 'expo-router';
+import { uploadChatMedia } from '@/lib/uploadChatMedia';
+import { Swipeable } from 'react-native-gesture-handler';
+import { Reply } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
+import { ChatReplyContext } from '@/components/ChatReplyContext';
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -132,6 +136,7 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
   const [showImageModal, setShowImageModal] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [modalImageLoading, setModalImageLoading] = useState(true);
+  // @ts-ignore
   const theme = useTheme();
   
   const data = typeof content === 'string' ? JSON.parse(content) : content;
@@ -555,6 +560,188 @@ const SessionInviteMessageWrapper = ({
   );
 };
 
+const MessageItem = ({ 
+  item, 
+  index, 
+  isMe, 
+  showUnreadSeparator, 
+  unreadCountAtOpen, 
+  replyToMsg, 
+  theme, 
+  coachProfile, 
+  setReplyingTo, 
+  activeUploads, 
+  cancelUpload,
+  handlePostpone
+}: any) => {
+  const swipeableRef = useRef<any>(null);
+
+  const renderContent = () => {
+    let isTaskMessage = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'task_completion') isTaskMessage = true;
+    } catch (e) {}
+    if (isTaskMessage) return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
+
+    let isChallengeMessage = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'challenge_completed') isChallengeMessage = true;
+    } catch (e) {}
+    if (isChallengeMessage) return <ChallengeCompletionMessage content={item.content} isOwn={isMe} />;
+
+    let isSessionInvite = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'session_invite') isSessionInvite = true;
+    } catch (e) {}
+    if (isSessionInvite) {
+      const parsed = JSON.parse(item.content);
+      return (
+        <SessionInviteMessageWrapper 
+          item={item}
+          parsed={parsed}
+          isOwn={isMe}
+          handlePostpone={handlePostpone}
+        />
+      );
+    }
+
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'reschedule_proposal') {
+        return <RescheduleProposalMessage messageId={item.id} metadata={parsed} isOwn={isMe} />;
+      }
+    } catch (e) {}
+
+    let isMealLog = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'meal_log') isMealLog = true;
+    } catch (e) {}
+    if (isMealLog) return <MealMessageCard content={item.content} isOwn={isMe} />;
+
+    let isMediaMessage = false;
+    try {
+      const parsedMedia = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+      if (parsedMedia && ['image', 'video', 'document', 'gif'].includes(parsedMedia.type)) isMediaMessage = true;
+    } catch (e) {}
+    if (isMediaMessage) {
+      const parsedMedia = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+      const uploadProgress = activeUploads[item.id]?.progress ?? parsedMedia.progress ?? 0;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          onCancel={() => cancelUpload(item.id)}
+          progress={uploadProgress}
+          isUploading={parsedMedia.status === 'pending'}
+          replyTo={replyToMsg}
+        />
+      );
+    }
+
+    return (
+      <View style={[styles.messageBubble, isMe 
+        ? [styles.ownBubble, { backgroundColor: theme.colors.primary }] 
+        : [styles.receivedBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+      ]}>
+        {replyToMsg && <ChatReplyContext message={replyToMsg} />}
+        <Text style={[styles.messageText, isMe ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
+          {item.content}
+        </Text>
+        <View style={styles.messageFooter}>
+          <Text style={[styles.timestamp, isMe ? { color: theme.colors.textOnPrimary, opacity: 0.7 } : { color: theme.colors.textSecondary }]}>
+            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          {isMe && (
+            item.read ? 
+              <CheckCheck size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} /> : 
+              <Check size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderLeftActions = (progress: any, dragX: any) => {
+    const trans = dragX.interpolate({
+      inputRange: [0, 50, 100],
+      outputRange: [-20, 0, 10],
+    });
+    return (
+      <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
+        <Animated.View style={{ transform: [{ translateX: trans }] }}>
+          <Reply size={24} color={theme.colors.primary} />
+        </Animated.View>
+      </View>
+    );
+  };
+
+  const handleSwipeOpen = (direction: 'left' | 'right') => {
+    if (direction === 'left') {
+      setReplyingTo({
+        ...item,
+        isOwn: isMe,
+        sender_name: isMe ? 'You' : (coachProfile?.full_name || 'Coach')
+      });
+      setTimeout(() => {
+        swipeableRef.current?.close();
+      }, 100);
+    }
+  };
+
+  const handleLongPress = () => {
+    Alert.alert(
+      'Message Options',
+      '',
+      [
+        { 
+          text: 'Reply', 
+          onPress: () => {
+            setReplyingTo({
+              ...item,
+              isOwn: isMe,
+              sender_name: isMe ? 'You' : (coachProfile?.full_name || 'Coach')
+            });
+          } 
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  return (
+    <View>
+      {showUnreadSeparator && (
+        <View style={styles.unreadSeparator}>
+          <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
+          <View style={[styles.unreadSeparatorBadge, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }]}>
+            <Text style={[styles.unreadSeparatorText, { color: theme.colors.primary }]}>
+              {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
+            </Text>
+          </View>
+          <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
+        </View>
+      )}
+      <Swipeable
+        ref={swipeableRef}
+        renderLeftActions={renderLeftActions}
+        onSwipeableOpen={handleSwipeOpen}
+        friction={2}
+        leftThreshold={40}
+      >
+        <TouchableOpacity activeOpacity={0.9} onLongPress={handleLongPress}>
+          {renderContent()}
+        </TouchableOpacity>
+      </Swipeable>
+    </View>
+  );
+};
+
 export default function MessagesScreen() {
   const { client, user } = useAuth();
   const theme = useTheme();
@@ -572,6 +759,13 @@ export default function MessagesScreen() {
 
   const [postponeModalVisible, setPostponeModalVisible] = useState(false);
   const [postponeData, setPostponeData] = useState<{sessionData: any, messageId: string, sessionId: string} | null>(null);
+
+  // Background Uploads State
+  const [activeUploads, setActiveUploads] = useState<Record<string, { xhr: XMLHttpRequest, progress: number }>>({});
+
+  // Reply State
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [coachProfile, setCoachProfile] = useState<any>(null);
 
   useEffect(() => {
     if (user?.id) {
@@ -763,17 +957,76 @@ export default function MessagesScreen() {
     markMessagesAsRead();
   };
 
-  const sendMediaMessage = async (jsonContent: string) => {
-    if (!user || !client) return;
+  const cancelUpload = (tempId: string) => {
+    const upload = activeUploads[tempId];
+    if (upload) {
+      upload.xhr.abort();
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+      setMessages(current => current.filter(m => m.id !== tempId));
+    }
+  };
+
+  const sendMediaMessage = async (jsonContent: string, replyId?: string) => {
+    const parsed = JSON.parse(jsonContent);
+    if (!user || !client || !parsed.isOptimistic) return;
+
+    const tempId = `temp-media-${Date.now()}`;
+    const localUri = parsed.url;
+    const mediaType = parsed.type;
+
+    // 1. Add optimistic message to list
+    const optimisticMessage: Message = {
+      id: tempId,
+      sender_id: user.id,
+      recipient_id: '', // Will be filled
+      content: JSON.stringify({
+        ...parsed,
+        status: 'pending',
+        progress: 0,
+        reply_to_id: replyId,
+      }),
+      created_at: new Date().toISOString(),
+      read: false,
+      client_id: client.id,
+    };
+
+    setMessages(current => [...current, optimisticMessage]);
+    setReplyingTo(null);
+
+    // 2. Start background upload
     try {
-      const { data: coachLink, error: linkError } = await supabase
+      const folder = mediaType === 'video' ? 'videos' : mediaType === 'document' ? 'documents' : 'images';
+      
+      const publicUrl = await uploadChatMedia(
+        localUri,
+        folder,
+        (pct) => {
+          setActiveUploads(prev => ({
+            ...prev,
+            [tempId]: { ...prev[tempId], progress: pct }
+          }));
+        },
+        (xhr) => {
+          setActiveUploads(prev => ({
+            ...prev,
+            [tempId]: { xhr, progress: 0 }
+          }));
+        }
+      );
+
+      // 3. Upload successful -> Send to Supabase DB
+      const { data: coachLink } = await supabase
         .from('coach_client_links')
         .select('coach_id')
         .eq('client_id', client.id)
         .eq('status', 'active')
         .single();
 
-      if (linkError || !coachLink) throw new Error('No active coach');
+      if (!coachLink) throw new Error('No active coach');
 
       const { data: coach } = await supabase
         .from('coaches')
@@ -783,28 +1036,59 @@ export default function MessagesScreen() {
 
       if (!coach) throw new Error('Coach not found');
 
-      const { error } = await supabase
+      const realMediaContent = {
+        type: mediaType,
+        url: publicUrl,
+        fileName: parsed.fileName,
+        mimeType: parsed.mimeType
+      };
+
+      const { data: serverMessage, error: insertError } = await supabase
         .from('messages')
         .insert({
           sender_id: user.id,
           recipient_id: coach.user_id,
-          content: jsonContent,
+          content: JSON.stringify(realMediaContent),
+          reply_to_id: replyId,
           read: false,
           ai_generated: false,
-        });
-        
-      if (error) throw error;
-      // Don't manually append — realtime subscription handles insertion with dedup
-    } catch (error) {
-      console.error('Error sending media:', error);
-      Alert.alert('Error', 'Failed to send file. Please try again.');
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // 4. Cleanup
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+
+      setMessages(current => 
+        current.map(m => m.id === tempId ? serverMessage : m)
+      );
+
+    } catch (error: any) {
+      if (error.message === 'abort' || (error instanceof Error && error.message.includes('abort'))) {
+        console.log('Upload cancelled');
+        return;
+      }
+      console.error('Error in sendMediaMessage flow:', error);
+      setMessages(current => current.filter(m => m.id !== tempId));
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+      Alert.alert('Upload Failed', 'There was an error uploading your file.');
     }
   };
 
 
-  const sendMessage = async (textToSend?: string) => {
-    const messageText = (textToSend || "").trim();
-    if (!messageText || !user || !client) return;
+  const sendMessage = async (messageText: string, replyId?: string) => {
+    if (!messageText.trim() || !user || !client) return;
+    const textToSend = messageText.trim();
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = {
@@ -815,9 +1099,11 @@ export default function MessagesScreen() {
       created_at: new Date().toISOString(),
       read: false,
       client_id: client.id,
+      reply_to_id: replyId,
     };
     
     setMessages([...messages, optimisticMessage]);
+    setReplyingTo(null);
 
     try {
       setSending(true);
@@ -841,7 +1127,9 @@ export default function MessagesScreen() {
       const message = {
         sender_id: user.id,
         recipient_id: coach.user_id,
+        client_id: client.id,
         content: messageText,
+        reply_to_id: replyId,
         read: false,
         ai_generated: false,
       };
@@ -860,7 +1148,7 @@ export default function MessagesScreen() {
     } catch (error) {
       console.error('Error sending message:', error);
       setMessages((current) => current.filter(m => m.id !== tempId));
-      setNewMessage(messageText);
+      Alert.alert('Error', 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -901,96 +1189,42 @@ export default function MessagesScreen() {
     const isMe = item.sender_id === user?.id;
     const showUnreadSeparator = index === firstUnreadIndex;
 
-    const renderContent = () => {
-      let isTaskMessage = false;
+    // Resolve replied-to message
+    let replyToMsg: any = null;
+    const replyToId = (item as any).reply_to_id || (() => {
       try {
         const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'task_completion') isTaskMessage = true;
-      } catch (e) {}
-      if (isTaskMessage) return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
+        return parsed.reply_to_id;
+      } catch (e) { return null; }
+    })();
 
-      let isChallengeMessage = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'challenge_completed') isChallengeMessage = true;
-      } catch (e) {}
-      if (isChallengeMessage) return <ChallengeCompletionMessage content={item.content} isOwn={isMe} />;
-
-      let isSessionInvite = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'session_invite') isSessionInvite = true;
-      } catch (e) {}
-      if (isSessionInvite) {
-        const parsed = JSON.parse(item.content);
-        return (
-          <SessionInviteMessageWrapper 
-            item={item}
-            parsed={parsed}
-            isOwn={isMe}
-            handlePostpone={handlePostpone}
-          />
-        );
+    if (replyToId) {
+      const original = messages.find(m => m.id === replyToId);
+      if (original) {
+        const isOriginalMe = original.sender_id === user?.id;
+        replyToMsg = {
+          ...original,
+          isOwn: isOriginalMe,
+          sender_name: isOriginalMe ? 'You' : (coachProfile?.full_name || 'Coach')
+        };
       }
-
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'reschedule_proposal') {
-          return <RescheduleProposalMessage messageId={item.id} metadata={parsed} isOwn={isMe} />;
-        }
-      } catch (e) {}
-
-      let isMealLog = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'meal_log') isMealLog = true;
-      } catch (e) {}
-      if (isMealLog) return <MealMessageCard content={item.content} isOwn={isMe} />;
-
-      let isMediaMessage = false;
-      try {
-        const parsed = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
-        if (parsed && ['image', 'video', 'document', 'gif'].includes(parsed.type)) isMediaMessage = true;
-      } catch (e) {}
-      if (isMediaMessage) return <ChatMediaMessage content={item.content} isOwn={isMe} />;
-
-      return (
-        <View style={[styles.messageBubble, isMe 
-          ? [styles.ownBubble, { backgroundColor: theme.colors.primary }] 
-          : [styles.receivedBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
-        ]}>
-          <Text style={[styles.messageText, isMe ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
-            {item.content}
-          </Text>
-          <View style={styles.messageFooter}>
-            <Text style={[styles.timestamp, isMe ? { color: theme.colors.textOnPrimary, opacity: 0.7 } : { color: theme.colors.textSecondary }]}>
-              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isMe && (
-              item.read ? 
-                <CheckCheck size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} /> : 
-                <Check size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
-            )}
-          </View>
-        </View>
-      );
-    };
+    }
 
     return (
-      <View>
-        {showUnreadSeparator && (
-          <View style={styles.unreadSeparator}>
-            <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
-            <View style={[styles.unreadSeparatorBadge, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }]}>
-              <Text style={[styles.unreadSeparatorText, { color: theme.colors.primary }]}>
-                {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
-              </Text>
-            </View>
-            <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
-          </View>
-        )}
-        {renderContent()}
-      </View>
+      <MessageItem 
+        item={item}
+        index={index}
+        isMe={isMe}
+        showUnreadSeparator={showUnreadSeparator}
+        unreadCountAtOpen={unreadCountAtOpen}
+        replyToMsg={replyToMsg}
+        theme={theme}
+        coachProfile={coachProfile}
+        setReplyingTo={setReplyingTo}
+        activeUploads={activeUploads}
+        cancelUpload={cancelUpload}
+        handlePostpone={handlePostpone}
+      />
     );
   };
 
@@ -1010,6 +1244,7 @@ export default function MessagesScreen() {
                 data={messages.slice().reverse()}
                 keyExtractor={(item) => item.id}
                 renderItem={renderMessage}
+                extraData={activeUploads}
                 contentContainerStyle={styles.messageList}
                 inverted
                 onScroll={handleScroll}
@@ -1032,10 +1267,12 @@ export default function MessagesScreen() {
               </TouchableOpacity>
             )}
             
-            <ChatInputBar
-                onSendText={sendMessage}
-                onSendMedia={sendMediaMessage}
-                sending={sending}
+            <ChatInputBar 
+              onSendText={sendMessage} 
+              onSendMedia={sendMediaMessage}
+              sending={sending}
+              replyingTo={replyingTo}
+              onCancelReply={() => setReplyingTo(null)}
             />
         </KeyboardAvoidingView>
 

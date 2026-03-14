@@ -31,6 +31,7 @@ export async function uploadChatMedia(
     localUri: string,
     folder = 'images',
     onProgress?: (pct: number) => void,
+    onXhrCreated?: (xhr: XMLHttpRequest) => void,
 ): Promise<string> {
     const ext = localUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
     const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
@@ -59,6 +60,8 @@ export async function uploadChatMedia(
         xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
         xhr.setRequestHeader('apikey', supabaseKey);
         xhr.setRequestHeader('x-upsert', 'false');
+
+        onXhrCreated?.(xhr);
 
         // ── Real upload progress ──────────────────────────────────────────────
         if (xhr.upload && onProgress) {

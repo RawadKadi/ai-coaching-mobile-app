@@ -6,12 +6,11 @@ import {
   KeyboardAvoidingView, Easing, PanResponder
 } from 'react-native';
 import { Image } from 'expo-image'; // disk-cached, hardware-accelerated
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '@/contexts/BrandContext';
-import { Send, Paperclip, Smile, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste } from 'lucide-react-native';
-import { EMOJIS_BY_CATEGORY, EMOJI_SEARCH } from '@/lib/emojiData';
+import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -23,30 +22,30 @@ interface GifResult { id: string; previewUrl: string; url: string; }
 
 interface Props {
   /** Called when user sends a plain text message */
-  onSendText: (text: string) => Promise<void>;
+  onSendText: (text: string, replyId?: string) => Promise<void>;
   /** Called when user sends a media message — receives JSON string content */
-  onSendMedia: (jsonContent: string) => Promise<void>;
+  onSendMedia: (jsonContent: string, replyId?: string) => Promise<void>;
   sending?: boolean;
   placeholder?: string;
+  replyingTo?: any;
+  onCancelReply?: () => void;
 }
 
 type Panel = 'emoji' | 'attach' | null;
 
-export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = 'Message…' }: Props) {
+export function ChatInputBar({ 
+  onSendText, onSendMedia, sending, placeholder = 'Message…', 
+  replyingTo, onCancelReply 
+}: Props) {
   const theme = useTheme();
   const [text, setText] = useState('');
   const [activePanel, setActivePanel] = useState<Panel>(null);
-  const [emojiTab, setEmojiTab] = useState<'emoji' | 'gif'>('emoji');
-  const [emojiSearch, setEmojiSearch] = useState('');
   const [gifQuery, setGifQuery] = useState('');
   const [gifResults, setGifResults] = useState<GifResult[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
   const [gifLoadingMore, setGifLoadingMore] = useState(false);
   const [gifHasMore, setGifHasMore] = useState(true);
   const [gifOffset, setGifOffset] = useState(0);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadingMedia, setUploadingMedia] = useState<{ uri: string, type: string } | null>(null);
   const [selectedMedia, setSelectedMedia] = useState<{ uri: string, type: string, fileName?: string, mimeType?: string } | null>(null);
   const [hasClipboardImage, setHasClipboardImage] = useState(false);
   const [deferRender, setDeferRender] = useState(false);
@@ -77,34 +76,32 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
       onPanResponderGrant: () => {
+        // Just track where we started from our own listener value
         startHeight.current = currentHeight.current;
-        panelHeightAnim.extractOffset();
       },
       onPanResponderMove: (_, gestureState) => {
-        let proposedTotalHeight = startHeight.current - gestureState.dy;
-        let animatedValue = -gestureState.dy;
+        // Direct value calculation (dy is positive when dragging DOWN)
+        let newHeight = startHeight.current - gestureState.dy;
         
-        if (proposedTotalHeight > PANEL_FULL_HEIGHT) {
-           let excess = proposedTotalHeight - PANEL_FULL_HEIGHT;
-           proposedTotalHeight = PANEL_FULL_HEIGHT + excess * 0.3;
-           animatedValue = proposedTotalHeight - startHeight.current;
-        } else if (proposedTotalHeight < 0) {
-           animatedValue = -startHeight.current; // Prevent shrinking below 0 width
+        // Add elastic resistance at the top
+        if (newHeight > PANEL_FULL_HEIGHT) {
+           newHeight = PANEL_FULL_HEIGHT + (newHeight - PANEL_FULL_HEIGHT) * 0.25;
+        } else if (newHeight < 0) {
+           newHeight = 0;
         }
         
-        panelHeightAnim.setValue(animatedValue);
+        panelHeightAnim.setValue(newHeight);
       },
       onPanResponderRelease: (_, gestureState) => {
-        panelHeightAnim.flattenOffset();
         const start = startHeight.current;
         const dy = gestureState.dy; // positive = dragged down
         const vy = gestureState.vy;
 
         let target = PANEL_HEIGHT;
 
-        if (Math.abs(start - PANEL_FULL_HEIGHT) < 50) {
+        if (start >= PANEL_FULL_HEIGHT - 50) {
           // Started from EXPANDED (Top)
-          if (dy > 300 || vy > 1.5) {
+          if (dy > 300 || vy > 1.2) {
              target = 0; // Dragged down a LOT -> Close
           } else if (dy > 50 || vy > 0.3) {
              target = PANEL_HEIGHT; // Dragged down a bit -> Middle
@@ -113,9 +110,9 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
           }
         } else {
           // Started from MIDDLE
-          if (dy < -20 || vy < -0.1) {
+          if (dy < -20 || vy < -0.3) {
              target = PANEL_FULL_HEIGHT; // Dragged up even a bit -> Expand
-          } else if (dy > 50 || vy > 0.3) {
+          } else if (dy > 60 || vy > 0.4) {
              target = 0; // Dragged down -> Close
           } else {
              target = PANEL_HEIGHT; // Stay Middle
@@ -128,8 +125,8 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
           Animated.spring(panelHeightAnim, {
             toValue: target,
             useNativeDriver: false,
-            tension: 50,
-            friction: 8,
+            tension: 65,
+            friction: 10,
           }).start();
         }
       }
@@ -143,8 +140,8 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
     setActivePanel(panel);
     Animated.spring(panelHeightAnim, { toValue: PANEL_HEIGHT, useNativeDriver: false, tension: 50, friction: 8 }).start();
     
-    // Defer heavy rendering until animation starts
-    setTimeout(() => setDeferRender(true), 50);
+    // Defer heavy rendering until the slide-up animation and keyboard-dismissal are totally finished
+    setTimeout(() => setDeferRender(true), 250);
   };
 
   const closePanel = useCallback(() => {
@@ -185,54 +182,29 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
 
   const handleSend = async () => {
     const msg = text.trim();
-    if ((!msg && !selectedMedia) || sending || uploading) return;
+    if ((!msg && !selectedMedia) || sending) return;
 
     setText('');
-    const mediaToUpload = selectedMedia;
+    const mediaToSend = selectedMedia;
     setSelectedMedia(null);
 
-    if (mediaToUpload) {
-      setUploading(true);
-      setUploadProgress(0);
-      // Show local preview immediately (optimistic bubble)
-      setUploadingMedia({ uri: mediaToUpload.uri, type: mediaToUpload.type });
-      try {
-        const isVideo = mediaToUpload.type === 'video';
-        const isDoc = mediaToUpload.type === 'document';
-        const url = await uploadChatMedia(
-          mediaToUpload.uri,
-          isDoc ? 'documents' : isVideo ? 'videos' : 'images',
-          (pct) => setUploadProgress(pct),
-        );
-
-        // Upload is done — show 100% briefly, then tell parent to insert into DB
-        setUploadProgress(100);
-        await onSendMedia(JSON.stringify({
-          type: isDoc ? 'document' : isVideo ? 'video' : 'image',
-          url,
-          fileName: mediaToUpload.fileName,
-          mimeType: mediaToUpload.mimeType
-        }));
-        // Realtime will deliver the real message within ~500ms;
-        // give it a moment before clearing the optimistic bubble
-        setTimeout(() => {
-          setUploadingMedia(null);
-          setUploadProgress(0);
-        }, 600);
-      } catch (error: any) {
-        console.error('Error sending media:', error);
-        Alert.alert('Upload failed', error?.message || 'Could not upload the file.');
-        setSelectedMedia(mediaToUpload);
-        setText(msg);
-        setUploadingMedia(null);
-        setUploadProgress(0);
-      } finally {
-        setUploading(false);
-      }
+    if (mediaToSend) {
+      // Notify parent immediately with local info
+      await onSendMedia(JSON.stringify({
+        type: mediaToSend.type,
+        url: mediaToSend.uri, // Use local URI optimistically
+        fileName: mediaToSend.fileName,
+        mimeType: mediaToSend.mimeType,
+        isOptimistic: true // Flag to indicate this is not yet on server
+      }), replyingTo?.id);
+    }
+    
+    if (replyingTo && !mediaToSend) {
+        onCancelReply?.();
     }
 
     if (msg) {
-      await onSendText(msg);
+      await onSendText(msg, replyingTo?.id);
     }
   };
 
@@ -316,18 +288,6 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
     }
   };
 
-  // ─── Emoji ─────────────────────────────────────────────────────────────────
-
-  const onEmojiTap = (emoji: string) => {
-    setText(prev => prev + emoji);
-    // Keep panel open so user can pick multiple emojis
-  };
-
-  // Filter emojis by search term
-  const filteredEmojis: string[] = emojiSearch.trim()
-    ? EMOJI_SEARCH.filter(e => e.name.includes(emojiSearch.toLowerCase())).map(e => e.char)
-    : [];
-
   // ─── GIF ───────────────────────────────────────────────────────────────────
 
   const searchGifs = useCallback(async (query: string = '', offset: number = 0, isLoadMore: boolean = false) => {
@@ -377,12 +337,12 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
     searchGifs(gifQuery, gifOffset, true);
   };
 
-  // Fetch trending globally when GIF tab opened / cleared
+  // Fetch trending globally when GIF panel opened / cleared
   React.useEffect(() => {
-    if (activePanel === 'emoji' && emojiTab === 'gif' && !gifQuery.trim()) {
+    if (activePanel === 'emoji' && !gifQuery.trim()) {
       searchGifs('');
     }
-  }, [activePanel, emojiTab, gifQuery, searchGifs]);
+  }, [activePanel, gifQuery, searchGifs]);
 
   const handleSendGif = (gif: GifResult) => {
     const payload = {
@@ -397,7 +357,7 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  const isDisabled = sending || uploading;
+  const isDisabled = !!sending;
 
   return (
     <View style={{ backgroundColor: theme.colors.surface }}>
@@ -406,7 +366,16 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
         <View style={styles.mediaPreviewContainer}>
           <View style={[styles.mediaPreviewBox, { borderColor: theme.colors.border }]}>
             {selectedMedia.type === 'image' || selectedMedia.type === 'video' ? (
-              <Image source={{ uri: selectedMedia.uri }} style={styles.mediaPreviewImage} />
+              <View>
+                <Image source={{ uri: selectedMedia.uri }} style={styles.mediaPreviewImage} />
+                {selectedMedia.type === 'video' && (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }]}>
+                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Play size={16} color="#FFFFFF" style={{ marginLeft: 2 }} />
+                    </View>
+                  </View>
+                )}
+              </View>
             ) : (
               <View style={styles.mediaPreviewDoc}>
                 <FileText size={24} color={theme.colors.primary} />
@@ -420,41 +389,51 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
         </View>
       )}
 
-      {/* ── Optimistic upload bubble (sender) ── */}
-      {uploadingMedia && (
-        <View style={styles.uploadBubbleContainer}>
-          <View style={styles.uploadBubble}>
-            {(uploadingMedia.type === 'image' || uploadingMedia.type === 'video') ? (
-              <Image
-                source={{ uri: uploadingMedia.uri }}
-                style={{ width: 200, height: 180 }}
-                contentFit="cover"
-                cachePolicy="memory"
-              />
-            ) : (
-              <View style={{ width: 200, height: 180, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a2e' }}>
-                <FileText size={32} color="#FFFFFF" />
-              </View>
-            )}
-
-            {/* Semi-transparent overlay + progress ring */}
-            <View style={[StyleSheet.absoluteFill, {
-              backgroundColor: uploadProgress >= 100 ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.45)',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }]}>
-              {uploadProgress >= 100 ? (
-                // Sent! Show a subtle checkmark
-                <View style={styles.sentCheckmark}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 22 }}>✓</Text>
-                </View>
-              ) : (
-                <CircularProgress pct={uploadProgress} />
-              )}
-            </View>
+      {/* ── Reply Preview Bar ──────────────────────────────────────────────── */}
+      {replyingTo && (
+        <View style={[styles.replyPreviewContainer, { backgroundColor: theme.colors.surfaceAlt || '#f0f0f0' }]}>
+          <View style={[styles.replySideBar, { backgroundColor: theme.colors.primary }]} />
+          <View style={styles.replyContent}>
+            <Text style={[styles.replySender, { color: theme.colors.primary }]}>
+              {replyingTo.isOwn ? 'You' : (replyingTo.sender_name || 'Sender')}
+            </Text>
+            <Text style={[styles.replySnippet, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+              {(() => {
+                try {
+                  const content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
+                  if (content.type === 'image') return '🖼 Photo';
+                  if (content.type === 'video') return '🎥 Video';
+                  if (content.type === 'gif') return '🎞 GIF';
+                  if (content.type === 'document') return '📄 ' + (content.fileName || 'Document');
+                } catch (e) {}
+                return replyingTo.content;
+              })()}
+            </Text>
           </View>
+          {(() => {
+            try {
+              const content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
+              if (content.url && (content.type === 'image' || content.type === 'video' || content.type === 'gif')) {
+                return (
+                  <View style={styles.replyThumbBox}>
+                    <Image source={{ uri: content.url }} style={styles.replyThumb} />
+                  </View>
+                );
+              }
+            } catch (e) {}
+            return null;
+          })()}
+          <TouchableOpacity 
+            style={styles.replyCloseBtn} 
+            onPress={onCancelReply}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <X size={18} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
         </View>
       )}
+
+
 
       {/* ── Input row ──────────────────────────────────────────────────────── */}
       <View style={[
@@ -463,75 +442,75 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
         Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 8 : 24 } : { paddingBottom: 12 },
       ]}>
 
-        {/* Attach */}
+        {/* Plus / Attach */}
         <TouchableOpacity
           style={styles.iconBtn}
           onPress={() => togglePanel('attach')}
           activeOpacity={0.7}
           disabled={isDisabled}
         >
-          <Paperclip
-            size={22}
+          <Plus
+            size={24}
             color={activePanel === 'attach' ? theme.colors.primary : theme.colors.textSecondary}
+            strokeWidth={2}
           />
         </TouchableOpacity>
 
-        {/* Emoji / GIF */}
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={() => togglePanel('emoji')}
-          activeOpacity={0.7}
-          disabled={isDisabled}
-        >
-          <Smile
-            size={22}
-            color={activePanel === 'emoji' ? theme.colors.primary : theme.colors.textSecondary}
-          />
-        </TouchableOpacity>
-
-        {/* Text input */}
-        <TextInput
-          ref={inputRef}
-          style={[
-            styles.input,
-            {
-              backgroundColor: theme.colors.inputBackground ?? theme.colors.surfaceAlt,
-              color: theme.colors.text,
-              fontFamily: theme.typography.fontFamily,
-            },
-          ]}
-          placeholder={uploading ? 'Uploading…' : placeholder}
-          placeholderTextColor={theme.colors.textSecondary}
-          value={text}
-          onChangeText={setText}
-          onFocus={onInputFocus}
-          multiline
-          editable={!isDisabled}
-        />
-
-        {/* Upload spinner or Send */}
-        {uploading ? (
-          <View style={styles.sendBtn}>
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          </View>
-        ) : (
-          <TouchableOpacity
+        {/* Text input + sticker button inside */}
+        <View style={[
+          styles.inputWrapper,
+          { backgroundColor: theme.colors.inputBackground ?? theme.colors.surfaceAlt },
+        ]}>
+          <TextInput
+            ref={inputRef}
             style={[
-              styles.sendBtn,
-              { backgroundColor: theme.colors.primary },
-              ((!text.trim() && !selectedMedia) || isDisabled) && { opacity: 0.5 },
+              styles.input,
+              {
+                color: theme.colors.text,
+                fontFamily: theme.typography.fontFamily,
+              },
             ]}
-            onPress={handleSend}
-            disabled={(!text.trim() && !selectedMedia) || isDisabled}
-            activeOpacity={0.8}
+            placeholder={placeholder}
+            placeholderTextColor={theme.colors.textSecondary}
+            value={text}
+            onChangeText={setText}
+            onFocus={onInputFocus}
+            multiline
+            editable={!isDisabled}
+          />
+
+          {/* Sticker / GIF button — inside input on the right */}
+          <TouchableOpacity
+            style={styles.stickerBtn}
+            onPress={() => togglePanel('emoji')}
+            activeOpacity={0.7}
+            disabled={isDisabled}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {sending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Send size={18} color="#FFFFFF" />
-            )}
+            {/* Sticker icon SVG */}
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Circle cx="12" cy="12" r="10" stroke={activePanel === 'emoji' ? theme.colors.primary : theme.colors.textSecondary} strokeWidth="1.8" />
+              <Path d="M12 22C15.5 22 18.5 20 20 17H12C10.3 17 9 15.7 9 14V12H4C4 17.5 7.5 22 12 22Z" fill={activePanel === 'emoji' ? theme.colors.primary : theme.colors.textSecondary} />
+            </Svg>
           </TouchableOpacity>
-        )}
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.sendBtn,
+            { backgroundColor: theme.colors.primary },
+            ((!text.trim() && !selectedMedia) || isDisabled) && { opacity: 0.5 },
+          ]}
+          onPress={handleSend}
+          disabled={(!text.trim() && !selectedMedia) || isDisabled}
+          activeOpacity={0.8}
+        >
+          {sending ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Send size={18} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* ── Sliding panel ──────────────────────────────────────────────────── */}
@@ -605,95 +584,33 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
             </View>
           )}
 
-          {/* ── Emoji / GIF panel ────────────────────────────────────────── */}
+          {/* ── GIF panel ────────────────────────────────────────── */}
           {activePanel === 'emoji' && (
             <View style={{ flex: 1 }}>
-              {/* Tabs */}
-              <View style={[styles.tabs, { borderBottomColor: theme.colors.border }]}>
-                <TouchableOpacity
-                  style={[styles.tab, emojiTab === 'emoji' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
-                  onPress={() => setEmojiTab('emoji')}
-                >
-                  <Text style={[styles.tabText, { color: emojiTab === 'emoji' ? theme.colors.primary : theme.colors.textSecondary }]}>
-                    😊 Emoji
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.tab, emojiTab === 'gif' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
-                  onPress={() => setEmojiTab('gif')}
-                >
-                  <Text style={[styles.tabText, { color: emojiTab === 'gif' ? theme.colors.primary : theme.colors.textSecondary }]}>
-                    🎞 GIF
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
               {/* Search bar */}
               <View style={[styles.searchRow, { backgroundColor: theme.colors.surfaceAlt ?? theme.colors.background }]}>
                 <Search size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
                 <TextInput
                   style={[styles.searchInput, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}
-                  placeholder={emojiTab === 'emoji' ? 'Search emoji…' : 'Search GIFs…'}
+                  placeholder="Search GIFs…"
                   placeholderTextColor={theme.colors.textSecondary}
-                  value={emojiTab === 'emoji' ? emojiSearch : gifQuery}
+                  value={gifQuery}
                   onChangeText={(v) => {
-                    if (emojiTab === 'emoji') {
-                      setEmojiSearch(v);
-                    } else {
-                      setGifQuery(v);
-                      searchGifs(v, 0, false);
-                    }
+                    setGifQuery(v);
+                    searchGifs(v, 0, false);
                   }}
+                  returnKeyType="search"
+                  autoCapitalize="none"
                 />
-                {(emojiTab === 'emoji' ? emojiSearch : gifQuery).length > 0 && (
-                  <TouchableOpacity onPress={() => {
-                    if (emojiTab === 'emoji') setEmojiSearch('');
-                    else { setGifQuery(''); setGifResults([]); }
-                  }}>
+                {gifQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => { setGifQuery(''); setGifResults([]); }} style={{ padding: 4 }}>
                     <X size={16} color={theme.colors.textSecondary} />
                   </TouchableOpacity>
                 )}
               </View>
 
-              {/* Emoji tab content */}
-              {emojiTab === 'emoji' && (
-                <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                  {!deferRender ? (
-                    <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 20 }} />
-                  ) : emojiSearch.trim() ? (
-                    /* Search results */
-                    <View style={styles.emojiGrid}>
-                      {filteredEmojis.length === 0 ? (
-                        <Text style={[styles.emptyMsg, { color: theme.colors.textSecondary }]}>No results</Text>
-                      ) : filteredEmojis.map((emoji, i) => (
-                        <TouchableOpacity key={i} style={styles.emojiCell} onPress={() => onEmojiTap(emoji)}>
-                          <Text style={styles.emojiChar}>{emoji}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  ) : (
-                    /* Categories */
-                    EMOJIS_BY_CATEGORY.map((cat) => (
-                      <View key={cat.label}>
-                        <Text style={[styles.catLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-                          {cat.label}
-                        </Text>
-                        <View style={styles.emojiGrid}>
-                          {cat.emojis.map((emoji, i) => (
-                            <TouchableOpacity key={i} style={styles.emojiCell} onPress={() => onEmojiTap(emoji)}>
-                              <Text style={styles.emojiChar}>{emoji}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-                    ))
-                  )}
-                </ScrollView>
-              )}
-
-              {/* GIF tab content */}
-              {emojiTab === 'gif' && (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: gifResults.length === 0 ? 'center' : 'flex-start' }}>
+              {/* GIF Results */}              
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: gifResults.length === 0 ? 'center' : 'flex-start' }}>
                   {!process.env.EXPO_PUBLIC_GIPHY_API_KEY && (
                     <Text style={[styles.emptyMsg, { color: theme.colors.textSecondary, textAlign: 'center', padding: 16 }]}>
                       Add EXPO_PUBLIC_GIPHY_API_KEY to .env to enable GIF search
@@ -731,7 +648,6 @@ export function ChatInputBar({ onSendText, onSendMedia, sending, placeholder = '
                     />
                   )}
                 </View>
-              )}
             </View>
           )}
         </Animated.View>
@@ -882,14 +798,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  inputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 22,
+    marginHorizontal: 4,
+    paddingRight: 4,
+    minHeight: 44,
+  },
   input: {
     flex: 1,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-    fontSize: 16,
+    fontSize: 15,
     maxHeight: 120,
-    minHeight: 36,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  stickerBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sendBtn: {
     width: 36,
@@ -922,11 +851,56 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   attachIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Reply Preview
+  replyPreviewContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    marginHorizontal: 8,
+    marginBottom: -4,
+    zIndex: 5,
+  },
+  replySideBar: {
+    width: 4,
+    height: '100%',
+    borderRadius: 2,
+    marginRight: 10,
+  },
+  replyContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  replySender: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  replySnippet: {
+    fontSize: 12,
+  },
+  replyThumbBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginLeft: 8,
+  },
+  replyThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  replyCloseBtn: {
+    marginLeft: 10,
+    padding: 2,
   },
   attachLabel: {
     fontSize: 16,
