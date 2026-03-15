@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { Client, Habit } from '@/types/database';
 import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Calendar as CalendarIcon, Target, Scale, Award, Info, User, Sparkles } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 import SchedulerModal from '@/components/SchedulerModal';
 import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
@@ -427,7 +428,15 @@ export default function ClientDetailsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{(client as any).profiles?.full_name || 'Client'}</Text>
+        <View style={styles.headerInfo}>
+          <BrandedAvatar 
+            name={(client as any).profiles?.full_name || 'Client'}
+            size={36}
+            imageUrl={(client as any).profiles?.avatar_url}
+            useBrandColor={true}
+          />
+          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{(client as any).profiles?.full_name || 'Client'}</Text>
+        </View>
         <TouchableOpacity style={styles.headerButton} onPress={() => setSchedulerVisible(true)}>
           <CalendarIcon size={24} color={theme.colors.primary} />
         </TouchableOpacity>
@@ -832,6 +841,12 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   backButton: {
     marginRight: 16,

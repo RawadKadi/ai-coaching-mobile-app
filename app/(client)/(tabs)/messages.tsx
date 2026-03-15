@@ -560,7 +560,7 @@ const SessionInviteMessageWrapper = ({
   );
 };
 
-const MessageItem = ({ 
+const MessageItem = React.memo(({ 
   item, 
   index, 
   isMe, 
@@ -686,11 +686,10 @@ const MessageItem = ({
       setReplyingTo({
         ...item,
         isOwn: isMe,
-        sender_name: isMe ? 'You' : (coachProfile?.full_name || 'Coach')
+        sender_name: isMe ? 'You' : (coachProfile?.profiles?.full_name || 'Coach')
       });
-      setTimeout(() => {
-        swipeableRef.current?.close();
-      }, 100);
+      // Snap back immediately
+      swipeableRef.current?.close();
     }
   };
 
@@ -705,7 +704,7 @@ const MessageItem = ({
             setReplyingTo({
               ...item,
               isOwn: isMe,
-              sender_name: isMe ? 'You' : (coachProfile?.full_name || 'Coach')
+              sender_name: isMe ? 'You' : (coachProfile?.profiles?.full_name || 'Coach')
             });
           } 
         },
@@ -730,9 +729,9 @@ const MessageItem = ({
       <Swipeable
         ref={swipeableRef}
         renderLeftActions={renderLeftActions}
-        onSwipeableOpen={handleSwipeOpen}
+        onSwipeableWillOpen={handleSwipeOpen}
         friction={2}
-        leftThreshold={40}
+        leftThreshold={30}
       >
         <TouchableOpacity activeOpacity={0.9} onLongPress={handleLongPress}>
           {renderContent()}
@@ -740,7 +739,7 @@ const MessageItem = ({
       </Swipeable>
     </View>
   );
-};
+});
 
 export default function MessagesScreen() {
   const { client, user } = useAuth();
@@ -1185,7 +1184,7 @@ export default function MessagesScreen() {
     }
   };
 
-  const renderMessage = ({ item, index }: { item: Message, index: number }) => {
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isMe = item.sender_id === user?.id;
     const showUnreadSeparator = index === firstUnreadIndex;
 
@@ -1205,7 +1204,7 @@ export default function MessagesScreen() {
         replyToMsg = {
           ...original,
           isOwn: isOriginalMe,
-          sender_name: isOriginalMe ? 'You' : (coachProfile?.full_name || 'Coach')
+          sender_name: isOriginalMe ? 'You' : (coachProfile?.profiles?.full_name || 'Coach')
         };
       }
     }
@@ -1226,7 +1225,7 @@ export default function MessagesScreen() {
         handlePostpone={handlePostpone}
       />
     );
-  };
+  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, coachProfile, user?.id, setReplyingTo, activeUploads, cancelUpload, handlePostpone]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

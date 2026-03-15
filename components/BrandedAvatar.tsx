@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { getInitials, getContrastColor } from '@/lib/theme-utils';
 
@@ -8,6 +8,7 @@ interface BrandedAvatarProps {
   imageUrl?: string | null;
   size?: number;
   useBrandColor?: boolean;
+  uploading?: boolean;
 }
 
 export function BrandedAvatar({
@@ -15,6 +16,7 @@ export function BrandedAvatar({
   imageUrl,
   size = 48,
   useBrandColor = true,
+  uploading = false,
 }: BrandedAvatarProps) {
   const theme = useTheme();
   const initials = getInitials(name);
@@ -35,7 +37,9 @@ export function BrandedAvatar({
         },
       ]}
     >
-      {imageUrl ? (
+      {uploading ? (
+        <ActivityIndicator size={size * 0.4} color={textColor} />
+      ) : imageUrl ? (
         <Image
           source={{ uri: imageUrl }}
           style={{

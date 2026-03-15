@@ -30,7 +30,7 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true }: Pr
       mediaType = 'image';
     } else if (content.type === 'video') {
       snippet = '🎥 Video';
-      mediaUrl = content.url;
+      mediaUrl = content.thumbnailUrl || content.url;
       mediaType = 'video';
     } else if (content.type === 'gif') {
       snippet = '🎞 GIF';

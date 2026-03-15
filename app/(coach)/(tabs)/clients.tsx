@@ -24,6 +24,7 @@ interface ClientWithProfile {
   experience_level?: string;
   profiles: {
     full_name: string;
+    avatar_url?: string | null;
   };
 }
 
@@ -85,7 +86,8 @@ export default function ClientsScreen() {
         goal: item.client_goal,
         experience_level: item.client_experience,
         profiles: {
-          full_name: item.client_name
+          full_name: item.client_name,
+          avatar_url: item.client_avatar
         }
       })) || [];
 
@@ -165,6 +167,7 @@ export default function ClientsScreen() {
                   <BrandedAvatar 
                     name={client.profiles?.full_name || 'Client'}
                     size={48}
+                    imageUrl={client.profiles?.avatar_url}
                     useBrandColor={true}
                   />
                   <View style={styles.clientDetails}>

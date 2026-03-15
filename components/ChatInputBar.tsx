@@ -55,6 +55,25 @@ export function ChatInputBar({
   const startHeight = useRef(0);
   const inputRef = useRef<TextInput>(null);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const replyAnim = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (replyingTo) {
+      Animated.spring(replyAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 110,
+        friction: 12,
+      }).start();
+    } else {
+      Animated.timing(replyAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }).start();
+    }
+  }, [replyingTo]);
 
   React.useEffect(() => {
     const id = panelHeightAnim.addListener(({ value }) => {
@@ -391,7 +410,19 @@ export function ChatInputBar({
 
       {/* ── Reply Preview Bar ──────────────────────────────────────────────── */}
       {replyingTo && (
-        <View style={[styles.replyPreviewContainer, { backgroundColor: theme.colors.surfaceAlt || '#f0f0f0' }]}>
+        <Animated.View 
+          style={[
+            styles.replyPreviewContainer, 
+            { 
+              backgroundColor: theme.colors.surfaceAlt || '#f0f0f0',
+              opacity: replyAnim,
+              transform: [
+                { translateY: replyAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
+                { scale: replyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }
+              ]
+            }
+          ]}
+        >
           <View style={[styles.replySideBar, { backgroundColor: theme.colors.primary }]} />
           <View style={styles.replyContent}>
             <Text style={[styles.replySender, { color: theme.colors.primary }]}>
@@ -416,7 +447,7 @@ export function ChatInputBar({
               if (content.url && (content.type === 'image' || content.type === 'video' || content.type === 'gif')) {
                 return (
                   <View style={styles.replyThumbBox}>
-                    <Image source={{ uri: content.url }} style={styles.replyThumb} />
+                    <Image source={{ uri: content.thumbnailUrl || content.url }} style={styles.replyThumb} />
                   </View>
                 );
               }
@@ -430,7 +461,7 @@ export function ChatInputBar({
           >
             <X size={18} color={theme.colors.textSecondary} />
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       )}
 
 

@@ -16,6 +16,7 @@ import ChatMediaMessage from '@/components/ChatMediaMessage';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Reply } from 'lucide-react-native';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { ChatReplyContext } from '@/components/ChatReplyContext';
 
 if (Platform.OS === 'android') {
@@ -54,6 +55,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   loadingContainer: {
     flex: 1,
@@ -1155,7 +1162,7 @@ const SessionInviteMessageWrapper = ({
 
 
 
-const MessageItem = ({ 
+const MessageItem = React.memo(({ 
   item, 
   index, 
   isOwn, 
@@ -1274,11 +1281,10 @@ const MessageItem = ({
       setReplyingTo({
         ...item,
         isOwn: isOwn,
-        sender_name: isOwn ? 'You' : (clientProfile?.full_name || 'Client')
+        sender_name: isOwn ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
       });
-      setTimeout(() => {
-        swipeableRef.current?.close();
-      }, 100);
+      // Snap back immediately
+      swipeableRef.current?.close();
     }
   };
 
@@ -1293,7 +1299,7 @@ const MessageItem = ({
             setReplyingTo({
               ...item,
               isOwn: isOwn,
-              sender_name: isOwn ? 'You' : (clientProfile?.full_name || 'Client')
+              sender_name: isOwn ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
             });
           } 
         },
@@ -1318,9 +1324,10 @@ const MessageItem = ({
       <Swipeable
         ref={swipeableRef}
         renderLeftActions={renderLeftActions}
-        onSwipeableOpen={handleSwipeOpen}
+        onSwipeableWillOpen={handleSwipeOpen}
         friction={2}
-        leftThreshold={40}
+        leftThreshold={30}
+        overshootLeft={false}
       >
         <TouchableOpacity activeOpacity={0.9} onLongPress={handleLongPress}>
           {renderContent()}
@@ -1328,7 +1335,7 @@ const MessageItem = ({
       </Swipeable>
     </View>
   );
-};
+});
 
 
 export default function CoachChat() {
@@ -1651,7 +1658,7 @@ export default function CoachChat() {
       // 1. Get client's profile info
       const { data: clientData, error: clientError } = await supabase
         .from('clients')
-        .select('user_id, profiles:user_id(full_name)')
+        .select('user_id, profiles:user_id(full_name, avatar_url)')
         .eq('id', id)
         .single();
 
@@ -1926,7 +1933,7 @@ export default function CoachChat() {
     }
   };
 
-  const renderMessage = ({ item, index }: { item: Message, index: number }) => {
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isOwn = item.sender_id === profile?.id;
     const showUnreadSeparator = index === firstUnreadIndex;
 
@@ -1940,13 +1947,14 @@ export default function CoachChat() {
     })();
 
     if (replyToId) {
+      // Fast lookup instead of .find if messages is large
       const original = messages.find(m => m.id === replyToId);
       if (original) {
         const isOriginalMe = original.sender_id === profile?.id;
         replyToMsg = {
           ...original,
           isOwn: isOriginalMe,
-          sender_name: isOriginalMe ? 'You' : (clientProfile?.full_name || 'Client')
+          sender_name: isOriginalMe ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
         };
       }
     }
@@ -1967,7 +1975,7 @@ export default function CoachChat() {
         loadNextSession={loadNextSession}
       />
     );
-  };
+  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, clientProfile, setReplyingTo, activeUploads, cancelUpload, loadNextSession, profile?.id]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -1975,9 +1983,17 @@ export default function CoachChat() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ChevronLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-          {clientProfile?.profiles?.full_name || 'Chat'}
-        </Text>
+        <View style={styles.headerInfo}>
+          <BrandedAvatar 
+            name={clientProfile?.profiles?.full_name || 'Client'}
+            size={36}
+            imageUrl={clientProfile?.profiles?.avatar_url}
+            useBrandColor={true}
+          />
+          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
+            {clientProfile?.profiles?.full_name || 'Chat'}
+          </Text>
+        </View>
         <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.scheduleButton}>
           <MoreVertical size={24} color={theme.colors.primary} />
         </TouchableOpacity>
