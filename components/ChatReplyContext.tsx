@@ -80,27 +80,31 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true }: Pr
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    padding: 8,
+    padding: 10,
     overflow: 'hidden',
+    minHeight: 54,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
+    paddingRight: 4,
   },
   sender: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     marginBottom: 2,
   },
   snippet: {
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 18,
   },
   thumbBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 6,
     overflow: 'hidden',
     marginLeft: 8,
+    alignSelf: 'center',
   },
   thumb: {
     width: '100%',

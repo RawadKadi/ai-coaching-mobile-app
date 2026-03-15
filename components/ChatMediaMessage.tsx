@@ -30,6 +30,7 @@ interface Props {
   progress?: number;
   onCancel?: () => void;
   replyTo?: any;
+  onPressReply?: (id: string) => void;
 }
 
 // ── Circular download progress ring ──────────────────────────────────────────
@@ -465,7 +466,7 @@ function CustomImagePlayer({
 }
 
 export default function ChatMediaMessage({ 
-  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo 
+  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply 
 }: Props) {
   const theme = useTheme();
 
@@ -504,7 +505,10 @@ export default function ChatMediaMessage({
       ]}>
         {replyTo && (
           <View style={{ padding: 4, backgroundColor: theme.colors.surface }}>
-            <ChatReplyContext message={replyTo} />
+            <ChatReplyContext 
+              message={replyTo} 
+              onPress={() => replyTo.id && onPressReply?.(replyTo.id)} 
+            />
           </View>
         )}
 
@@ -551,7 +555,10 @@ export default function ChatMediaMessage({
       ]}>
         {replyTo && (
           <View style={{ padding: 4, backgroundColor: theme.colors.surface }}>
-            <ChatReplyContext message={replyTo} />
+            <ChatReplyContext 
+              message={replyTo} 
+              onPress={() => replyTo.id && onPressReply?.(replyTo.id)}
+            />
           </View>
         )}
         <CustomVideoPlayer 
@@ -591,7 +598,12 @@ export default function ChatMediaMessage({
         onPress={() => !isUploading && media?.url && Linking.openURL(media.url)}
         activeOpacity={0.8}
       >
-        {replyTo && <ChatReplyContext message={replyTo} />}
+        {replyTo && (
+          <ChatReplyContext 
+            message={replyTo} 
+            onPress={() => replyTo.id && onPressReply?.(replyTo.id)}
+          />
+        )}
         <View style={styles.docContainer}>
           <FileText size={28} color={isOwn ? '#FFFFFF' : theme.colors.primary} />
           <View style={{ flex: 1, marginLeft: 10 }}>

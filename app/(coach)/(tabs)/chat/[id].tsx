@@ -1163,19 +1163,10 @@ const SessionInviteMessageWrapper = ({
 
 
 const MessageItem = React.memo(({ 
-  item, 
-  index, 
-  isOwn, 
-  showUnreadSeparator, 
-  unreadCountAtOpen, 
-  replyToMsg, 
-  theme, 
-  clientProfile, 
-  setReplyingTo, 
-  activeUploads, 
-  cancelUpload,
-  loadNextSession
-}: any) => {
+  item, index, isMe, showUnreadSeparator, unreadCountAtOpen, replyToMsg, theme, clientProfile, setReplyingTo, activeUploads, cancelUpload, onPressReply, loadNextSession 
+}: { 
+  item: Message; index: number; isMe: boolean; showUnreadSeparator: boolean; unreadCountAtOpen: number; replyToMsg: any; theme: any; clientProfile: any; setReplyingTo: (msg: any) => void; activeUploads: any; cancelUpload: (id: string) => void; onPressReply?: (id: string) => void; loadNextSession: () => void;
+}) => {
   const swipeableRef = useRef<any>(null);
 
   const renderContent = () => {
@@ -1197,15 +1188,15 @@ const MessageItem = React.memo(({
       if (['image', 'video', 'document', 'gif'].includes(parsed.type)) {
         isMediaMessage = true;
       } else if (parsed.type === 'task_completion') {
-        return <TaskCompletionMessage content={item.content} isOwn={isOwn} />;
+        return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
       } else if (parsed.type === 'challenge_completed') {
-        return <ChallengeCompletionMessage content={item.content} isOwn={isOwn} />;
+        return <ChallengeCompletionMessage content={item.content} isOwn={isMe} />;
       } else if (parsed.type === 'session_invite') {
         return (
           <SessionInviteMessageWrapper 
             item={item}
             parsed={parsed}
-            isOwn={isOwn}
+            isOwn={isMe}
             loadNextSession={loadNextSession}
           />
         );
@@ -1214,11 +1205,11 @@ const MessageItem = React.memo(({
           <RescheduleProposalMessage 
             messageId={item.id}
             metadata={parsed}
-            isOwn={isOwn}
+            isOwn={isMe}
           />
         );
       } else if (parsed.type === 'meal_log') {
-        return <MealMessageCard content={item.content} isOwn={isOwn} />;
+        return <MealMessageCard content={item.content} isOwn={isMe} />;
       }
     }
 
@@ -1228,31 +1219,37 @@ const MessageItem = React.memo(({
       return (
         <ChatMediaMessage 
           content={item.content} 
-          isOwn={isOwn} 
+          isOwn={isMe} 
           createdAt={item.created_at} 
           isRead={item.read} 
           onCancel={() => cancelUpload(item.id)}
           progress={uploadProgress}
           isUploading={parsedMedia.status === 'pending'}
           replyTo={replyToMsg}
+          onPressReply={onPressReply}
         />
       );
     }
 
     return (
-      <View style={[styles.messageBubble, isOwn 
+      <View style={[styles.messageBubble, isMe 
         ? [styles.sentBubble, { backgroundColor: theme.colors.primary }] 
         : [styles.receivedBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
       ]}>
-        {replyToMsg && <ChatReplyContext message={replyToMsg} />}
-        <Text style={[styles.messageText, isOwn ? { color: '#FFFFFF' } : { color: theme.colors.text }]}>
+        {replyToMsg && (
+          <ChatReplyContext 
+            message={replyToMsg} 
+            onPress={() => replyToMsg.id && onPressReply?.(replyToMsg.id)} 
+          />
+        )}
+        <Text style={[styles.messageText, isMe ? { color: '#FFFFFF' } : { color: theme.colors.text }]}>
           {item.content}
         </Text>
         <View style={styles.messageFooter}>
-          <Text style={[styles.timestamp, isOwn ? { color: theme.colors.textOnPrimary, opacity: 0.7 } : { color: theme.colors.textSecondary }]}>
+          <Text style={[styles.timestamp, isMe ? { color: theme.colors.textOnPrimary, opacity: 0.7 } : { color: theme.colors.textSecondary }]}>
             {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
-          {isOwn && (
+          {isMe && (
             item.read ? 
               <CheckCheck size={14} color="#FFFFFF" style={{ opacity: 0.8 }} /> : 
               <Check size={14} color="#FFFFFF" style={{ opacity: 0.8 }} />
@@ -1280,8 +1277,8 @@ const MessageItem = React.memo(({
     if (direction === 'left') {
       setReplyingTo({
         ...item,
-        isOwn: isOwn,
-        sender_name: isOwn ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
+        isOwn: isMe,
+        sender_name: isMe ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
       });
       // Snap back immediately upon trigger
       swipeableRef.current?.close();
@@ -1298,8 +1295,8 @@ const MessageItem = React.memo(({
           onPress: () => {
             setReplyingTo({
               ...item,
-              isOwn: isOwn,
-              sender_name: isOwn ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
+              isOwn: isMe,
+              sender_name: isMe ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
             });
           } 
         },
@@ -1768,6 +1765,19 @@ export default function CoachChat() {
     markMessagesAsRead();
   };
 
+  const scrollToMessage = useCallback((messageId: string) => {
+    // Find the index of the message in the *reversed* array
+    const reversedMessages = messages.slice().reverse();
+    const index = reversedMessages.findIndex(m => m.id === messageId);
+    if (index !== -1) {
+      flatListRef.current?.scrollToIndex({ 
+        index, 
+        animated: true,
+        viewPosition: 0.5 // Center the message in the view
+      });
+    }
+  }, [messages]);
+
   const markAsRead = async (messageId: string) => {
     await supabase.from('messages').update({ read: true }).eq('id', messageId);
   };
@@ -1934,7 +1944,7 @@ export default function CoachChat() {
   };
 
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
-    const isOwn = item.sender_id === profile?.id;
+    const isMe = item.sender_id === profile?.id;
     const showUnreadSeparator = index === firstUnreadIndex;
 
     // Resolve replied-to message
@@ -1963,7 +1973,7 @@ export default function CoachChat() {
       <MessageItem 
         item={item}
         index={index}
-        isOwn={isOwn}
+        isMe={isMe}
         showUnreadSeparator={showUnreadSeparator}
         unreadCountAtOpen={unreadCountAtOpen}
         replyToMsg={replyToMsg}
@@ -1972,10 +1982,11 @@ export default function CoachChat() {
         setReplyingTo={setReplyingTo}
         activeUploads={activeUploads}
         cancelUpload={cancelUpload}
+        onPressReply={scrollToMessage}
         loadNextSession={loadNextSession}
       />
     );
-  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, clientProfile, setReplyingTo, activeUploads, cancelUpload, loadNextSession, profile?.id]);
+  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, clientProfile, profile?.id, setReplyingTo, activeUploads, cancelUpload, scrollToMessage, loadNextSession]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

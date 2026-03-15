@@ -34,7 +34,7 @@ type Message = {
   content: string;
   created_at: string;
   read: boolean;
-  client_id: string;
+  reply_to_id?: string;
 };
 
 const ZoomableImage = ({ imageUrl, onClose, onLoadStart, onLoadEnd }: {
@@ -565,19 +565,10 @@ const SessionInviteMessageWrapper = ({
 };
 
 const MessageItem = React.memo(({ 
-  item, 
-  index, 
-  isMe, 
-  showUnreadSeparator, 
-  unreadCountAtOpen, 
-  replyToMsg, 
-  theme, 
-  coachProfile, 
-  setReplyingTo, 
-  activeUploads, 
-  cancelUpload,
-  handlePostpone
-}: any) => {
+  item, index, isMe, showUnreadSeparator, unreadCountAtOpen, replyToMsg, theme, coachProfile, setReplyingTo, activeUploads, cancelUpload, handlePostpone, onPressReply 
+}: { 
+  item: Message; index: number; isMe: boolean; showUnreadSeparator: boolean; unreadCountAtOpen: number; replyToMsg: any; theme: any; coachProfile: any; setReplyingTo: (msg: any) => void; activeUploads: any; cancelUpload: (id: string) => void; handlePostpone: any; onPressReply?: (id: string) => void;
+}) => {
   const swipeableRef = useRef<any>(null);
 
   const renderContent = () => {
@@ -644,6 +635,7 @@ const MessageItem = React.memo(({
           progress={uploadProgress}
           isUploading={parsedMedia.status === 'pending'}
           replyTo={replyToMsg}
+          onPressReply={onPressReply}
         />
       );
     }
@@ -653,7 +645,12 @@ const MessageItem = React.memo(({
         ? [styles.ownBubble, { backgroundColor: theme.colors.primary }] 
         : [styles.receivedBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
       ]}>
-        {replyToMsg && <ChatReplyContext message={replyToMsg} />}
+        {replyToMsg && (
+          <ChatReplyContext 
+            message={replyToMsg} 
+            onPress={() => replyToMsg.id && onPressReply?.(replyToMsg.id)}
+          />
+        )}
         <Text style={[styles.messageText, isMe ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
           {item.content}
         </Text>
@@ -775,23 +772,39 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (user?.id) {
       loadMessages();
-      loadNextSession();
-      loadCoachProfile();
       const cleanup = subscribeToMessages();
       return cleanup;
     }
   }, [user?.id]);
 
+  useEffect(() => {
+    if (client?.id) {
+      loadNextSession();
+      loadCoachProfile();
+    }
+  }, [client?.id]);
+
   const loadCoachProfile = async () => {
-    if (!client?.coach_id) return;
+    if (!client?.id) return;
     try {
+      // 1. Find the active coach link
+      const { data: coachLink, error: linkError } = await supabase
+        .from('coach_client_links')
+        .select('coach_id')
+        .eq('client_id', client.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (linkError || !coachLink) return;
+
+      // 2. Fetch coach profile with profile data join
       const { data, error } = await supabase
         .from('coaches')
         .select(`
           *,
           profiles:user_id (*)
         `)
-        .eq('id', client.coach_id)
+        .eq('id', coachLink.coach_id)
         .maybeSingle();
 
       if (error) throw error;
@@ -982,6 +995,17 @@ export default function MessagesScreen() {
     markMessagesAsRead();
   };
 
+  const scrollToMessage = (messageId: string) => {
+    const index = messages.slice().reverse().findIndex(m => m.id === messageId);
+    if (index !== -1) {
+      flatListRef.current?.scrollToIndex({ 
+        index, 
+        animated: true,
+        viewPosition: 0.5 
+      });
+    }
+  };
+
   const cancelUpload = (tempId: string) => {
     const upload = activeUploads[tempId];
     if (upload) {
@@ -1016,7 +1040,6 @@ export default function MessagesScreen() {
       }),
       created_at: new Date().toISOString(),
       read: false,
-      client_id: client.id,
     };
 
     setMessages(current => [...current, optimisticMessage]);
@@ -1123,7 +1146,6 @@ export default function MessagesScreen() {
       content: messageText,
       created_at: new Date().toISOString(),
       read: false,
-      client_id: client.id,
       reply_to_id: replyId,
     };
     
@@ -1152,7 +1174,6 @@ export default function MessagesScreen() {
       const message = {
         sender_id: user.id,
         recipient_id: coach.user_id,
-        client_id: client.id,
         content: messageText,
         reply_to_id: replyId,
         read: false,
@@ -1249,9 +1270,10 @@ export default function MessagesScreen() {
         activeUploads={activeUploads}
         cancelUpload={cancelUpload}
         handlePostpone={handlePostpone}
+        onPressReply={scrollToMessage}
       />
     );
-  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, coachProfile, user?.id, setReplyingTo, activeUploads, cancelUpload, handlePostpone]);
+  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, coachProfile, user?.id, setReplyingTo, activeUploads, cancelUpload, handlePostpone, scrollToMessage]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -1261,13 +1283,13 @@ export default function MessagesScreen() {
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <BrandedAvatar 
-            name={coachProfile?.profiles?.full_name || 'Coach'} 
-            imageUrl={coachProfile?.profiles?.avatar_url} 
+            name={coachProfile?.profiles?.full_name || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.full_name : 'Coach')} 
+            imageUrl={coachProfile?.profiles?.avatar_url || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.avatar_url : undefined)} 
             size={40} 
           />
           <View>
             <BrandedText variant="lg" weight="heading">
-              {coachProfile?.profiles?.full_name || 'Coach'}
+              {coachProfile?.profiles?.full_name || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.full_name : 'Coach')}
             </BrandedText>
             <BrandedText variant="xs" color="secondary">
               Coach
