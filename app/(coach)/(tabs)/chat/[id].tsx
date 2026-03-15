@@ -1283,7 +1283,7 @@ const MessageItem = React.memo(({
         isOwn: isOwn,
         sender_name: isOwn ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
       });
-      // Snap back immediately
+      // Snap back immediately upon trigger
       swipeableRef.current?.close();
     }
   };
@@ -1325,9 +1325,9 @@ const MessageItem = React.memo(({
         ref={swipeableRef}
         renderLeftActions={renderLeftActions}
         onSwipeableWillOpen={handleSwipeOpen}
-        friction={2}
-        leftThreshold={30}
-        overshootLeft={false}
+        friction={4}
+        leftThreshold={40}
+        overshootFriction={20}
       >
         <TouchableOpacity activeOpacity={0.9} onLongPress={handleLongPress}>
           {renderContent()}
@@ -2064,7 +2064,7 @@ export default function CoachChat() {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
               <ChatInputBar 
               onSendText={sendMessage} 

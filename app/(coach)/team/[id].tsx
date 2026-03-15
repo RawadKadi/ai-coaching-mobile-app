@@ -17,17 +17,20 @@ import { supabase } from '@/lib/supabase';
 import { BrandedHeader } from '@/components/BrandedHeader';
 import { AssignClientsModal } from '@/components/AssignClientsModal';
 import { TerminationSuccessModal } from '@/components/TerminationSuccessModal';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 interface SubCoachDetails {
   coach_id: string;
   full_name: string;
   email: string;
+  avatar_url?: string | null;
   joined_at: string;
   client_count: number;
   clients: Array<{
     id: string;
     full_name: string;
     email: string;
+    avatar_url?: string | null;
     added_at: string;
   }>;
 }
@@ -89,6 +92,7 @@ export default function SubCoachDetailsScreen() {
         id: client.client_id,
         full_name: client.full_name,
         email: client.email,
+        avatar_url: client.avatar_url,
         added_at: client.assigned_at,
       }));
 
@@ -96,6 +100,7 @@ export default function SubCoachDetailsScreen() {
         coach_id: coachDetailsRaw.coach_id,
         full_name: coachDetailsRaw.full_name || 'Unknown Coach',
         email: coachDetailsRaw.email || 'No email',
+        avatar_url: coachDetailsRaw.avatar_url,
         joined_at: coachDetailsRaw.joined_at || coachDetailsRaw.created_at,
         client_count: formattedClients.length,
         clients: formattedClients,
@@ -191,9 +196,12 @@ export default function SubCoachDetailsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Profile Card */}
         <View style={[styles.profileCard, { borderTopColor: primary, backgroundColor: theme.colors.surface }]}>
-          <View style={[styles.avatar, { backgroundColor: `${primary}20` }]}>
-            <UserCheck size={40} color={primary} />
-          </View>
+          <BrandedAvatar 
+            name={subCoach.full_name}
+            size={80}
+            imageUrl={subCoach.avatar_url}
+            useBrandColor={true}
+          />
           
           <Text style={[styles.name, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{subCoach.full_name}</Text>
           
@@ -253,11 +261,12 @@ export default function SubCoachDetailsScreen() {
                 }}
               >
                 <View style={styles.clientInfo}>
-                  <View style={styles.clientAvatar}>
-                    <Text style={[styles.clientInitial, { fontFamily: theme.typography.fontFamily }]}>
-                      {client.full_name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
+                  <BrandedAvatar 
+                    name={client.full_name}
+                    size={44}
+                    imageUrl={client.avatar_url}
+                    useBrandColor={true}
+                  />
                   <View style={styles.clientDetails}>
                     <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.full_name}</Text>
                     <Text style={[styles.clientEmail, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{client.email}</Text>

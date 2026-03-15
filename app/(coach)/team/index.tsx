@@ -16,6 +16,7 @@ import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { BrandedHeader } from '@/components/BrandedHeader';
 import { BrandedButton } from '@/components/BrandedButton';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 interface SubCoach {
   coach_id: string | null;
@@ -25,6 +26,7 @@ interface SubCoach {
   added_at: string;
   status: 'active' | 'pending';
   invite_token: string | null;
+  avatar_url?: string | null;
 }
 
 export default function TeamManagementScreen() {
@@ -153,12 +155,12 @@ export default function TeamManagementScreen() {
       }}
     >
       <View style={styles.coachHeader}>
-        <View style={[
-          styles.avatar, 
-          { backgroundColor: item.status === 'active' ? `${primary}20` : '#F3F4F6' }
-        ]}>
-          <UserCheck size={24} color={item.status === 'active' ? primary : '#9CA3AF'} />
-        </View>
+        <BrandedAvatar 
+          name={item.full_name}
+          size={48}
+          imageUrl={item.avatar_url}
+          useBrandColor={item.status === 'active'}
+        />
         <View style={styles.coachInfo}>
           <View style={styles.nameRow}>
             <Text style={[styles.coachName, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>{item.full_name}</Text>

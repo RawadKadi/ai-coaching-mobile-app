@@ -15,6 +15,10 @@ import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Reply } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { BrandedText } from '@/components/BrandedText';
+import { ChevronLeft } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { ChatReplyContext } from '@/components/ChatReplyContext';
 
 if (Platform.OS === 'android') {
@@ -688,7 +692,7 @@ const MessageItem = React.memo(({
         isOwn: isMe,
         sender_name: isMe ? 'You' : (coachProfile?.profiles?.full_name || 'Coach')
       });
-      // Snap back immediately
+      // Snap back immediately upon trigger
       swipeableRef.current?.close();
     }
   };
@@ -730,8 +734,9 @@ const MessageItem = React.memo(({
         ref={swipeableRef}
         renderLeftActions={renderLeftActions}
         onSwipeableWillOpen={handleSwipeOpen}
-        friction={2}
-        leftThreshold={30}
+        friction={4}
+        leftThreshold={40}
+        overshootFriction={20}
       >
         <TouchableOpacity activeOpacity={0.9} onLongPress={handleLongPress}>
           {renderContent()}
@@ -742,6 +747,7 @@ const MessageItem = React.memo(({
 });
 
 export default function MessagesScreen() {
+  const router = useRouter();
   const { client, user } = useAuth();
   const theme = useTheme();
   const { refreshUnreadCount } = useUnread();
@@ -770,10 +776,30 @@ export default function MessagesScreen() {
     if (user?.id) {
       loadMessages();
       loadNextSession();
+      loadCoachProfile();
       const cleanup = subscribeToMessages();
       return cleanup;
     }
   }, [user?.id]);
+
+  const loadCoachProfile = async () => {
+    if (!client?.coach_id) return;
+    try {
+      const { data, error } = await supabase
+        .from('coaches')
+        .select(`
+          *,
+          profiles:user_id (*)
+        `)
+        .eq('id', client.coach_id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setCoachProfile(data);
+    } catch (error) {
+      console.error('Error loading coach profile:', error);
+    }
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -1229,14 +1255,31 @@ export default function MessagesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Messages</Text>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ChevronLeft size={28} color={theme.colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerInfo}>
+          <BrandedAvatar 
+            name={coachProfile?.profiles?.full_name || 'Coach'} 
+            imageUrl={coachProfile?.profiles?.avatar_url} 
+            size={40} 
+          />
+          <View>
+            <BrandedText variant="lg" weight="heading">
+              {coachProfile?.profiles?.full_name || 'Coach'}
+            </BrandedText>
+            <BrandedText variant="xs" color="secondary">
+              Coach
+            </BrandedText>
+          </View>
         </View>
+      </View>
 
         <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
             style={styles.keyboardAvoidingView}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
             <FlatList
                 ref={flatListRef}
@@ -1302,14 +1345,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    padding: 24,
+    padding: 16,
     paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
+  backButton: {
+    marginRight: 16,
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '700',
     color: '#111827',
   },

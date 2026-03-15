@@ -62,13 +62,13 @@ export function ChatInputBar({
       Animated.spring(replyAnim, {
         toValue: 1,
         useNativeDriver: true,
-        tension: 110,
-        friction: 12,
+        tension: 180, // Much higher tension for instant feel
+        friction: 10, // Lower friction for snappiness
       }).start();
     } else {
       Animated.timing(replyAnim, {
         toValue: 0,
-        duration: 200,
+        duration: 150, // Faster close
         useNativeDriver: true,
         easing: Easing.out(Easing.quad),
       }).start();
@@ -470,7 +470,7 @@ export function ChatInputBar({
       <View style={[
         styles.inputRow,
         { borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface },
-        Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 8 : 24 } : { paddingBottom: 12 },
+        Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 0 : 24 } : { paddingBottom: 12 },
       ]}>
 
         {/* Plus / Attach */}
