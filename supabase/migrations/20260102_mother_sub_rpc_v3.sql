@@ -17,7 +17,8 @@ CREATE OR REPLACE FUNCTION create_mother_challenge(
     p_sub_challenges JSONB,  -- [{assigned_date, name, description, focus_type, intensity}...]
     p_created_by challenge_creator DEFAULT 'coach',
     p_trigger_reason TEXT DEFAULT NULL,
-    p_ai_reasoning TEXT DEFAULT NULL
+    p_ai_reasoning TEXT DEFAULT NULL,
+    p_mode challenge_mode DEFAULT 'relative'
 )
 RETURNS UUID
 LANGUAGE plpgsql
@@ -26,7 +27,33 @@ AS $$
 DECLARE
     v_mother_id UUID;
     v_sub JSONB;
+    v_start_date DATE;
+    v_end_date DATE;
+    v_initial_status challenge_status;
 BEGIN
+    -- Handle Relative Mode defaults
+    IF p_mode = 'relative' THEN
+        -- Relative challenges start TODAY if not specified (or if p_start_date is null/past)
+        -- Actually, user requirement: "Start when assigned to or accepted by the client."
+        -- If coach is creating it manually, "assigned" means "created". 
+        -- So for manual relative challenges, Start Date = Current Date.
+        v_start_date := COALESCE(p_start_date, CURRENT_DATE);
+        
+        -- Calculate End Date based on duration if passed, or infer from sub-challenges
+        -- But create_mother_challenge gets start/end passed in. 
+        -- If fixed mode (campaign), we respect passed dates.
+    ELSE
+        v_start_date := p_start_date;
+    END IF;
+    
+    v_end_date := p_end_date;
+    
+    -- Determine Initial Status
+    IF v_start_date > CURRENT_DATE THEN
+        v_initial_status := 'upcoming';
+    ELSE
+        v_initial_status := 'active';
+    END IF;
     -- Verify coach-client relationship
     IF NOT EXISTS (
         SELECT 1 FROM coach_client_links
@@ -47,7 +74,9 @@ BEGIN
         end_date,
         created_by,
         trigger_reason,
-        ai_reasoning
+        ai_reasoning,
+        status,
+        mode
     ) VALUES (
         p_coach_id,
         p_client_id,
@@ -57,7 +86,15 @@ BEGIN
         p_end_date,
         p_created_by,
         p_trigger_reason,
-        p_ai_reasoning
+        p_name,
+        p_description,
+        v_start_date,
+        v_end_date,
+        p_created_by,
+        p_trigger_reason,
+        p_ai_reasoning,
+        v_initial_status,
+        p_mode
     )
     RETURNING id INTO v_mother_id;
 
@@ -104,12 +141,17 @@ RETURNS TABLE (
     created_by challenge_creator,
     total_subs BIGINT,
     completed_subs BIGINT,
-    completion_rate INTEGER
+    completed_subs BIGINT,
+    completion_rate INTEGER,
+    mode challenge_mode
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
+    -- Update statuses before fetching to ensure freshness
+    PERFORM update_challenge_statuses(p_client_id);
+
     RETURN QUERY
     SELECT
         mc.id,
@@ -123,7 +165,8 @@ BEGIN
         COUNT(sc.id) as total_subs,
         COUNT(sc.id) FILTER (WHERE sc.completed = true) as completed_subs,
         ROUND((COUNT(sc.id) FILTER (WHERE sc.completed = true)::NUMERIC / 
-               NULLIF(COUNT(sc.id), 0) * 100))::INTEGER as completion_rate
+               NULLIF(COUNT(sc.id), 0) * 100))::INTEGER as completion_rate,
+        mc.mode
     FROM mother_challenges mc
     LEFT JOIN sub_challenges sc ON mc.id = sc.mother_challenge_id
     WHERE mc.client_id = p_client_id

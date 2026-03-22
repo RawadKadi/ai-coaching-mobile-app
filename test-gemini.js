@@ -15,7 +15,7 @@ async function testAPI() {
 
     try {
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
 
         console.log('🚀 Testing Gemini Pro...');
         const result = await model.generateContent('Say "API works!" in one word');

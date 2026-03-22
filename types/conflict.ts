@@ -30,9 +30,8 @@ export interface ConflictInfo {
 }
 
 export interface Resolution {
-    action: 'cancel' | 'propose_new_time_for_incoming' | 'propose_reschedule_for_existing';
+    action: 'cancel' | 'propose_new_time_for_incoming';
     proposedSlots?: string[];
-    targetSessionId?: string;
 }
 
 export interface RescheduleMessageMetadata {

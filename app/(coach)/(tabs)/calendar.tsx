@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Platform, UIManager, LayoutAnimation } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
+import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { Session as SessionType } from '@/types/database';
 
@@ -37,12 +39,37 @@ type Session = {
 
 export default function CalendarScreen() {
   const { profile, coach } = useAuth();
+  const theme = useTheme();
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showScheduler, setShowScheduler] = useState(false);
+  const [showManualScheduler, setShowManualScheduler] = useState(false);
+  const [showAIScheduler, setShowAIScheduler] = useState(false);
   const [selectedClient, setSelectedClient] = useState<{id: string, name: string, timezone: string} | null>(null);
+  const [initialClientData, setInitialClientData] = useState<any>(null); // For passing to ManualSchedulerModal
+
+  // When switching back from AI scheduler, we need to fetch the full client data
+  useEffect(() => {
+    const fetchClientData = async () => {
+      if (selectedClient && showManualScheduler && !showAIScheduler) {
+        // Fetch full client data for ManualSchedulerModal
+        const { data } = await supabase
+          .from('clients')
+          .select('id, user_id, profiles(full_name, avatar_url)')
+          .eq('id', selectedClient.id)
+          .single();
+        
+        if (data) {
+          setInitialClientData(data);
+        }
+      } else if (!showManualScheduler) {
+        // Reset when modal closes
+        setInitialClientData(null);
+      }
+    };
+    fetchClientData();
+  }, [selectedClient, showManualScheduler, showAIScheduler]);
 
   useFocusEffect(
     useCallback(() => {
@@ -155,46 +182,46 @@ export default function CalendarScreen() {
     
     return (
       <TouchableOpacity 
-        style={styles.card}
+        style={[styles.card, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}
         onPress={() => router.push({
           pathname: '/(coach)/chat/[id]',
           params: { id: item.client_id }
         })}
       >
         <View style={styles.cardHeader}>
-          <View style={styles.timeContainer}>
-            <Clock size={16} color="#3B82F6" />
-            <Text style={styles.timeText}>
+          <View style={[styles.timeContainer, { backgroundColor: theme.colors.primary + '15' }]}>
+            <Clock size={16} color={theme.colors.primary} />
+            <Text style={[styles.timeText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>
               {sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
           {isToday && (
-            <View style={styles.todayBadge}>
-              <Text style={styles.todayText}>TODAY</Text>
+            <View style={[styles.todayBadge, { backgroundColor: theme.colors.primary + '15' }]}>
+              <Text style={[styles.todayText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>TODAY</Text>
             </View>
           )}
         </View>
 
         <View style={styles.clientInfo}>
-          <View style={styles.avatarPlaceholder}>
-            <User size={20} color="#9CA3AF" />
+          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceAlt }]}>
+            <User size={20} color={theme.colors.textSecondary} />
           </View>
           <View>
-            <Text style={styles.clientName}>
+            <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
               {item.client?.profiles?.full_name || 'Unknown Client'}
             </Text>
-            <Text style={styles.durationText}>{item.duration_minutes} min session</Text>
+            <Text style={[styles.durationText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{item.duration_minutes} min session</Text>
           </View>
         </View>
 
-        <View style={styles.cardFooter}>
+        <View style={[styles.cardFooter, { borderTopColor: theme.colors.border }]}>
           <View style={styles.linkContainer}>
-            <Video size={16} color="#6B7280" />
-            <Text style={styles.linkText} numberOfLines={1}>
+            <Video size={16} color={theme.colors.textSecondary} />
+            <Text style={[styles.linkText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]} numberOfLines={1}>
               Video Call
             </Text>
           </View>
-          <ChevronRight size={20} color="#9CA3AF" />
+          <ChevronRight size={20} color={theme.colors.textTertiary} />
         </View>
       </TouchableOpacity>
     );
@@ -208,12 +235,12 @@ export default function CalendarScreen() {
   });
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Schedule</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Schedule</Text>
       </View>
 
-      <View style={styles.calendarStrip}>
+      <View style={[styles.calendarStrip, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -226,17 +253,21 @@ export default function CalendarScreen() {
             
             return (
               <TouchableOpacity
-                style={[styles.dateItem, isSelected && styles.dateItemSelected]}
+                style={[
+                  styles.dateItem,
+                  { backgroundColor: isSelected ? theme.colors.primary : theme.colors.inputBackground },
+                  isSelected && styles.dateItemSelected
+                ]}
                 onPress={() => setSelectedDate(item)}
               >
-                <Text style={[styles.dayName, isSelected && styles.dateTextSelected]}>
+                <Text style={[styles.dayName, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.textSecondary }, { fontFamily: theme.typography.fontFamily }]}>
                   {item.toLocaleDateString('en-US', { weekday: 'short' })}
                 </Text>
-                <Text style={[styles.dayNumber, isSelected && styles.dateTextSelected]}>
+                <Text style={[styles.dayNumber, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.text }, { fontFamily: theme.typography.fontFamily }]}>
                   {item.getDate()}
                 </Text>
                 {hasSession && (
-                  <View style={[styles.dot, isSelected && styles.dotSelected]} />
+                  <View style={[styles.dot, { backgroundColor: isSelected ? theme.colors.textOnPrimary : theme.colors.primary }]} />
                 )}
               </TouchableOpacity>
             );
@@ -245,12 +276,12 @@ export default function CalendarScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.sectionTitle}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
           {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </Text>
         
         {loading ? (
-          <ActivityIndicator size="large" color="#3B82F6" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 40 }} />
         ) : (
           <FlatList
             data={getSessionsForDate(selectedDate)}
@@ -259,8 +290,8 @@ export default function CalendarScreen() {
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <CalendarIcon size={48} color="#D1D5DB" />
-                <Text style={styles.emptyText}>No sessions scheduled</Text>
+                <CalendarIcon size={48} color={theme.colors.border} />
+                <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No sessions scheduled</Text>
               </View>
             }
           />
@@ -268,29 +299,63 @@ export default function CalendarScreen() {
       </View>
 
       {/* Floating Action Button */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.fab}
         onPress={() => {
-          // For now, open modal without client selection
-          // TODO: Add client selector before opening modal
-          setSelectedClient({ id: 'temp-id', name: 'Client', timezone: 'UTC' });
-          setShowScheduler(true);
+          // Open manual scheduler for client selection first
+          setShowManualScheduler(true);
         }}
       >
         <Plus size={24} color="#FFF" />
       </TouchableOpacity>
 
-      {/* Scheduler Modal */}
+      {/* Manual Scheduler Modal */}
+      {coach && (
+        <ManualSchedulerModal
+          visible={showManualScheduler}
+          onClose={() => {
+            setShowManualScheduler(false);
+            setSelectedClient(null);
+          }}
+          onConfirm={async (sessions) => {
+            // Manual scheduler handles its own session creation
+            // Just reload sessions afterwards
+            loadSessions();
+          }}
+          existingSessions={sessions as any}
+          coachId={coach.id}
+          initialClient={initialClientData} // Pass the fetched client data
+          onSwitchToAI={(client) => {
+            // Client selected, user wants to use AI scheduler
+            setSelectedClient({
+              id: client.id,
+              name: client.profiles.full_name,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            });
+            setShowManualScheduler(false);
+            setShowAIScheduler(true);
+          }}
+        />
+      )}
+
+      {/* AI Scheduler Modal */}
       {selectedClient && (
         <SchedulerModal
-          visible={showScheduler}
+          visible={showAIScheduler}
           onClose={() => {
-            setShowScheduler(false);
+            setShowAIScheduler(false);
             setSelectedClient(null);
           }}
           onConfirm={handleConfirmSessions}
           clientContext={selectedClient}
+          targetClientId={selectedClient.id}
           existingSessions={sessions}
+          onSwitchToManual={() => {
+            // Switch back to manual scheduler, preserving the client
+            setShowAIScheduler(false);
+            setShowManualScheduler(true);
+            // Client context is already preserved in selectedClient state
+          }}
         />
       )}
     </View>
@@ -315,10 +380,8 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   calendarStrip: {
-    backgroundColor: '#FFFFFF',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   calendarContent: {
     paddingHorizontal: 16,
@@ -328,13 +391,12 @@ const styles = StyleSheet.create({
     width: 60,
     height: 70,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
   },
   dateItemSelected: {
-    backgroundColor: '#3B82F6',
+    // Applied via inline style
   },
   dayName: {
     fontSize: 12,
@@ -353,11 +415,10 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#3B82F6',
     marginTop: 2,
   },
   dotSelected: {
-    backgroundColor: '#FFFFFF',
+    // Applied via inline style
   },
   content: {
     flex: 1,
@@ -373,7 +434,6 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   card: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     shadowColor: '#000',
@@ -442,7 +502,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
   },
   linkContainer: {
     flexDirection: 'row',
@@ -470,7 +529,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#3B82F6',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

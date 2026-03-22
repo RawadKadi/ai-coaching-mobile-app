@@ -1,11 +1,22 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, User, Settings, Brain } from 'lucide-react-native';
+import { useBrand, useTheme } from '@/contexts/BrandContext';
+import { LogOut, User, Settings, Camera, Trash2, Image as ImageIcon, Users, UserPlus } from 'lucide-react-native';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { BrandedText } from '@/components/BrandedText';
+import { BrandedCard } from '@/components/BrandedCard';
+import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '@/lib/supabase';
+import { useState } from 'react';
+import { ActivityIndicator } from 'react-native';
 
 export default function CoachProfileScreen() {
   const router = useRouter();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, coach, refreshProfile } = useAuth();
+  const { brand, canManageBrand } = useBrand();
+  const theme = useTheme();
+  const [uploading, setUploading] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -15,40 +26,216 @@ export default function CoachProfileScreen() {
       console.error('Sign out error:', error);
     }
   };
+  
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow access to your photos to upload a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow access to your camera to take a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const deletePhoto = async () => {
+    Alert.alert(
+      'Delete Photo',
+      'Are you sure you want to remove your profile photo?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setUploading(true);
+              const { error } = await supabase
+                .from('profiles')
+                .update({ avatar_url: null })
+                .eq('id', profile?.id);
+
+              if (error) throw error;
+              
+              await refreshProfile();
+              Alert.alert('Success', 'Profile photo removed.');
+            } catch (error) {
+              console.error('Error deleting avatar:', error);
+              Alert.alert('Error', 'Failed to remove profile photo.');
+            } finally {
+              setUploading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const uploadAvatar = async (uri: string) => {
+    try {
+      setUploading(true);
+      
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `avatar-${profile?.id}-${Date.now()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      // Fetch the image and convert to arrayBuffer
+      const response = await fetch(uri);
+      const arrayBuffer = await response.arrayBuffer();
+
+      const { error: uploadError } = await supabase.storage
+        .from('chat-media')
+        .upload(filePath, arrayBuffer, {
+          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat-media')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', profile?.id);
+
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+      Alert.alert('Success', 'Profile photo updated!');
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Error', 'Failed to upload profile photo.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleEditPhoto = () => {
+    Alert.alert(
+      'Profile Photo',
+      'Update your profile photo',
+      [
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: 'Choose from Library', onPress: pickImage },
+        profile?.avatar_url ? { text: 'Delete Photo', onPress: deletePhoto, style: 'destructive' } : null,
+        { text: 'Cancel', style: 'cancel' },
+      ].filter(Boolean) as any
+    );
+  };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <BrandedText variant="xxl" weight="heading">Profile</BrandedText>
       </View>
 
       <View style={styles.content}>
-        <View style={styles.profileCard}>
+        <BrandedCard variant="elevated" style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <User size={48} color="#3B82F6" />
+            <BrandedAvatar 
+              name={profile?.full_name || 'User'} 
+              size={120}
+              imageUrl={profile?.avatar_url}
+              useBrandColor={true}
+            />
+            <TouchableOpacity 
+              style={[styles.editBadge, { backgroundColor: theme.colors.primary }]}
+              onPress={handleEditPhoto}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Camera size={20} color="#FFFFFF" />
+              )}
+            </TouchableOpacity>
           </View>
-          <Text style={styles.name}>{profile?.full_name}</Text>
-          <Text style={styles.role}>Coach Account</Text>
-        </View>
+          <BrandedText variant="xl" weight="heading" style={styles.name}>
+            {profile?.full_name}
+          </BrandedText>
+          <BrandedText variant="sm" color="secondary">
+            Coach Account
+          </BrandedText>
+        </BrandedCard>
 
-        <View style={styles.menuSection}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/settings')}>
-            <Settings size={20} color="#6B7280" />
-            <Text style={styles.menuItemText}>Settings</Text>
+        <BrandedCard variant="elevated" style={styles.menuSection}>
+          <TouchableOpacity style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} onPress={() => router.push('/(coach)/settings')}>
+            <Settings size={20} color={theme.colors.textSecondary} />
+            <BrandedText variant="base" style={styles.menuItemText}>Settings</BrandedText>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(coach)/(tabs)/ai-brain')}>
-            <Brain size={20} color="#8B5CF6" />
-            <Text style={[styles.menuItemText, styles.aiBrainText]}>AI Brain</Text>
+          {/* Team Management - Only for parent coaches */}
+          {coach?.is_parent_coach && (
+            <TouchableOpacity 
+              style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} 
+              onPress={() => router.push('/(coach)/team')}
+            >
+              <Users size={20} color={theme.colors.secondary} />
+              <BrandedText variant="base" style={styles.menuItemText}>
+                Team Management
+                <BrandedText variant="sm" weight="700" style={styles.parentBadge}> • Parent</BrandedText>
+              </BrandedText>
+            </TouchableOpacity>
+          )}
+
+          {/* Invite Client - For all coaches */}
+          <TouchableOpacity 
+            style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} 
+            onPress={() => router.push('/(coach)/invite-client')}
+          >
+            <UserPlus size={20} color={theme.colors.accent} />
+            <BrandedText variant="base" style={styles.menuItemText}>Invite Client</BrandedText>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
-            <LogOut size={20} color="#EF4444" />
-            <Text style={[styles.menuItemText, styles.signOutText]}>
-              Sign Out
+          {/* TEST: Deep Link Tester (Remove after testing) */}
+          {/* <TouchableOpacity 
+            style={[styles.menuItem, { backgroundColor: '#FFF7ED' }]} 
+            onPress={() => router.push('/(coach)/test-deeplink')}
+          >
+            <Link size={20} color="#F97316" />
+            <Text style={[styles.menuItemText, { color: '#F97316' }]}>
+              🧪 Test Deep Links
             </Text>
+          </TouchableOpacity> */}
+
+          <TouchableOpacity style={[styles.menuItem, { borderBottomColor: theme.colors.border }]} onPress={handleSignOut}>
+            <LogOut size={20} color={theme.colors.error} />
+            <BrandedText variant="base" color="error" style={styles.menuItemText}>
+              Sign Out
+            </BrandedText>
           </TouchableOpacity>
-        </View>
+        </BrandedCard>
       </View>
     </View>
   );
@@ -57,56 +244,63 @@ export default function CoachProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#FFFFFF',
     padding: 24,
     paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
   },
   content: {
     padding: 16,
   },
   profileCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     marginBottom: 16,
   },
   avatarContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#EFF6FF',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    position: 'relative',
   },
   name: {
     fontSize: 24,
     fontWeight: '600',
-    color: '#111827',
     marginBottom: 4,
   },
   role: {
     fontSize: 14,
-    color: '#6B7280',
+  },
+  editBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   menuSection: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     overflow: 'hidden',
   },
   menuItem: {
@@ -115,11 +309,19 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
   },
   menuItemText: {
     fontSize: 16,
-    color: '#111827',
+  },
+  badgeText: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  parentBadge: {
+    fontSize: 12,
+    color: '#3B82F6',
+    fontWeight: '600',
   },
   aiBrainText: {
     color: '#8B5CF6',

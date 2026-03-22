@@ -13,6 +13,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { X, Check, Calendar as CalendarIcon, TrendingUp, CheckCircle } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
 
 /**
  * Client Progress Tracker
@@ -41,6 +42,7 @@ export default function ChallengeProgressScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
+  const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -138,8 +140,8 @@ export default function ChallengeProgressScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366f1" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -160,36 +162,36 @@ export default function ChallengeProgressScreen() {
   const today = new Date().toISOString().split('T')[0];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-          <X size={24} color="#666" />
+          <X size={24} color={theme.colors.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Track Progress</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Track Progress</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Challenge Info */}
-        <View style={styles.challengeInfo}>
-          <Text style={styles.challengeName}>{challenge.name}</Text>
+        <View style={[styles.challengeInfo, { backgroundColor: theme.colors.primary }]}>
+          <Text style={[styles.challengeName, { color: theme.colors.textOnPrimary }]}>{challenge.name}</Text>
           <View style={styles.progressSummary}>
-            <TrendingUp size={20} color="#6366f1" />
-            <Text style={styles.progressSummaryText}>
+            <TrendingUp size={20} color={theme.colors.textOnPrimary} />
+            <Text style={[styles.progressSummaryText, { color: theme.colors.textOnPrimary }]}>
               {completedDays}/{challenge.duration_days} days • {completionRate}%
             </Text>
           </View>
         </View>
 
         {/* Today's Check-in */}
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.sectionHeader}>
-            <CalendarIcon size={20} color="#6366f1" />
-            <Text style={styles.sectionTitle}>Today's Check-in</Text>
+            <CalendarIcon size={20} color={theme.colors.primary} />
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Today's Check-in</Text>
           </View>
 
-          <Text style={styles.dateText}>{new Date().toLocaleDateString('en-US', {
+          <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>{new Date().toLocaleDateString('en-US', {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
@@ -197,61 +199,62 @@ export default function ChallengeProgressScreen() {
           })}</Text>
 
           {todayProgress ? (
-            <View style={styles.completedBanner}>
-              <CheckCircle size={24} color="#10b981" />
-              <Text style={styles.completedText}>
+            <View style={[styles.completedBanner, { backgroundColor: theme.colors.success + '20' }]}>
+              <CheckCircle size={24} color={theme.colors.success} />
+              <Text style={[styles.completedText, { color: theme.colors.success }]}>
                 {todayProgress.completed ? '✓ Completed for today!' : '✓ Logged for today'}
               </Text>
             </View>
           ) : (
-            <View style={styles.pendingBanner}>
-              <Text style={styles.pendingText}>⏰ Pending for today</Text>
+            <View style={[styles.pendingBanner, { backgroundColor: theme.colors.warning + '20' }]}>
+              <Text style={[styles.pendingText, { color: theme.colors.warning }]}>⏰ Pending for today</Text>
             </View>
           )}
 
           {/* Notes Input */}
           <View style={styles.notesContainer}>
-            <Text style={styles.inputLabel}>Notes (Optional)</Text>
+            <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Notes (Optional)</Text>
             <TextInput
-              style={styles.notesInput}
+              style={[styles.notesInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
               value={notes}
               onChangeText={setNotes}
               placeholder="How did it go today? Any challenges or wins?"
+              placeholderTextColor={theme.colors.textSecondary}
               multiline
               numberOfLines={4}
               maxLength={500}
             />
-            <Text style={styles.charCount}>{notes.length}/500</Text>
+            <Text style={[styles.charCount, { color: theme.colors.textDisabled }]}>{notes.length}/500</Text>
           </View>
 
           {/* Action Buttons */}
           <View style={styles.buttonRow}>
             <TouchableOpacity
-              style={[styles.actionButton, styles.skipButton]}
+              style={[styles.actionButton, styles.skipButton, { backgroundColor: theme.colors.surfaceAlt }]}
               onPress={() => handleMarkProgress(false)}
               disabled={submitting}
             >
               {submitting ? (
-                <ActivityIndicator color="#666" />
+                <ActivityIndicator color={theme.colors.textSecondary} />
               ) : (
                 <>
-                  <X size={20} color="#666" />
-                  <Text style={styles.skipButtonText}>Skip Today</Text>
+                  <X size={20} color={theme.colors.textSecondary} />
+                  <Text style={[styles.skipButtonText, { color: theme.colors.textSecondary }]}>Skip Today</Text>
                 </>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionButton, styles.completeButton]}
+              style={[styles.actionButton, styles.completeButton, { backgroundColor: theme.colors.primary }]}
               onPress={() => handleMarkProgress(true)}
               disabled={submitting}
             >
               {submitting ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={theme.colors.textOnPrimary} />
               ) : (
                 <>
-                  <Check size={20} color="#fff" />
-                  <Text style={styles.completeButtonText}>Mark Complete</Text>
+                  <Check size={20} color={theme.colors.textOnPrimary} />
+                  <Text style={[styles.completeButtonText, { color: theme.colors.textOnPrimary }]}>Mark Complete</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -259,8 +262,8 @@ export default function ChallengeProgressScreen() {
         </View>
 
         {/* Progress Calendar */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Progress Calendar</Text>
+        <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Progress Calendar</Text>
           <View style={styles.calendar}>
             {Array.from({ length: challenge.duration_days }, (_, i) => {
               const date = new Date(challenge.start_date);
@@ -276,26 +279,28 @@ export default function ChallengeProgressScreen() {
                   key={i}
                   style={[
                     styles.calendarDay,
-                    dayProgress?.completed && styles.calendarDayCompleted,
-                    isToday && styles.calendarDayToday,
-                    isFuture && styles.calendarDayFuture,
+                    { backgroundColor: theme.colors.surfaceAlt },
+                    dayProgress?.completed && { backgroundColor: theme.colors.success },
+                    isToday && { borderColor: theme.colors.primary, borderWidth: 2 },
+                    isFuture && { opacity: 0.4 },
                   ]}
                 >
                   <Text
                     style={[
                       styles.calendarDayNumber,
-                      dayProgress?.completed && styles.calendarDayNumberCompleted,
-                      isToday && styles.calendarDayNumberToday,
-                      isFuture && styles.calendarDayNumberFuture,
+                      { color: theme.colors.textSecondary },
+                      dayProgress?.completed && { color: theme.colors.textOnPrimary },
+                      isToday && { color: theme.colors.primary },
+                      isFuture && { color: theme.colors.textDisabled },
                     ]}
                   >
                     {i + 1}
                   </Text>
                   {dayProgress?.completed && (
-                    <Check size={12} color="#fff" style={styles.calendarCheck} />
+                    <Check size={12} color={theme.colors.textOnPrimary} style={styles.calendarCheck} />
                   )}
                   {isToday && !dayProgress && (
-                    <Text style={styles.todayIndicator}>•</Text>
+                    <Text style={[styles.todayIndicator, { color: theme.colors.primary }]}>•</Text>
                   )}
                 </View>
               );
@@ -305,32 +310,32 @@ export default function ChallengeProgressScreen() {
 
         {/* Previous Entries */}
         {progress.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Previous Entries</Text>
+          <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Previous Entries</Text>
             {progress
               .filter((p) => p.date !== today)
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .slice(0, 5)
               .map((entry) => (
-                <View key={entry.id} style={styles.historyEntry}>
+                <View key={entry.id} style={[styles.historyEntry, { borderBottomColor: theme.colors.border }]}>
                   <View style={styles.historyHeader}>
-                    <Text style={styles.historyDate}>
+                    <Text style={[styles.historyDate, { color: theme.colors.text }]}>
                       {new Date(entry.date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                       })}
                     </Text>
                     {entry.completed ? (
-                      <View style={styles.completedBadge}>
-                        <Check size={12} color="#10b981" />
-                        <Text style={styles.completedBadgeText}>Completed</Text>
+                      <View style={[styles.completedBadge, { backgroundColor: theme.colors.success + '20' }]}>
+                        <Check size={12} color={theme.colors.success} />
+                        <Text style={[styles.completedBadgeText, { color: theme.colors.success }]}>Completed</Text>
                       </View>
                     ) : (
-                      <Text style={styles.skippedText}>Skipped</Text>
+                      <Text style={[styles.skippedText, { color: theme.colors.textDisabled }]}>Skipped</Text>
                     )}
                   </View>
                   {entry.notes && (
-                    <Text style={styles.historyNotes}>{entry.notes}</Text>
+                    <Text style={[styles.historyNotes, { color: theme.colors.textSecondary }]}>{entry.notes}</Text>
                   )}
                 </View>
               ))}

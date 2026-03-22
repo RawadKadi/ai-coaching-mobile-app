@@ -4,12 +4,20 @@ import SchedulerModal from '@/components/SchedulerModal';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image, Modal, Pressable, Dimensions, Linking, Alert, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { Send, ArrowLeft, ChevronDown, ChevronUp, Check, CheckCheck, ChevronLeft, X, Calendar, Video, ArrowDown, MoreVertical, Activity } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
 import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
 import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
+import { ChatInputBar } from '@/components/ChatInputBar';
+import ChatMediaMessage from '@/components/ChatMediaMessage';
+import { uploadChatMedia } from '@/lib/uploadChatMedia';
+import { Swipeable } from 'react-native-gesture-handler';
+import { Reply } from 'lucide-react-native';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { ChatReplyContext } from '@/components/ChatReplyContext';
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -47,6 +55,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   loadingContainer: {
     flex: 1,
@@ -742,6 +756,7 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
 };
 
 const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolean }) => {
+  const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   
   console.log('[ChallengeCompletionMessage] Component called with:', typeof content);
@@ -767,14 +782,14 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
 
   return (
     <View style={{ width: '100%', alignItems: isOwn ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
-      <View style={[challengeStyles.container]}>
-        <View style={challengeStyles.header}>
-          <Text style={challengeStyles.headerText}>{data.title || 'Client finished this task'}</Text>
+      <View style={[challengeStyles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.primary }]}>
+        <View style={[challengeStyles.header, { backgroundColor: theme.colors.primary + '20', borderBottomColor: theme.colors.primary }]}>
+          <Text style={[challengeStyles.headerText, { color: theme.colors.primary }]}>{data.title || 'Client finished this task'}</Text>
         </View>
         
         <View style={challengeStyles.body}>
-          <Text style={challengeStyles.taskName}>{data.taskName}</Text>
-          <Text style={challengeStyles.completedAt}>
+          <Text style={[challengeStyles.taskName, { color: theme.colors.text }]}>{data.taskName}</Text>
+          <Text style={[challengeStyles.completedAt, { color: theme.colors.textSecondary }]}>
             Completed at: {data.completedAt}
           </Text>
           
@@ -782,29 +797,29 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
             style={challengeStyles.viewDetailsButton}
             onPress={toggleExpand}
           >
-            <Text style={challengeStyles.viewDetailsText}>View Details</Text>
+            <Text style={[challengeStyles.viewDetailsText, { color: theme.colors.primary }]}>View Details</Text>
             {expanded ? (
-              <ChevronUp size={16} color="#059669" />
+              <ChevronUp size={16} color={theme.colors.primary} />
             ) : (
-              <ChevronDown size={16} color="#059669" />
+              <ChevronDown size={16} color={theme.colors.primary} />
             )}
           </TouchableOpacity>
 
           {expanded && (
-            <View style={challengeStyles.expandedDetails}>
+            <View style={[challengeStyles.expandedDetails, { borderTopColor: theme.colors.border }]}>
               {data.taskDescription && (
                 <>
-                  <Text style={challengeStyles.detailLabel}>Description:</Text>
-                  <Text style={challengeStyles.detailText}>{data.taskDescription}</Text>
+                  <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Description:</Text>
+                  <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.taskDescription}</Text>
                 </>
               )}
               <View style={challengeStyles.detailRow}>
-                <Text style={challengeStyles.detailLabel}>Focus: </Text>
-                <Text style={challengeStyles.detailText}>{data.focusType}</Text>
+                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Focus: </Text>
+                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.focusType}</Text>
               </View>
               <View style={challengeStyles.detailRow}>
-                <Text style={challengeStyles.detailLabel}>Intensity: </Text>
-                <Text style={challengeStyles.detailText}>{data.intensity}</Text>
+                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Intensity: </Text>
+                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.intensity}</Text>
               </View>
             </View>
           )}
@@ -962,6 +977,7 @@ const ZoomableImage = ({ imageUrl, onClose, onLoadStart, onLoadEnd }: {
   );
 };
 const SessionInviteMessage = ({ content, isOwn, status, onJoin, onCancel }: { content: any, isOwn: boolean, status?: string, onJoin: () => void, onCancel: () => void }) => {
+  const theme = useTheme();
   const data = typeof content === 'string' ? JSON.parse(content) : content;
   const isCancelled = status === 'cancelled';
   const isPostponed = isCancelled && !!data.cancellationReason;
@@ -969,45 +985,46 @@ const SessionInviteMessage = ({ content, isOwn, status, onJoin, onCancel }: { co
   return (
     <View style={[
       styles.inviteContainer, 
+      { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
       { alignSelf: isOwn ? 'flex-end' : 'flex-start' },
-      isPostponed ? styles.invitePostponed : (isCancelled ? styles.inviteCancelled : null)
+      isPostponed ? { borderColor: theme.colors.warning, backgroundColor: theme.colors.warning + '10' } : (isCancelled ? { borderColor: theme.colors.warning, backgroundColor: theme.colors.warning + '08' } : null)
     ]}>
-      <View style={styles.inviteHeader}>
+      <View style={[styles.inviteHeader, { borderBottomColor: theme.colors.border }]}>
         <Image 
           source={{ uri: 'https://jitsi.org/wp-content/uploads/2020/03/favicon.png' }} 
           style={styles.meetLogo}
           resizeMode="contain"
         />
-        <Text style={styles.inviteTitle}>Coaching Session</Text>
+        <Text style={[styles.inviteTitle, { color: theme.colors.text }]}>Coaching Session</Text>
         {isCancelled && (
-          <View style={isPostponed ? styles.postponedTag : styles.cancelledTag}>
+          <View style={isPostponed ? [styles.postponedTag, { backgroundColor: theme.colors.warning }] : [styles.cancelledTag, { backgroundColor: theme.colors.warning }]}>
             <Text style={styles.cancelledTagText}>{isPostponed ? 'Postponed' : 'Cancelled'}</Text>
           </View>
         )}
       </View>
       
       <View style={styles.inviteBody}>
-        <Text style={styles.inviteDescription}>
+        <Text style={[styles.inviteDescription, { color: theme.colors.text }]}>
           {data.description || 'Instant Meeting'}
         </Text>
-        <Text style={styles.inviteTime}>
+        <Text style={[styles.inviteTime, { color: theme.colors.textSecondary }]}>
           {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
         {isCancelled && data.cancellationReason && (
           <View style={styles.cancellationReasonContainer}>
-            <Text style={styles.cancellationReasonLabel}>Reason:</Text>
-            <Text style={styles.cancellationReasonText}>{data.cancellationReason}</Text>
+            <Text style={[styles.cancellationReasonLabel, { color: theme.colors.textSecondary }]}>Reason:</Text>
+            <Text style={[styles.cancellationReasonText, { color: theme.colors.textSecondary }]}>{data.cancellationReason}</Text>
           </View>
         )}
       </View>
 
       {!isCancelled && (
-        <View style={styles.inviteActions}>
-          <TouchableOpacity style={styles.inviteCancelButton} onPress={onCancel}>
-            <Text style={styles.inviteCancelText}>Cancel</Text>
+        <View style={[styles.inviteActions, { borderTopColor: theme.colors.border }]}>
+          <TouchableOpacity style={[styles.inviteCancelButton, { borderRightColor: theme.colors.border }]} onPress={onCancel}>
+            <Text style={[styles.inviteCancelText, { color: theme.colors.warning }]}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.inviteJoinButton} onPress={onJoin}>
-            <Text style={styles.inviteJoinText}>Join Now</Text>
+          <TouchableOpacity style={[styles.inviteJoinButton, { backgroundColor: theme.colors.primary + '15' }]} onPress={onJoin}>
+            <Text style={[styles.inviteJoinText, { color: theme.colors.primary }]}>Join Now</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1145,15 +1162,212 @@ const SessionInviteMessageWrapper = ({
 
 
 
+const MessageItem = React.memo(({ 
+  item, index, isMe, showUnreadSeparator, unreadCountAtOpen, replyToMsg, theme, clientProfile, setReplyingTo, activeUploads, cancelUpload, onPressReply, loadNextSession, isHighlighted 
+}: { 
+  item: Message; index: number; isMe: boolean; showUnreadSeparator: boolean; unreadCountAtOpen: number; replyToMsg: any; theme: any; clientProfile: any; setReplyingTo: (msg: any) => void; activeUploads: any; cancelUpload: (id: string) => void; onPressReply?: (id: string) => void; loadNextSession: () => void; isHighlighted?: boolean;
+}) => {
+  const swipeableRef = useRef<any>(null);
+  const highlightAnim = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (isHighlighted) {
+      Animated.sequence([
+        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 600, useNativeDriver: false }),
+      ]).start();
+    } else {
+      highlightAnim.setValue(0);
+    }
+  }, [isHighlighted]);
+
+  const highlightOverlayColor = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', isMe ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)']
+  });
+
+  const renderContent = () => {
+    let parsed: any = null;
+    let isMediaMessage = false;
+
+    try {
+      if (typeof item.content === 'object' && item.content !== null) {
+        parsed = item.content;
+      } else if (typeof item.content === 'string' && (item.content.trim().startsWith('{') || item.content.trim().startsWith('['))) {
+        parsed = JSON.parse(item.content);
+        if (typeof parsed === 'string') {
+          parsed = JSON.parse(parsed);
+        }
+      }
+    } catch (e) {}
+
+    if (parsed && parsed.type) {
+      if (['image', 'video', 'document', 'gif'].includes(parsed.type)) {
+        isMediaMessage = true;
+      } else if (parsed.type === 'task_completion') {
+        return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
+      } else if (parsed.type === 'challenge_completed') {
+        return <ChallengeCompletionMessage content={item.content} isOwn={isMe} />;
+      } else if (parsed.type === 'session_invite') {
+        return (
+          <SessionInviteMessageWrapper 
+            item={item}
+            parsed={parsed}
+            isOwn={isMe}
+            loadNextSession={loadNextSession}
+          />
+        );
+      } else if (parsed.type === 'reschedule_proposal') {
+        return (
+          <RescheduleProposalMessage 
+            messageId={item.id}
+            metadata={parsed}
+            isOwn={isMe}
+          />
+        );
+      } else if (parsed.type === 'meal_log') {
+        return <MealMessageCard content={item.content} isOwn={isMe} />;
+      }
+    }
+
+    if (isMediaMessage) {
+      const parsedMedia = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+      const uploadProgress = activeUploads[item.id]?.progress ?? parsedMedia.progress ?? 0;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          onCancel={() => cancelUpload(item.id)}
+          progress={parsedMedia.progress ?? 0}
+          isUploading={parsedMedia.status === 'pending'}
+          replyTo={replyToMsg}
+          onPressReply={onPressReply}
+          isHighlighted={isHighlighted}
+        />
+      );
+    }
+
+    return (
+      <View style={[styles.messageBubble, isMe 
+        ? [styles.sentBubble, { backgroundColor: theme.colors.primary }] 
+        : [styles.receivedBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+      ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, borderRadius: 20, zIndex: 10 }]} pointerEvents="none" />
+        {replyToMsg && (
+          <ChatReplyContext 
+            message={replyToMsg} 
+            onPress={() => replyToMsg.id && onPressReply?.(replyToMsg.id)} 
+            isMe={isMe}
+          />
+        )}
+        <Text style={[styles.messageText, isMe ? { color: '#FFFFFF' } : { color: theme.colors.text }]}>
+          {item.content}
+        </Text>
+        <View style={styles.messageFooter}>
+          <Text style={[styles.timestamp, isMe ? { color: theme.colors.textOnPrimary, opacity: 0.7 } : { color: theme.colors.textSecondary }]}>
+            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          {isMe && (
+            item.read ? 
+              <CheckCheck size={14} color="#FFFFFF" style={{ opacity: 0.8 }} /> : 
+              <Check size={14} color="#FFFFFF" style={{ opacity: 0.8 }} />
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderLeftActions = (progress: any, dragX: any) => {
+    const trans = dragX.interpolate({
+      inputRange: [0, 50, 100],
+      outputRange: [-20, 0, 10],
+    });
+    return (
+      <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
+        <Animated.View style={{ transform: [{ translateX: trans }] }}>
+          <Reply size={24} color={theme.colors.primary} />
+        </Animated.View>
+      </View>
+    );
+  };
+
+  const handleSwipeOpen = (direction: 'left' | 'right') => {
+    if (direction === 'left') {
+      setReplyingTo({
+        ...item,
+        isOwn: isMe,
+        sender_name: isMe ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
+      });
+      // Snap back immediately upon trigger
+      swipeableRef.current?.close();
+    }
+  };
+
+  const handleLongPress = () => {
+    Alert.alert(
+      'Message Options',
+      '',
+      [
+        { 
+          text: 'Reply', 
+          onPress: () => {
+            setReplyingTo({
+              ...item,
+              isOwn: isMe,
+              sender_name: isMe ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
+            });
+          } 
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  return (
+    <View>
+      {showUnreadSeparator && (
+        <View style={styles.unreadSeparator}>
+          <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
+          <View style={[styles.unreadSeparatorBadge, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }]}>
+            <Text style={[styles.unreadSeparatorText, { color: theme.colors.primary }]}>
+              {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
+            </Text>
+          </View>
+          <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
+        </View>
+      )}
+      <Swipeable
+        ref={swipeableRef}
+        renderLeftActions={renderLeftActions}
+        onSwipeableWillOpen={handleSwipeOpen}
+        friction={4}
+        leftThreshold={40}
+        overshootFriction={20}
+      >
+        <TouchableOpacity activeOpacity={0.9} onLongPress={handleLongPress}>
+          {renderContent()}
+        </TouchableOpacity>
+      </Swipeable>
+    </View>
+  );
+});
+
+
 export default function CoachChat() {
   const { id, suggestedMessage } = useLocalSearchParams();
   const router = useRouter();
   const { user: profile } = useAuth();
+  const theme = useTheme();
   const { refreshUnreadCount } = useUnread();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState(suggestedMessage as string || '');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [activeUploads, setActiveUploads] = useState<Record<string, { xhr: XMLHttpRequest, progress: number }>>({});
   const [clientProfile, setClientProfile] = useState<any>(null);
   const [coach, setCoach] = useState<any>(null);
   const [nextSession, setNextSession] = useState<any>(null);
@@ -1169,6 +1383,7 @@ export default function CoachChat() {
   const [unreadCountAtOpen, setUnreadCountAtOpen] = useState<number>(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -1462,7 +1677,7 @@ export default function CoachChat() {
       // 1. Get client's profile info
       const { data: clientData, error: clientError } = await supabase
         .from('clients')
-        .select('user_id, profiles:user_id(full_name)')
+        .select('user_id, profiles:user_id(full_name, avatar_url)')
         .eq('id', id)
         .single();
 
@@ -1565,6 +1780,8 @@ export default function CoachChat() {
     }
   };
 
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
   const scrollToBottom = () => {
     // For inverted lists, offset 0 is the bottom (newest messages)
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -1572,28 +1789,151 @@ export default function CoachChat() {
     markMessagesAsRead();
   };
 
+  const scrollToMessage = useCallback((messageId: string) => {
+    // Find the index of the message in the *reversed* array
+    const reversedMessages = messages.slice().reverse();
+    const index = reversedMessages.findIndex(m => m.id === messageId);
+    if (index !== -1) {
+      setHighlightedMessageId(messageId);
+      flatListRef.current?.scrollToIndex({ 
+        index, 
+        animated: true,
+        viewPosition: 0.5 // Center the message in the view
+      });
+      // Clear highlight after animation
+      setTimeout(() => setHighlightedMessageId(null), 2500);
+    }
+  }, [messages]);
+
   const markAsRead = async (messageId: string) => {
     await supabase.from('messages').update({ read: true }).eq('id', messageId);
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !profile || !clientProfile) return;
+  const cancelUpload = (tempId: string) => {
+    const upload = activeUploads[tempId];
+    if (upload) {
+      upload.xhr.abort();
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+      setMessages(current => current.filter(m => m.id !== tempId));
+    }
+  };
 
-    const messageText = newMessage.trim();
-    
+  const sendMediaMessage = async (jsonContent: string, replyId?: string) => {
+    const parsed = JSON.parse(jsonContent);
+    if (!profile || !clientProfile || !parsed.isOptimistic) return;
+
+    const tempId = `temp-media-${Date.now()}`;
+    const localUri = parsed.url;
+    const mediaType = parsed.type;
+
+    // 1. Add optimistic message to list
+    const optimisticMessage: Message = {
+      id: tempId,
+      sender_id: profile.id,
+      recipient_id: clientProfile.user_id,
+      content: JSON.stringify({
+        ...parsed,
+        status: 'pending',
+        progress: 0,
+      }),
+      created_at: new Date().toISOString(),
+      read: false,
+      reply_to_id: replyId,
+    } as any;
+
+    setMessages(prev => [...prev, optimisticMessage]);
+
+    // 2. Start background upload
+    try {
+      const folder = mediaType === 'video' ? 'videos' : mediaType === 'document' ? 'documents' : 'images';
+      
+      const publicUrl = await uploadChatMedia(
+        localUri,
+        folder,
+        (pct) => {
+          setActiveUploads(prev => ({
+            ...prev,
+            [tempId]: { ...prev[tempId], progress: pct }
+          }));
+        },
+        (xhr) => {
+          setActiveUploads(prev => ({
+            ...prev,
+            [tempId]: { xhr, progress: 0 }
+          }));
+        }
+      );
+
+      // 3. Upload successful -> Send to Supabase DB
+      const realMediaContent = {
+        type: mediaType,
+        url: publicUrl,
+        fileName: parsed.fileName,
+        mimeType: parsed.mimeType
+      };
+
+      const { data: serverMessage, error: insertError } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: profile.id,
+          recipient_id: clientProfile.user_id,
+          content: JSON.stringify(realMediaContent),
+          read: false,
+          ai_generated: false,
+          reply_to_id: replyId,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // 4. Cleanup
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+
+      setMessages(current => 
+        current.map(m => m.id === tempId ? serverMessage : m)
+      );
+
+    } catch (error: any) {
+      if (error.message === 'abort' || (error instanceof Error && error.message.includes('abort'))) {
+        console.log('Upload cancelled');
+        return;
+      }
+      console.error('Error in coach sendMediaMessage flow:', error);
+      setMessages(current => current.filter(m => m.id !== tempId));
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+      Alert.alert('Upload Failed', 'There was an error uploading your file.');
+    }
+  };
+
+  const sendMessage = async (text: string, replyId?: string) => {
+    if (!profile || !clientProfile) return;
+
     // Optimistic update - add to UI immediately
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = {
       id: tempId,
       sender_id: profile.id,
       recipient_id: clientProfile.user_id,
-      content: messageText,
+      content: text,
       created_at: new Date().toISOString(),
       read: false,
-    };
+      reply_to_id: replyId,
+    } as any;
     
-    setMessages([...messages, optimisticMessage]);
-    setNewMessage('');
+    setMessages(prev => [...prev, optimisticMessage]);
 
     // Send to backend in background
     try {
@@ -1602,9 +1942,10 @@ export default function CoachChat() {
       const message = {
         sender_id: profile.id,
         recipient_id: clientProfile.user_id,
-        content: messageText,
+        content: text,
         read: false,
         ai_generated: false,
+        reply_to_id: replyId,
       };
 
       const { data, error } = await supabase
@@ -1623,130 +1964,97 @@ export default function CoachChat() {
       console.error('Error sending message:', error);
       // Remove optimistic message on error and restore text
       setMessages((current) => current.filter(m => m.id !== tempId));
-      setNewMessage(messageText);
+      Alert.alert('Error', 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
   };
 
-  const renderMessage = ({ item, index }: { item: Message, index: number }) => {
-    const isOwn = item.sender_id === profile?.id;
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
+    const isMe = item.sender_id === profile?.id;
     const showUnreadSeparator = index === firstUnreadIndex;
-    
-    const renderContent = () => {
-      let parsed: any = null;
+
+    // Resolve replied-to message
+    let replyToMsg: any = null;
+    const replyToId = (item as any).reply_to_id || (() => {
       try {
-        if (typeof item.content === 'object' && item.content !== null) {
-          parsed = item.content;
-        } else if (typeof item.content === 'string' && (item.content.trim().startsWith('{') || item.content.trim().startsWith('['))) {
-          parsed = JSON.parse(item.content);
-          if (typeof parsed === 'string') {
-            parsed = JSON.parse(parsed);
-          }
-        }
-      } catch (e) {
-        // Not JSON
-      }
+        const parsed = JSON.parse(item.content);
+        return parsed.reply_to_id;
+      } catch (e) { return null; }
+    })();
 
-      if (parsed && parsed.type) {
-        if (parsed.type === 'task_completion') {
-          return <TaskCompletionMessage content={item.content} isOwn={isOwn} />;
-        }
-        if (parsed.type === 'challenge_completed') {
-          return <ChallengeCompletionMessage content={item.content} isOwn={isOwn} />;
-        }
-        if (parsed.type === 'session_invite') {
-          return (
-            <SessionInviteMessageWrapper 
-              item={item}
-              parsed={parsed}
-              isOwn={isOwn}
-              loadNextSession={loadNextSession}
-            />
-          );
-        }
-        if (parsed.type === 'reschedule_proposal') {
-          return (
-            <RescheduleProposalMessage 
-              messageId={item.id}
-              metadata={parsed}
-              isOwn={isOwn}
-            />
-          );
-        }
-        if (parsed.type === 'meal_log') {
-          return <MealMessageCard content={item.content} isOwn={isOwn} />;
-        }
+    if (replyToId) {
+      // Fast lookup instead of .find if messages is large
+      const original = messages.find(m => m.id === replyToId);
+      if (original) {
+        const isOriginalMe = original.sender_id === profile?.id;
+        replyToMsg = {
+          ...original,
+          isOwn: isOriginalMe,
+          sender_name: isOriginalMe ? 'You' : (clientProfile?.profiles?.full_name || 'Client')
+        };
       }
-
-      return (
-        <View style={[styles.messageContainer, isOwn ? styles.myMessage : styles.theirMessage]}>
-          <Text style={[styles.messageText, isOwn ? styles.myMessageText : styles.theirMessageText]}>
-            {item.content}
-          </Text>
-          <View style={styles.messageFooter}>
-            <Text style={[styles.timestamp, isOwn ? styles.sentTimestamp : styles.receivedTimestamp]}>
-              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isOwn && (
-              item.read ? 
-                <CheckCheck size={14} color="rgba(255, 255, 255, 0.7)" /> : 
-                <Check size={14} color="rgba(255, 255, 255, 0.7)" />
-            )}
-          </View>
-        </View>
-      );
-    };
+    }
 
     return (
-      <View>
-        {showUnreadSeparator && (
-          <View style={styles.unreadSeparator}>
-            <View style={styles.unreadSeparatorLine} />
-            <View style={styles.unreadSeparatorBadge}>
-              <Text style={styles.unreadSeparatorText}>
-                {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
-              </Text>
-            </View>
-            <View style={styles.unreadSeparatorLine} />
-          </View>
-        )}
-        {renderContent()}
-      </View>
+      <MessageItem 
+        item={item}
+        index={index}
+        isMe={isMe}
+        showUnreadSeparator={showUnreadSeparator}
+        unreadCountAtOpen={unreadCountAtOpen}
+        replyToMsg={replyToMsg}
+        theme={theme}
+        clientProfile={clientProfile}
+        setReplyingTo={setReplyingTo}
+        activeUploads={activeUploads}
+        cancelUpload={cancelUpload}
+        onPressReply={scrollToMessage}
+        loadNextSession={loadNextSession}
+        isHighlighted={item.id === highlightedMessageId}
+      />
     );
-  };
+  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, clientProfile, profile?.id, setReplyingTo, activeUploads, cancelUpload, scrollToMessage, loadNextSession, highlightedMessageId]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>
-          {clientProfile?.profiles?.full_name || 'Chat'}
-        </Text>
+        <View style={styles.headerInfo}>
+          <BrandedAvatar 
+            name={clientProfile?.profiles?.full_name || 'Client'}
+            size={36}
+            imageUrl={clientProfile?.profiles?.avatar_url}
+            useBrandColor={true}
+          />
+          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
+            {clientProfile?.profiles?.full_name || 'Chat'}
+          </Text>
+        </View>
         <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.scheduleButton}>
-          <MoreVertical size={24} color="#3B82F6" />
+          <MoreVertical size={24} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
       {nextSession && (
-        <View style={styles.sessionBanner}>
+        <View style={[styles.sessionBanner, { backgroundColor: theme.colors.primary }]}>
           <View style={styles.sessionInfo}>
             <Video size={20} color="#FFFFFF" />
             <View>
-              <Text style={styles.sessionTitle}>Next Session</Text>
-              <Text style={styles.sessionTime}>
+              <Text style={[styles.sessionTitle, { fontFamily: theme.typography.fontFamily }]}>Next Session</Text>
+              <Text style={[styles.sessionTime, { fontFamily: theme.typography.fontFamily }]}>
                 {new Date(nextSession.scheduled_at).toLocaleDateString()} at {new Date(nextSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </View>
           </View>
           <View style={styles.bannerActions}>
             <TouchableOpacity style={styles.actionButton} onPress={cancelSession}>
-              <Text style={styles.actionButtonText}>Cancel</Text>
+              <Text style={[styles.actionButtonText, { fontFamily: theme.typography.fontFamily }]}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.joinButton} onPress={joinSession}>
-              <Text style={styles.joinButtonText}>Join Now</Text>
+            <TouchableOpacity style={[styles.joinButton, { backgroundColor: theme.colors.background }]} onPress={joinSession}>
+              <Text style={[styles.joinButtonText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Join Now</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1754,7 +2062,7 @@ export default function CoachChat() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -1762,6 +2070,7 @@ export default function CoachChat() {
           data={messages.slice().reverse()}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
+          extraData={activeUploads}
           contentContainerStyle={styles.messageList}
           inverted
           onScroll={handleScroll}
@@ -1777,13 +2086,13 @@ export default function CoachChat() {
 
       {showScrollButton && (
         <TouchableOpacity 
-          style={styles.scrollButton} 
+          style={[styles.scrollButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} 
           onPress={scrollToBottom}
           activeOpacity={0.8}
         >
-          <ArrowDown size={20} color="#3B82F6" />
+          <ArrowDown size={20} color={theme.colors.primary} />
           {firstUnreadIndex !== -1 && (
-            <View style={styles.scrollButtonBadge}>
+            <View style={[styles.scrollButtonBadge, { backgroundColor: theme.colors.error }]}>
               <Text style={styles.scrollButtonBadgeText}>
                 {messages.length - firstUnreadIndex}
               </Text>
@@ -1793,28 +2102,16 @@ export default function CoachChat() {
       )}
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        style={styles.inputContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <TextInput
-          style={styles.input}
-          placeholder="Type a message..."
-          value={newMessage}
-          onChangeText={setNewMessage}
-          multiline
-        />
-        <TouchableOpacity 
-          style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]} 
-          onPress={sendMessage}
-          disabled={!newMessage.trim() || sending}
-        >
-          {sending ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Send size={20} color="#FFFFFF" />
-          )}
-        </TouchableOpacity>
+              <ChatInputBar 
+              onSendText={sendMessage} 
+              onSendMedia={sendMediaMessage}
+              sending={sending}
+              replyingTo={replyingTo}
+              onCancelReply={() => setReplyingTo(null)}
+            />
       </KeyboardAvoidingView>
 
       {/* Scheduler Modal */}
@@ -1843,38 +2140,38 @@ export default function CoachChat() {
           style={styles.menuOverlay} 
           onPress={() => setMenuVisible(false)}
         >
-          <View style={styles.menuContent} onStartShouldSetResponder={() => true}>
+          <View style={[styles.menuContent, { backgroundColor: theme.colors.surface }]} onStartShouldSetResponder={() => true}>
             <View style={styles.menuHeader}>
-              <Text style={styles.menuTitle}>Options</Text>
+              <Text style={[styles.menuTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Options</Text>
               <TouchableOpacity onPress={() => setMenuVisible(false)}>
-                <X size={24} color="#6B7280" />
+                <X size={24} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity 
-              style={styles.menuItem}
+              style={[styles.menuItem, { borderBottomColor: theme.colors.border }]}
               onPress={() => {
                 setMenuVisible(false);
                 setSchedulerVisible(true);
               }}
             >
-              <View style={styles.menuItemIcon}>
-                <Calendar size={20} color="#3B82F6" />
+              <View style={[styles.menuItemIcon, { backgroundColor: theme.colors.surfaceAlt }]}>
+                <Calendar size={20} color={theme.colors.primary} />
               </View>
-              <Text style={styles.menuItemText}>AI Scheduler</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>AI Scheduler</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={styles.menuItem}
+              style={[styles.menuItem, { borderBottomColor: theme.colors.border }]}
               onPress={() => {
                 setMenuVisible(false);
                 router.push(`/(coach)/clients/${id}`);
               }}
             >
-              <View style={styles.menuItemIcon}>
-                <Activity size={20} color="#10B981" />
+              <View style={[styles.menuItemIcon, { backgroundColor: theme.colors.surfaceAlt }]}>
+                <Activity size={20} color={theme.colors.secondary} />
               </View>
-              <Text style={styles.menuItemText}>Activity</Text>
+              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Activity</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

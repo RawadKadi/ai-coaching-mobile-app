@@ -12,12 +12,14 @@ import {
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { AICoachBrain } from '@/types/database';
 
 export default function AIBrainScreen() {
   const router = useRouter();
   const { coach } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [brainConfig, setBrainConfig] = useState<AICoachBrain | null>(null);
@@ -103,79 +105,79 @@ export default function AIBrainScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#111827" />
+          <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>AI Brain Configuration</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>AI Brain Configuration</Text>
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
           Customize how AI communicates with your clients
         </Text>
       </View>
 
       <View style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.label}>Tone</Text>
-          <Text style={styles.description}>
+        <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Tone</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
             How should the AI communicate? (e.g., professional, friendly,
             motivating)
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             value={tone}
             onChangeText={setTone}
             placeholder="professional and motivating"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.colors.textTertiary}
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Style</Text>
-          <Text style={styles.description}>
+          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Style</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
             What approach should the AI take? (e.g., supportive, educational,
             direct)
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             value={style}
             onChangeText={setStyle}
             placeholder="supportive and educational"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.colors.textTertiary}
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Philosophy</Text>
-          <Text style={styles.description}>
+          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Philosophy</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
             What are your core coaching principles?
           </Text>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[styles.input, styles.textArea, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             value={philosophy}
             onChangeText={setPhilosophy}
             placeholder="Describe your coaching philosophy..."
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.colors.textTertiary}
             multiline
             numberOfLines={4}
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Specialty Focus</Text>
-          <Text style={styles.description}>
+          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Specialty Focus</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
             What area do you specialize in? (e.g., weight loss, muscle
             building, mindset)
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
             value={specialtyFocus}
             onChangeText={setSpecialtyFocus}
             placeholder="weight loss and nutrition"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.colors.textTertiary}
           />
         </View>
 

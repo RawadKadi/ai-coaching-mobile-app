@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, PanResponder } from 'react-native';
 import { MessageCircle } from 'lucide-react-native';
+import { useBrandColors } from '@/contexts/BrandContext';
 
 interface NotificationToastProps {
   senderName: string;
@@ -17,6 +18,8 @@ export default function NotificationToast({
   onDismiss,
   duration = 5000,
 }: NotificationToastProps) {
+  const colors = useBrandColors();
+
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -98,6 +101,10 @@ export default function NotificationToast({
     })
   ).current;
 
+  // Derive a soft tinted background for the icon container from the brand primary color
+  // We take the primary color and add ~15% opacity as a tint
+  const iconBgColor = colors.primary + '26'; // 26 hex ≈ 15% opacity
+
   return (
     <Animated.View
       {...panResponder.panHandlers}
@@ -112,19 +119,26 @@ export default function NotificationToast({
       ]}
     >
       <TouchableOpacity
-        style={styles.toast}
+        style={[
+          styles.toast,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            shadowColor: colors.primary,
+          },
+        ]}
         onPress={handlePress}
         activeOpacity={0.9}
       >
-        <View style={styles.iconContainer}>
-          <MessageCircle size={24} color="#3B82F6" />
+        <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
+          <MessageCircle size={24} color={colors.primary} />
         </View>
         <View style={styles.content}>
-          <Text style={styles.senderName}>{senderName}</Text>
-          <Text style={styles.message} numberOfLines={2}>
+          <Text style={[styles.senderName, { color: colors.text }]}>{senderName}</Text>
+          <Text style={[styles.message, { color: colors.textSecondary }]} numberOfLines={2}>
             {message}
           </Text>
-          <Text style={styles.action}>Tap to view • Swipe up to dismiss</Text>
+          <Text style={[styles.action, { color: colors.primary }]}>Tap to view • Swipe up to dismiss</Text>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -140,24 +154,20 @@ const styles = StyleSheet.create({
     zIndex: 9999,
   },
   toast: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   iconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -168,18 +178,15 @@ const styles = StyleSheet.create({
   senderName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 4,
   },
   message: {
     fontSize: 14,
-    color: '#6B7280',
     marginBottom: 4,
     lineHeight: 20,
   },
   action: {
     fontSize: 12,
-    color: '#3B82F6',
     fontWeight: '600',
   },
 });

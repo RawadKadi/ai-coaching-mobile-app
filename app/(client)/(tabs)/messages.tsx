@@ -8,7 +8,18 @@ import { supabase } from '@/lib/supabase';
 import { Send, ChevronDown, ChevronUp, X, Video, ArrowDown, Check, CheckCheck } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
 import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
+import ChatMediaMessage from '@/components/ChatMediaMessage';
+import { ChatInputBar } from '@/components/ChatInputBar';
 import { useFocusEffect } from 'expo-router';
+import { uploadChatMedia } from '@/lib/uploadChatMedia';
+import { Swipeable } from 'react-native-gesture-handler';
+import { Reply } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { BrandedText } from '@/components/BrandedText';
+import { ChevronLeft } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ChatReplyContext } from '@/components/ChatReplyContext';
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -23,7 +34,7 @@ type Message = {
   content: string;
   created_at: string;
   read: boolean;
-  client_id: string;
+  reply_to_id?: string;
 };
 
 const ZoomableImage = ({ imageUrl, onClose, onLoadStart, onLoadEnd }: {
@@ -129,6 +140,8 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
   const [showImageModal, setShowImageModal] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [modalImageLoading, setModalImageLoading] = useState(true);
+  // @ts-ignore
+  const theme = useTheme();
   
   const data = typeof content === 'string' ? JSON.parse(content) : content;
 
@@ -142,8 +155,8 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
 
   // Colors based on type
   const containerStyle = isUndo 
-    ? { backgroundColor: '#FFFBEB', borderColor: '#F59E0B' } 
-    : { backgroundColor: '#ECFDF5', borderColor: '#10B981' };
+    ? { backgroundColor: theme.colors.surface, borderColor: theme.colors.warning } 
+    : { backgroundColor: theme.colors.surface, borderColor: theme.colors.success };
     
   const headerStyle = isUndo
     ? { backgroundColor: '#FEF3C7', borderBottomColor: '#F59E0B' }
@@ -157,8 +170,11 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
 
   return (
     <View style={[styles.taskMessageContainer, containerStyle, { alignSelf: isOwn ? 'flex-end' : 'flex-start' }]}>
-      <View style={[styles.taskHeader, headerStyle]}>
-        <Text style={[styles.taskTitle, { color: titleColor }]}>
+      <View style={[styles.taskHeader, { 
+        backgroundColor: isUndo ? theme.colors.surfaceAlt : theme.colors.success + '20', 
+        borderBottomColor: isUndo ? theme.colors.warning : theme.colors.success 
+      }]}>
+        <Text style={[styles.taskTitle, { color: isUndo ? theme.colors.warning : theme.colors.success }]}>
           {isUndo ? `${data.clientName} undid this task` : `${data.clientName} finished this task`}
         </Text>
       </View>
@@ -249,6 +265,7 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
 
 const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolean }) => {
   const [expanded, setExpanded] = useState(false);
+  const theme = useTheme();
   
   let data;
   try {
@@ -268,14 +285,14 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
 
   return (
     <View style={{ width: '100%', alignItems: isOwn ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
-      <View style={[challengeStyles.container]}>
-        <View style={challengeStyles.header}>
-          <Text style={challengeStyles.headerText}>{data.title || 'Client finished this task'}</Text>
+      <View style={[challengeStyles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.primary }]}>
+        <View style={[challengeStyles.header, { backgroundColor: theme.colors.primary + '20', borderBottomColor: theme.colors.primary }]}>
+          <Text style={[challengeStyles.headerText, { color: theme.colors.primary }]}>{data.title || 'Client finished this task'}</Text>
         </View>
         
         <View style={challengeStyles.body}>
-          <Text style={challengeStyles.taskName}>{data.taskName}</Text>
-          <Text style={challengeStyles.completedAt}>
+          <Text style={[challengeStyles.taskName, { color: theme.colors.text }]}>{data.taskName}</Text>
+          <Text style={[challengeStyles.completedAt, { color: theme.colors.textSecondary }]}>
             Completed at: {data.completedAt}
           </Text>
           
@@ -283,29 +300,29 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
             style={challengeStyles.viewDetailsButton}
             onPress={toggleExpand}
           >
-            <Text style={challengeStyles.viewDetailsText}>View Details</Text>
+            <Text style={[challengeStyles.viewDetailsText, { color: theme.colors.primary }]}>View Details</Text>
             {expanded ? (
-              <ChevronUp size={16} color="#059669" />
+              <ChevronUp size={16} color={theme.colors.primary} />
             ) : (
-              <ChevronDown size={16} color="#059669" />
+              <ChevronDown size={16} color={theme.colors.primary} />
             )}
           </TouchableOpacity>
 
           {expanded && (
-            <View style={challengeStyles.expandedDetails}>
+            <View style={[challengeStyles.expandedDetails, { borderTopColor: theme.colors.border }]}>
               {data.taskDescription && (
                 <>
-                  <Text style={challengeStyles.detailLabel}>Description:</Text>
-                  <Text style={challengeStyles.detailText}>{data.taskDescription}</Text>
+                  <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Description:</Text>
+                  <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.taskDescription}</Text>
                 </>
               )}
               <View style={challengeStyles.detailRow}>
-                <Text style={challengeStyles.detailLabel}>Focus: </Text>
-                <Text style={challengeStyles.detailText}>{data.focusType}</Text>
+                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Focus: </Text>
+                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.focusType}</Text>
               </View>
               <View style={challengeStyles.detailRow}>
-                <Text style={challengeStyles.detailLabel}>Intensity: </Text>
-                <Text style={challengeStyles.detailText}>{data.intensity}</Text>
+                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Intensity: </Text>
+                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.intensity}</Text>
               </View>
             </View>
           )}
@@ -391,6 +408,7 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
   onJoin: () => void, 
   onPostpone: () => void 
 }) => {
+  const theme = useTheme();
   const data = typeof content === 'string' ? JSON.parse(content) : content;
   const isCancelled = status === 'cancelled';
   const isPostponed = isCancelled && !!data.cancellationReason;
@@ -398,8 +416,12 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
   return (
     <View style={[
       styles.inviteContainer, 
-      { alignSelf: isOwn ? 'flex-end' : 'flex-start' },
-      isPostponed ? styles.invitePostponed : (isCancelled ? styles.inviteCancelled : null)
+      { 
+        alignSelf: isOwn ? 'flex-end' : 'flex-start',
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.border
+      },
+      isPostponed ? { borderColor: theme.colors.warning, backgroundColor: theme.colors.warning + '10', borderWidth: 1 } : (isCancelled ? { borderColor: theme.colors.warning, backgroundColor: theme.colors.warning + '08', borderWidth: 1, opacity: 0.8 } : null)
     ]}>
       <View style={styles.inviteHeader}>
         <Image 
@@ -408,38 +430,44 @@ const SessionInviteMessage = ({ content, isOwn, status, isClient, onJoin, onPost
           contentFit="contain"
           transition={200}
         />
-        <Text style={styles.inviteTitle}>Coaching Session</Text>
+        <Text style={[styles.inviteTitle, { color: theme.colors.text }]}>Coaching Session</Text>
         {isCancelled && (
-          <View style={isPostponed ? styles.postponedTag : styles.cancelledTag}>
+          <View style={[styles.postponedTag, { backgroundColor: theme.colors.warning }]}>
             <Text style={styles.cancelledTagText}>{isPostponed ? 'Postponed' : 'Cancelled'}</Text>
           </View>
         )}
       </View>
       
       <View style={styles.inviteBody}>
-        <Text style={styles.inviteDescription}>
+        <Text style={[styles.inviteDescription, { color: theme.colors.text }]}>
           {data.description || 'Instant Meeting'}
         </Text>
-        <Text style={styles.inviteTime}>
+        <Text style={[styles.inviteTime, { color: theme.colors.textSecondary }]}>
           {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
         {isCancelled && data.cancellationReason && (
-          <View style={styles.cancellationReasonContainer}>
-            <Text style={styles.cancellationReasonLabel}>Reason:</Text>
-            <Text style={styles.cancellationReasonText}>{data.cancellationReason}</Text>
+          <View style={[styles.cancellationReasonContainer, { borderTopColor: theme.colors.border }]}>
+            <Text style={[styles.cancellationReasonLabel, { color: theme.colors.warning }]}>Reason:</Text>
+            <Text style={[styles.cancellationReasonText, { color: theme.colors.textSecondary }]}>{data.cancellationReason}</Text>
           </View>
         )}
       </View>
 
       {!isCancelled && (
-        <View style={styles.inviteActions}>
+        <View style={[styles.inviteActions, { borderTopColor: theme.colors.border }]}>
           {isClient && (
-            <TouchableOpacity style={styles.invitePostponeButton} onPress={onPostpone}>
-              <Text style={styles.invitePostponeText}>Postpone</Text>
+            <TouchableOpacity 
+              style={[styles.invitePostponeButton, { borderRightColor: theme.colors.border }]} 
+              onPress={onPostpone}
+            >
+              <Text style={[styles.invitePostponeText, { color: theme.colors.warning }]}>Postpone</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.inviteJoinButton} onPress={onJoin}>
-            <Text style={styles.inviteJoinText}>Join Now</Text>
+          <TouchableOpacity 
+            style={[styles.inviteJoinButton, { backgroundColor: theme.colors.primary + '10' }]} 
+            onPress={onJoin}
+          >
+            <Text style={[styles.inviteJoinText, { color: theme.colors.primary }]}>Join Now</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -536,8 +564,211 @@ const SessionInviteMessageWrapper = ({
   );
 };
 
+const MessageItem = React.memo(({ 
+  item, index, isMe, showUnreadSeparator, unreadCountAtOpen, replyToMsg, theme, coachProfile, setReplyingTo, activeUploads, cancelUpload, handlePostpone, onPressReply, isHighlighted 
+}: { 
+  item: Message; index: number; isMe: boolean; showUnreadSeparator: boolean; unreadCountAtOpen: number; replyToMsg: any; theme: any; coachProfile: any; setReplyingTo: (msg: any) => void; activeUploads: any; cancelUpload: (id: string) => void; handlePostpone: any; onPressReply?: (id: string) => void; isHighlighted?: boolean;
+}) => {
+  const swipeableRef = useRef<any>(null);
+  const highlightAnim = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (isHighlighted) {
+      Animated.sequence([
+        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 600, useNativeDriver: false }),
+      ]).start();
+    } else {
+      highlightAnim.setValue(0);
+    }
+  }, [isHighlighted]);
+
+  const highlightOverlayColor = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', isMe ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)']
+  });
+
+  const renderContent = () => {
+    let isTaskMessage = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'task_completion') isTaskMessage = true;
+    } catch (e) {}
+    if (isTaskMessage) return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
+
+    let isChallengeMessage = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'challenge_completed') isChallengeMessage = true;
+    } catch (e) {}
+    if (isChallengeMessage) return <ChallengeCompletionMessage content={item.content} isOwn={isMe} />;
+
+    let isSessionInvite = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'session_invite') isSessionInvite = true;
+    } catch (e) {}
+    if (isSessionInvite) {
+      const parsed = JSON.parse(item.content);
+      return (
+        <SessionInviteMessageWrapper 
+          item={item}
+          parsed={parsed}
+          isOwn={isMe}
+          handlePostpone={handlePostpone}
+        />
+      );
+    }
+
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'reschedule_proposal') {
+        return <RescheduleProposalMessage messageId={item.id} metadata={parsed} isOwn={isMe} />;
+      }
+    } catch (e) {}
+
+    let isMealLog = false;
+    try {
+      const parsed = JSON.parse(item.content);
+      if (parsed && parsed.type === 'meal_log') isMealLog = true;
+    } catch (e) {}
+    if (isMealLog) return <MealMessageCard content={item.content} isOwn={isMe} />;
+
+    let isMediaMessage = false;
+    try {
+      const parsedMedia = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+      if (parsedMedia && ['image', 'video', 'document', 'gif'].includes(parsedMedia.type)) isMediaMessage = true;
+    } catch (e) {}
+    if (isMediaMessage) {
+      const parsedMedia = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+      const uploadProgress = activeUploads[item.id]?.progress ?? parsedMedia.progress ?? 0;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          onCancel={() => cancelUpload(item.id)}
+          progress={uploadProgress}
+          isUploading={parsedMedia.status === 'pending'}
+          replyTo={replyToMsg}
+          onPressReply={onPressReply}
+          isHighlighted={isHighlighted}
+        />
+      );
+    }
+
+    return (
+      <View style={[styles.messageBubble, isMe 
+        ? [styles.ownBubble, { backgroundColor: theme.colors.primary }] 
+        : [styles.receivedBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+      ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, borderRadius: 20, zIndex: 10 }]} pointerEvents="none" />
+        {replyToMsg && (
+          <ChatReplyContext 
+            message={replyToMsg} 
+            onPress={() => replyToMsg.id && onPressReply?.(replyToMsg.id)}
+            isMe={isMe}
+          />
+        )}
+        <Text style={[styles.messageText, isMe ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
+          {item.content}
+        </Text>
+        <View style={styles.messageFooter}>
+          <Text style={[styles.timestamp, isMe ? { color: theme.colors.textOnPrimary, opacity: 0.7 } : { color: theme.colors.textSecondary }]}>
+            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          {isMe && (
+            item.read ? 
+              <CheckCheck size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} /> : 
+              <Check size={14} color={theme.colors.textOnPrimary} style={{ opacity: 0.8 }} />
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderLeftActions = (progress: any, dragX: any) => {
+    const trans = dragX.interpolate({
+      inputRange: [0, 50, 100],
+      outputRange: [-20, 0, 10],
+    });
+    return (
+      <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
+        <Animated.View style={{ transform: [{ translateX: trans }] }}>
+          <Reply size={24} color={theme.colors.primary} />
+        </Animated.View>
+      </View>
+    );
+  };
+
+  const handleSwipeOpen = (direction: 'left' | 'right') => {
+    if (direction === 'left') {
+      setReplyingTo({
+        ...item,
+        isOwn: isMe,
+        sender_name: isMe ? 'You' : (coachProfile?.profiles?.full_name || 'Coach')
+      });
+      // Snap back immediately upon trigger
+      swipeableRef.current?.close();
+    }
+  };
+
+  const handleLongPress = () => {
+    Alert.alert(
+      'Message Options',
+      '',
+      [
+        { 
+          text: 'Reply', 
+          onPress: () => {
+            setReplyingTo({
+              ...item,
+              isOwn: isMe,
+              sender_name: isMe ? 'You' : (coachProfile?.profiles?.full_name || 'Coach')
+            });
+          } 
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  return (
+    <View>
+      {showUnreadSeparator && (
+        <View style={styles.unreadSeparator}>
+          <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
+          <View style={[styles.unreadSeparatorBadge, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }]}>
+            <Text style={[styles.unreadSeparatorText, { color: theme.colors.primary }]}>
+              {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
+            </Text>
+          </View>
+          <View style={[styles.unreadSeparatorLine, { backgroundColor: theme.colors.border }]} />
+        </View>
+      )}
+      <Swipeable
+        ref={swipeableRef}
+        renderLeftActions={renderLeftActions}
+        onSwipeableWillOpen={handleSwipeOpen}
+        friction={4}
+        leftThreshold={40}
+        overshootFriction={20}
+      >
+        <TouchableOpacity activeOpacity={0.9} onLongPress={handleLongPress}>
+          {renderContent()}
+        </TouchableOpacity>
+      </Swipeable>
+    </View>
+  );
+});
+
 export default function MessagesScreen() {
+  const router = useRouter();
   const { client, user } = useAuth();
+  const theme = useTheme();
   const { refreshUnreadCount } = useUnread();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -553,14 +784,57 @@ export default function MessagesScreen() {
   const [postponeModalVisible, setPostponeModalVisible] = useState(false);
   const [postponeData, setPostponeData] = useState<{sessionData: any, messageId: string, sessionId: string} | null>(null);
 
+  // Background Uploads State
+  const [activeUploads, setActiveUploads] = useState<Record<string, { xhr: XMLHttpRequest, progress: number }>>({});
+
+  // Reply State
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [coachProfile, setCoachProfile] = useState<any>(null);
+
   useEffect(() => {
     if (user?.id) {
       loadMessages();
-      loadNextSession();
       const cleanup = subscribeToMessages();
       return cleanup;
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    if (client?.id) {
+      loadNextSession();
+      loadCoachProfile();
+    }
+  }, [client?.id]);
+
+  const loadCoachProfile = async () => {
+    if (!client?.id) return;
+    try {
+      // 1. Find the active coach link
+      const { data: coachLink, error: linkError } = await supabase
+        .from('coach_client_links')
+        .select('coach_id')
+        .eq('client_id', client.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (linkError || !coachLink) return;
+
+      // 2. Fetch coach profile with profile data join
+      const { data, error } = await supabase
+        .from('coaches')
+        .select(`
+          *,
+          profiles:user_id (*)
+        `)
+        .eq('id', coachLink.coach_id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setCoachProfile(data);
+    } catch (error) {
+      console.error('Error loading coach profile:', error);
+    }
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -738,15 +1012,159 @@ export default function MessagesScreen() {
     }
   };
 
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
   const scrollToBottom = () => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     markMessagesAsRead();
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !user || !client) return;
+  const scrollToMessage = (messageId: string) => {
+    const index = messages.slice().reverse().findIndex(m => m.id === messageId);
+    if (index !== -1) {
+      setHighlightedMessageId(messageId);
+      flatListRef.current?.scrollToIndex({ 
+        index, 
+        animated: true,
+        viewPosition: 0.5 
+      });
+      // Clear highlight after animation
+      setTimeout(() => setHighlightedMessageId(null), 2500);
+    }
+  };
 
-    const messageText = newMessage.trim();
+  const cancelUpload = (tempId: string) => {
+    const upload = activeUploads[tempId];
+    if (upload) {
+      upload.xhr.abort();
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+      setMessages(current => current.filter(m => m.id !== tempId));
+    }
+  };
+
+  const sendMediaMessage = async (jsonContent: string, replyId?: string) => {
+    const parsed = JSON.parse(jsonContent);
+    if (!user || !client || !parsed.isOptimistic) return;
+
+    const tempId = `temp-media-${Date.now()}`;
+    const localUri = parsed.url;
+    const mediaType = parsed.type;
+
+    // 1. Add optimistic message to list
+    const optimisticMessage: Message = {
+      id: tempId,
+      sender_id: user.id,
+      recipient_id: '', // Will be filled
+      content: JSON.stringify({
+        ...parsed,
+        status: 'pending',
+        progress: 0,
+        reply_to_id: replyId,
+      }),
+      created_at: new Date().toISOString(),
+      read: false,
+    };
+
+    setMessages(current => [...current, optimisticMessage]);
+    setReplyingTo(null);
+
+    // 2. Start background upload
+    try {
+      const folder = mediaType === 'video' ? 'videos' : mediaType === 'document' ? 'documents' : 'images';
+      
+      const publicUrl = await uploadChatMedia(
+        localUri,
+        folder,
+        (pct) => {
+          setActiveUploads(prev => ({
+            ...prev,
+            [tempId]: { ...prev[tempId], progress: pct }
+          }));
+        },
+        (xhr) => {
+          setActiveUploads(prev => ({
+            ...prev,
+            [tempId]: { xhr, progress: 0 }
+          }));
+        }
+      );
+
+      // 3. Upload successful -> Send to Supabase DB
+      const { data: coachLink } = await supabase
+        .from('coach_client_links')
+        .select('coach_id')
+        .eq('client_id', client.id)
+        .eq('status', 'active')
+        .single();
+
+      if (!coachLink) throw new Error('No active coach');
+
+      const { data: coach } = await supabase
+        .from('coaches')
+        .select('user_id')
+        .eq('id', coachLink.coach_id)
+        .single();
+
+      if (!coach) throw new Error('Coach not found');
+
+      const realMediaContent = {
+        type: mediaType,
+        url: publicUrl,
+        fileName: parsed.fileName,
+        mimeType: parsed.mimeType
+      };
+
+      const { data: serverMessage, error: insertError } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: user.id,
+          recipient_id: coach.user_id,
+          content: JSON.stringify(realMediaContent),
+          reply_to_id: replyId,
+          read: false,
+          ai_generated: false,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // 4. Cleanup
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+
+      setMessages(current => 
+        current.map(m => m.id === tempId ? serverMessage : m)
+      );
+
+    } catch (error: any) {
+      if (error.message === 'abort' || (error instanceof Error && error.message.includes('abort'))) {
+        console.log('Upload cancelled');
+        return;
+      }
+      console.error('Error in sendMediaMessage flow:', error);
+      setMessages(current => current.filter(m => m.id !== tempId));
+      setActiveUploads(prev => {
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
+      Alert.alert('Upload Failed', 'There was an error uploading your file.');
+    }
+  };
+
+
+  const sendMessage = async (messageText: string, replyId?: string) => {
+    if (!messageText.trim() || !user || !client) return;
+    const textToSend = messageText.trim();
+
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = {
       id: tempId,
@@ -755,11 +1173,11 @@ export default function MessagesScreen() {
       content: messageText,
       created_at: new Date().toISOString(),
       read: false,
-      client_id: client.id,
+      reply_to_id: replyId,
     };
     
     setMessages([...messages, optimisticMessage]);
-    setNewMessage('');
+    setReplyingTo(null);
 
     try {
       setSending(true);
@@ -784,6 +1202,7 @@ export default function MessagesScreen() {
         sender_id: user.id,
         recipient_id: coach.user_id,
         content: messageText,
+        reply_to_id: replyId,
         read: false,
         ai_generated: false,
       };
@@ -802,7 +1221,7 @@ export default function MessagesScreen() {
     } catch (error) {
       console.error('Error sending message:', error);
       setMessages((current) => current.filter(m => m.id !== tempId));
-      setNewMessage(messageText);
+      Alert.alert('Error', 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -839,109 +1258,85 @@ export default function MessagesScreen() {
     }
   };
 
-  const renderMessage = ({ item, index }: { item: Message, index: number }) => {
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isMe = item.sender_id === user?.id;
     const showUnreadSeparator = index === firstUnreadIndex;
 
-    const renderContent = () => {
-      let isTaskMessage = false;
+    // Resolve replied-to message
+    let replyToMsg: any = null;
+    const replyToId = (item as any).reply_to_id || (() => {
       try {
         const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'task_completion') isTaskMessage = true;
-      } catch (e) {}
-      if (isTaskMessage) return <TaskCompletionMessage content={item.content} isOwn={isMe} />;
+        return parsed.reply_to_id;
+      } catch (e) { return null; }
+    })();
 
-      let isChallengeMessage = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'challenge_completed') isChallengeMessage = true;
-      } catch (e) {}
-      if (isChallengeMessage) return <ChallengeCompletionMessage content={item.content} isOwn={isMe} />;
-
-      let isSessionInvite = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'session_invite') isSessionInvite = true;
-      } catch (e) {}
-      if (isSessionInvite) {
-        const parsed = JSON.parse(item.content);
-        return (
-          <SessionInviteMessageWrapper 
-            item={item}
-            parsed={parsed}
-            isOwn={isMe}
-            handlePostpone={handlePostpone}
-          />
-        );
+    if (replyToId) {
+      const original = messages.find(m => m.id === replyToId);
+      if (original) {
+        const isOriginalMe = original.sender_id === user?.id;
+        replyToMsg = {
+          ...original,
+          isOwn: isOriginalMe,
+          sender_name: isOriginalMe ? 'You' : (coachProfile?.profiles?.full_name || 'Coach')
+        };
       }
-
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'reschedule_proposal') {
-          return <RescheduleProposalMessage messageId={item.id} metadata={parsed} isOwn={isMe} />;
-        }
-      } catch (e) {}
-
-      let isMealLog = false;
-      try {
-        const parsed = JSON.parse(item.content);
-        if (parsed && parsed.type === 'meal_log') isMealLog = true;
-      } catch (e) {}
-      if (isMealLog) return <MealMessageCard content={item.content} isOwn={isMe} />;
-
-      return (
-        <View style={[styles.messageBubble, isMe ? styles.ownBubble : styles.receivedBubble]}>
-          <Text style={[styles.messageText, isMe ? styles.ownText : styles.receivedText]}>
-            {item.content}
-          </Text>
-          <View style={styles.messageFooter}>
-            <Text style={[styles.timestamp, isMe ? styles.sentTimestamp : styles.receivedTimestamp]}>
-              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isMe && (
-              item.read ? 
-                <CheckCheck size={14} color="rgba(255, 255, 255, 0.7)" /> : 
-                <Check size={14} color="rgba(255, 255, 255, 0.7)" />
-            )}
-          </View>
-        </View>
-      );
-    };
+    }
 
     return (
-      <View>
-        {showUnreadSeparator && (
-          <View style={styles.unreadSeparator}>
-            <View style={styles.unreadSeparatorLine} />
-            <View style={styles.unreadSeparatorBadge}>
-              <Text style={styles.unreadSeparatorText}>
-                {unreadCountAtOpen} NEW {unreadCountAtOpen === 1 ? 'MESSAGE' : 'MESSAGES'}
-              </Text>
-            </View>
-            <View style={styles.unreadSeparatorLine} />
-          </View>
-        )}
-        {renderContent()}
-      </View>
+      <MessageItem 
+        item={item}
+        index={index}
+        isMe={isMe}
+        showUnreadSeparator={showUnreadSeparator}
+        unreadCountAtOpen={unreadCountAtOpen}
+        replyToMsg={replyToMsg}
+        theme={theme}
+        coachProfile={coachProfile}
+        setReplyingTo={setReplyingTo}
+        activeUploads={activeUploads}
+        cancelUpload={cancelUpload}
+        handlePostpone={handlePostpone}
+        onPressReply={scrollToMessage}
+        isHighlighted={item.id === highlightedMessageId}
+      />
     );
-  };
+  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, coachProfile, user?.id, setReplyingTo, activeUploads, cancelUpload, handlePostpone, scrollToMessage, highlightedMessageId]);
 
   return (
-    <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Messages</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ChevronLeft size={28} color={theme.colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerInfo}>
+          <BrandedAvatar 
+            name={coachProfile?.profiles?.full_name || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.full_name : 'Coach')} 
+            imageUrl={coachProfile?.profiles?.avatar_url || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.avatar_url : undefined)} 
+            size={40} 
+          />
+          <View>
+            <BrandedText variant="lg" weight="heading">
+              {coachProfile?.profiles?.full_name || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.full_name : 'Coach')}
+            </BrandedText>
+            <BrandedText variant="xs" color="secondary">
+              Coach
+            </BrandedText>
+          </View>
         </View>
+      </View>
 
         <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
             style={styles.keyboardAvoidingView}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
             <FlatList
                 ref={flatListRef}
                 data={messages.slice().reverse()}
                 keyExtractor={(item) => item.id}
                 renderItem={renderMessage}
+                extraData={activeUploads}
                 contentContainerStyle={styles.messageList}
                 inverted
                 onScroll={handleScroll}
@@ -949,27 +1344,28 @@ export default function MessagesScreen() {
             />
             
             {showScrollButton && (
-              <TouchableOpacity style={styles.scrollToBottomButton} onPress={scrollToBottom}>
-                <ArrowDown size={20} color="#3B82F6" />
+              <TouchableOpacity 
+                style={[
+                  styles.scrollToBottomButton, 
+                  { 
+                    backgroundColor: theme.colors.surface, 
+                    borderColor: theme.colors.border,
+                    shadowColor: theme.colors.text 
+                  }
+                ]} 
+                onPress={scrollToBottom}
+              >
+                <ArrowDown size={20} color={theme.colors.primary} />
               </TouchableOpacity>
             )}
             
-            <View style={styles.inputContainer}>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Type a message..."
-                    value={newMessage}
-                    onChangeText={setNewMessage}
-                    multiline
-                />
-                <TouchableOpacity 
-                    style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]} 
-                    onPress={sendMessage}
-                    disabled={!newMessage.trim()}
-                >
-                    <Send size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-            </View>
+            <ChatInputBar 
+              onSendText={sendMessage} 
+              onSendMedia={sendMediaMessage}
+              sending={sending}
+              replyingTo={replyingTo}
+              onCancelReply={() => setReplyingTo(null)}
+            />
         </KeyboardAvoidingView>
 
         {postponeData && (
@@ -999,14 +1395,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    padding: 24,
+    padding: 16,
     paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
+  backButton: {
+    marginRight: 16,
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '700',
     color: '#111827',
   },
@@ -1103,10 +1510,8 @@ const styles = StyleSheet.create({
   taskMessageContainer: {
     width: '100%',
     marginVertical: 4,
-    backgroundColor: '#ECFDF5', // Light green
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#10B981', // Green border
     overflow: 'hidden',
   },
   taskHeader: {
@@ -1255,7 +1660,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   joinButtonText: {
-    color: '#3B82F6',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1395,16 +1799,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   unreadSeparatorBadge: {
-    backgroundColor: '#EFF6FF',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     marginHorizontal: 8,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
   },
   unreadSeparatorText: {
-    color: '#3B82F6',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1415,7 +1816,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -1424,7 +1824,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   scrollToBottomButton: {
     position: 'absolute',

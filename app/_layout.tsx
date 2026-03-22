@@ -3,11 +3,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+import { useAppFonts } from '@/hooks/useAppFonts';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { BrandProvider } from '@/contexts/BrandContext';
 import { UnreadProvider } from '@/contexts/UnreadContext';
 import { NotificationProvider, useNotification } from '@/contexts/NotificationContext';
 import NotificationToast from '@/components/NotificationToast';
 import { loadNotificationSound, unloadNotificationSound } from '@/lib/notification-sound';
+
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 function RootLayoutNav() {
   const { session, loading, profile } = useAuth();
@@ -23,7 +27,11 @@ function RootLayoutNav() {
 
     if (!session && !inAuthGroup) {
       // Redirect to the sign-in page.
-      router.replace('/(auth)/login');
+      try {
+        router.replace('/(auth)/login');
+      } catch (e) {
+        console.log('[Routing] Navigation not ready yet');
+      }
     } else if (session && profile) {
       // Redirect to dashboard if in auth group or root
       if (inAuthGroup || segments.length === 0 || (segments.length === 1 && segments[0] === 'index')) {
@@ -61,6 +69,7 @@ function RootLayoutNav() {
     <>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="join-team" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(client)" />
         <Stack.Screen name="(coach)" />
@@ -84,6 +93,7 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   useFrameworkReady();
+  const fontsLoaded = useAppFonts();
 
   // Load notification sound on app start
   useEffect(() => {
@@ -94,13 +104,26 @@ export default function RootLayout() {
     };
   }, []);
 
+  // Wait for fonts to load
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
   return (
-    <AuthProvider>
-      <UnreadProvider>
-        <NotificationProvider>
-          <RootLayoutNav />
-        </NotificationProvider>
-      </UnreadProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <BrandProvider>
+          <UnreadProvider>
+            <NotificationProvider>
+              <RootLayoutNav />
+            </NotificationProvider>
+          </UnreadProvider>
+        </BrandProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
