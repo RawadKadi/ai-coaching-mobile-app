@@ -46,7 +46,7 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import SchedulerModal from '@/components/SchedulerModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MotiView, AnimatePresence } from 'moti';
+import { MotiView } from 'moti';
 import { Swipeable } from 'react-native-gesture-handler';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -64,9 +64,9 @@ type Message = {
 };
 
 export default function CoachChatScreen() {
-  const { id } = useLocalSearchParams(); // This is the CLIENT ID
+  const { id } = useLocalSearchParams(); // This is the CLIENT ID (UUID)
   const router = useRouter();
-  const { user, profile, coach } = useAuth();
+  const { user, profile } = useAuth();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { refreshUnreadCount } = useUnread();
@@ -77,8 +77,6 @@ export default function CoachChatScreen() {
   const [clientUserId, setClientUserId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
-  const [nextSession, setNextSession] = useState<any>(null);
-  const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
   const [schedulerVisible, setSchedulerVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -95,59 +93,40 @@ export default function CoachChatScreen() {
   const loadChatData = async () => {
     try {
       setLoading(true);
-      // Get client's profile and user_id
-      const { data: cData, error: cError } = await supabase
-        .from('clients')
-        .select('user_id, profiles:user_id(full_name, avatar_url, id)')
-        .eq('id', id)
-        .single();
       
+      // 1. Get client details using the RPC which is the source of truth in main/v2
+      const { data: cData, error: cError } = await supabase.rpc('get_client_details', { target_client_id: id });
       if (cError) throw cError;
-      setClientProfile(cData);
-      setClientUserId(cData.user_id);
+      
+      setClientProfile({ profiles: { full_name: cData.full_name, avatar_url: cData.avatar_url, id: cData.id } });
+      setClientUserId(cData.id); // In main logic, id from RPC is the profile/user id
 
-      // Get conversation messages
+      // 2. Get messages (between coach-auth-user-id and client-auth-user-id)
       const { data: mData, error: mError } = await supabase.from('messages')
         .select('*')
-        .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${cData.user_id}),and(sender_id.eq.${cData.user_id},recipient_id.eq.${user?.id})`)
+        .or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${cData.id}),and(sender_id.eq.${cData.id},recipient_id.eq.${profile?.id})`)
         .order('created_at', { ascending: false });
       
       if (mError) throw mError;
       setMessages(mData || []);
       
-      // Real-time sub for this convo
+      // 3. Real-time subscription
       const channel = supabase.channel(`coach-convo-${id}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
           const nm = p.new as Message;
-          if (nm.sender_id === cData.user_id || nm.sender_id === user!.id) {
+          if (nm.sender_id === cData.id || nm.sender_id === profile?.id) {
             setMessages(prev => [nm, ...prev]);
-            if (nm.sender_id !== user!.id) markAsRead(nm.id);
+            if (nm.sender_id !== profile?.id) markAsRead(nm.id);
           }
         })
         .subscribe();
 
-      loadNextSession();
       return () => { supabase.removeChannel(channel); };
     } catch (e) { 
-        console.error('[CoachChat] Error loading data:', e); 
-        Alert.alert('Error', 'Failed to load chat data.');
+        console.error('[CoachChat] Error:', e); 
     } finally { 
         setLoading(false); 
     }
-  };
-
-  const loadNextSession = async () => {
-    if (!coach?.id) return;
-    const { data } = await supabase.from('sessions')
-        .select('*')
-        .eq('client_id', id)
-        .eq('coach_id', coach.id)
-        .eq('status', 'scheduled')
-        .gt('scheduled_at', new Date().toISOString())
-        .order('scheduled_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-    setNextSession(data);
   };
 
   const markAsRead = async (mid: string) => {
@@ -156,18 +135,11 @@ export default function CoachChatScreen() {
   };
 
   const sendMessage = async (text: string, replyId?: string) => {
-    if (!user || !clientUserId || !text.trim()) return;
+    if (!profile || !clientUserId || !text.trim()) return;
     setSending(true);
-    const msg = { 
-        sender_id: user.id, 
-        recipient_id: clientUserId, 
-        content: text, 
-        read: false, 
-        reply_to_id: replyId,
-        ai_generated: false 
-    };
+    const msg = { sender_id: profile.id, recipient_id: clientUserId, content: text, read: false, reply_to_id: replyId, ai_generated: false };
     const { error } = await supabase.from('messages').insert(msg);
-    if (error) Alert.alert('Error', 'Failed to send message');
+    if (error) Alert.alert('Error', 'Failed to send');
     setSending(false);
     setReplyingTo(null);
   };
@@ -181,55 +153,7 @@ export default function CoachChatScreen() {
      }
   }, [messages]);
 
-  const renderSessionCard = (sessionData: any, isMe: boolean) => {
-    const date = new Date(sessionData.timestamp || sessionData.scheduled_at);
-    const status = sessionData.status || 'scheduled';
-    
-    let statusLabel = "UPCOMING";
-    let statusColor = "#9333EA";
-    if (status === 'postponed') { statusLabel = "POSTPONED"; statusColor = "#EAB308"; }
-    if (status === 'cancelled') { statusLabel = "CANCELLED"; statusColor = "#EF4444"; }
-
-    return (
-      <View className="bg-slate-900/80 rounded-[32px] p-6 border border-white/5 shadow-2xl w-full">
-          <View style={{ backgroundColor: statusColor }} className="self-start px-3 py-1 rounded-full mb-4">
-              <Text className="text-white text-[10px] font-black tracking-widest uppercase">{statusLabel}</Text>
-          </View>
-          <View className="flex-row items-center justify-between mb-4">
-              <View className="flex-1">
-                  <Text className="text-white text-xl font-black tracking-tight mb-1">{sessionData.description || 'Live Session'}</Text>
-                  <View className="flex-row items-center gap-2">
-                       <Calendar size={14} color="#64748B" />
-                       <Text className="text-slate-400 font-bold text-sm">
-                           {date.toLocaleDateString([], { weekday: 'long' })} at {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                       </Text>
-                  </View>
-              </View>
-              <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/5">
-                  <Dumbbell size={24} color="#FB923C" />
-              </View>
-          </View>
-          
-          <View className="flex-row items-center gap-4 mt-2">
-              <TouchableOpacity className="flex-1 bg-blue-600 py-4 rounded-2xl items-center shadow-lg shadow-blue-500/30">
-                  <Text className="text-white font-black uppercase text-xs tracking-widest">Join Now</Text>
-              </TouchableOpacity>
-              <TouchableOpacity className="px-4">
-                  <Text className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Cancel</Text>
-              </TouchableOpacity>
-          </View>
-      </View>
-    );
-  };
-
   const renderMessageContent = (item: Message, isMe: boolean) => {
-    try {
-        const parsed = JSON.parse(item.content);
-        if (parsed.type === 'session_invite' || parsed.type === 'session_proposal') {
-            return renderSessionCard(parsed, isMe);
-        }
-    } catch {}
-
     const isHighlighted = item.id === highlightedMessageId;
     const repliedMsg = item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null;
 
@@ -237,8 +161,7 @@ export default function CoachChatScreen() {
         <MotiView 
             animate={{ 
                 scale: isHighlighted ? 1.05 : 1,
-                opacity: 1,
-                backgroundColor: isHighlighted ? '#3B82F6' : (isMe ? '#2563EB' : '#0F172A') 
+                backgroundColor: isHighlighted ? '#60A5FA' : (isMe ? '#2563EB' : '#1E293B') 
             }}
             transition={{ type: 'spring', damping: 15 }}
             className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
@@ -250,7 +173,7 @@ export default function CoachChatScreen() {
                 onPress={() => scrollToMessage(item.reply_to_id!)}
                 className="bg-black/20 px-3 py-2 rounded-2xl mb-2 border-l-2 border-white/30"
              >
-                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Client'}</Text>
+                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === profile?.id ? 'You' : 'Client'}</Text>
                 <Text className="text-white/80 text-xs" numberOfLines={1}>{repliedMsg.content}</Text>
              </TouchableOpacity>
           )}
@@ -264,9 +187,8 @@ export default function CoachChatScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.sender_id === user?.id; // Robust check using exact user ID
+    const isMe = item.sender_id === profile?.id;
     
-    // ACTION: Swiping reveal reply
     const renderRightActions = (progress: any, dragX: any) => {
         const trans = dragX.interpolate({ inputRange: [-100, 0], outputRange: [1, 0], extrapolate: 'clamp' });
         return (
@@ -279,17 +201,20 @@ export default function CoachChatScreen() {
     return (
       <Swipeable
         ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderRightActions={renderRightActions} // Enable for everyone
+        renderRightActions={renderRightActions}
         onSwipeableOpen={() => {
-            console.log('[CoachChat] Replying to:', item.id);
             setReplyingTo(item);
             swipeableRefs.current[item.id]?.close();
         }}
         containerStyle={{ marginBottom: 16 }}
       >
-        <View style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+        <TouchableOpacity 
+            activeOpacity={0.9} 
+            onLongPress={() => { setReplyingTo(item); }}
+            style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+        >
             {renderMessageContent(item, isMe)}
-        </View>
+        </TouchableOpacity>
       </Swipeable>
     );
   };
@@ -308,7 +233,7 @@ export default function CoachChatScreen() {
                 <TouchableOpacity onPress={() => router.push(`/(coach)/clients/${id}`)} className="flex-row items-center gap-3">
                     <BrandedAvatar name={clientProfile?.profiles?.full_name} size={42} imageUrl={clientProfile?.profiles?.avatar_url} />
                     <View>
-                        <Text className="text-white font-black text-lg tracking-tight">{clientProfile?.profiles?.full_name || 'Loading...'}</Text>
+                        <Text className="text-white font-black text-lg tracking-tight">{clientProfile?.profiles?.full_name || 'Protocol Hub'}</Text>
                         <View className="flex-row items-center gap-1.5">
                             <View className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
                             <Text className="text-slate-500 text-[9px] font-black uppercase tracking-[2px]">Encrypted Stream</Text>
@@ -326,7 +251,7 @@ export default function CoachChatScreen() {
           {loading ? (
             <View className="flex-1 items-center justify-center">
                 <ActivityIndicator color="#3B82F6" />
-                <Text className="text-slate-500 text-xs mt-4 font-black uppercase tracking-widest">Opening Convo...</Text>
+                <Text className="text-slate-500 text-xs mt-4 font-black uppercase tracking-widest">Opening Secure Comms...</Text>
             </View>
           ) : (
             <FlatList
@@ -344,27 +269,15 @@ export default function CoachChatScreen() {
           )}
       </View>
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }} className="bg-slate-950 border-t border-white/5">
-              <ChatInputBar 
-                onSendText={sendMessage} 
-                onSendMedia={async () => {}} 
-                sending={sending} 
-                replyingTo={replyingTo} 
-                onCancelReply={() => setReplyingTo(null)} 
-              />
+              <ChatInputBar onSendText={sendMessage} onSendMedia={async () => {}} sending={sending} replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
           </View>
       </KeyboardAvoidingView>
 
       <Modal visible={menuVisible} transparent animationType="slide">
           <Pressable className="flex-1 bg-black/60 justify-end" onPress={() => setMenuVisible(false)}>
-              <MotiView 
-                from={{ translateY: 300 }}
-                animate={{ translateY: 0 }}
-                className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10"
-              >
+              <MotiView from={{ translateY: 300 }} animate={{ translateY: 0 }} className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10">
                   <View className="w-12 h-1.5 bg-slate-800 rounded-full self-center mb-8" />
                   <Text className="text-white text-2xl font-black mb-8 tracking-tight">Channel Actions</Text>
                   <OptionItem icon={<Calendar size={20} color="#3B82F6" />} title="AI Scheduler" sub="Find the next available gap" onPress={() => { setMenuVisible(false); setSchedulerVisible(true); }} />
@@ -377,12 +290,9 @@ export default function CoachChatScreen() {
         <SchedulerModal
           visible={schedulerVisible}
           onClose={() => setSchedulerVisible(false)}
-          onConfirm={async () => { 
-                await loadNextSession();
-                setSchedulerVisible(false);
-          }}
+          onConfirm={async () => { setSchedulerVisible(false); }}
           clientContext={{ name: clientProfile.profiles?.full_name, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }}
-          existingSessions={allCoachSessions}
+          existingSessions={[]}
           targetClientId={id as string}
         />
       )}
