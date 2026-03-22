@@ -565,11 +565,30 @@ const SessionInviteMessageWrapper = ({
 };
 
 const MessageItem = React.memo(({ 
-  item, index, isMe, showUnreadSeparator, unreadCountAtOpen, replyToMsg, theme, coachProfile, setReplyingTo, activeUploads, cancelUpload, handlePostpone, onPressReply 
+  item, index, isMe, showUnreadSeparator, unreadCountAtOpen, replyToMsg, theme, coachProfile, setReplyingTo, activeUploads, cancelUpload, handlePostpone, onPressReply, isHighlighted 
 }: { 
-  item: Message; index: number; isMe: boolean; showUnreadSeparator: boolean; unreadCountAtOpen: number; replyToMsg: any; theme: any; coachProfile: any; setReplyingTo: (msg: any) => void; activeUploads: any; cancelUpload: (id: string) => void; handlePostpone: any; onPressReply?: (id: string) => void;
+  item: Message; index: number; isMe: boolean; showUnreadSeparator: boolean; unreadCountAtOpen: number; replyToMsg: any; theme: any; coachProfile: any; setReplyingTo: (msg: any) => void; activeUploads: any; cancelUpload: (id: string) => void; handlePostpone: any; onPressReply?: (id: string) => void; isHighlighted?: boolean;
 }) => {
   const swipeableRef = useRef<any>(null);
+  const highlightAnim = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (isHighlighted) {
+      Animated.sequence([
+        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 600, useNativeDriver: false }),
+      ]).start();
+    } else {
+      highlightAnim.setValue(0);
+    }
+  }, [isHighlighted]);
+
+  const highlightOverlayColor = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', isMe ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)']
+  });
 
   const renderContent = () => {
     let isTaskMessage = false;
@@ -636,6 +655,7 @@ const MessageItem = React.memo(({
           isUploading={parsedMedia.status === 'pending'}
           replyTo={replyToMsg}
           onPressReply={onPressReply}
+          isHighlighted={isHighlighted}
         />
       );
     }
@@ -645,10 +665,12 @@ const MessageItem = React.memo(({
         ? [styles.ownBubble, { backgroundColor: theme.colors.primary }] 
         : [styles.receivedBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
       ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, borderRadius: 20, zIndex: 10 }]} pointerEvents="none" />
         {replyToMsg && (
           <ChatReplyContext 
             message={replyToMsg} 
             onPress={() => replyToMsg.id && onPressReply?.(replyToMsg.id)}
+            isMe={isMe}
           />
         )}
         <Text style={[styles.messageText, isMe ? { color: theme.colors.textOnPrimary } : { color: theme.colors.text }]}>
@@ -990,6 +1012,8 @@ export default function MessagesScreen() {
     }
   };
 
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
   const scrollToBottom = () => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     markMessagesAsRead();
@@ -998,11 +1022,14 @@ export default function MessagesScreen() {
   const scrollToMessage = (messageId: string) => {
     const index = messages.slice().reverse().findIndex(m => m.id === messageId);
     if (index !== -1) {
+      setHighlightedMessageId(messageId);
       flatListRef.current?.scrollToIndex({ 
         index, 
         animated: true,
         viewPosition: 0.5 
       });
+      // Clear highlight after animation
+      setTimeout(() => setHighlightedMessageId(null), 2500);
     }
   };
 
@@ -1271,9 +1298,10 @@ export default function MessagesScreen() {
         cancelUpload={cancelUpload}
         handlePostpone={handlePostpone}
         onPressReply={scrollToMessage}
+        isHighlighted={item.id === highlightedMessageId}
       />
     );
-  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, coachProfile, user?.id, setReplyingTo, activeUploads, cancelUpload, handlePostpone, scrollToMessage]);
+  }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, coachProfile, user?.id, setReplyingTo, activeUploads, cancelUpload, handlePostpone, scrollToMessage, highlightedMessageId]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

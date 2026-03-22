@@ -11,9 +11,10 @@ interface Props {
   } | null;
   onPress?: () => void;
   isInsideBubble?: boolean;
+  isMe?: boolean;
 }
 
-export function ChatReplyContext({ message, onPress, isInsideBubble = true }: Props) {
+export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe = false }: Props) {
   const theme = useTheme();
   
   if (!message) return null;
@@ -45,6 +46,8 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true }: Pr
     snippet = message.content;
   }
 
+  const isMedia = !!mediaUrl || snippet.startsWith('📄');
+
   return (
     <TouchableOpacity 
       activeOpacity={0.8} 
@@ -52,19 +55,25 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true }: Pr
       style={[
         styles.container, 
         { 
-          backgroundColor: isInsideBubble ? 'rgba(0,0,0,0.05)' : theme.colors.surfaceAlt,
-          borderLeftColor: theme.colors.primary,
+          backgroundColor: isInsideBubble 
+            ? (isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)') 
+            : theme.colors.surfaceAlt,
+          borderLeftColor: isInsideBubble && isMe ? '#FFFFFF' : theme.colors.primary,
           marginBottom: isInsideBubble ? 8 : 0,
           borderRadius: 8,
           borderLeftWidth: 4,
+          // Constrain width as per user request
+          width: isMedia ? 220 : undefined,
+          minWidth: isMedia ? 220 : 130, // Minimum width for text to prevent squishing
+          maxWidth: 280, // Absolute max to avoid screen overflow
         }
       ]}
     >
       <View style={styles.content}>
-        <Text style={[styles.sender, { color: theme.colors.primary }]} numberOfLines={1}>
+        <Text style={[styles.sender, { color: isInsideBubble && isMe ? '#FFFFFF' : theme.colors.primary }]} numberOfLines={1}>
           {message.isOwn ? 'You' : (message.sender_name || 'Sender')}
         </Text>
-        <Text style={[styles.snippet, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+        <Text style={[styles.snippet, { color: isInsideBubble && isMe ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }]} numberOfLines={2}>
           {snippet}
         </Text>
       </View>

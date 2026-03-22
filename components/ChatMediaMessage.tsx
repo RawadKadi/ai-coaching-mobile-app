@@ -31,6 +31,7 @@ interface Props {
   onCancel?: () => void;
   replyTo?: any;
   onPressReply?: (id: string) => void;
+  isHighlighted?: boolean;
 }
 
 // ── Circular download progress ring ──────────────────────────────────────────
@@ -466,9 +467,28 @@ function CustomImagePlayer({
 }
 
 export default function ChatMediaMessage({ 
-  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply 
+  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted 
 }: Props) {
   const theme = useTheme();
+  const highlightAnim = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (isHighlighted) {
+      Animated.sequence([
+        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 600, useNativeDriver: false }),
+      ]).start();
+    } else {
+      highlightAnim.setValue(0);
+    }
+  }, [isHighlighted]);
+
+  const highlightOverlayColor = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', isOwn ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)']
+  });
 
   let media: MediaContent | null = null;
   try {
@@ -503,11 +523,13 @@ export default function ChatMediaMessage({
           position: 'relative',
         }
       ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, borderRadius: 16, zIndex: 10 }]} pointerEvents="none" />
         {replyTo && (
           <View style={{ padding: 4, backgroundColor: theme.colors.surface }}>
             <ChatReplyContext 
               message={replyTo} 
               onPress={() => replyTo.id && onPressReply?.(replyTo.id)} 
+              isMe={isOwn}
             />
           </View>
         )}
@@ -553,11 +575,13 @@ export default function ChatMediaMessage({
           backgroundColor: '#000000',
         }
       ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, borderRadius: 16, zIndex: 10 }]} pointerEvents="none" />
         {replyTo && (
           <View style={{ padding: 4, backgroundColor: theme.colors.surface }}>
             <ChatReplyContext 
               message={replyTo} 
               onPress={() => replyTo.id && onPressReply?.(replyTo.id)}
+              isMe={isOwn}
             />
           </View>
         )}
@@ -602,8 +626,10 @@ export default function ChatMediaMessage({
           <ChatReplyContext 
             message={replyTo} 
             onPress={() => replyTo.id && onPressReply?.(replyTo.id)}
+            isMe={isOwn}
           />
         )}
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, borderRadius: 16, zIndex: 10 }]} pointerEvents="none" />
         <View style={styles.docContainer}>
           <FileText size={28} color={isOwn ? '#FFFFFF' : theme.colors.primary} />
           <View style={{ flex: 1, marginLeft: 10 }}>
