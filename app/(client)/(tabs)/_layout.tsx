@@ -55,7 +55,7 @@ export default function ClientTabLayout() {
               className="px-4"
               onPress={() => router.push('/(client)/log-meal')}
             >
-              <View className="w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-500/40 -mt-6 border-4 border-slate-950">
+              <View className="w-20 h-20 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-500/40 -mt-6 border-4 border-slate-950">
                 <Camera size={26} color="white" />
               </View>
             </TouchableOpacity>
@@ -69,7 +69,8 @@ export default function ClientTabLayout() {
           title: 'Direct',
           tabBarIcon: ({ color }) => <MessageCircle size={22} color={color} />,
           tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: '#3B82F6', fontSize: 10, fontWeight: '900' }
+          tabBarBadgeStyle: { backgroundColor: '#3B82F6', fontSize: 10, fontWeight: '900' },
+          tabBarStyle: { display: 'none' }
         }}
       />
       <Tabs.Screen

@@ -1,26 +1,46 @@
 
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Modal } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Modal, StatusBar, RefreshControl, Image } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
-import { Utensils, Dumbbell, Calendar as CalendarIcon, CheckCircle, Circle, Camera } from 'lucide-react-native';
+import { 
+  Utensils, 
+  Dumbbell, 
+  Calendar as CalendarIcon, 
+  CheckCircle, 
+  Circle, 
+  Camera, 
+  Zap, 
+  ChevronRight, 
+  Clock, 
+  Target,
+  Award,
+  Sparkles,
+  ArrowUpRight,
+  ChevronDown,
+  X
+} from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ActivityScreen() {
   const router = useRouter();
-  const { client } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { client, profile } = useAuth();
   const theme = useTheme();
+  
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>([]);
   const [challenges, setChallenges] = useState<any[]>([]);
-  const [challengeProgress, setChallengeProgress] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -33,7 +53,7 @@ export default function ActivityScreen() {
 
   const loadActivityData = async () => {
     try {
-      setLoading(true);
+      if (!refreshing) setLoading(true);
       const [mealsResult, workoutsResult, habitsResult, logsResult] = await Promise.all([
         supabase
           .from('meals')
@@ -57,7 +77,6 @@ export default function ActivityScreen() {
           .select('*')
           .eq('client_id', client?.id)
           .eq('date', selectedDate),
-
       ]);
 
       if (mealsResult.error) throw mealsResult.error;
@@ -65,12 +84,12 @@ export default function ActivityScreen() {
       if (habitsResult.error) throw habitsResult.error;
       if (logsResult.error) throw logsResult.error;
 
-
       setMeals(mealsResult.data || []);
       setWorkouts(workoutsResult.data || []);
       setHabits(habitsResult.data || []);
       const logs = logsResult.data || [];
       setHabitLogs(logs);
+
       // Get sub-challenges via RPC
       const { data: subsData, error: subsError } = await supabase.rpc('get_todays_sub_challenges', {
         p_client_id: client?.id,
@@ -82,7 +101,6 @@ export default function ActivityScreen() {
       }
 
       setChallenges(subsData || []);
-      setChallengeProgress([]);
 
       // Initialize last reported status
       logs.forEach(log => {
@@ -92,7 +110,13 @@ export default function ActivityScreen() {
       console.error('Error loading activity:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadActivityData();
   };
 
   const handleOpenDetails = (challenge: any) => {
@@ -168,8 +192,6 @@ export default function ActivityScreen() {
     };
   }, []);
 
-
-
   const sendCompletionMessage = async (habitName: string, isCompletion: boolean, imageUrl?: string, description?: string) => {
     try {
       const { data: linkData, error: linkError } = await supabase
@@ -212,7 +234,6 @@ export default function ActivityScreen() {
         .single();
 
       if (error) throw error;
-      console.log('[Activity] Task completion message sent:', data);
       return data;
     } catch (error) {
       console.error('Error sending automated message:', error);
@@ -277,12 +298,12 @@ export default function ActivityScreen() {
     }
   };
 
-  const toggleChallenge = async (habit: Habit) => {
+  const toggleHabit = async (habit: Habit) => {
     try {
       if (habit.verification_type === 'camera') {
         const existingLog = habitLogs.find((log) => log.habit_id === habit.id);
         if (existingLog && existingLog.completed) {
-           // allow undo
+           // Allow undo
         } else {
            await handleCameraVerification(habit);
            return;
@@ -328,7 +349,6 @@ export default function ActivityScreen() {
 
       // Schedule message check
       timeoutRefs.current[habit.id] = setTimeout(() => {
-        // Check if the current status is different from the last reported status
         const lastStatus = lastReportedStatus.current[habit.id] ?? false; 
         
         if (newCompleted !== lastStatus) {
@@ -337,10 +357,10 @@ export default function ActivityScreen() {
         }
         
         delete timeoutRefs.current[habit.id];
-      }, 5000); // 5 seconds
+      }, 5000);
 
     } catch (error) {
-      console.error('Error toggling challenge:', error);
+      console.error('Error toggling habit:', error);
     }
   };
 
@@ -348,386 +368,328 @@ export default function ActivityScreen() {
   const totalWorkoutMinutes = workouts.reduce((sum, workout) => sum + (workout.duration_minutes || 0), 0);
   const completedHabits = habitLogs.filter((log) => log.completed).length;
 
+  const formattedDate = new Date(selectedDate).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  if (loading && !refreshing) {
+    return (
+      <View className="flex-1 bg-slate-950 justify-center items-center">
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Activity</Text>
-        <Text style={styles.date}>
-          {new Date(selectedDate).toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-          })}
-        </Text>
-      </View>
-
-      <View style={styles.summaryContainer}>
-        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{totalCalories}</Text>
-          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Calories</Text>
-        </View>
-        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{totalWorkoutMinutes}m</Text>
-          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Active Time</Text>
-        </View>
-        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{completedHabits}/{habits.length}</Text>
-          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Habits</Text>
-        </View>
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-      ) : (
-        <ScrollView style={styles.content}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Challenges</Text>
-          {challenges.length === 0 ? (
-            <Text style={styles.emptyText}>No active challenges</Text>
-          ) : (
-            challenges.map((challenge) => {
-              const isCompleted = challenge.completed || false;
-
-              return (
-                <View
-                  key={challenge.id}
-                  style={[
-                    styles.card,
-                    { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-                    isCompleted && { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.primary }
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={styles.cardContent}
-                    onPress={() => handleOpenDetails(challenge)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.challengeHeader}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.text }, isCompleted && { color: theme.colors.primary, textDecorationLine: 'line-through' }]}>
-                        {challenge.name}
-                      </Text>
-                      <Text style={styles.challengeBadge}>
-                        {challenge.focus_type}
-                      </Text>
-                    </View>
-                    {challenge.description && (
-                      <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                        {challenge.description}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleToggleChallenge(challenge)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    activeOpacity={0.6}
-                  >
-                    {isCompleted ? (
-                      <CheckCircle size={24} color={theme.colors.primary} />
-                    ) : (
-                      <Circle size={24} color={theme.colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              );
-            })
-          )}
-
-          <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.text }]}>Meals</Text>
-          {meals.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>No meals logged today</Text>
-          ) : (
-            meals.map((meal) => (
-              <View key={meal.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                <View style={styles.iconContainer}>
-                  <Utensils size={20} color="#F59E0B" />
-                </View>
-                <View style={styles.cardContent}>
-                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{meal.name}</Text>
-                  <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
-                    {meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} • {meal.calories} kcal
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-
-          <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.text }]}>Workouts</Text>
-          {workouts.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>No workouts logged today</Text>
-          ) : (
-            workouts.map((workout) => (
-              <View key={workout.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                <View style={[styles.iconContainer, { backgroundColor: '#ECFDF5' }]}>
-                  <Dumbbell size={20} color="#10B981" />
-                </View>
-                <View style={styles.cardContent}>
-                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{workout.name}</Text>
-                  <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
-                    {workout.duration_minutes} min • {workout.exercises?.length || 0} exercises
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
-      )}
-
-      {/* Challenge Details Modal */}
-      <Modal
-        visible={showDetailsModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDetailsModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Challenge Details</Text>
-              <TouchableOpacity onPress={() => setShowDetailsModal(false)}>
-                <Text style={[styles.modalClose, { color: theme.colors.textSecondary }]}>✕</Text>
-              </TouchableOpacity>
+    <View className="flex-1 bg-slate-950">
+      <StatusBar barStyle="light-content" translucent />
+      
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        {/* Header Section */}
+        <MotiView 
+          from={{ opacity: 0, translateY: -10 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          className="px-6 pt-10 pb-6"
+        >
+          <View className="flex-row items-center justify-between mb-2">
+            <View>
+              <Text className="text-white text-3xl font-black tracking-tighter">Your Progress</Text>
+              <Text className="text-blue-500 font-bold uppercase tracking-[2px] text-[10px] mt-1">{formattedDate}</Text>
             </View>
-            {selectedChallenge && (
-              <ScrollView style={styles.modalContent}>
-                <Text style={[styles.modalChallengeName, { color: theme.colors.text }]}>
-                  {selectedChallenge.name}
-                </Text>
-                <View style={styles.modalBadgeContainer}>
-                  <View style={[styles.modalBadge, { backgroundColor: theme.colors.primary + '15' }]}>
-                    <Text style={[styles.modalBadgeText, { color: theme.colors.primary }]}>
-                      {selectedChallenge.focus_type}
-                    </Text>
+            <TouchableOpacity 
+              className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5"
+              onPress={() => {/* Date Picker functionality */}}
+            >
+              <CalendarIcon size={20} color="#3B82F6" />
+            </TouchableOpacity>
+          </View>
+        </MotiView>
+
+        <ScrollView 
+          className="flex-1" 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh} 
+              tintColor="#3B82F6" 
+            />
+          }
+        >
+          {/* Summary Metric Grid */}
+          <MotiView 
+            from={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'timing', duration: 400, delay: 100 }}
+            className="px-6 flex-row flex-wrap justify-between gap-y-4 mb-10"
+          >
+            <MetricCard 
+              label="KCAL Burnt" 
+              value={totalCalories.toString()} 
+              icon={<Utensils size={18} color="#F59E0B" />} 
+            />
+            <MetricCard 
+              label="Active Time" 
+              value={`${totalWorkoutMinutes}m`} 
+              icon={<Clock size={18} color="#10B981" />} 
+            />
+            <MetricCard 
+              label="Habit Velocity" 
+              value={`${completedHabits}/${habits.length}`} 
+              icon={<Award size={18} color="#818CF8" />} 
+            />
+            <MetricCard 
+              label="Rank Status" 
+              value="Protocol-A" 
+              icon={<Zap size={18} color="#3B82F6" />} 
+            />
+          </MotiView>
+
+          {/* Activity Logs Section */}
+          <View className="px-6">
+            
+            {/* Challenges Section */}
+            <SectionHeader title="Active Challenges" count={challenges.length} />
+            {challenges.length === 0 ? (
+              <EmptyState message="No active challenges assigned." />
+            ) : (
+              <View className="gap-3">
+                {challenges.map((challenge, idx) => (
+                  <ActivityCard 
+                    key={challenge.id}
+                    title={challenge.name}
+                    sub={challenge.focus_type}
+                    completed={challenge.completed}
+                    icon={<Target size={20} color={challenge.completed ? '#3B82F6' : '#94A3B8'} />}
+                    onToggle={() => handleToggleChallenge(challenge)}
+                    onPress={() => handleOpenDetails(challenge)}
+                    delay={idx * 50}
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* Habits Section */}
+            <SectionHeader title="Daily Protocols" count={habits.length} marginTop={32} />
+            {habits.length === 0 ? (
+              <EmptyState message="No habits established for this protocol." />
+            ) : (
+              <View className="gap-3">
+                {habits.map((habit, idx) => {
+                  const log = habitLogs.find(l => l.habit_id === habit.id);
+                  const isCompleted = log?.completed || false;
+                  return (
+                    <ActivityCard 
+                      key={habit.id}
+                      title={habit.name}
+                      sub={habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle'}
+                      completed={isCompleted}
+                      icon={<CheckCircle size={20} color={isCompleted ? '#3B82F6' : '#94A3B8'} />}
+                      onToggle={() => toggleHabit(habit)}
+                      delay={idx * 50}
+                    />
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Meals Section */}
+            <SectionHeader title="Nutrition Intake" count={meals.length} marginTop={32} />
+            {meals.length === 0 ? (
+              <EmptyState message="No meals tracked for today." />
+            ) : (
+              <View className="gap-3">
+                {meals.map((meal, idx) => (
+                  <ActivityCard 
+                    key={meal.id}
+                    title={meal.name}
+                    sub={`${meal.meal_type.toUpperCase()} • ${meal.calories} kcal`}
+                    completed={true}
+                    icon={<Utensils size={20} color="#F59E0B" />}
+                    readOnly
+                    delay={idx * 50}
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* Workouts Section */}
+            <SectionHeader title="Performance Training" count={workouts.length} marginTop={32} />
+            {workouts.length === 0 ? (
+              <EmptyState message="No workouts recorded for today." />
+            ) : (
+              <View className="gap-3">
+                {workouts.map((workout, idx) => (
+                  <ActivityCard 
+                    key={workout.id}
+                    title={workout.name}
+                    sub={`${workout.duration_minutes} MIN • ${workout.exercises?.length || 0} EXERCISES`}
+                    completed={true}
+                    icon={<Dumbbell size={20} color="#10B981" />}
+                    readOnly
+                    delay={idx * 50}
+                  />
+                ))}
+              </View>
+            )}
+
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Modern Details Overlay (Replaces Modal to fix context issues) */}
+      <AnimatePresence>
+        {showDetailsModal && selectedChallenge && (
+          <MotiView
+            from={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] flex-1 justify-end"
+            pointerEvents={showDetailsModal ? 'auto' : 'none'}
+          >
+            {/* Backdrop */}
+            <TouchableOpacity 
+              activeOpacity={1} 
+              className="absolute inset-0 bg-black/60" 
+              onPress={() => setShowDetailsModal(false)} 
+            />
+            
+            <MotiView
+              from={{ translateY: 600 }}
+              animate={{ translateY: 0 }}
+              exit={{ translateY: 600 }}
+              transition={{
+                type: 'spring',
+                damping: 25,
+                stiffness: 200,
+              }}
+              className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10"
+              style={{ maxHeight: '85%', paddingBottom: insets.bottom + 32 }}
+            >
+              <View className="w-12 h-1.5 bg-slate-800 rounded-full self-center mb-8" />
+              
+              <View className="flex-row items-center justify-between mb-8">
+                <View className="flex-row items-center gap-3">
+                  <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center border border-blue-600/20">
+                    <Sparkles size={24} color="#3B82F6" />
                   </View>
-                  {selectedChallenge.intensity && (
-                    <View style={[styles.modalBadge, { backgroundColor: theme.colors.primary + '15' }]}>
-                      <Text style={[styles.modalBadgeText, { color: theme.colors.primary }]}>
-                        {selectedChallenge.intensity}
-                      </Text>
-                    </View>
-                  )}
+                  <View>
+                    <Text className="text-white text-2xl font-black tracking-tight">{selectedChallenge.name}</Text>
+                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Global Protocol</Text>
+                  </View>
                 </View>
-                {selectedChallenge.description && (
-                  <View style={styles.modalSection}>
-                    <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>Description</Text>
-                    <Text style={[styles.modalSectionText, { color: theme.colors.textSecondary }]}>
-                      {selectedChallenge.description}
-                    </Text>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
+                <TouchableOpacity onPress={() => setShowDetailsModal(false)} className="w-10 h-10 bg-slate-950 rounded-full items-center justify-center border border-white/5">
+                  <X size={20} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} className="mb-0">
+                <View className="flex-row flex-wrap gap-2 mb-8">
+                  <Badge label={selectedChallenge.focus_type} />
+                  {selectedChallenge.intensity && <Badge label={selectedChallenge.intensity} color="border-orange-500/20 text-orange-500 bg-orange-500/5" />}
+                  <Badge label="Daily Objective" color="border-green-500/20 text-green-500 bg-green-500/5" />
+                </View>
+
+                <Text className="text-slate-400 text-base leading-7 font-medium mb-10">
+                  {selectedChallenge.description || 'No detailed instructions provided for this challenge. Ensure you maintain proper form and stay hydrated.'}
+                </Text>
+
+                <TouchableOpacity 
+                  className={`p-6 rounded-[32px] items-center justify-center flex-row gap-3 ${selectedChallenge.completed ? 'bg-slate-800' : 'bg-blue-600 shadow-2xl shadow-blue-500/40'}`}
                   onPress={() => {
-                    setShowDetailsModal(false);
                     handleToggleChallenge(selectedChallenge);
+                    setShowDetailsModal(false);
                   }}
                 >
-                  <Text style={[styles.modalButtonText, { color: theme.colors.textOnPrimary }]}>
-                    {selectedChallenge.completed ? 'Mark as Incomplete' : 'Mark as Complete'}
-                  </Text>
+                  {selectedChallenge.completed ? (
+                    <>
+                      <X size={20} color="#94A3B8" />
+                      <Text className="text-slate-400 font-black uppercase tracking-[2px] text-sm">Remove Completion</Text>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle size={20} color="white" />
+                      <Text className="text-white font-black uppercase tracking-[2px] text-sm">Confirm Completion</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
+            </MotiView>
+          </MotiView>
+        )}
+      </AnimatePresence>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  date: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  summaryContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-  },
-  summaryCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  emptyText: {
-    color: '#9CA3AF',
-    fontStyle: 'italic',
-  },
-  card: {
-    flexDirection: 'row',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  cardCompleted: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFBEB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  cardContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  textCompleted: {
-    textDecorationLine: 'line-through',
-    color: '#059669',
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  challengeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  challengeBadge: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6366f1',
-    backgroundColor: '#ede9fe',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  challengeProgressBar: {
-    height: 4,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 2,
-    marginTop: 8,
-    overflow: 'hidden',
-  },
-  challengeProgressFill: {
-    height: '100%',
-    backgroundColor: '#6366f1',
-    borderRadius: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingBottom: 40,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  modalClose: {
-    fontSize: 24,
-    padding: 4,
-  },
-  modalContent: {
-    padding: 20,
-  },
-  modalChallengeName: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  modalBadgeContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 24,
-  },
-  modalBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  modalBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  modalSection: {
-    marginBottom: 24,
-  },
-  modalSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  modalSectionText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  modalButton: {
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+// Support Components
+const MetricCard = ({ label, value, icon }: any) => (
+  <View className="w-[47%] bg-slate-900/40 p-5 rounded-[36px] border border-white/5 items-center justify-center">
+    <View className="w-10 h-10 bg-slate-950 rounded-xl items-center justify-center border border-white/5 mb-3">
+      {icon}
+    </View>
+    <Text className="text-white text-xl font-black tracking-tighter">{value}</Text>
+    <Text className="text-slate-500 text-[8px] font-black uppercase tracking-[2px] mt-1">{label}</Text>
+  </View>
+);
+
+const SectionHeader = ({ title, count, marginTop = 0 }: any) => (
+  <View style={{ marginTop }} className="flex-row items-center justify-between mb-5 px-1">
+    <Text className="text-white text-xl font-black tracking-tight">{title}</Text>
+    <View className="bg-slate-900 px-3 py-1 rounded-full border border-white/5">
+      <Text className="text-slate-500 text-[10px] font-bold">{count}</Text>
+    </View>
+  </View>
+);
+
+const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly, delay = 0 }: any) => (
+  <MotiView
+    from={{ opacity: 0, translateX: -20 }}
+    animate={{ opacity: 1, translateX: 0 }}
+    transition={{ type: 'timing', duration: 300, delay }}
+  >
+    <TouchableOpacity 
+      activeOpacity={0.7}
+      disabled={!onPress}
+      onPress={onPress}
+      className={`flex-row items-center p-5 bg-slate-900/40 rounded-[32px] border ${completed ? 'border-blue-500/20' : 'border-white/5'}`}
+    >
+      <View className={`w-12 h-12 rounded-2xl items-center justify-center mr-4 border ${completed ? 'bg-blue-600/10 border-blue-600/20' : 'bg-slate-950 border-white/5'}`}>
+        {icon}
+      </View>
+      <View className="flex-1">
+        <Text className={`text-base font-bold tracking-tight ${completed ? 'text-white' : 'text-slate-300'}`}>{title}</Text>
+        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-0.5">{sub}</Text>
+      </View>
+      {!readOnly && (
+        <TouchableOpacity 
+          onPress={(e) => {
+            e.stopPropagation();
+            onToggle && onToggle();
+          }}
+          className={`w-10 h-10 rounded-full items-center justify-center border ${completed ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-500/40' : 'bg-slate-950 border-white/10'}`}
+        >
+          {completed ? <CheckCircle size={20} color="white" /> : <Circle size={20} color="#475569" />}
+        </TouchableOpacity>
+      )}
+      {readOnly && (
+        <ArrowUpRight size={18} color="#475569" />
+      )}
+    </TouchableOpacity>
+  </MotiView>
+);
+
+const EmptyState = ({ message }: { message: string }) => (
+  <View className="p-8 bg-slate-900/20 rounded-[32px] border border-white/5 border-dashed items-center justify-center">
+    <Text className="text-slate-600 text-[11px] font-black uppercase tracking-widest text-center">{message}</Text>
+  </View>
+);
+
+const Badge = ({ label, color = "border-blue-500/20 text-blue-500 bg-blue-500/5" }: any) => (
+  <View className={`px-4 py-2 rounded-full border ${color}`}>
+    <Text className={`${color.split(' ')[1]} text-[9px] font-black uppercase tracking-widest`}>{label}</Text>
+  </View>
+);

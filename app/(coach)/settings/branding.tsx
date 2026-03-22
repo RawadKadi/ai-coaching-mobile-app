@@ -12,9 +12,13 @@ import {
   SafeAreaView,
   Switch,
   Modal,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Upload, Save, Eye, Palette, Check, Home, Users, MessageCircle, Calendar, Settings, X, TrendingUp, CheckCircle, Target, Sparkles } from 'lucide-react-native';
+import { ArrowLeft, Upload, Save, Eye, Palette, Check, Home, Users, MessageSquare as MessageCircle, Calendar, Settings, X, TrendingUp, CheckCircle, Target, Sparkles, ChevronRight, LayoutGrid, Type, Square, LayoutTemplate, Moon, Sliders, ShieldAlert } from 'lucide-react-native';
+import { MotiView, AnimatePresence } from 'moti';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useBrand, useTheme, Brand } from '@/contexts/BrandContext';
 import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
@@ -82,6 +86,7 @@ export default function BrandSettingsScreen() {
   const { brand, canManageBrand, updateBrandSettings, refreshBrand } = useBrand();
   const currentTheme = useTheme();
   const { coach } = useAuth();
+  const insets = useSafeAreaInsets();
   
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -157,31 +162,43 @@ export default function BrandSettingsScreen() {
   // No permission view
   if (!canManageBrand) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#111827" />
+      <View style={[styles.container, { backgroundColor: '#020617' }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <TouchableOpacity 
+            onPress={() => router.back()} 
+            style={[styles.roundIconButton, { borderColor: '#ffffff15', backgroundColor: '#ffffff08' }]}
+          >
+            <ArrowLeft size={20} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Brand Settings</Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.premiumHeaderTitle}>View Only</Text>
+            <View style={styles.premiumBadge}>
+              <Text style={[styles.premiumBadgeText, { color: primaryColor }]}>RESTRICTED</Text>
+            </View>
+          </View>
+          <View style={{ width: 40 }} />
         </View>
         
-        <View style={styles.noPermissionContainer}>
-          <Text style={styles.noPermissionTitle}>No Permission</Text>
-          <Text style={styles.noPermissionText}>
-            Brand settings are managed by your parent coach.
-          </Text>
-          
-          {brand && (
-            <View style={styles.previewContainer}>
-              <Text style={styles.previewLabel}>Current Brand:</Text>
-              {brand.logo_url && (
-                <Image source={{ uri: brand.logo_url }} style={styles.logoPreview} />
-              )}
-              <Text style={styles.brandNamePreview}>{brand.name}</Text>
-            </View>
-          )}
-        </View>
-      </SafeAreaView>
+        <ScrollView contentContainerStyle={styles.contentContainer}>
+          <View style={[styles.card, { marginTop: 24, alignItems: 'center' }]}>
+            <ShieldAlert size={48} color={primaryColor} style={{ marginBottom: 16 }} />
+            <Text style={[styles.cardTitle, { color: '#FFFFFF', textAlign: 'center' }]}>Access Restricted</Text>
+            <Text style={[styles.helperText, { color: '#94A3B8', textAlign: 'center', marginTop: 8 }]}>
+              These brand settings are managed at the Headquarters level. Contact your administrator to request changes.
+            </Text>
+            
+            {brand && (
+              <View style={[styles.logoPreviewContainer, { width: '100%', borderTopWidth: 1, borderTopColor: '#ffffff08', paddingTop: 20, marginTop: 20 }]}>
+                <Text style={[styles.label, { color: '#64748B', marginBottom: 16 }]}>CURRENT BRAND IDENTITY</Text>
+                {brand.logo_url && (
+                  <Image source={{ uri: brand.logo_url }} style={styles.logoPreview} />
+                )}
+                <Text style={[styles.premiumHeaderTitle, { marginTop: 12, fontSize: 24 }]}>{brand.name}</Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 
@@ -386,700 +403,688 @@ export default function BrandSettingsScreen() {
   };
 
   const renderTabContent = () => {
-    switch (activeTab) {
-      case 'identity':
-        return (
-          <>
-            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
-              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Brand Name *</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border, color: currentTheme.colors.text }]}
-                placeholder="e.g., Elite Fitness Gym"
-                value={brandName}
-                onChangeText={setBrandName}
-                placeholderTextColor={currentTheme.colors.textTertiary}
-              />
-            </View>
-
-            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
-              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Brand Logo</Text>
-              <TouchableOpacity
-                style={[styles.uploadButton, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}
-                onPress={pickImage}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <ActivityIndicator color="#3B82F6" />
-                ) : (
-                  <>
-                    <Upload size={20} color="#3B82F6" />
-                    <Text style={styles.uploadButtonText}>
-                      {logoUrl ? 'Change Logo' : 'Upload Logo'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              
-              {logoUrl && (
-                <View style={styles.logoPreviewContainer}>
-                  <Image source={{ uri: logoUrl }} style={styles.logoPreview} />
+    const content = (() => {
+      switch (activeTab) {
+        case 'identity':
+          return (
+            <MotiView 
+              from={{ opacity: 0, translateY: 10 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              key="identity"
+              style={styles.tabContent}
+            >
+              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+                <View style={styles.cardHeader}>
+                  <LayoutGrid size={20} color={primaryColor} />
+                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Identity</Text>
                 </View>
-              )}
-            </View>
+                
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Brand Name *</Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: '#1E293B', borderColor: '#334155', color: '#FFFFFF' }]}
+                    placeholder="e.g., Elite Fitness Gym"
+                    value={brandName}
+                    onChangeText={setBrandName}
+                    placeholderTextColor="#64748B"
+                  />
+                </View>
 
-            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
-              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Quick Presets</Text>
-              <Text style={[styles.helperText, { color: currentTheme.colors.textSecondary }]}>Apply a preset theme to get started quickly</Text>
-              <View style={styles.presetGrid}>
-                {Object.entries(PRESET_THEMES).map(([key, preset]) => (
+                <View style={[styles.formGroup, { marginTop: 12 }]}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Brand Logo</Text>
                   <TouchableOpacity
-                    key={key}
-                    style={[
-                      styles.presetCard,
-                      { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border },
-                      selectedPreset === key && { borderColor: primaryColor, borderWidth: 2 }
-                    ]}
-                    onPress={() => applyPreset(key as keyof typeof PRESET_THEMES)}
+                    style={[styles.uploadButton, { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                    onPress={pickImage}
+                    disabled={uploading}
                   >
-                    {selectedPreset === key && (
-                      <View style={[styles.presetSelectedCheck, { backgroundColor: primaryColor }]}>
-                        <Check size={12} color="#FFFFFF" />
-                      </View>
+                    {uploading ? (
+                      <ActivityIndicator color={primaryColor} />
+                    ) : (
+                      <>
+                        <Upload size={18} color={primaryColor} />
+                        <Text style={[styles.uploadButtonText, { color: primaryColor }]}>
+                          {logoUrl ? 'Change Logo' : 'Upload Logo'}
+                        </Text>
+                      </>
                     )}
-                    <View style={styles.presetColors}>
-                      <View style={[styles.presetColorDot, { backgroundColor: preset.primary_color }]} />
-                      <View style={[styles.presetColorDot, { backgroundColor: preset.secondary_color }]} />
+                  </TouchableOpacity>
+                  
+                  {logoUrl && (
+                    <View style={styles.logoPreviewContainer}>
+                      <Image source={{ uri: logoUrl }} style={styles.logoPreview} />
                     </View>
-                    <Text style={[styles.presetName, { color: currentTheme.colors.text }]}>{preset.name}</Text>
-                  </TouchableOpacity>
-                ))}
+                  )}
+                </View>
               </View>
-            </View>
-          </>
-        );
 
-      case 'colors':
-        return (
-          <>
-            <VisualColorPicker
-              label="Primary Color"
-              value={primaryColor}
-              onPress={() => openColorPicker('primary', primaryColor)}
-              helper="Main color for buttons and accents"
-            />
-            <VisualColorPicker
-              label="Secondary Color"
-              value={secondaryColor}
-              onPress={() => openColorPicker('secondary', secondaryColor)}
-              helper="Supporting color for secondary elements"
-            />
-            <VisualColorPicker
-              label="Accent Color"
-              value={accentColor}
-              onPress={() => openColorPicker('accent', accentColor)}
-              helper="Used for highlights, badges, and links"
-            />
-            <VisualColorPicker
-              label="Background Color"
-              value={backgroundColor}
-              onPress={() => openColorPicker('background', backgroundColor)}
-              helper="App background color"
-            />
-          </>
-        );
-
-      case 'typography':
-        return (
-          <>
-            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
-              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Font Family</Text>
-              <TouchableOpacity 
-                style={[styles.fontSelectButton, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}
-                onPress={() => setShowFontPicker(true)}
-              >
-                <Text style={[styles.fontSelectButtonText, { fontFamily: getFontFamily(fontFamily), color: currentTheme.colors.text }]}>
-                  {fontFamily || 'Select Font'}
+              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+                <View style={styles.cardHeader}>
+                  <LayoutTemplate size={20} color={primaryColor} />
+                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Quick Presets</Text>
+                </View>
+                <Text style={[styles.helperText, { color: '#94A3B8' }]}>
+                  Apply a preset theme to quickly establish your brand identity
                 </Text>
-                <Text style={[styles.fontSelectArrow, { color: currentTheme.colors.textSecondary }]}>▼</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
-              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Heading Weight</Text>
-              <View style={styles.buttonRow}>
-                {['400', '500', '600', '700', '800', '900'].map((weight) => (
-                  <TouchableOpacity
-                    key={weight}
-                    style={[styles.optionButton, { backgroundColor: headingWeight === weight ? primaryColor : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, headingWeight === weight && styles.optionButtonActive]}
-                    onPress={() => setHeadingWeight(weight)}
-                  >
-                    <Text style={[styles.optionButtonText, { color: headingWeight === weight ? '#FFFFFF' : currentTheme.colors.text }, headingWeight === weight && styles.optionButtonTextActive]}>
-                      {weight}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={[styles.section, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
-              <Text style={[styles.label, { color: currentTheme.colors.text }]}>Body Weight</Text>
-              <View style={styles.buttonRow}>
-                {['400', '500', '600', '700'].map((weight) => (
-                  <TouchableOpacity
-                    key={weight}
-                    style={[styles.optionButton, { backgroundColor: bodyWeight === weight ? primaryColor : currentTheme.colors.surface, borderColor: currentTheme.colors.border }, bodyWeight === weight && styles.optionButtonActive]}
-                    onPress={() => setBodyWeight(weight)}
-                  >
-                    <Text style={[styles.optionButtonText, { color: bodyWeight === weight ? '#FFFFFF' : currentTheme.colors.text }, bodyWeight === weight && styles.optionButtonTextActive]}>
-                      {weight}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Font Scale: {(fontScale || 1.0).toFixed(1)}x</Text>
-              <Text style={styles.helperText}>Adjust overall text size (0.8x - 1.3x)</Text>
-              <View style={styles.sliderContainer}>
-                {[0.8, 0.9, 1.0, 1.1, 1.2, 1.3].map((scale) => (
-                  <TouchableOpacity
-                    key={scale}
-                    style={[styles.sliderDot, fontScale === scale && styles.sliderDotActive]}
-                    onPress={() => setFontScale(scale)}
-                  >
-                    <Text style={styles.sliderLabel}>{scale.toFixed(1)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </>
-        );
-
-      case 'buttons':
-        return (
-          <>
-            <View style={styles.section}>
-              <Text style={styles.label}>Button Shape</Text>
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={[styles.shapeOption, buttonShape === 'rounded' && styles.optionButtonActive]}
-                  onPress={() => setButtonShape('rounded')}
-                >
-                  <View style={[styles.shapePreview, { borderRadius: 12 }]} />
-                  <Text style={[styles.optionButtonText, buttonShape === 'rounded' && styles.optionButtonTextActive]}>
-                    Rounded
-                  </Text>
-                </TouchableOpacity>
                 
-                <TouchableOpacity
-                  style={[styles.shapeOption, buttonShape === 'pill' && styles.optionButtonActive]}
-                  onPress={() => setButtonShape('pill')}
-                >
-                  <View style={[styles.shapePreview, { borderRadius: 999 }]} />
-                  <Text style={[styles.optionButtonText, buttonShape === 'pill' && styles.optionButtonTextActive]}>
-                    Pill
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.presetGrid}>
+                  {Object.entries(PRESET_THEMES).map(([key, preset]) => (
+                    <TouchableOpacity
+                      key={key}
+                      style={[
+                        styles.presetCard,
+                        { backgroundColor: '#1E293B', borderColor: '#334155' },
+                        selectedPreset === key && { borderColor: primaryColor, borderWidth: 2 }
+                      ]}
+                      onPress={() => applyPreset(key as keyof typeof PRESET_THEMES)}
+                    >
+                      {selectedPreset === key && (
+                        <View style={[styles.presetSelectedCheck, { backgroundColor: primaryColor }]}>
+                          <Check size={10} color="#FFFFFF" />
+                        </View>
+                      )}
+                      <View style={styles.presetColors}>
+                        <View style={[styles.presetColorDot, { backgroundColor: preset.primary_color }]} />
+                        <View style={[styles.presetColorDot, { backgroundColor: preset.secondary_color }]} />
+                        <View style={[styles.presetColorDot, { backgroundColor: preset.background_color, borderWidth: 1, borderColor: '#333' }]} />
+                      </View>
+                      <Text style={[styles.presetName, { color: '#FFFFFF' }]}>{preset.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </MotiView>
+          );
+
+        case 'colors':
+          return (
+            <MotiView 
+              from={{ opacity: 0, translateY: 10 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              key="colors"
+              style={styles.tabContent}
+            >
+              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+                <View style={styles.cardHeader}>
+                  <Palette size={20} color={primaryColor} />
+                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Color System</Text>
+                </View>
                 
-                <TouchableOpacity
-                  style={[styles.shapeOption, buttonShape === 'square' && styles.optionButtonActive]}
-                  onPress={() => setButtonShape('square')}
-                >
-                  <View style={[styles.shapePreview, { borderRadius: 4 }]} />
-                  <Text style={[styles.optionButtonText, buttonShape === 'square' && styles.optionButtonTextActive]}>
-                    Square
-                  </Text>
-                </TouchableOpacity>
+                <VisualColorPicker
+                  label="Primary Color"
+                  value={primaryColor}
+                  onPress={() => openColorPicker('primary', primaryColor)}
+                  helper="Main Action buttons"
+                />
+                <VisualColorPicker
+                  label="Secondary Color"
+                  value={secondaryColor}
+                  onPress={() => openColorPicker('secondary', secondaryColor)}
+                  helper="Supporting accent elements"
+                />
+                <VisualColorPicker
+                  label="Accent Color"
+                  value={accentColor}
+                  onPress={() => openColorPicker('accent', accentColor)}
+                  helper="Highlights and badges"
+                />
+                <VisualColorPicker
+                  label="Background Color"
+                  value={backgroundColor}
+                  onPress={() => openColorPicker('background', backgroundColor)}
+                  helper="Core dashboard background"
+                />
               </View>
-            </View>
+            </MotiView>
+          );
 
-            <View style={styles.section}>
-              <Text style={styles.label}>Button Style</Text>
-              <View style={styles.buttonRow}>
-                {[
-                  { value: 'flat', label: 'Flat' },
-                  { value: 'gradient', label: 'Gradient' },
-                  { value: 'outlined', label: 'Outlined' },
-                ].map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[styles.optionButton, buttonStyle === option.value && styles.optionButtonActive]}
-                    onPress={() => setButtonStyle(option.value as any)}
-                  >
-                    <Text style={[styles.optionButtonText, buttonStyle === option.value && styles.optionButtonTextActive]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.switchRow}>
-                <Text style={styles.label}>Button Shadow</Text>
-                <Switch value={buttonShadow} onValueChange={setButtonShadow} />
-              </View>
-              <Text style={styles.helperText}>Add drop shadows to buttons</Text>
-            </View>
-          </>
-        );
-
-      case 'spacing':
-        return (
-          <>
-            <View style={styles.section}>
-              <Text style={styles.label}>Spacing Scale: {(spacingScale || 1.0).toFixed(1)}x</Text>
-              <Text style={styles.helperText}>Adjust overall spacing and padding</Text>
-              <View style={styles.sliderContainer}>
-                {[0.8, 0.9, 1.0, 1.2, 1.5].map((scale) => (
-                  <TouchableOpacity
-                    key={scale}
-                    style={[styles.sliderDot, spacingScale === scale && styles.sliderDotActive]}
-                    onPress={() => setSpacingScale(scale)}
-                  >
-                    <Text style={styles.sliderLabel}>{scale.toFixed(1)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Card Shadow</Text>
-              <View style={styles.buttonRow}>
-                {[
-                  { value: 'none', label: 'None' },
-                  { value: 'small', label: 'Small' },
-                  { value: 'medium', label: 'Medium' },
-                  { value: 'large', label: 'Large' },
-                ].map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[styles.optionButton, cardShadow === option.value && styles.optionButtonActive]}
-                    onPress={() => setCardShadow(option.value as any)}
-                  >
-                    <Text style={[styles.optionButtonText, cardShadow === option.value && styles.optionButtonTextActive]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Border Radius Scale: {(borderRadiusScale || 1.0).toFixed(1)}x</Text>
-              <Text style={styles.helperText}>Adjust roundness of corners</Text>
-              <View style={styles.sliderContainer}>
-                {[0.5, 0.8, 1.0, 1.5, 2.0].map((scale) => (
-                  <TouchableOpacity
-                    key={scale}
-                    style={[styles.sliderDot, borderRadiusScale === scale && styles.sliderDotActive]}
-                    onPress={() => setBorderRadiusScale(scale)}
-                  >
-                    <Text style={styles.sliderLabel}>{scale.toFixed(1)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </>
-        );
-
-      case 'dark':
-        return (
-          <>
-            <View style={styles.section}>
-              <View style={styles.switchRow}>
-                <Text style={styles.label}>Enable Dark Mode</Text>
-                <Switch value={darkModeEnabled} onValueChange={setDarkModeEnabled} />
-              </View>
-              <Text style={styles.helperText}>
-                Allow users to switch to a dark theme
-              </Text>
-            </View>
-
-            {darkModeEnabled && (
-              <>
-                <View style={styles.section}>
-                  <TouchableOpacity
-                    style={styles.autoGenerateButton}
-                    onPress={autoGenerateDarkTheme}
-                  >
-                    <Palette size={20} color="#3B82F6" />
-                    <Text style={styles.autoGenerateText}>Auto-Generate Dark Theme</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.helperText}>
-                    Or customize dark mode colors below
-                  </Text>
+        case 'typography':
+          return (
+            <MotiView 
+              from={{ opacity: 0, translateY: 10 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              key="typography"
+              style={styles.tabContent}
+            >
+              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+                <View style={styles.cardHeader}>
+                  <Type size={20} color={primaryColor} />
+                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Typography</Text>
                 </View>
 
-                <VisualColorPicker
-                  label="Dark Primary Color"
-                  value={darkPrimaryColor || primaryColor}
-                  onPress={() => openColorPicker('darkPrimary', darkPrimaryColor || primaryColor)}
-                  helper="Leave empty to auto-generate"
-                />
-                <VisualColorPicker
-                  label="Dark Secondary Color"
-                  value={darkSecondaryColor || secondaryColor}
-                  onPress={() => openColorPicker('darkSecondary', darkSecondaryColor || secondaryColor)}
-                  helper="Leave empty to auto-generate"
-                />
-                <VisualColorPicker
-                  label="Dark Accent Color"
-                  value={darkAccentColor || accentColor}
-                  onPress={() => openColorPicker('darkAccent', darkAccentColor || accentColor)}
-                  helper="Leave empty to auto-generate"
-                />
-                <VisualColorPicker
-                  label="Dark Background Color"
-                  value={darkBackgroundColor || '#1F2937'}
-                  onPress={() => openColorPicker('darkBackground', darkBackgroundColor || '#1F2937')}
-                  helper="Dark mode background"
-                />
-              </>
-            )}
-          </>
-        );
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Font Family</Text>
+                  <TouchableOpacity 
+                    style={[styles.fontSelectButton, { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                    onPress={() => setShowFontPicker(true)}
+                  >
+                    <Text style={[styles.fontSelectButtonText, { fontFamily: getFontFamily(fontFamily), color: '#FFFFFF' }]}>
+                      {fontFamily || 'Select Font'}
+                    </Text>
+                    <ChevronRight size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
 
-      default:
-        return null;
-    }
+                <View style={[styles.formGroup, { marginTop: 16 }]}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Heading Weight</Text>
+                  <View style={styles.buttonRow}>
+                    {['400', '500', '600', '700', '900'].map((weight) => (
+                      <TouchableOpacity
+                        key={weight}
+                        style={[styles.optionButton, { backgroundColor: headingWeight === weight ? primaryColor : '#1E293B', borderColor: '#334155' }]}
+                        onPress={() => setHeadingWeight(weight)}
+                      >
+                        <Text style={[styles.optionButtonText, { color: headingWeight === weight ? '#FFFFFF' : '#94A3B8' }]}>
+                          {weight}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={[styles.formGroup, { marginTop: 16 }]}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Body Weight</Text>
+                  <View style={styles.buttonRow}>
+                    {['400', '500', '600', '700'].map((weight) => (
+                      <TouchableOpacity
+                        key={weight}
+                        style={[styles.optionButton, { backgroundColor: bodyWeight === weight ? primaryColor : '#1E293B', borderColor: '#334155' }]}
+                        onPress={() => setBodyWeight(weight)}
+                      >
+                        <Text style={[styles.optionButtonText, { color: bodyWeight === weight ? '#FFFFFF' : '#94A3B8' }]}>
+                          {weight}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={[styles.formGroup, { marginTop: 16 }]}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Font Scale: {(fontScale || 1.0).toFixed(1)}x</Text>
+                  <View style={styles.sliderContainer}>
+                    {[0.8, 0.9, 1.0, 1.1, 1.2, 1.3].map((scale) => (
+                      <TouchableOpacity
+                        key={scale}
+                        style={[styles.sliderDot, fontScale === scale && { backgroundColor: primaryColor, transform: [{ scale: 1.2 }] }]}
+                        onPress={() => setFontScale(scale)}
+                      >
+                        <Text style={[styles.sliderLabel, { color: fontScale === scale ? primaryColor : '#64748B' }]}>{scale.toFixed(1)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </MotiView>
+          );
+
+        case 'buttons':
+          return (
+            <MotiView 
+              from={{ opacity: 0, translateY: 10 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              key="buttons"
+              style={styles.tabContent}
+            >
+              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+                <View style={styles.cardHeader}>
+                  <Square size={20} color={primaryColor} />
+                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Button Controls</Text>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Button Shape</Text>
+                  <View style={styles.buttonRow}>
+                    {[
+                      { id: 'rounded', label: 'Rounded', icon: <View style={[styles.shapePreview, { borderRadius: 8 }]} /> },
+                      { id: 'pill', label: 'Pill', icon: <View style={[styles.shapePreview, { borderRadius: 16 }]} /> },
+                      { id: 'square', label: 'Square', icon: <View style={[styles.shapePreview, { borderRadius: 0 }]} /> },
+                    ].map((shape) => (
+                      <TouchableOpacity
+                        key={shape.id}
+                        style={[
+                          styles.shapeOption,
+                          { backgroundColor: '#1E293B', borderColor: '#334155' },
+                          buttonShape === shape.id && { borderColor: primaryColor, borderWidth: 2 }
+                        ]}
+                        onPress={() => setButtonShape(shape.id as any)}
+                      >
+                        <View style={[styles.shapePreview, { backgroundColor: buttonShape === shape.id ? primaryColor : '#64748B' }]} />
+                        <Text style={[styles.optionButtonText, { color: buttonShape === shape.id ? '#FFFFFF' : '#94A3B8' }]}>
+                          {shape.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={[styles.formGroup, { marginTop: 16 }]}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Initial Style Preset</Text>
+                  <View style={styles.buttonRow}>
+                    {['flat', 'gradient', 'outlined'].map((style) => (
+                      <TouchableOpacity
+                        key={style}
+                        style={[
+                          styles.optionButton,
+                          { backgroundColor: buttonStyle === style ? primaryColor : '#1E293B', borderColor: '#334155' }
+                        ]}
+                        onPress={() => setButtonStyle(style as any)}
+                      >
+                        <Text style={[styles.optionButtonText, { color: buttonStyle === style ? '#FFFFFF' : '#94A3B8', textTransform: 'capitalize' }]}>
+                          {style}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={[styles.switchRow, { marginTop: 16 }]}>
+                  <View>
+                    <Text style={[styles.label, { color: '#FFFFFF', marginBottom: 0 }]}>Button Shadows</Text>
+                    <Text style={[styles.helperText, { color: '#94A3B8', marginBottom: 0 }]}>Add dynamic depth to buttons</Text>
+                  </View>
+                  <Switch
+                    value={buttonShadow}
+                    onValueChange={setButtonShadow}
+                    trackColor={{ false: '#1E293B', true: primaryColor }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+              </View>
+            </MotiView>
+          );
+
+        case 'spacing':
+          return (
+            <MotiView 
+              from={{ opacity: 0, translateY: 10 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              key="spacing"
+              style={styles.tabContent}
+            >
+              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+                <View style={styles.cardHeader}>
+                  <Sliders size={20} color={primaryColor} />
+                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Dimension & Scale</Text>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Base Spacing: {spacingScale.toFixed(1)}x</Text>
+                  <View style={styles.sliderContainer}>
+                    {[0.8, 0.9, 1.0, 1.2, 1.5].map((scale) => (
+                      <TouchableOpacity
+                        key={scale}
+                        style={[styles.sliderDot, spacingScale === scale && { backgroundColor: primaryColor, transform: [{ scale: 1.2 }] }]}
+                        onPress={() => setSpacingScale(scale)}
+                      >
+                        <Text style={[styles.sliderLabel, { color: spacingScale === scale ? primaryColor : '#64748B' }]}>{scale.toFixed(1)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={[styles.formGroup, { marginTop: 16 }]}>
+                  <Text style={[styles.label, { color: '#94A3B8' }]}>Default Lift (Shadows)</Text>
+                  <View style={styles.buttonRow}>
+                    {['none', 'small', 'medium', 'large'].map((shadow) => (
+                      <TouchableOpacity
+                        key={shadow}
+                        style={[
+                          styles.optionButton,
+                          { backgroundColor: cardShadow === shadow ? primaryColor : '#1E293B', borderColor: '#334155' }
+                        ]}
+                        onPress={() => setCardShadow(shadow as any)}
+                      >
+                        <Text style={[styles.optionButtonText, { color: cardShadow === shadow ? '#FFFFFF' : '#94A3B8', textTransform: 'capitalize' }]}>
+                          {shadow}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </MotiView>
+          );
+
+        case 'dark':
+          return (
+            <MotiView 
+              from={{ opacity: 0, translateY: 10 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              key="dark"
+              style={styles.tabContent}
+            >
+              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+                <View style={styles.cardHeader}>
+                  <Moon size={20} color={primaryColor} />
+                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Night Protocol</Text>
+                </View>
+
+                <View style={styles.switchRow}>
+                  <View>
+                    <Text style={[styles.label, { color: '#FFFFFF', marginBottom: 0 }]}>Enable Dark Theme</Text>
+                    <Text style={[styles.helperText, { color: '#94A3B8', marginBottom: 0 }]}>Allow the AI to switch to dark mode</Text>
+                  </View>
+                  <Switch 
+                    value={darkModeEnabled} 
+                    onValueChange={setDarkModeEnabled}
+                    trackColor={{ false: '#1E293B', true: primaryColor }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+
+                {darkModeEnabled && (
+                  <View style={{ marginTop: 24, gap: 16 }}>
+                    <TouchableOpacity
+                      style={[styles.autoGenerateButton, { backgroundColor: primaryColor + '10', borderColor: primaryColor + '40' }]}
+                      onPress={autoGenerateDarkTheme}
+                    >
+                      <Palette size={18} color={primaryColor} />
+                      <Text style={[styles.autoGenerateText, { color: primaryColor }]}>Auto-Generate Variations</Text>
+                    </TouchableOpacity>
+
+                    <VisualColorPicker
+                      label="Night Primary"
+                      value={darkPrimaryColor || primaryColor}
+                      onPress={() => openColorPicker('darkPrimary', darkPrimaryColor || primaryColor)}
+                    />
+                    <VisualColorPicker
+                      label="Night Secondary"
+                      value={darkSecondaryColor || secondaryColor}
+                      onPress={() => openColorPicker('darkSecondary', darkSecondaryColor || secondaryColor)}
+                    />
+                    <VisualColorPicker
+                      label="Night Background"
+                      value={darkBackgroundColor || '#020617'}
+                      onPress={() => openColorPicker('darkBackground', darkBackgroundColor || '#020617')}
+                    />
+                  </View>
+                )}
+              </View>
+            </MotiView>
+          );
+
+        default:
+          return null;
+      }
+    })();
+
+    return (
+      <View style={styles.contentContainer}>
+        {content}
+      </View>
+    );
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: currentTheme.colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: currentTheme.colors.surface, borderBottomColor: currentTheme.colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={currentTheme.colors.text} />
+    <View style={[styles.container, { backgroundColor: '#020617' }]}>
+      <StatusBar style="light" />
+      
+      {/* Premium Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          style={[styles.roundIconButton, { backgroundColor: '#ffffff10', borderColor: '#ffffff20' }]}
+        >
+          <ArrowLeft size={20} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: currentTheme.colors.text }]}>Brand Settings</Text>
-        <TouchableOpacity onPress={() => setShowFullPreview(true)} style={styles.headerPreviewButton}>
+        
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.premiumHeaderTitle}>Brand Lab</Text>
+          <View style={styles.premiumBadge}>
+            <Sparkles size={10} color={primaryColor} />
+            <Text style={[styles.premiumBadgeText, { color: primaryColor }]}>HQ PROTOCOL</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity 
+          onPress={() => setShowFullPreview(true)} 
+          style={[styles.roundIconButton, { backgroundColor: primaryColor + '20', borderColor: primaryColor + '40' }]}
+        >
           <Eye size={20} color={primaryColor} />
         </TouchableOpacity>
       </View>
 
-      {/* Tab Navigation */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.tabBar, { backgroundColor: currentTheme.colors.surface }]}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'identity' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
-          onPress={() => setActiveTab('identity')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'identity' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'identity' && styles.tabTextActive]}>Identity</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'colors' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
-          onPress={() => setActiveTab('colors')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'colors' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'colors' && styles.tabTextActive]}>Colors</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'typography' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
-          onPress={() => setActiveTab('typography')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'typography' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'typography' && styles.tabTextActive]}>Typography</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'buttons' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
-          onPress={() => setActiveTab('buttons')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'buttons' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'buttons' && styles.tabTextActive]}>Buttons</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'spacing' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
-          onPress={() => setActiveTab('spacing')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'spacing' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'spacing' && styles.tabTextActive]}>Spacing</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'dark' && { borderBottomColor: currentTheme.colors.primary, borderBottomWidth: 2 }]}
-          onPress={() => setActiveTab('dark')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'dark' ? currentTheme.colors.primary : currentTheme.colors.textSecondary }, activeTab === 'dark' && styles.tabTextActive]}>Dark Mode</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      {/* Modern Scrolling Tabs */}
+      <View style={styles.tabBarContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBarScroll}>
+          <TabItem 
+            active={activeTab === 'identity'} 
+            label="Identity" 
+            onPress={() => setActiveTab('identity')} 
+            icon={<LayoutGrid size={16} color={activeTab === 'identity' ? '#FFFFFF' : '#94A3B8'} />}
+          />
+          <TabItem 
+            active={activeTab === 'colors'} 
+            label="Colors" 
+            onPress={() => setActiveTab('colors')} 
+            icon={<Palette size={16} color={activeTab === 'colors' ? '#FFFFFF' : '#94A3B8'} />}
+          />
+          <TabItem 
+            active={activeTab === 'typography'} 
+            label="Type" 
+            onPress={() => setActiveTab('typography')} 
+            icon={<Type size={16} color={activeTab === 'typography' ? '#FFFFFF' : '#94A3B8'} />}
+          />
+          <TabItem 
+            active={activeTab === 'buttons'} 
+            label="Controls" 
+            onPress={() => setActiveTab('buttons')} 
+            icon={<Square size={16} color={activeTab === 'buttons' ? '#FFFFFF' : '#94A3B8'} />}
+          />
+          <TabItem 
+            active={activeTab === 'spacing'} 
+            label="Grid" 
+            onPress={() => setActiveTab('spacing')} 
+            icon={<Sliders size={16} color={activeTab === 'spacing' ? '#FFFFFF' : '#94A3B8'} />}
+          />
+          <TabItem 
+            active={activeTab === 'dark'} 
+            label="Night" 
+            onPress={() => setActiveTab('dark')} 
+            icon={<Moon size={16} color={activeTab === 'dark' ? '#FFFFFF' : '#94A3B8'} />}
+          />
+        </ScrollView>
+      </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        keyboardShouldPersistTaps="handled" 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
         {renderTabContent()}
 
-        {/* Live Preview */}
-        {showPreview && (
-          <View style={styles.previewSection}>
-            <Text style={styles.previewTitle}>Live Preview</Text>
-            
-            <View style={[styles.previewCard, { backgroundColor: backgroundColor }]}>
-              {logoUrl && (
-                <Image source={{ uri: logoUrl }} style={styles.previewLogo} />
-              )}
-              <Text style={[styles.previewBrandName, { fontFamily, fontWeight: headingWeight as any }]}>
-                {brandName || 'Your Brand'}
-              </Text>
-              
-              <View style={styles.previewButtons}>
-                <View
-                  style={[
-                    styles.previewButton,
-                    {
-                      backgroundColor: primaryColor,
-                      borderRadius: buttonShape === 'rounded' ? 12 : buttonShape === 'pill' ? 999 : 4,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.previewButtonText, { fontFamily }]}>Primary Button</Text>
-                </View>
-                <View
-                  style={[
-                    styles.previewButton,
-                    {
-                      backgroundColor: secondaryColor,
-                      borderRadius: buttonShape === 'rounded' ? 12 : buttonShape === 'pill' ? 999 : 4,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.previewButtonText, { fontFamily }]}>Secondary Button</Text>
-                </View>
-              </View>
+        {/* Floating Action Bar */}
+      </ScrollView>
 
-              <View style={styles.previewAvatarRow}>
-                <View style={[styles.previewAvatar, { backgroundColor: primaryColor }]}>
-                  <Text style={styles.previewAvatarText}>JD</Text>
-                </View>
-                <View style={styles.previewAvatarInfo}>
-                  <Text style={[styles.previewAvatarName, { fontFamily, fontWeight: headingWeight as any }]}>
-                    John Doe
-                  </Text>
-                  <Text style={[styles.previewAvatarRole, { fontFamily }]}>Client Avatar</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Preview Dashboard Button */}
-        {/* <TouchableOpacity
-          style={[styles.previewDashboardButton, { borderColor: primaryColor }]}
-          onPress={() => setShowFullPreview(true)}
-        >
-          <Eye size={20} color={primaryColor} />
-          <Text style={[styles.previewDashboardButtonText, { color: primaryColor }]}>Preview Dashboard</Text>
-        </TouchableOpacity> */}
-
-        {/* Full-Page Dashboard Preview Modal */}
-        <Modal visible={showFullPreview} animationType="slide" presentationStyle="fullScreen">
-          <SafeAreaView style={[styles.fullPreviewContainer, { backgroundColor: backgroundColor }]}>
-            {/* Close Button */}
-            <TouchableOpacity
-              style={styles.fullPreviewCloseButton}
-              onPress={() => setShowFullPreview(false)}
-            >
-              <View style={[styles.fullPreviewCloseIcon, { backgroundColor: primaryColor }]}>
-                <X size={20} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
-
-            {/* Dashboard Header */}
-            <View style={[styles.fullPreviewHeader, { backgroundColor: darkModeEnabled ? '#1F2937' : '#FFFFFF', borderBottomColor: darkModeEnabled ? '#374151' : '#E5E7EB' }]}>
-              <Text style={[styles.fullPreviewGreeting, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
-                Welcome back, Coach!
-              </Text>
-              <Text style={[styles.fullPreviewSubtitle, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>
-                Coach Dashboard
-              </Text>
-            </View>
-
-            <ScrollView style={styles.fullPreviewContent}>
-              {/* Stats Grid */}
-              <View style={styles.fullPreviewStatsGrid}>
-                <View style={[styles.fullPreviewStatCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
-                  <View style={[styles.fullPreviewStatIcon, { backgroundColor: primaryColor + '20' }]}>
-                    <Users size={24} color={primaryColor} />
-                  </View>
-                  <Text style={[styles.fullPreviewStatValue, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>12</Text>
-                  <Text style={[styles.fullPreviewStatLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Total Clients</Text>
-                </View>
-
-                <View style={[styles.fullPreviewStatCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
-                  <View style={[styles.fullPreviewStatIcon, { backgroundColor: secondaryColor + '20' }]}>
-                    <TrendingUp size={24} color={secondaryColor} />
-                  </View>
-                  <Text style={[styles.fullPreviewStatValue, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>8</Text>
-                  <Text style={[styles.fullPreviewStatLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Active Clients</Text>
-                </View>
-
-                <View style={[styles.fullPreviewStatCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
-                  <View style={[styles.fullPreviewStatIcon, { backgroundColor: accentColor + '20' }]}>
-                    <CheckCircle size={24} color={accentColor} />
-                  </View>
-                  <Text style={[styles.fullPreviewStatValue, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>5</Text>
-                  <Text style={[styles.fullPreviewStatLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Pending Check-ins</Text>
-                </View>
-
-                <View style={[styles.fullPreviewStatCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
-                  <View style={[styles.fullPreviewStatIcon, { backgroundColor: '#EF4444' + '20' }]}>
-                    <MessageCircle size={24} color="#EF4444" />
-                  </View>
-                  <Text style={[styles.fullPreviewStatValue, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>3</Text>
-                  <Text style={[styles.fullPreviewStatLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Unread Messages</Text>
-                </View>
-              </View>
-
-              {/* Quick Actions */}
-              <View style={styles.fullPreviewSection}>
-                <Text style={[styles.fullPreviewSectionTitle, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
-                  Quick Actions
-                </Text>
-                <View style={[styles.fullPreviewActionCard, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
-                  <View style={[styles.fullPreviewActionIcon, { backgroundColor: primaryColor + '20' }]}>
-                    <Target size={28} color={primaryColor} />
-                  </View>
-                  <View style={styles.fullPreviewActionContent}>
-                    <Text style={[styles.fullPreviewActionTitle, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
-                      Challenges
-                    </Text>
-                    <Text style={[styles.fullPreviewActionSubtitle, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>
-                      Manage client challenges and AI suggestions
-                    </Text>
-                  </View>
-                  <View style={[styles.fullPreviewAIIndicator, { backgroundColor: primaryColor + '20' }]}>
-                    <Sparkles size={16} color={primaryColor} />
-                  </View>
-                </View>
-              </View>
-
-              {/* Recent Activity */}
-              <View style={styles.fullPreviewSection}>
-                <Text style={[styles.fullPreviewSectionTitle, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
-                  Recent Activity
-                </Text>
-                <View style={[styles.fullPreviewEmptyState, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
-                  <Text style={[styles.fullPreviewEmptyText, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>
-                    No recent activity
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            {/* Bottom Navigation Preview */}
-            <View style={[styles.fullPreviewNavBar, { backgroundColor: darkModeEnabled ? '#1F2937' : '#FFFFFF', borderTopColor: darkModeEnabled ? '#374151' : '#E5E7EB' }]}>
-              <View style={styles.fullPreviewNavItem}>
-                <Home size={24} color={primaryColor} />
-                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: primaryColor }]}>Home</Text>
-              </View>
-              <View style={styles.fullPreviewNavItem}>
-                <Users size={24} color={darkModeEnabled ? '#9CA3AF' : '#6B7280'} />
-                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Clients</Text>
-              </View>
-              <View style={styles.fullPreviewNavItem}>
-                <MessageCircle size={24} color={darkModeEnabled ? '#9CA3AF' : '#6B7280'} />
-                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Messages</Text>
-              </View>
-              <View style={styles.fullPreviewNavItem}>
-                <Calendar size={24} color={darkModeEnabled ? '#9CA3AF' : '#6B7280'} />
-                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Calendar</Text>
-              </View>
-              <View style={styles.fullPreviewNavItem}>
-                <Settings size={24} color={darkModeEnabled ? '#9CA3AF' : '#6B7280'} />
-                <Text style={[styles.fullPreviewNavLabel, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>Settings</Text>
-              </View>
-            </View>
-          </SafeAreaView>
-        </Modal>
-
-        {/* Save Button */}
+      {/* Gradient Bottom Save Button */}
+      <View style={[styles.bottomActionBar, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: currentTheme.colors.primary }, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={loading}
+          style={[styles.saveButtonMain, { backgroundColor: '#2563EB' }, loading && { opacity: 0.7 }]}
         >
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <>
-              <Save size={20} color="#FFFFFF" />
-              <Text style={styles.saveButtonText}>Save Changes</Text>
-            </>
+            <View style={styles.saveButtonContent}>
+              <Save size={20} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.saveButtonTextMain}>Commit Changes</Text>
+            </View>
           )}
         </TouchableOpacity>
+      </View>
 
-        {/* Color Picker Modal */}
-        <ColorPickerModal
-          visible={showColorPicker}
-          currentColor={
-            activeColorField === 'primary' ? primaryColor :
-            activeColorField === 'secondary' ? secondaryColor :
-            activeColorField === 'accent' ? accentColor :
-            activeColorField === 'background' ? backgroundColor :
-            activeColorField === 'darkPrimary' ? (darkPrimaryColor || primaryColor) :
-            activeColorField === 'darkSecondary' ? (darkSecondaryColor || secondaryColor) :
-            activeColorField === 'darkAccent' ? (darkAccentColor || accentColor) :
-            (darkBackgroundColor || '#1F2937')
-          }
-          onClose={() => setShowColorPicker(false)}
-          onColorSelected={handleColorChange}
+      {/* Pre-existing Modals */}
+      <ColorPickerModal
+        visible={showColorPicker}
+        currentColor={
+          activeColorField === 'primary' ? primaryColor :
+          activeColorField === 'secondary' ? secondaryColor :
+          activeColorField === 'accent' ? accentColor :
+          activeColorField === 'background' ? backgroundColor :
+          activeColorField === 'darkPrimary' ? (darkPrimaryColor || primaryColor) :
+          activeColorField === 'darkSecondary' ? (darkSecondaryColor || secondaryColor) :
+          activeColorField === 'darkAccent' ? (darkAccentColor || accentColor) :
+          (darkBackgroundColor || '#020617')
+        }
+        onClose={() => setShowColorPicker(false)}
+        onColorSelected={handleColorChange}
+      />
+
+      <FontPickerModal 
+        visible={showFontPicker} 
+        active={fontFamily} 
+        onClose={() => setShowFontPicker(false)} 
+        onSelect={(font: string) => {
+          setFontFamily(font);
+          setShowFontPicker(false);
+        }}
+        primaryColor={primaryColor}
+        theme={currentTheme}
+      />
+
+      {/* Full Preview Modal Content - Keeping original logic but could be restyled */}
+      <Modal visible={showFullPreview} animationType="slide" presentationStyle="fullScreen">
+        <FullPreviewContent 
+          brandName={brandName} 
+          logoUrl={logoUrl} 
+          primaryColor={primaryColor}
+          secondaryColor={secondaryColor}
+          accentColor={accentColor}
+          backgroundColor={backgroundColor}
+          fontFamily={fontFamily}
+          headingWeight={headingWeight}
+          darkModeEnabled={darkModeEnabled}
+          onClose={() => setShowFullPreview(false)}
         />
+      </Modal>
+    </View>
+  );
+}
 
-        {/* Font Picker Modal */}
-        <Modal visible={showFontPicker} animationType="slide" transparent>
-          <View style={styles.fontPickerOverlay}>
-            <View style={[styles.fontPickerContainer, { backgroundColor: currentTheme.colors.background }]}>
-              <View style={styles.fontPickerHeader}>
-                <Text style={[styles.fontPickerTitle, { color: currentTheme.colors.text }]}>Select Font</Text>
-                <TouchableOpacity onPress={() => setShowFontPicker(false)}>
-                  <X size={24} color={currentTheme.colors.text} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.fontPickerList} showsVerticalScrollIndicator={false}>
-                {AVAILABLE_FONTS.map((font) => (
-                  <TouchableOpacity
-                    key={font.name}
-                    style={[
-                      styles.fontPickerItem,
-                      { borderBottomColor: currentTheme.colors.border },
-                      fontFamily === font.name && { backgroundColor: primaryColor + '15' }
-                    ]}
-                    onPress={() => {
-                      setFontFamily(font.name);
-                      setShowFontPicker(false);
-                    }}
-                  >
-                    <Text 
-                      style={[
-                        styles.fontPickerItemText,
-                        { 
-                          fontFamily: font.fontFamily !== 'System' ? font.fontFamily : undefined,
-                          color: fontFamily === font.name ? primaryColor : currentTheme.colors.text,
-                        }
-                      ]}
-                    >
-                      {font.name}
-                    </Text>
-                    {fontFamily === font.name && (
-                      <Check size={20} color={primaryColor} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+// Sub-components for cleaner code
+function TabItem({ active, label, onPress, icon }: any) {
+  const blueBrand = '#2563EB'; // The "exact blue" brand color
+  return (
+    <TouchableOpacity 
+      onPress={onPress}
+      style={[
+        styles.tabItem, 
+        active && { backgroundColor: blueBrand }
+      ]}
+    >
+      {React.cloneElement(icon, { color: active ? '#FFFFFF' : '#94A3B8', size: 18 })}
+      <Text style={[styles.tabLabel, { color: active ? '#FFFFFF' : '#94A3B8' }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function FontPickerModal({ visible, active, onClose, onSelect, primaryColor, theme }: any) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalBlurOverlay}>
+        <View style={[styles.premiumBottomModal, { backgroundColor: '#020617', borderColor: '#ffffff10' }]}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Identity Font</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
+              <X size={20} color="#94A3B8" />
+            </TouchableOpacity>
           </View>
-        </Modal>
+          <ScrollView style={styles.fontList} showsVerticalScrollIndicator={false}>
+            {AVAILABLE_FONTS.map((font) => (
+              <TouchableOpacity
+                key={font.name}
+                style={[
+                  styles.fontListItem,
+                  active === font.name && { backgroundColor: primaryColor + '20', borderColor: primaryColor + '40' }
+                ]}
+                onPress={() => onSelect(font.name)}
+              >
+                <View>
+                  <Text 
+                    style={[
+                      styles.fontListText,
+                      { 
+                        fontFamily: font.fontFamily !== 'System' ? font.fontFamily : undefined,
+                        color: active === font.name ? primaryColor : '#F8FAFC',
+                      }
+                    ]}
+                  >
+                    {font.name}
+                  </Text>
+                  <Text style={styles.fontListPreview}>The quick brown fox jumps over the lazy dog</Text>
+                </View>
+                {active === font.name && <CheckCircle size={20} color={primaryColor} />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// Move Full Preview to separate component to clean up main screen
+function FullPreviewContent({ brandName, logoUrl, primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, headingWeight, darkModeEnabled, onClose }: any) {
+  return (
+    <SafeAreaView style={[styles.fullPreviewContainer, { backgroundColor: backgroundColor }]}>
+      <TouchableOpacity style={styles.fullPreviewCloseButton} onPress={onClose}>
+        <View style={[styles.fullPreviewCloseIcon, { backgroundColor: primaryColor }]}>
+          <X size={20} color="#FFFFFF" />
+        </View>
+      </TouchableOpacity>
+
+      <View style={[styles.fullPreviewHeader, { backgroundColor: darkModeEnabled ? '#1F2937' : '#FFFFFF', borderBottomColor: darkModeEnabled ? '#374151' : '#E5E7EB' }]}>
+        <Text style={[styles.fullPreviewGreeting, { fontFamily, fontWeight: headingWeight as any, color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>
+          Welcome back!
+        </Text>
+        <Text style={[styles.fullPreviewSubtitle, { fontFamily, color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }]}>
+          Your Brand Identity
+        </Text>
+      </View>
+
+      <ScrollView style={styles.fullPreviewContent}>
+        <View style={styles.fullPreviewStatsGrid}>
+          <StatBox label="Total Impact" value="1.2k" color={primaryColor} icon={<Users size={20} color={primaryColor} />} />
+          <StatBox label="Growth" value="24%" color={secondaryColor} icon={<TrendingUp size={20} color={secondaryColor} />} />
+        </View>
+
+        <View style={styles.fullPreviewSection}>
+          <Text style={[styles.fullPreviewSectionTitle, { color: darkModeEnabled ? '#F9FAFB' : '#111827' }]}>Recent Activity</Text>
+          <View style={[styles.fullPreviewEmptyState, { backgroundColor: darkModeEnabled ? '#374151' : '#FFFFFF' }]}>
+            <Text style={{ color: darkModeEnabled ? '#9CA3AF' : '#6B7280' }}>Dashboard simulation active</Text>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function StatBox({ label, value, color, icon }: any) {
+  return (
+    <View style={styles.fullPreviewStatCard}>
+      <View style={[styles.fullPreviewStatIcon, { backgroundColor: color + '20' }]}>{icon}</View>
+      <Text style={styles.fullPreviewStatValue}>{value}</Text>
+      <Text style={styles.fullPreviewStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
 // Visual Color Picker Component (Button that opens modal)
 function VisualColorPicker({ label, value, onPress, helper }: { label: string; value: string; onPress: () => void; helper?: string }) {
-  const theme = useTheme();
   return (
-    <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-      <Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text>
-      {helper && <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>{helper}</Text>}
+    <View style={styles.colorPickerGroup}>
+      <View style={styles.colorPickerLabelRow}>
+        <Text style={[styles.label, { color: '#FFFFFF', marginBottom: 0 }]}>{label}</Text>
+        <Text style={[styles.colorHexCode, { color: '#94A3B8' }]}>{value.toUpperCase()}</Text>
+      </View>
       <TouchableOpacity
-        style={[styles.colorPickerButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+        style={[styles.colorTrigger, { backgroundColor: '#1E293B', borderColor: '#334155' }]}
         onPress={onPress}
       >
-        <View style={[styles.colorPreviewLarge, { backgroundColor: value }]} />
-        <Text style={[styles.colorPickerButtonText, { color: theme.colors.text }]}>{value.toUpperCase()}</Text>
+        <View style={[styles.colorChip, { backgroundColor: value }]} />
+        <Text style={[styles.colorTriggerText, { color: '#FFFFFF' }]}>Adjust Shade</Text>
+        <ChevronRight size={16} color="#94A3B8" />
       </TouchableOpacity>
     </View>
   );
@@ -1148,191 +1153,145 @@ function ColorPickerModal({ visible, currentColor, onClose, onColorSelected }: {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    zIndex: 10,
+  },
+  roundIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+  },
+  premiumHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff08',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 2,
+    gap: 4,
+  },
+  premiumBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  tabBarContainer: {
+    height: 60,
+    marginBottom: 8,
+  },
+  tabBarScroll: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    alignItems: 'center',
+    gap: 8,
   },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: 16,
-  },
-  headerPreviewButton: {
-    padding: 4,
-  },
-  tabBar: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    paddingHorizontal: 8,
-    maxHeight: 48,
-  },
-  tab: {
+  tabItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    marginHorizontal: 4,
+    borderRadius: 12,
+    backgroundColor: '#ffffff08',
+    gap: 6,
   },
-  tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#3B82F6',
+  tabLabel: {
+    fontSize: 13,
+    fontWeight: '700',
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
+  contentContainer: {
+    paddingHorizontal: 16,
   },
-  tabTextActive: {
-    color: '#3B82F6',
+  tabContent: {
+    gap: 16,
   },
-  content: {
-    flex: 1,
-    padding: 16,
+  card: {
+    backgroundColor: '#0F172A',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 5,
   },
-  section: {
-    marginBottom: 24,
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 10,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  formGroup: {
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
     marginBottom: 8,
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginBottom: 8,
+    opacity: 0.9,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
     fontSize: 16,
-    color: '#111827',
+    fontWeight: '500',
+    backgroundColor: '#1E293B',
+    borderColor: '#334155',
+    color: '#FFFFFF',
   },
   uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    height: 100,
+    borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#3B82F6',
-    borderRadius: 12,
     borderStyle: 'dashed',
-    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: 8,
   },
   uploadButtonText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#3B82F6',
+    fontWeight: '700',
   },
   logoPreviewContainer: {
-    marginTop: 12,
+    marginTop: 16,
     alignItems: 'center',
   },
   logoPreview: {
-    width: 100,
-    height: 100,
-    borderRadius: 12,
+    width: 120,
+    height: 120,
+    borderRadius: 24,
   },
-  colorInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  colorPreview: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  colorInput: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#111827',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  optionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-  },
-  optionButtonActive: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
-  },
-  optionButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  optionButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  shapeOption: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    gap: 8,
-  },
-  shapePreview: {
-    width: 40,
-    height: 24,
-    backgroundColor: '#3B82F6',
-  },
-  sliderContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  sliderDot: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  sliderDotActive: {
-    transform: [{ scale: 1.2 }],
-  },
-  sliderLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  helperText: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 16,
+    opacity: 0.6,
   },
   presetGrid: {
     flexDirection: 'row',
@@ -1340,223 +1299,263 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   presetCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
+    flex: 1,
+    minWidth: '45%',
+    borderRadius: 16,
     padding: 16,
+    borderWidth: 1.5,
     alignItems: 'center',
-    gap: 8,
-  },
-  presetColors: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  presetColorDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  presetName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#374151',
-    textAlign: 'center',
+    gap: 10,
+    position: 'relative',
+    overflow: 'hidden',
   },
   presetSelectedCheck: {
     position: 'absolute',
     top: 8,
     right: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  presetColors: {
+    flexDirection: 'row',
+    gap: -8,
+  },
+  presetColorDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#0F172A',
+  },
+  presetName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  colorPickerGroup: {
+    marginBottom: 20,
+  },
+  colorPickerLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  colorHexCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  colorTrigger: {
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  colorChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ffffff20',
+  },
+  colorTriggerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  fontSelectButton: {
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  fontSelectButtonText: {
+    fontSize: 16,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  optionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  optionButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sliderContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    paddingBottom: 20,
+    paddingHorizontal: 10,
+  },
+  sliderDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffffff08',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sliderLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  shapeOption: {
+    flex: 1,
+    height: 70,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shapePreview: {
+    width: 36,
+    height: 18,
+    borderWidth: 1,
+    borderColor: '#ffffff20',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   autoGenerateButton: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    borderRadius: 12,
-    padding: 16,
     gap: 8,
+    marginBottom: 8,
   },
   autoGenerateText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#3B82F6',
+    fontWeight: '700',
   },
-  previewSection: {
-    marginTop: 24,
-    marginBottom: 24,
+  bottomActionBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    backgroundColor: '#020617ee',
+    borderTopWidth: 1,
+    borderTopColor: '#ffffff08',
   },
-  previewTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  previewCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
+  saveButtonMain: {
+    height: 56,
+    borderRadius: 18,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    gap: 16,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  previewLogo: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-  },
-  previewBrandName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  previewButtons: {
-    width: '100%',
-    gap: 12,
-  },
-  previewButton: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  previewButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  previewAvatarRow: {
+  saveButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    width: '100%',
+    gap: 10,
   },
-  previewAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  previewAvatarText: {
+  saveButtonTextMain: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  previewAvatarInfo: {
+  modalBlurOverlay: {
     flex: 1,
+    backgroundColor: '#000000aa',
+    justifyContent: 'flex-end',
   },
-  previewAvatarName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
+  premiumBottomModal: {
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderTopWidth: 1,
+    paddingBottom: 40,
+    maxHeight: '80%',
   },
-  previewAvatarRole: {
-    fontSize: 12,
-    color: '#6B7280',
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#ffffff20',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
   },
-  saveButton: {
+  modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    padding: 16,
-    gap: 8,
-    marginBottom: 32,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  noPermissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 24,
   },
-  noPermissionTitle: {
+  modalTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
-  noPermissionText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  previewContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffffff08',
+    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    width: '100%',
   },
-  previewLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginBottom: 12,
+  fontList: {
+    paddingHorizontal: 16,
   },
-  brandNamePreview: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginTop: 12,
-  },
-  // Color Picker Styles
-  colorPickerButton: {
+  fontListItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    justifyContent: 'space-between',
     padding: 16,
+    borderRadius: 16,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginTop: 8,
+    borderColor: 'transparent',
   },
-  colorPreviewLarge: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginRight: 12,
+  fontListText: {
+    fontSize: 18,
+    fontWeight: '600',
   },
-  colorPickerButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#374151',
+  fontListPreview: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 4,
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#000000d0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   colorPickerModal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: '#0F172A',
+    borderRadius: 32,
     padding: 24,
     width: '90%',
-    maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: '#1E293B',
   },
   colorPickerModalHeader: {
     flexDirection: 'row',
@@ -1566,258 +1565,133 @@ const styles = StyleSheet.create({
   },
   colorPickerModalTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   colorPickerModalClose: {
-    fontSize: 32,
-    color: '#6B7280',
-    fontWeight: '300',
+    fontSize: 28,
+    color: '#94A3B8',
   },
   colorPickerContainer: {
-    height: 300,
-    marginBottom: 20,
+    height: 280,
+    marginBottom: 24,
   },
   colorPreviewSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    backgroundColor: '#1E293B',
     padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
+    borderRadius: 16,
+    marginBottom: 20,
   },
   colorPreviewBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
+    width: 50,
+    height: 50,
+    borderRadius: 12,
     marginRight: 16,
+    borderWidth: 1,
+    borderColor: '#ffffff20',
   },
   colorPreviewText: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: '800',
+    color: '#FFFFFF',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   colorPickerConfirmButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    padding: 16,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   colorPickerConfirmText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
   },
-  // Preview Dashboard Button
-  previewDashboardButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    gap: 8,
-  },
-  previewDashboardButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  // Full Preview Modal Styles
   fullPreviewContainer: {
     flex: 1,
   },
   fullPreviewCloseButton: {
     position: 'absolute',
-    top: 60,
-    right: 16,
+    top: 50,
+    right: 20,
     zIndex: 100,
   },
   fullPreviewCloseIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
   fullPreviewHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
+    padding: 24,
+    paddingTop: 80,
     borderBottomWidth: 1,
   },
   fullPreviewGreeting: {
-    fontSize: 24,
-    marginBottom: 4,
+    fontSize: 28,
+    letterSpacing: -0.5,
   },
   fullPreviewSubtitle: {
-    fontSize: 14,
+    fontSize: 16,
+    opacity: 0.7,
   },
   fullPreviewContent: {
-    flex: 1,
-    padding: 16,
+    padding: 20,
   },
   fullPreviewStatsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 24,
   },
   fullPreviewStatCard: {
     flex: 1,
-    minWidth: '45%',
-    padding: 16,
-    borderRadius: 16,
+    backgroundColor: '#ffffff08',
+    padding: 20,
+    borderRadius: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#ffffff10',
   },
   fullPreviewStatIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   fullPreviewStatValue: {
     fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   fullPreviewStatLabel: {
     fontSize: 12,
+    color: '#94A3B8',
     textAlign: 'center',
   },
   fullPreviewSection: {
     marginBottom: 24,
   },
   fullPreviewSectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginBottom: 16,
   },
-  fullPreviewActionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  fullPreviewActionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullPreviewActionContent: {
-    flex: 1,
-  },
-  fullPreviewActionTitle: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  fullPreviewActionSubtitle: {
-    fontSize: 14,
-  },
-  fullPreviewAIIndicator: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   fullPreviewEmptyState: {
-    padding: 40,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  fullPreviewEmptyText: {
-    fontSize: 14,
-  },
-  fullPreviewNavBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 12,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-  },
-  fullPreviewNavItem: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  fullPreviewNavLabel: {
-    fontSize: 10,
-  },
-  // Font Select Button
-  fontSelectButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    padding: 30,
+    borderRadius: 24,
+    backgroundColor: '#ffffff05',
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  fontSelectButtonText: {
-    fontSize: 16,
-  },
-  fontSelectArrow: {
-    fontSize: 12,
-  },
-  // Font Picker Modal
-  fontPickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  fontPickerContainer: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 8,
-    maxHeight: '70%',
-  },
-  fontPickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    borderColor: '#ffffff08',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  fontPickerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  fontPickerList: {
-    paddingHorizontal: 8,
-  },
-  fontPickerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    marginHorizontal: 8,
-  },
-  fontPickerItemText: {
-    fontSize: 18,
   },
 });

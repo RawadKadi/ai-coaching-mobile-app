@@ -469,11 +469,11 @@ export function ChatInputBar({
       {/* ── Input row ──────────────────────────────────────────────────────── */}
       <View style={[
         styles.inputRow,
-        { borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface },
+        { backgroundColor: '#020617' },
         Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 0 : 24 } : { paddingBottom: 12 },
       ]}>
 
-        {/* Plus / Attach */}
+        {/* Action Trigger (Plus) */}
         <TouchableOpacity
           style={styles.iconBtn}
           onPress={() => togglePanel('attach')}
@@ -482,27 +482,27 @@ export function ChatInputBar({
         >
           <Plus
             size={24}
-            color={activePanel === 'attach' ? theme.colors.primary : theme.colors.textSecondary}
-            strokeWidth={2}
+            color={activePanel === 'attach' ? '#3B82F6' : '#64748B'}
+            strokeWidth={2.5}
           />
         </TouchableOpacity>
 
-        {/* Text input + sticker button inside */}
+        {/* Styled Focus Input */}
         <View style={[
           styles.inputWrapper,
-          { backgroundColor: theme.colors.inputBackground ?? theme.colors.surfaceAlt },
+          { backgroundColor: '#0F172A', borderColor: '#1E293B' },
         ]}>
           <TextInput
             ref={inputRef}
             style={[
               styles.input,
               {
-                color: theme.colors.text,
+                color: '#F8FAFC',
                 fontFamily: theme.typography.fontFamily,
               },
             ]}
-            placeholder={placeholder}
-            placeholderTextColor={theme.colors.textSecondary}
+            placeholder="Message athlete..."
+            placeholderTextColor="#475569"
             value={text}
             onChangeText={setText}
             onFocus={onInputFocus}
@@ -510,7 +510,7 @@ export function ChatInputBar({
             editable={!isDisabled}
           />
 
-          {/* Sticker / GIF button — inside input on the right */}
+          {/* Core Engine: Sticker/GIF */}
           <TouchableOpacity
             style={styles.stickerBtn}
             onPress={() => togglePanel('emoji')}
@@ -518,18 +518,18 @@ export function ChatInputBar({
             disabled={isDisabled}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {/* Sticker icon SVG */}
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-              <Circle cx="12" cy="12" r="10" stroke={activePanel === 'emoji' ? theme.colors.primary : theme.colors.textSecondary} strokeWidth="1.8" />
-              <Path d="M12 22C15.5 22 18.5 20 20 17H12C10.3 17 9 15.7 9 14V12H4C4 17.5 7.5 22 12 22Z" fill={activePanel === 'emoji' ? theme.colors.primary : theme.colors.textSecondary} />
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+              <Circle cx="12" cy="12" r="10" stroke={activePanel === 'emoji' ? '#3B82F6' : '#64748B'} strokeWidth="2" />
+              <Path d="M12 22C15.5 22 18.5 20 20 17H12C10.3 17 9 15.7 9 14V12H4C4 17.5 7.5 22 12 22Z" fill={activePanel === 'emoji' ? '#3B82F6' : '#64748B'} />
             </Svg>
           </TouchableOpacity>
         </View>
 
+        {/* Strategic Send Action */}
         <TouchableOpacity
           style={[
             styles.sendBtn,
-            { backgroundColor: theme.colors.primary },
+            { backgroundColor: '#FB923C' },
             ((!text.trim() && !selectedMedia) || isDisabled) && { opacity: 0.5 },
           ]}
           onPress={handleSend}
@@ -539,7 +539,7 @@ export function ChatInputBar({
           {sending ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Send size={18} color="#FFFFFF" />
+            <Send size={20} color="#FFFFFF" fill="#FFFFFF" />
           )}
         </TouchableOpacity>
       </View>
@@ -817,11 +817,10 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 8,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    gap: 6,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
   },
   iconBtn: {
     width: 36,
@@ -833,10 +832,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 22,
+    borderRadius: 28,
     marginHorizontal: 4,
-    paddingRight: 4,
-    minHeight: 44,
+    paddingRight: 6,
+    minHeight: 48,
+    borderWidth: 1,
   },
   input: {
     flex: 1,
@@ -852,9 +852,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },

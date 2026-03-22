@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, SafeAreaView, RefreshControl } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, RefreshControl, StatusBar } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { ChevronRight, MessageCircle, Users, Zap } from 'lucide-react-native';
+import { ChevronRight, MessageCircle, Users, Zap, Search, Bell } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ClientPreview = {
   id: string; user_id: string; full_name: string; avatar_url: string | null;
@@ -18,8 +19,9 @@ type CoachPreview = {
 type Tab = 'clients' | 'team';
 
 export default function CoachMessagesScreen() {
-  const router = useRouter();
+
   const { coach, user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<Tab>('clients');
   const [clients, setClients] = useState<ClientPreview[]>([]);
   const [teammates, setTeammates] = useState<CoachPreview[]>([]);
@@ -87,54 +89,26 @@ export default function CoachMessagesScreen() {
 
   const onRefresh = () => { setRefreshing(true); loadClients(); loadTeammates(); };
 
-  const renderClientCard = ({ item, index }: { item: ClientPreview; index: number }) => (
-    <MotiView from={{ opacity: 0, translateX: -10 }} animate={{ opacity: 1, translateX: 0 }} transition={{ delay: index * 40 }} className="mb-3">
+  const renderCard = (fullName: string, avatarUrl: string | null, lastMsg: string | undefined, lastTime: string | undefined, unread: number | undefined, onPress: () => void, index: number) => (
+    <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: index * 50 }} className="mb-4">
       <TouchableOpacity
-        className="flex-row items-center p-4 bg-slate-900/40 rounded-[28px] border border-slate-900"
-        onPress={() => router.push({ pathname: '/(coach)/(tabs)/chat/[id]', params: { id: item.id } })}
+        className="flex-row items-center p-5 bg-slate-900/40 rounded-[32px] border border-white/5"
+        onPress={onPress}
       >
         <View className="relative mr-4">
-          <BrandedAvatar name={item.full_name} imageUrl={item.avatar_url} size={52} />
-          <View className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-950" />
+          <BrandedAvatar name={fullName} imageUrl={avatarUrl} size={56} />
+          <View className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-950" />
         </View>
         <View className="flex-1 mr-3">
           <View className="flex-row justify-between items-center mb-1">
-            <Text className={`font-black text-base ${item.unread_count ? 'text-white' : 'text-slate-300'}`}>{item.full_name}</Text>
-            <Text className="text-slate-600 text-[10px] font-bold">{formatTime(item.last_message_time)}</Text>
+            <Text className={`font-black text-base tracking-tight ${unread ? 'text-white' : 'text-slate-300'}`}>{fullName}</Text>
+            <Text className="text-slate-600 text-[10px] font-bold uppercase">{formatTime(lastTime)}</Text>
           </View>
-          <Text className={`text-xs font-bold ${item.unread_count ? 'text-slate-400' : 'text-slate-600'}`} numberOfLines={1}>{item.last_message}</Text>
+          <Text className={`text-sm font-medium ${unread ? 'text-slate-400' : 'text-slate-600'}`} numberOfLines={1}>{lastMsg}</Text>
         </View>
-        {(item.unread_count || 0) > 0 ? (
-          <View className="w-6 h-6 bg-blue-600 rounded-full items-center justify-center">
-            <Text className="text-white text-[10px] font-black">{item.unread_count}</Text>
-          </View>
-        ) : (
-          <ChevronRight size={18} color="#334155" />
-        )}
-      </TouchableOpacity>
-    </MotiView>
-  );
-
-  const renderTeamCard = ({ item, index }: { item: CoachPreview; index: number }) => (
-    <MotiView from={{ opacity: 0, translateX: -10 }} animate={{ opacity: 1, translateX: 0 }} transition={{ delay: index * 40 }} className="mb-3">
-      <TouchableOpacity
-        className="flex-row items-center p-4 bg-slate-900/40 rounded-[28px] border border-slate-900"
-        onPress={() => router.push({ pathname: '/(coach)/(tabs)/chat/coach/[coachId]', params: { coachId: item.coach_id, userId: item.user_id, fullName: item.full_name, avatarUrl: item.avatar_url ?? '' } })}
-      >
-        <View className="relative mr-4">
-          <BrandedAvatar name={item.full_name} imageUrl={item.avatar_url} size={52} />
-          <View className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full border-2 border-slate-950" />
-        </View>
-        <View className="flex-1 mr-3">
-          <View className="flex-row justify-between items-center mb-1">
-            <Text className={`font-black text-base ${item.unread_count ? 'text-white' : 'text-slate-300'}`}>{item.full_name}</Text>
-            <Text className="text-slate-600 text-[10px] font-bold">{formatTime(item.last_message_time)}</Text>
-          </View>
-          <Text className={`text-xs font-bold ${item.unread_count ? 'text-slate-400' : 'text-slate-600'}`} numberOfLines={1}>{item.last_message}</Text>
-        </View>
-        {(item.unread_count || 0) > 0 ? (
-          <View className="w-6 h-6 bg-blue-600 rounded-full items-center justify-center">
-            <Text className="text-white text-[10px] font-black">{item.unread_count}</Text>
+        {(unread || 0) > 0 ? (
+          <View className="w-6 h-6 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-500/40">
+            <Text className="text-white text-[10px] font-black">{unread}</Text>
           </View>
         ) : (
           <ChevronRight size={18} color="#334155" />
@@ -145,32 +119,37 @@ export default function CoachMessagesScreen() {
 
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={{ flex: 1 }}>
+      <StatusBar barStyle="light-content" translucent />
+      <View style={{ paddingTop: insets.top }} className="flex-1">
           {/* Header */}
-          <View className="px-6 pt-10 pb-4">
-            <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[4px] mb-1">Comms Hub</Text>
-            <Text className="text-white text-3xl font-black">Messages</Text>
+          <View className="px-6 py-8 flex-row justify-between items-end">
+            <View>
+                <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[4px] mb-2">Message Center</Text>
+                <Text className="text-white text-4xl font-black tracking-tighter">Messages</Text>
+            </View>
+            <TouchableOpacity className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5">
+                <Search size={22} color="#64748B" />
+            </TouchableOpacity>
           </View>
 
           {/* Tab Switch */}
-          <View className="px-6 mb-6">
-            <View className="flex-row bg-slate-900/50 rounded-2xl p-1 border border-slate-900">
+          <View className="px-6 mb-8">
+            <View className="flex-row bg-slate-900/50 rounded-[28px] p-1.5 border border-white/5">
               <TouchableOpacity
                 onPress={() => setActiveTab('clients')}
-                className={`flex-1 py-3 rounded-xl items-center flex-row justify-center gap-2 ${activeTab === 'clients' ? 'bg-slate-800 shadow-sm' : ''}`}
+                className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'clients' ? 'bg-slate-800 shadow-xl' : ''}`}
               >
-                <Users size={16} color={activeTab === 'clients' ? '#3B82F6' : '#475569'} />
-                <Text className={`font-black text-sm ${activeTab === 'clients' ? 'text-white' : 'text-slate-600'}`}>Units</Text>
+                <Users size={18} color={activeTab === 'clients' ? '#3B82F6' : '#475569'} />
+                <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'clients' ? 'text-white' : 'text-slate-500'}`}>Clients</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setActiveTab('team')}
-                className={`flex-1 py-3 rounded-xl items-center flex-row justify-center gap-2 ${activeTab === 'team' ? 'bg-slate-800 shadow-sm' : ''}`}
+                className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'team' ? 'bg-slate-800 shadow-xl' : ''}`}
               >
-                <Zap size={16} color={activeTab === 'team' ? '#3B82F6' : '#475569'} />
-                <Text className={`font-black text-sm ${activeTab === 'team' ? 'text-white' : 'text-slate-600'}`}>Command</Text>
+                <Zap size={18} color={activeTab === 'team' ? '#3B82F6' : '#475569'} />
+                <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'team' ? 'text-white' : 'text-slate-500'}`}>Team</Text>
                 {teamUnreadCount > 0 && activeTab !== 'team' && (
-                  <View className="w-2 h-2 bg-red-500 rounded-full" />
+                  <View className="w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-slate-900" />
                 )}
               </TouchableOpacity>
             </View>
@@ -178,30 +157,35 @@ export default function CoachMessagesScreen() {
 
           {/* List */}
           {loading && !refreshing ? (
-            <View className="flex-1 items-center justify-center">
-              <ActivityIndicator color="#3B82F6" />
-            </View>
+            <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View>
           ) : (
             <FlatList
-              data={activeTab === 'clients' ? clients : teammates}
-              renderItem={activeTab === 'clients' ? renderClientCard : renderTeamCard}
+              data={(activeTab === 'clients' ? clients : teammates) as any[]}
+              renderItem={({ item, index }) => {
+                if ('id' in item) {
+                    const c = item as ClientPreview;
+                    return renderCard(c.full_name, c.avatar_url, c.last_message, c.last_message_time, c.unread_count, () => router.push({ pathname: '/(coach)/chat/[id]', params: { id: c.id } }), index);
+                } else {
+                    const tm = item as CoachPreview;
+                    return renderCard(tm.full_name, tm.avatar_url, tm.last_message, tm.last_message_time, tm.unread_count, () => router.push({ pathname: '/(coach)/chat/coach/[coachId]', params: { coachId: tm.coach_id, userId: tm.user_id, fullName: tm.full_name, avatarUrl: tm.avatar_url ?? '' } }), index);
+                }
+              }}
               keyExtractor={item => 'id' in item ? item.id : item.coach_id}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140 }}
+              showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
               ListEmptyComponent={
-                <View className="mt-20 items-center">
-                  <View className="w-24 h-24 bg-slate-900/50 rounded-full items-center justify-center border border-slate-900">
-                    {activeTab === 'clients' ? <MessageCircle size={40} color="#1E293B" /> : <Users size={40} color="#1E293B" />}
+                <View className="mt-20 items-center px-10">
+                  <View className="w-24 h-24 bg-slate-900 rounded-[32px] items-center justify-center border border-white/5 shadow-2xl">
+                    <MessageCircle size={40} color="#334155" />
                   </View>
-                  <Text className="text-slate-700 font-black text-xs uppercase tracking-widest mt-6">
-                    {activeTab === 'clients' ? 'No active comms' : 'No command links'}
-                  </Text>
+                  <Text className="text-white font-black text-lg mt-8 text-center">Your inbox is clear</Text>
+                  <Text className="text-slate-500 text-xs mt-2 text-center leading-5 font-medium">When you have active conversations with {activeTab === 'clients' ? 'clients' : 'team members'}, they'll appear here.</Text>
                 </View>
               }
             />
           )}
-        </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }

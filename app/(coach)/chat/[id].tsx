@@ -10,6 +10,7 @@ import {
   Platform, 
   ActivityIndicator, 
   UIManager, 
+  Image, 
   Modal, 
   Pressable, 
   Dimensions, 
@@ -18,31 +19,35 @@ import {
   Animated,
   StatusBar
 } from 'react-native';
-import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { 
   Send, 
   ArrowLeft, 
-  Shield, 
+  ChevronDown, 
+  ChevronUp, 
   Check, 
   CheckCheck, 
+  X, 
+  Calendar, 
+  Video, 
+  ArrowDown, 
+  MoreVertical, 
+  Activity,
+  Plus,
   Reply,
-  Video,
   Dumbbell,
-  Calendar
+  Shield
 } from 'lucide-react-native';
-import MealMessageCard from '@/components/MealMessageCard';
-import RescheduleProposalMessage from '@/components/RescheduleProposalMessage';
-import ChatMediaMessage from '@/components/ChatMediaMessage';
-import { ChatInputBar } from '@/components/ChatInputBar';
-import { Swipeable } from 'react-native-gesture-handler';
-import { useTheme } from '@/contexts/BrandContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
-import { useRouter } from 'expo-router';
+import { ChatInputBar } from '@/components/ChatInputBar';
+import SchedulerModal from '@/components/SchedulerModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MotiView } from 'moti';
+import { MotiView, AnimatePresence } from 'moti';
+import { Swipeable } from 'react-native-gesture-handler';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -58,100 +63,91 @@ type Message = {
   reply_to_id?: string;
 };
 
-export default function ClientMessagesScreen() {
+export default function CoachChatScreen() {
+  const { id } = useLocalSearchParams(); // This is the CLIENT ID
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { user, client } = useAuth(); // client state contains coach_id
-  const { refreshUnreadCount } = useUnread();
+  const { user, profile, coach } = useAuth();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const { refreshUnreadCount } = useUnread();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [coachProfile, setCoachProfile] = useState<any>(null);
-  const [coachUserId, setCoachUserId] = useState<string | null>(null);
+  const [clientProfile, setClientProfile] = useState<any>(null);
+  const [clientUserId, setClientUserId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [nextSession, setNextSession] = useState<any>(null);
+  const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
+  const [schedulerVisible, setSchedulerVisible] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
 
   useEffect(() => {
-    if (user && client?.coach_id) {
+    if (user && id) {
       loadChatData();
-    } else if (user && !client?.coach_id) {
-        // If client record exists but no coach assigned yet
-        setLoading(false);
     }
-  }, [user?.id, client?.coach_id]);
-
-  // Real-time subscription needs coachUserId
-  useEffect(() => {
-    if (user && coachUserId) {
-        const channel = supabase.channel(`client-chat-${user.id}`)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
-            const nm = p.new as Message;
-            if (nm.sender_id === coachUserId || nm.sender_id === user.id) {
-              setMessages(prev => [nm, ...prev]);
-              if (nm.sender_id !== user.id) markAsRead(nm.id);
-            }
-          })
-          .subscribe();
-        return () => { supabase.removeChannel(channel); };
-    }
-  }, [user?.id, coachUserId]);
+  }, [user?.id, id]);
 
   const loadChatData = async () => {
-    if (!client?.coach_id || !user) {
-        setLoading(false);
-        return;
-    }
-
     try {
       setLoading(true);
-      console.log('[ClientChat] Loading data for coach_id:', client.coach_id);
-
-      // 1. Get the coach's user_id from the coaches table
-      const { data: coachRecord, error: coachError } = await supabase
-        .from('coaches')
-        .select('user_id')
-        .eq('id', client.coach_id)
-        .maybeSingle();
-
-      if (coachError) throw coachError;
-      if (!coachRecord) {
-          console.log('[ClientChat] No coach record found for ID:', client.coach_id);
-          setLoading(false);
-          return;
-      }
-
-      setCoachUserId(coachRecord.user_id);
-
-      // 2. Get the coach's profile
-      const { data: cData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', coachRecord.user_id)
-        .maybeSingle();
+      // Get client's profile and user_id
+      const { data: cData, error: cError } = await supabase
+        .from('clients')
+        .select('user_id, profiles:user_id(full_name, avatar_url, id)')
+        .eq('id', id)
+        .single();
       
-      if (profileError) throw profileError;
-      setCoachProfile(cData);
+      if (cError) throw cError;
+      setClientProfile(cData);
+      setClientUserId(cData.user_id);
 
-      // 3. Get messages
-      const { data: mData, error: msgError } = await supabase
-        .from('messages')
+      // Get conversation messages
+      const { data: mData, error: mError } = await supabase.from('messages')
         .select('*')
-        .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${coachRecord.user_id}),and(sender_id.eq.${coachRecord.user_id},recipient_id.eq.${user?.id})`)
+        .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${cData.user_id}),and(sender_id.eq.${cData.user_id},recipient_id.eq.${user?.id})`)
         .order('created_at', { ascending: false });
       
-      if (msgError) throw msgError;
+      if (mError) throw mError;
       setMessages(mData || []);
+      
+      // Real-time sub for this convo
+      const channel = supabase.channel(`coach-convo-${id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
+          const nm = p.new as Message;
+          if (nm.sender_id === cData.user_id || nm.sender_id === user!.id) {
+            setMessages(prev => [nm, ...prev]);
+            if (nm.sender_id !== user!.id) markAsRead(nm.id);
+          }
+        })
+        .subscribe();
+
+      loadNextSession();
+      return () => { supabase.removeChannel(channel); };
     } catch (e) { 
-        console.error('[ClientChat] Error:', e); 
-        Alert.alert('Connection Error', 'Failed to load your chat. Please try again.');
+        console.error('[CoachChat] Error loading data:', e); 
+        Alert.alert('Error', 'Failed to load chat data.');
     } finally { 
         setLoading(false); 
     }
+  };
+
+  const loadNextSession = async () => {
+    if (!coach?.id) return;
+    const { data } = await supabase.from('sessions')
+        .select('*')
+        .eq('client_id', id)
+        .eq('coach_id', coach.id)
+        .eq('status', 'scheduled')
+        .gt('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+    setNextSession(data);
   };
 
   const markAsRead = async (mid: string) => {
@@ -160,15 +156,15 @@ export default function ClientMessagesScreen() {
   };
 
   const sendMessage = async (text: string, replyId?: string) => {
-    if (!user || !coachUserId || !text.trim()) return;
+    if (!user || !clientUserId || !text.trim()) return;
     setSending(true);
     const msg = { 
         sender_id: user.id, 
-        recipient_id: coachUserId, 
+        recipient_id: clientUserId, 
         content: text, 
         read: false, 
         reply_to_id: replyId,
-        ai_generated: false
+        ai_generated: false 
     };
     const { error } = await supabase.from('messages').insert(msg);
     if (error) Alert.alert('Error', 'Failed to send message');
@@ -190,7 +186,7 @@ export default function ClientMessagesScreen() {
     const status = sessionData.status || 'scheduled';
     
     let statusLabel = "UPCOMING";
-    let statusColor = "#9333EA"; // Purple
+    let statusColor = "#9333EA";
     if (status === 'postponed') { statusLabel = "POSTPONED"; statusColor = "#EAB308"; }
     if (status === 'cancelled') { statusLabel = "CANCELLED"; statusColor = "#EF4444"; }
 
@@ -201,7 +197,7 @@ export default function ClientMessagesScreen() {
           </View>
           <View className="flex-row items-center justify-between mb-4">
               <View className="flex-1">
-                  <Text className="text-white text-xl font-black tracking-tight mb-1">{sessionData.description || 'Live Strategy'}</Text>
+                  <Text className="text-white text-xl font-black tracking-tight mb-1">{sessionData.description || 'Live Session'}</Text>
                   <View className="flex-row items-center gap-2">
                        <Calendar size={14} color="#64748B" />
                        <Text className="text-slate-400 font-bold text-sm">
@@ -210,16 +206,16 @@ export default function ClientMessagesScreen() {
                   </View>
               </View>
               <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/5">
-                  <Dumbbell size={24} color="#3B82F6" />
+                  <Dumbbell size={24} color="#FB923C" />
               </View>
           </View>
           
           <View className="flex-row items-center gap-4 mt-2">
               <TouchableOpacity className="flex-1 bg-blue-600 py-4 rounded-2xl items-center shadow-lg shadow-blue-500/30">
-                  <Text className="text-white font-black uppercase text-xs tracking-widest">Join Session</Text>
+                  <Text className="text-white font-black uppercase text-xs tracking-widest">Join Now</Text>
               </TouchableOpacity>
               <TouchableOpacity className="px-4">
-                  <Text className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Reschedule</Text>
+                  <Text className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Cancel</Text>
               </TouchableOpacity>
           </View>
       </View>
@@ -229,25 +225,23 @@ export default function ClientMessagesScreen() {
   const renderMessageContent = (item: Message, isMe: boolean) => {
     try {
         const parsed = JSON.parse(item.content);
-        if (parsed.type === 'meal' || parsed.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
-        if (parsed.type === 'reschedule_proposal' || parsed.type === 'session_proposal' || parsed.type === 'session_invite') {
+        if (parsed.type === 'session_invite' || parsed.type === 'session_proposal') {
             return renderSessionCard(parsed, isMe);
-        }
-        if (['image', 'video', 'document', 'gif'].includes(parsed.type)) {
-            return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
         }
     } catch {}
 
+    const isHighlighted = item.id === highlightedMessageId;
     const repliedMsg = item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null;
 
     return (
         <MotiView 
             animate={{ 
-                scale: item.id === highlightedMessageId ? 1.05 : 1,
-                backgroundColor: item.id === highlightedMessageId ? '#3B82F6' : (isMe ? '#2563EB' : '#0F172A') 
+                scale: isHighlighted ? 1.05 : 1,
+                opacity: 1,
+                backgroundColor: isHighlighted ? '#3B82F6' : (isMe ? '#2563EB' : '#0F172A') 
             }}
             transition={{ type: 'spring', damping: 15 }}
-            className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5'} shadow-2xl`}
+            className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
             style={{ maxWidth: '85%' }}
         >
           {repliedMsg && (
@@ -256,7 +250,7 @@ export default function ClientMessagesScreen() {
                 onPress={() => scrollToMessage(item.reply_to_id!)}
                 className="bg-black/20 px-3 py-2 rounded-2xl mb-2 border-l-2 border-white/30"
              >
-                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
+                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Client'}</Text>
                 <Text className="text-white/80 text-xs" numberOfLines={1}>{repliedMsg.content}</Text>
              </TouchableOpacity>
           )}
@@ -270,7 +264,9 @@ export default function ClientMessagesScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.sender_id === user?.id;
+    const isMe = item.sender_id === user?.id; // Robust check using exact user ID
+    
+    // ACTION: Swiping reveal reply
     const renderRightActions = (progress: any, dragX: any) => {
         const trans = dragX.interpolate({ inputRange: [-100, 0], outputRange: [1, 0], extrapolate: 'clamp' });
         return (
@@ -283,8 +279,9 @@ export default function ClientMessagesScreen() {
     return (
       <Swipeable
         ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderRightActions={renderRightActions}
+        renderRightActions={renderRightActions} // Enable for everyone
         onSwipeableOpen={() => {
+            console.log('[CoachChat] Replying to:', item.id);
             setReplyingTo(item);
             swipeableRefs.current[item.id]?.close();
         }}
@@ -308,19 +305,19 @@ export default function ClientMessagesScreen() {
                 <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
                     <ArrowLeft size={18} color="white" />
                 </TouchableOpacity>
-                <View className="flex-row items-center gap-3">
-                    <BrandedAvatar name={coachProfile?.full_name} size={42} imageUrl={coachProfile?.avatar_url} />
+                <TouchableOpacity onPress={() => router.push(`/(coach)/clients/${id}`)} className="flex-row items-center gap-3">
+                    <BrandedAvatar name={clientProfile?.profiles?.full_name} size={42} imageUrl={clientProfile?.profiles?.avatar_url} />
                     <View>
-                        <Text className="text-white font-black text-lg tracking-tight">{coachProfile?.full_name || 'Coach'}</Text>
+                        <Text className="text-white font-black text-lg tracking-tight">{clientProfile?.profiles?.full_name || 'Loading...'}</Text>
                         <View className="flex-row items-center gap-1.5">
-                            <View className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                            <View className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
                             <Text className="text-slate-500 text-[9px] font-black uppercase tracking-[2px]">Encrypted Stream</Text>
                         </View>
                     </View>
-                </View>
+                </TouchableOpacity>
             </View>
-            <TouchableOpacity className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
-                <Shield size={18} color="#64748B" />
+            <TouchableOpacity onPress={() => setMenuVisible(true)} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
+                <MoreVertical size={20} color="#64748B" />
             </TouchableOpacity>
         </View>
       </View>
@@ -329,15 +326,7 @@ export default function ClientMessagesScreen() {
           {loading ? (
             <View className="flex-1 items-center justify-center">
                 <ActivityIndicator color="#3B82F6" />
-                <Text className="text-slate-500 text-xs mt-4 font-black uppercase tracking-widest">Waking up Coach...</Text>
-            </View>
-          ) : messages.length === 0 ? (
-            <View className="flex-1 items-center justify-center px-10">
-                <View className="w-20 h-20 bg-slate-900 rounded-[32px] items-center justify-center border border-white/5 mb-6">
-                    <Send size={32} color="#1E293B" />
-                </View>
-                <Text className="text-white text-xl font-black text-center mb-2">Start the Conversation</Text>
-                <Text className="text-slate-500 text-center text-sm leading-6">Say hello to your coach to begin your strategy session.</Text>
+                <Text className="text-slate-500 text-xs mt-4 font-black uppercase tracking-widest">Opening Convo...</Text>
             </View>
           ) : (
             <FlatList
@@ -359,9 +348,54 @@ export default function ClientMessagesScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
           <View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }} className="bg-slate-950 border-t border-white/5">
-              <ChatInputBar onSendText={sendMessage} onSendMedia={async () => {}} sending={sending} replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
+              <ChatInputBar 
+                onSendText={sendMessage} 
+                onSendMedia={async () => {}} 
+                sending={sending} 
+                replyingTo={replyingTo} 
+                onCancelReply={() => setReplyingTo(null)} 
+              />
           </View>
       </KeyboardAvoidingView>
+
+      <Modal visible={menuVisible} transparent animationType="slide">
+          <Pressable className="flex-1 bg-black/60 justify-end" onPress={() => setMenuVisible(false)}>
+              <MotiView 
+                from={{ translateY: 300 }}
+                animate={{ translateY: 0 }}
+                className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10"
+              >
+                  <View className="w-12 h-1.5 bg-slate-800 rounded-full self-center mb-8" />
+                  <Text className="text-white text-2xl font-black mb-8 tracking-tight">Channel Actions</Text>
+                  <OptionItem icon={<Calendar size={20} color="#3B82F6" />} title="AI Scheduler" sub="Find the next available gap" onPress={() => { setMenuVisible(false); setSchedulerVisible(true); }} />
+                  <OptionItem icon={<Activity size={20} color="#34D399" />} title="Client Dossier" sub="View metrics and protocols" onPress={() => { setMenuVisible(false); router.push(`/(coach)/clients/${id}`); }} />
+              </MotiView>
+          </Pressable>
+      </Modal>
+
+      {clientProfile && (
+        <SchedulerModal
+          visible={schedulerVisible}
+          onClose={() => setSchedulerVisible(false)}
+          onConfirm={async () => { 
+                await loadNextSession();
+                setSchedulerVisible(false);
+          }}
+          clientContext={{ name: clientProfile.profiles?.full_name, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }}
+          existingSessions={allCoachSessions}
+          targetClientId={id as string}
+        />
+      )}
     </View>
   );
 }
+
+const OptionItem = ({ icon, title, sub, onPress }: any) => (
+    <TouchableOpacity onPress={onPress} className="flex-row items-center gap-5 p-5 bg-slate-950 rounded-[32px] border border-white/5 mb-4">
+        <View className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5">{icon}</View>
+        <View>
+            <Text className="text-white font-black text-base">{title}</Text>
+            <Text className="text-slate-500 text-[11px] font-medium">{sub}</Text>
+        </View>
+    </TouchableOpacity>
+);
