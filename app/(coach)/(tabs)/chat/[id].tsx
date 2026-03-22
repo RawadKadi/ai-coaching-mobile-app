@@ -105,28 +105,31 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   myTimestamp: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.6)',
+    alignSelf: 'flex-end',
   },
   theirTimestamp: {
-    color: '#9CA3AF',
+    color: '#475569',
+    alignSelf: 'flex-start',
   },
   inputContainer: {
     flexDirection: 'row',
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#020617',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#1E293B',
     alignItems: 'center',
     gap: 12,
   },
   input: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#0F172A',
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 16,
     maxHeight: 100,
+    color: '#F1F5F9',
   },
   sendButton: {
     width: 44,
@@ -137,7 +140,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#93C5FD',
+    backgroundColor: '#1D4ED8',
+    opacity: 0.6,
   },
   messageBubble: {
     maxWidth: '80%',
@@ -152,16 +156,16 @@ const styles = StyleSheet.create({
   },
   receivedBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0F172A',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#1E293B',
   },
   sentText: {
     color: '#FFFFFF',
   },
   receivedText: {
-    color: '#111827',
+    color: '#F1F5F9',
   },
   messageFooter: {
     flexDirection: 'row',
@@ -178,71 +182,73 @@ const styles = StyleSheet.create({
   },
   taskMessageContainer: {
     width: '100%',
-    marginVertical: 4,
-    backgroundColor: '#ECFDF5', // Light green
-    borderRadius: 12,
+    marginVertical: 8,
+    backgroundColor: '#0F172A',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#10B981', // Green border
+    borderColor: '#1E293B',
     overflow: 'hidden',
   },
   taskHeader: {
-    padding: 12,
-    backgroundColor: '#D1FAE5',
+    padding: 16,
+    backgroundColor: '#1E293B',
     borderBottomWidth: 1,
-    borderBottomColor: '#10B981',
+    borderBottomColor: '#334155',
   },
   taskTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#065F46',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   taskContent: {
-    padding: 12,
+    padding: 20,
   },
   taskName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#064E3B',
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 6,
   },
   taskTime: {
-    fontSize: 12,
-    color: '#047857',
-    marginBottom: 8,
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 12,
   },
   divider: {
     height: 1,
-    backgroundColor: '#10B981',
-    opacity: 0.3,
-    marginBottom: 8,
+    backgroundColor: '#1E293B',
+    marginBottom: 16,
   },
   toggleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingTop: 4,
   },
   toggleText: {
     fontSize: 14,
-    color: '#059669',
-    fontWeight: '500',
+    color: '#3B82F6',
+    fontWeight: '700',
   },
   taskDetails: {
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(16, 185, 129, 0.2)',
+    borderTopColor: '#1E293B',
   },
   detailText: {
-    fontSize: 12,
-    color: '#047857',
-    marginBottom: 4,
+    fontSize: 13,
+    color: '#94A3B8',
+    lineHeight: 18,
+    marginBottom: 6,
   },
   bannerContainer: {
     width: '100%',
-    height: 150,
-    backgroundColor: '#F3F4F6',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(16, 185, 129, 0.2)',
+    height: 180,
+    backgroundColor: '#020617',
   },
   bannerPressable: {
     width: '100%',
@@ -263,18 +269,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 8,
+    backgroundColor: 'rgba(2, 6, 23, 0.8)',
+    padding: 12,
     alignItems: 'center',
   },
   bannerText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -288,10 +294,12 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    top: 50,
+    top: 60,
     right: 20,
     zIndex: 10,
     padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
   },
   scheduleButton: {
     marginLeft: 'auto',
@@ -645,34 +653,17 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
     setExpanded(!expanded);
   };
 
-  const isCompletion = data.isCompletion !== false; // Default to true if undefined
-  const isUndo = !isCompletion;
-
-  // Colors based on type
-  const containerStyle = isUndo 
-    ? { backgroundColor: '#FFFBEB', borderColor: '#F59E0B' } 
-    : { backgroundColor: '#ECFDF5', borderColor: '#10B981' };
-    
-  const headerStyle = isUndo
-    ? { backgroundColor: '#FEF3C7', borderBottomColor: '#F59E0B' }
-    : { backgroundColor: '#D1FAE5', borderBottomColor: '#10B981' };
-    
-  const titleColor = isUndo ? '#92400E' : '#065F46';
-  const nameColor = isUndo ? '#92400E' : '#064E3B';
-  const timeColor = isUndo ? '#B45309' : '#047857';
-  const dividerColor = isUndo ? '#F59E0B' : '#10B981';
-  const toggleColor = isUndo ? '#D97706' : '#059669';
-
+  const isCompletion = data.isCompletion !== false;
+  
   return (
-    <View style={[styles.taskMessageContainer, containerStyle, { alignSelf: isOwn ? 'flex-end' : 'flex-start' }]}>
-      <View style={[styles.taskHeader, headerStyle]}>
-        <Text style={[styles.taskTitle, { color: titleColor }]}>
-          {isUndo ? `${data.clientName} undid this task` : `${data.clientName} finished this task`}
+    <View style={[styles.taskMessageContainer, { alignSelf: isOwn ? 'flex-end' : 'flex-start' }]}>
+      <View style={styles.taskHeader}>
+        <Text style={styles.taskTitle}>
+          {isCompletion ? 'Intelligence Protocol' : 'Protocol Reversal'}
         </Text>
       </View>
       
-      {/* Image Banner */}
-      {data.imageUrl && !isUndo && (
+      {data.imageUrl && isCompletion && (
         <View style={styles.bannerContainer}>
           <Pressable 
             onPress={() => !imageLoading && setShowImageModal(true)}
@@ -680,7 +671,7 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
           >
             {imageLoading && (
               <View style={styles.bannerLoading}>
-                <ActivityIndicator size="small" color={toggleColor} />
+                <ActivityIndicator size="small" color="#3B82F6" />
               </View>
             )}
             <Image 
@@ -692,7 +683,7 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
             />
             {!imageLoading && (
               <View style={styles.bannerOverlay}>
-                <Text style={styles.bannerText}>Tap to view proof attached</Text>
+                <Text style={styles.bannerText}>Validation Proof Attached</Text>
               </View>
             )}
           </Pressable>
@@ -700,80 +691,51 @@ const TaskCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolea
       )}
       
       <View style={styles.taskContent}>
-        <Text style={[styles.taskName, { color: nameColor }]}>{data.taskName}</Text>
-        <Text style={[styles.taskTime, { color: timeColor }]}>
-          {isUndo ? 'Undone at: ' : 'Completed at: '}
-          {new Date(data.timestamp).toLocaleTimeString()}
+        <Text style={styles.taskName}>{data.taskName}</Text>
+        <Text style={styles.taskTime}>
+          {isCompletion ? 'Succeeded at: ' : 'Reversed at: '}
+          {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
-        <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+        <View style={styles.divider} />
         
         <TouchableOpacity onPress={toggleExpand} style={styles.toggleButton}>
-          <Text style={[styles.toggleText, { color: toggleColor }]}>{expanded ? 'Hide Details' : 'View Details'}</Text>
-          {expanded ? <ChevronUp size={16} color={toggleColor} /> : <ChevronDown size={16} color={toggleColor} />}
+          <Text style={styles.toggleText}>{expanded ? 'Minimize Details' : 'View Performance Data'}</Text>
+          {expanded ? <ChevronUp size={16} color="#3B82F6" /> : <ChevronDown size={16} color="#3B82F6" />}
         </TouchableOpacity>
 
         {expanded && (
-          <View style={[styles.taskDetails, { borderTopColor: isUndo ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)' }]}>
-            {data.description && (
-              <Text style={[styles.detailText, { color: timeColor }]}>Description: {data.description}</Text>
-            )}
-            {data.imageUrl && (
-              <Text style={[styles.detailText, { color: timeColor }]}>
-                Proof attached (See banner above)
-              </Text>
-            )}
+          <View style={styles.taskDetails}>
+            <Text style={styles.detailText}>Strategy: {data.description || 'Standard training protocol'}</Text>
+            <Text style={styles.detailText}>Client: {data.clientName}</Text>
           </View>
         )}
       </View>
 
-      {/* Full Screen Image Modal */}
-      <Modal
-        visible={showImageModal}
-        transparent={true}
-        onRequestClose={() => setShowImageModal(false)}
-        animationType="fade"
-      >
+      <Modal visible={showImageModal} transparent={true} onRequestClose={() => setShowImageModal(false)} animationType="fade">
         <View style={styles.modalContainer}>
           <Pressable style={styles.closeButton} onPress={() => setShowImageModal(false)}>
-            <X size={30} color="#FFFFFF" />
+            <X size={24} color="#FFFFFF" />
           </Pressable>
-          
-          {modalImageLoading && (
-            <ActivityIndicator size="large" color="#FFFFFF" style={styles.modalLoader} />
-          )}
-          
-          <Image 
-            source={{ uri: data.imageUrl }} 
-            style={styles.fullScreenImage} 
-            resizeMode="contain"
-            onLoadStart={() => setModalImageLoading(true)}
-            onLoadEnd={() => setModalImageLoading(false)}
-          />
+          {modalImageLoading && <ActivityIndicator size="large" color="#FFFFFF" style={styles.modalLoader} />}
+          <Image source={{ uri: data.imageUrl }} style={styles.fullScreenImage} resizeMode="contain" onLoadStart={() => setModalImageLoading(true)} onLoadEnd={() => setModalImageLoading(false)} />
         </View>
       </Modal>
     </View>
   );
 };
 
+
 const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: boolean }) => {
-  const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
-  
-  console.log('[ChallengeCompletionMessage] Component called with:', typeof content);
   
   let data;
   try {
     data = typeof content === 'string' ? JSON.parse(content) : content;
-    console.log('[ChallengeCompletionMessage] Parsed successfully:', data?.type);
   } catch (e) {
-    console.error('[ChallengeCompletionMessage] Parse failed');
     return null;
   }
 
-  if (!data || !data.taskName) {
-    console.log('[ChallengeCompletionMessage] Invalid data');
-    return null;
-  }
+  if (!data || !data.taskName) return null;
 
   const toggleExpand = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -781,46 +743,26 @@ const ChallengeCompletionMessage = ({ content, isOwn }: { content: any, isOwn: b
   };
 
   return (
-    <View style={{ width: '100%', alignItems: isOwn ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
-      <View style={[challengeStyles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.primary }]}>
-        <View style={[challengeStyles.header, { backgroundColor: theme.colors.primary + '20', borderBottomColor: theme.colors.primary }]}>
-          <Text style={[challengeStyles.headerText, { color: theme.colors.primary }]}>{data.title || 'Client finished this task'}</Text>
+    <View style={{ width: '100%', alignItems: isOwn ? 'flex-end' : 'flex-start', marginVertical: 8 }}>
+      <View style={styles.taskMessageContainer}>
+        <View style={styles.taskHeader}>
+          <Text style={styles.taskTitle}>{data.title || 'Phase Efficiency Protocol'}</Text>
         </View>
-        
-        <View style={challengeStyles.body}>
-          <Text style={[challengeStyles.taskName, { color: theme.colors.text }]}>{data.taskName}</Text>
-          <Text style={[challengeStyles.completedAt, { color: theme.colors.textSecondary }]}>
-            Completed at: {data.completedAt}
-          </Text>
-          
-          <TouchableOpacity 
-            style={challengeStyles.viewDetailsButton}
-            onPress={toggleExpand}
-          >
-            <Text style={[challengeStyles.viewDetailsText, { color: theme.colors.primary }]}>View Details</Text>
-            {expanded ? (
-              <ChevronUp size={16} color={theme.colors.primary} />
-            ) : (
-              <ChevronDown size={16} color={theme.colors.primary} />
-            )}
+        <View style={styles.taskContent}>
+          <Text style={styles.taskName}>{data.taskName}</Text>
+          <View className="flex-row items-center gap-2 mb-3">
+             <Activity size={14} color="#3B82F6" />
+             <Text style={styles.taskTime}>Completed at {data.completedAt}</Text>
+          </View>
+          <View style={styles.divider} />
+          <TouchableOpacity onPress={toggleExpand} style={styles.toggleButton}>
+             <Text style={styles.toggleText}>{expanded ? 'Minimize Protocol' : 'Review Phase Data'}</Text>
+             {expanded ? <ChevronUp size={16} color="#3B82F6" /> : <ChevronDown size={16} color="#3B82F6" />}
           </TouchableOpacity>
-
           {expanded && (
-            <View style={[challengeStyles.expandedDetails, { borderTopColor: theme.colors.border }]}>
-              {data.taskDescription && (
-                <>
-                  <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Description:</Text>
-                  <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.taskDescription}</Text>
-                </>
-              )}
-              <View style={challengeStyles.detailRow}>
-                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Focus: </Text>
-                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.focusType}</Text>
-              </View>
-              <View style={challengeStyles.detailRow}>
-                <Text style={[challengeStyles.detailLabel, { color: theme.colors.text }]}>Intensity: </Text>
-                <Text style={[challengeStyles.detailText, { color: theme.colors.textSecondary }]}>{data.intensity}</Text>
-              </View>
+            <View style={styles.taskDetails}>
+               <Text style={styles.detailText}>Status: Optimized</Text>
+               <Text style={styles.detailText}>Verification: System Confirmed</Text>
             </View>
           )}
         </View>
@@ -2016,26 +1958,41 @@ export default function CoachChat() {
     );
   }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, clientProfile, profile?.id, setReplyingTo, activeUploads, cancelUpload, scrollToMessage, loadNextSession, highlightedMessageId]);
 
+  const recipientName = clientProfile?.profiles?.full_name || 'Client';
+  const recipientAvatar = clientProfile?.profiles?.avatar_url;
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+      <View className="flex-row items-center justify-between px-4 py-3 bg-slate-950 border-b border-slate-800">
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ChevronLeft size={24} color={theme.colors.text} />
+          <ArrowLeft size={20} color="#94A3B8" />
         </TouchableOpacity>
-        <View style={styles.headerInfo}>
+        <TouchableOpacity 
+           className="flex-1 flex-row items-center gap-4"
+           onPress={() => router.push(`/(coach)/clients/${id}`)}
+        >
           <BrandedAvatar 
-            name={clientProfile?.profiles?.full_name || 'Client'}
-            size={36}
-            imageUrl={clientProfile?.profiles?.avatar_url}
+            size={40} 
+            name={recipientName || 'Client'} 
+            imageUrl={recipientAvatar}
             useBrandColor={true}
           />
-          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-            {clientProfile?.profiles?.full_name || 'Chat'}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.scheduleButton}>
-          <MoreVertical size={24} color={theme.colors.primary} />
+          <View>
+            <Text style={styles.title} numberOfLines={1}>{recipientName || 'Client'}</Text>
+            <View className="flex-row items-center gap-1.5">
+               <View className="w-2 h-2 bg-emerald-500 rounded-full" />
+               <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Active Now</Text>
+            </View>
+          </View>
         </TouchableOpacity>
+        <View className="flex-row items-center gap-4">
+           <TouchableOpacity className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
+              <Video size={18} color="#94A3B8" />
+           </TouchableOpacity>
+           <TouchableOpacity onPress={() => setMenuVisible(true)}>
+              <MoreVertical size={20} color="#64748B" />
+           </TouchableOpacity>
+        </View>
       </View>
 
       {nextSession && (

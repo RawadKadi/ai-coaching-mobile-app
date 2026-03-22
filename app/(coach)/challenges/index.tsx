@@ -1,29 +1,16 @@
-// COPY THIS ENTIRE CONTENT AND PASTE INTO:
-// app/(coach)/challenges/index.tsx
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MotiView, MotiText, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Target, Sparkles, Clock } from 'lucide-react-native';
+import { Plus, Target, Sparkles, Clock, ChevronRight, Activity, TrendingUp } from 'lucide-react-native';
 import type { MotherChallengeWithProgress } from '@/types/challenges-v3';
-import { useTheme } from '@/contexts/BrandContext';
 
 export default function CoachChallengesDashboard() {
   const router = useRouter();
-  const { user } = useAuth();
-  const theme = useTheme();
+  const { user, coach } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [loading, setLoading] = useState(true);
@@ -31,70 +18,37 @@ export default function CoachChallengesDashboard() {
   const [activeChallenges, setActiveChallenges] = useState<MotherChallengeWithProgress[]>([]);
   const [historyChallenges, setHistoryChallenges] = useState<MotherChallengeWithProgress[]>([]);
 
-  // ✅ CHANGED: useFocusEffect instead of useEffect - reloads when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadChallenges();
-    }, [])
+    }, [coach])
   );
 
-  // Real-time subscription for sub-challenge updates
   useEffect(() => {
     if (!user) return;
-
     const subscription = supabase
       .channel('sub-challenges-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sub_challenges'
-        },
-        (payload) => {
-          console.log('[Dashboard Real-time] Sub-challenge updated');
-          // Reload challenges to update progress
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sub_challenges' }, () => {
           loadChallenges();
-        }
-      )
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
+    return () => { supabase.removeChannel(subscription); };
   }, [user]);
 
   const loadChallenges = async () => {
-    if (!user) return;
-
+    if (!coach) return;
     try {
       setLoading(true);
-
-      const { data: coachData } = await supabase
-        .from('coaches')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!coachData) {
-        console.error('Coach not found');
-        return;
-      }
-
       const { data, error } = await supabase.rpc('get_coach_mother_challenges', {
-        p_coach_id: coachData.id,
+        p_coach_id: coach.id,
       });
-
       if (error) throw error;
-
       const active = (data || []).filter((c: any) => c.status === 'active');
       const history = (data || []).filter((c: any) => c.status !== 'active');
-
       setActiveChallenges(active);
       setHistoryChallenges(history);
     } catch (error) {
       console.error('Error loading challenges:', error);
-      Alert.alert('Error', 'Failed to load challenges');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -106,18 +60,10 @@ export default function CoachChallengesDashboard() {
     loadChallenges();
   };
 
-  const navigateToCreate = () => {
-    router.push('/(coach)/challenges/create');
-  };
-
-  const navigateToAIGenerate = () => {
-    router.push('/(coach)/challenges/suggest');
-  };
-
-  if (loading) {
+  if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+      <View className="flex-1 bg-slate-950 justify-center items-center">
+        <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
   }
@@ -125,149 +71,165 @@ export default function CoachChallengesDashboard() {
   const challenges = activeTab === 'active' ? activeChallenges : historyChallenges;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Challenges</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={[styles.aiButton, { backgroundColor: theme.colors.primary }]} onPress={navigateToAIGenerate}>
-            <Sparkles size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.accent }]} onPress={navigateToCreate}>
-            <Plus size={20} color="#fff" />
-          </TouchableOpacity>
+    <View className="flex-1 bg-slate-950">
+      {/* Header */}
+      <View className="px-6 pt-20 pb-6 flex-row justify-between items-center bg-slate-950 shadow-2xl z-10">
+        <View>
+          <Text className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Growth Tracking</Text>
+          <Text className="text-white text-3xl font-bold mt-1">Challenges</Text>
         </View>
+        <TouchableOpacity 
+          className="w-12 h-12 bg-blue-600 rounded-full items-center justify-center shadow-lg"
+          onPress={() => router.push('/(coach)/challenges/suggest')}
+        >
+          <Sparkles size={22} color="white" />
+        </TouchableOpacity>
       </View>
 
-      <View style={[styles.tabs, { backgroundColor: theme.colors.surface }]}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'active' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
-          onPress={() => setActiveTab('active')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'active' ? theme.colors.primary : theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-            Active
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'history' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
-          onPress={() => setActiveTab('history')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'history' ? theme.colors.primary : theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-            History
-          </Text>
-        </TouchableOpacity>
+      {/* Tabs */}
+      <View className="px-6 py-4 flex-row gap-4">
+        <TabButton 
+          title="Active Plans" 
+          active={activeTab === 'active'} 
+          count={activeChallenges.length}
+          onPress={() => setActiveTab('active')} 
+        />
+        <TabButton 
+          title="Past History" 
+          active={activeTab === 'history'} 
+          count={historyChallenges.length}
+          onPress={() => setActiveTab('history')} 
+        />
       </View>
 
       <ScrollView
-        style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3B82F6" />}
       >
-        {challenges.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Target size={64} color="#ccc" />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-              {activeTab === 'active' ? 'No Active Challenges' : 'No Challenge History'}
-            </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-              {activeTab === 'active'
-                ? 'Create a new challenge or use AI to generate one for your clients.'
-                : 'Completed and cancelled challenges will appear here.'}
-            </Text>
-          </View>
-        ) : (
-          challenges.map((challenge) => (
-            <TouchableOpacity
-              key={challenge.id}
-              style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-              onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+        <AnimatePresence>
+          {challenges.length === 0 ? (
+            <MotiView 
+              from={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="px-6 mt-12 items-center"
             >
-              <View style={styles.cardHeader}>
-                <View style={styles.cardTitleRow}>
-                  <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{challenge.name}</Text>
-                  {challenge.created_by === 'ai' && (
-                    <View style={styles.aiTag}>
-                      <Sparkles size={12} color="#6366f1" />
-                      <Text style={styles.aiTagText}>AI</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.clientName, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>👤 {challenge.client_name}</Text>
+              <View className="w-20 h-20 bg-slate-900 rounded-full items-center justify-center border border-slate-800 mb-6">
+                <Target size={32} color="#475569" />
               </View>
-
-              {challenge.description && (
-                <Text style={[styles.cardDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>
-                  {challenge.description}
-                </Text>
-              )}
-
-              <View style={styles.cardMeta}>
-                <View style={styles.metaItem}>
-                  <Clock size={14} color="#666" />
-                  <Text style={[styles.metaText, { fontFamily: theme.typography.fontFamily }]}>
-                    {new Date(challenge.start_date).toLocaleDateString()} -{' '}
-                    {new Date(challenge.end_date).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={styles.metaItem}>
-                  <Text style={[styles.metaText, { fontFamily: theme.typography.fontFamily }]}>{challenge.duration_days} days</Text>
-                </View>
-              </View>
-
-              <View style={styles.progressContainer}>
-                <View style={styles.progressStats}>
-                  <Text style={[styles.progressText, { fontFamily: theme.typography.fontFamily }]}>
-                    {challenge.completed_subs} / {challenge.total_subs} tasks completed
-                  </Text>
-                  <Text style={[styles.progressPercent, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>{challenge.completion_rate}%</Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${challenge.completion_rate}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
+              <Text className="text-white text-xl font-bold mb-2">No {activeTab} challenges</Text>
+              <Text className="text-slate-500 text-center px-8 leading-5">
+                {activeTab === 'active' 
+                  ? "Launch an AI-assisted training plan to keep your clients engaged." 
+                  : "Completed plans will appear in your history tab."
+                }
+              </Text>
+              <TouchableOpacity 
+                className="mt-8 bg-slate-900 border border-slate-800 py-3 px-8 rounded-2xl"
+                onPress={() => router.push('/(coach)/challenges/create')}
+              >
+                <Text className="text-white font-bold">Create Manually</Text>
+              </TouchableOpacity>
+            </MotiView>
+          ) : (
+            challenges.map((challenge, index) => (
+              <ChallengeCard key={challenge.id} challenge={challenge} index={index} />
+            ))
+          )}
+        </AnimatePresence>
       </ScrollView>
+
+      {/* FAB */}
+      <TouchableOpacity 
+        className="absolute bottom-8 right-6 w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-2xl elevation-5"
+        onPress={() => router.push('/(coach)/challenges/create')}
+      >
+        <Plus size={28} color="white" />
+      </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 60, paddingBottom: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#111' },
-  headerActions: { flexDirection: 'row', gap: 8 },
-  aiButton: { backgroundColor: '#6366f1', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  addButton: { backgroundColor: '#10b981', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: '#6366f1' },
-  tabText: { fontSize: 14, fontWeight: '500', color: '#666' },
-  tabTextActive: { color: '#6366f1', fontWeight: '600' },
-  scrollView: { flex: 1 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', padding: 40, marginTop: 60 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#666', marginTop: 16 },
-  emptyDescription: { fontSize: 14, color: '#999', marginTop: 8, textAlign: 'center', lineHeight: 20 },
-  challengeCard: { backgroundColor: '#fff', margin: 16, marginBottom: 0, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
-  cardHeader: { marginBottom: 12 },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: '#111', flex: 1 },
-  aiTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ede9fe', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  aiTagText: { fontSize: 10, fontWeight: '600', color: '#6366f1' },
-  clientName: { fontSize: 13, color: '#666' },
-  cardDescription: { fontSize: 13, color: '#666', lineHeight: 18, marginBottom: 12 },
-  cardMeta: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 12, color: '#666' },
-  progressContainer: { paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  progressStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  progressText: { fontSize: 12, color: '#666' },
-  progressPercent: { fontSize: 14, fontWeight: '600', color: '#6366f1' },
-  progressBar: { height: 6, backgroundColor: '#e5e7eb', borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#10b981', borderRadius: 3 },
-});
+const TabButton = ({ title, active, count, onPress }: any) => (
+  <TouchableOpacity 
+    onPress={onPress}
+    className={`px-6 py-3 rounded-2xl flex-row items-center gap-3 border ${active ? 'bg-blue-600/10 border-blue-500/20' : 'bg-slate-900 border-slate-800'}`}
+  >
+    <Text className={`font-bold ${active ? 'text-blue-400' : 'text-slate-500'}`}>{title}</Text>
+    {count > 0 && (
+      <View className={`px-2 py-0.5 rounded-lg ${active ? 'bg-blue-500' : 'bg-slate-800'}`}>
+         <Text className="text-white text-[10px] font-bold">{count}</Text>
+      </View>
+    )}
+  </TouchableOpacity>
+);
+
+const ChallengeCard = ({ challenge, index }: { challenge: MotherChallengeWithProgress, index: number }) => {
+  const router = useRouter();
+  
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 20 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ delay: index * 100 }}
+      className="mx-6 mt-4 bg-slate-900 rounded-[32px] border border-slate-800 overflow-hidden shadow-xl"
+    >
+      <TouchableOpacity onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}>
+        <View className="p-6">
+          <View className="flex-row justify-between items-start mb-6">
+            <View className="flex-1">
+              <View className="flex-row items-center gap-2 mb-1">
+                {challenge.created_by === 'ai' && (
+                  <View className="bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md flex-row items-center gap-1">
+                    <Sparkles size={10} color="#818CF8" />
+                    <Text className="text-indigo-400 text-[10px] font-bold uppercase">AI Plan</Text>
+                  </View>
+                )}
+                <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">In Progress</Text>
+              </View>
+              <Text className="text-white text-xl font-bold leading-tight">Manage {challenge.client_name.split(' ')[0]}'s Training Plan</Text>
+              <Text className="text-slate-400 text-sm mt-1">{challenge.name}</Text>
+            </View>
+            <TouchableOpacity className="w-10 h-10 bg-slate-950 rounded-full items-center justify-center border border-slate-800">
+              <ChevronRight size={20} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Stats Bar */}
+          <View className="flex-row items-center justify-between mb-2">
+            <View className="flex-row items-center gap-2">
+               <Activity size={14} color="#3B82F6" />
+               <Text className="text-slate-500 text-xs font-medium">Completion Rate</Text>
+            </View>
+            <Text className="text-white font-bold text-sm">{challenge.completion_rate}%</Text>
+          </View>
+
+          {/* Progress Visualization */}
+          <View className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+             <View 
+                className="h-full bg-blue-500 rounded-full" 
+                style={{ width: `${challenge.completion_rate}%` }} 
+             />
+          </View>
+          
+          <View className="flex-row justify-between items-center mt-6 pt-6 border-t border-slate-950">
+             <View className="flex-row items-center gap-3">
+                <View className="w-8 h-8 rounded-full bg-slate-800 items-center justify-center border border-slate-700">
+                   <Clock size={16} color="#94A3B8" />
+                </View>
+                <View>
+                   <Text className="text-slate-300 text-xs font-bold">Next Deadline</Text>
+                   <Text className="text-slate-500 text-[10px]">Tomorrow at 10:00 AM</Text>
+                </View>
+             </View>
+             <View className="flex-row -space-x-2">
+                {[1, 2, 3].map(i => (
+                  <View key={i} className={`w-6 h-6 rounded-full border-2 border-slate-900 ${i === 1 ? 'bg-blue-500' : 'bg-slate-700'}`} />
+                ))}
+             </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </MotiView>
+  );
+};

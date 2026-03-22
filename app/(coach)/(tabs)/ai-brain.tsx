@@ -1,25 +1,16 @@
-import { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { MotiView, AnimatePresence } from 'moti';
+import { ArrowLeft, Sparkles, Brain, Zap, Shield, ChevronRight, Save } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { AICoachBrain } from '@/types/database';
 
 export default function AIBrainScreen() {
   const router = useRouter();
   const { coach } = useAuth();
-  const theme = useTheme();
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [brainConfig, setBrainConfig] = useState<AICoachBrain | null>(null);
@@ -29,23 +20,14 @@ export default function AIBrainScreen() {
   const [specialtyFocus, setSpecialtyFocus] = useState('');
 
   useEffect(() => {
-    if (coach) {
-      loadBrainConfig();
-    } else {
-      setLoading(false);
-    }
+    if (coach) loadBrainConfig();
+    else setLoading(false);
   }, [coach]);
 
   const loadBrainConfig = async () => {
     if (!coach) return;
-
     try {
-      const { data } = await supabase
-        .from('ai_coach_brains')
-        .select('*')
-        .eq('coach_id', coach.id)
-        .maybeSingle();
-
+      const { data } = await supabase.from('ai_coach_brains').select('*').eq('coach_id', coach.id).maybeSingle();
       if (data) {
         setBrainConfig(data);
         setTone(data.tone);
@@ -62,35 +44,18 @@ export default function AIBrainScreen() {
 
   const handleSave = async () => {
     if (!coach) return;
-
     setSaving(true);
-
     try {
-      const updates = {
-        tone,
-        style,
-        philosophy,
-        specialty_focus: specialtyFocus,
-        updated_at: new Date().toISOString(),
-      };
-
+      const updates = { tone, style, philosophy, specialty_focus: specialtyFocus, updated_at: new Date().toISOString() };
       if (brainConfig) {
-        await supabase
-          .from('ai_coach_brains')
-          .update(updates)
-          .eq('coach_id', coach.id);
+        await supabase.from('ai_coach_brains').update(updates).eq('coach_id', coach.id);
       } else {
-        await supabase.from('ai_coach_brains').insert({
-          coach_id: coach.id,
-          ...updates,
-        });
+        await supabase.from('ai_coach_brains').insert({ coach_id: coach.id, ...updates });
       }
-
-      Alert.alert('Success', 'AI Brain configuration saved successfully');
+      Alert.alert('Success', 'AI configuration optimized and stored.');
       loadBrainConfig();
-    } catch (error) {
+    } catch (e) {
       Alert.alert('Error', 'Failed to save configuration');
-      console.error('Error saving brain config:', error);
     } finally {
       setSaving(false);
     }
@@ -98,187 +63,123 @@ export default function AIBrainScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View className="flex-1 bg-slate-950 justify-center items-center">
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color={theme.colors.text} />
+    <View className="flex-1 bg-slate-950">
+      {/* Header */}
+      <View className="px-6 pt-16 pb-6 flex-row items-center gap-4 bg-slate-950 border-b border-slate-900">
+        <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full border border-slate-800">
+          <ArrowLeft size={20} color="#94A3B8" />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text }]}>AI Brain Configuration</Text>
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Customize how AI communicates with your clients
-        </Text>
+        <Text className="text-white text-xl font-bold">Engine Configuration</Text>
       </View>
 
-      <View style={styles.content}>
-        <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Tone</Text>
-          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
-            How should the AI communicate? (e.g., professional, friendly,
-            motivating)
-          </Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-            value={tone}
-            onChangeText={setTone}
-            placeholder="professional and motivating"
-            placeholderTextColor={theme.colors.textTertiary}
-          />
-        </View>
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }}>
+          {/* AI Core Hero */}
+          <MotiView 
+            from={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mx-6 mt-8 p-10 rounded-[48px] bg-indigo-600/10 border border-indigo-500/20 items-center overflow-hidden"
+          >
+              <View className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16" />
+              <MotiView 
+                from={{ scale: 1 }}
+                animate={{ scale: 1.1 }}
+                transition={{ loop: true, type: 'timing', duration: 2000 }}
+                className="w-24 h-24 bg-indigo-600 rounded-[32px] items-center justify-center shadow-2xl shadow-indigo-500/50 mb-8"
+              >
+                 <Brain size={48} color="white" />
+              </MotiView>
+              <Text className="text-white text-2xl font-bold text-center">AI Logic Core</Text>
+              <Text className="text-slate-400 text-center mt-3 text-sm leading-5 px-4 font-medium">
+                Customize the neural parameters that define how your AI persona interacts with and motivates your clients.
+              </Text>
+          </MotiView>
 
-          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Style</Text>
-          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
-            What approach should the AI take? (e.g., supportive, educational,
-            direct)
-          </Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-            value={style}
-            onChangeText={setStyle}
-            placeholder="supportive and educational"
-            placeholderTextColor={theme.colors.textTertiary}
-          />
-        </View>
+          {/* Configuration Forms */}
+          <View className="px-6 mt-10">
+              <ConfigSection 
+                title="Tone of Voice" 
+                desc="The personality of your AI assistant"
+                value={tone}
+                onChange={setTone}
+                placeholder="Professional, encouraging, and direct"
+                icon={<Sparkles size={18} color="#818CF8" />}
+              />
+              <ConfigSection 
+                title="Support Style" 
+                desc="How the AI handles feedback and guidance"
+                value={style}
+                onChange={setStyle}
+                placeholder="Supportive and results-driven"
+                icon={<Shield size={18} color="#10B981" />}
+              />
+              <ConfigSection 
+                title="Core Philosophy" 
+                desc="The principles the AI should enforce"
+                value={philosophy}
+                onChange={setPhilosophy}
+                placeholder="Focus on consistency and incremental progress..."
+                icon={<Zap size={18} color="#F59E0B" />}
+                multiline
+              />
+              <ConfigSection 
+                title="Specialty Domain" 
+                desc="Primary area of expertise for the AI"
+                value={specialtyFocus}
+                onChange={setSpecialtyFocus}
+                placeholder="Hypertrophy and nutrition optimization"
+                icon={<ChevronRight size={18} color="#3B82F6" />}
+              />
+          </View>
+      </ScrollView>
 
-          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Philosophy</Text>
-          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
-            What are your core coaching principles?
-          </Text>
-          <TextInput
-            style={[styles.input, styles.textArea, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-            value={philosophy}
-            onChangeText={setPhilosophy}
-            placeholder="Describe your coaching philosophy..."
-            placeholderTextColor={theme.colors.textTertiary}
-            multiline
-            numberOfLines={4}
-          />
-        </View>
-
-          <View style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Specialty Focus</Text>
-          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
-            What area do you specialize in? (e.g., weight loss, muscle
-            building, mindset)
-          </Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-            value={specialtyFocus}
-            onChangeText={setSpecialtyFocus}
-            placeholder="weight loss and nutrition"
-            placeholderTextColor={theme.colors.textTertiary}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.saveButtonText}>Save Configuration</Text>
-          )}
-        </TouchableOpacity>
+      {/* Save Action */}
+      <View className="absolute bottom-0 w-full p-6 bg-slate-950/90 border-t border-slate-900">
+          <TouchableOpacity 
+            className={`h-16 rounded-2xl flex-row items-center justify-center gap-3 bg-indigo-600 shadow-xl shadow-indigo-500/20`}
+            onPress={handleSave}
+            disabled={saving}
+          >
+              {saving ? (
+                  <ActivityIndicator color="white" />
+              ) : (
+                  <>
+                    <Save size={22} color="white" />
+                    <Text className="text-white font-bold text-lg">Save Parameters</Text>
+                  </>
+              )}
+          </TouchableOpacity>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  backButton: {
-    marginBottom: 16,
-    padding: 8,
-    alignSelf: 'flex-start',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  content: {
-    padding: 16,
-  },
-  section: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#111827',
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  saveButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+const ConfigSection = ({ title, desc, value, onChange, placeholder, icon, multiline }: any) => (
+  <View className="mb-8">
+      <View className="flex-row items-center gap-3 mb-2">
+         <View className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 items-center justify-center">
+            {icon}
+         </View>
+         <View>
+            <Text className="text-white font-bold">{title}</Text>
+            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{desc}</Text>
+         </View>
+      </View>
+      <TextInput 
+         className={`bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-white font-medium ${multiline ? 'min-h-[120px] text-top' : ''}`}
+         placeholder={placeholder}
+         placeholderTextColor="#475569"
+         value={value}
+         onChangeText={onChange}
+         multiline={multiline}
+         numberOfLines={multiline ? 4 : 1}
+         textAlignVertical={multiline ? 'top' : 'center'}
+      />
+  </View>
+);

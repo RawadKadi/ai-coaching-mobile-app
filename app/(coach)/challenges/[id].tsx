@@ -1,322 +1,203 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MotiView, MotiText, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, X, AlertCircle, CheckCircle, Calendar, Target } from 'lucide-react-native';
-import { useTheme } from '@/contexts/BrandContext';
-
-/**
- * Mother Challenge Detail Screen V3 (Coach View)
- * Shows mother challenge with all sub-challenges
- */
+import { ArrowLeft, X, AlertCircle, CheckCircle, Calendar, Target, Clock, Dumbbell, Apple, Moon, Zap, ChevronRight } from 'lucide-react-native';
 
 export default function ChallengeDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
-  const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [challenge, setChallenge] = useState<any>(null);
 
   useEffect(() => {
     loadChallengeDetails();
-
-    // Set up real-time subscription for sub-challenge updates
     if (!id) return;
-
     const subscription = supabase
       .channel(`challenge-${id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sub_challenges',
-          filter: `mother_challenge_id=eq.${id}`
-        },
-        (payload) => {
-          console.log('[Real-time] Sub-challenge updated:', payload.new);
-          
-          // Update the specific sub-challenge in local state
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sub_challenges', filter: `mother_challenge_id=eq.${id}` }, (payload) => {
           setChallenge((current: any) => {
             if (!current) return current;
-            
-            const updatedSubChallenges = current.sub_challenges.map((sub: any) => {
-              if (sub.id === payload.new.id) {
-                return {
-                  ...sub,
-                  completed: payload.new.completed,
-                  completed_at: payload.new.completed_at
-                };
-              }
-              return sub;
-            });
-
-            return {
-              ...current,
-              sub_challenges: updatedSubChallenges
-            };
+            const updatedSubChallenges = current.sub_challenges.map((sub: any) => sub.id === payload.new.id ? { ...sub, completed: payload.new.completed, completed_at: payload.new.completed_at } : sub);
+            return { ...current, sub_challenges: updatedSubChallenges };
           });
-        }
-      )
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
+    return () => { supabase.removeChannel(subscription); };
   }, [id]);
 
   const loadChallengeDetails = async () => {
     if (!id || !user) return;
-
     try {
       setLoading(true);
-
-      // Get mother challenge with all sub-challenges
-      const { data, error } = await supabase.rpc('get_mother_challenge_details', {
-        p_mother_challenge_id: id
-      });
-
+      const { data, error } = await supabase.rpc('get_mother_challenge_details', { p_mother_challenge_id: id });
       if (error) throw error;
-
-      if (!data || data.length === 0) {
-        Alert.alert('Error', 'Challenge not found');
-        router.back();
-        return;
-      }
-
+      if (!data || data.length === 0) { router.back(); return; }
       setChallenge(data[0]);
     } catch (error) {
       console.error('Error loading challenge:', error);
-      Alert.alert('Error', 'Failed to load challenge details');
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancel = async () => {
-    Alert.alert(
-      'Cancel Challenge',
-      'Are you sure you want to cancel this challenge?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase.rpc('cancel_mother_challenge', {
-                p_mother_challenge_id: id
-              });
-
-              if (error) throw error;
-
-              Alert.alert('Success', 'Challenge cancelled');
-              router.back();
-            } catch (error:any) {
-              console.error('Error cancelling challenge:', error);
-              Alert.alert('Error', 'Failed to cancel challenge');
-            }
-          },
-        },
-      ]
-    );
+    Alert.alert('Cancel Challenge', 'Are you sure you want to cancel this challenge?', [
+      { text: 'No', style: 'cancel' },
+      { text: 'Yes, Cancel', style: 'destructive', onPress: async () => {
+          try {
+            await supabase.rpc('cancel_mother_challenge', { p_mother_challenge_id: id });
+            router.back();
+          } catch (e) {
+            Alert.alert('Error', 'Failed to cancel');
+          }
+      }},
+    ]);
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+      <View className="flex-1 bg-slate-950 justify-center items-center">
+        <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
   }
 
-  if (!challenge) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#111" />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { fontFamily: theme.typography.fontFamily }]}>Challenge Details</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.emptyContainer}>
-          <AlertCircle size={48} color="#999" />
-          <Text style={[styles.emptyText, { fontFamily: theme.typography.fontFamily }]}>Challenge not found</Text>
-        </View>
-      </View>
-    );
-  }
+  if (!challenge) return null;
 
   const completedCount = challenge.sub_challenges?.filter((s: any) => s.completed).length || 0;
   const totalCount = challenge.sub_challenges?.length || 0;
   const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View className="flex-1 bg-slate-950">
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={theme.colors.text} />
+      <View className="px-6 pt-16 pb-6 flex-row items-center gap-4 bg-slate-950 border-b border-slate-900">
+        <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full">
+          <ArrowLeft size={20} color="#94A3B8" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Challenge Details</Text>
-        <View style={{ width: 24 }} />
+        <View className="flex-1">
+           <Text className="text-white text-xl font-bold" numberOfLines={1}>{challenge.name}</Text>
+           <Text className="text-slate-500 text-xs font-medium">Tracking {challenge.client_name.split(' ')[0]}'s progress</Text>
+        </View>
+        <TouchableOpacity onPress={handleCancel} className="p-2 bg-red-500/10 rounded-full border border-red-500/20">
+          <X size={20} color="#EF4444" />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
-        {/* Challenge Info Card */}
-        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={styles.cardHeader}>
-            <Text style={[styles.challengeName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{challenge.name}</Text>
-            <View style={[styles.statusBadge, challenge.status === 'active' && styles.statusActive]}>
-              <Text style={[styles.statusText, { fontFamily: theme.typography.fontFamily }]}>{challenge.status}</Text>
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+        {/* Performance Overview */}
+        <MotiView 
+          from={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mx-6 mt-8 bg-slate-900 p-6 rounded-[32px] border border-slate-800"
+        >
+          <View className="flex-row justify-between items-center mb-6">
+            <View className="bg-blue-600/10 border border-blue-500/20 px-3 py-1 rounded-full">
+              <Text className="text-blue-400 text-[10px] font-bold uppercase tracking-widest">Active Phase</Text>
+            </View>
+            <View className="flex-row items-center gap-2">
+              <Calendar size={14} color="#64748B" />
+              <Text className="text-slate-500 text-xs font-medium">Until {new Date(challenge.end_date).toLocaleDateString()}</Text>
             </View>
           </View>
 
-          {challenge.description && (
-            <Text style={[styles.description, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{challenge.description}</Text>
-          )}
-
-          <View style={styles.infoRow}>
-            <Calendar size={16} color="#666" />
-            <Text style={[styles.infoText, { fontFamily: theme.typography.fontFamily }]}>
-              {new Date(challenge.start_date).toLocaleDateString()} - {new Date(challenge.end_date).toLocaleDateString()}
-            </Text>
+          <View className="flex-row items-baseline gap-2 mb-2">
+            <Text className="text-white text-4xl font-bold">{completionRate}%</Text>
+            <Text className="text-slate-500 font-medium">Compliance</Text>
           </View>
 
-          <View style={styles.infoRow}>
-            <Target size={16} color="#666" />
-            <Text style={[styles.infoText, { fontFamily: theme.typography.fontFamily }]}>
-              {challenge.client_name}
-            </Text>
+          <View className="h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800 mb-6">
+             <View className="h-full bg-blue-500 rounded-full" style={{ width: `${completionRate}%` }} />
           </View>
 
-          {/* Progress */}
-          <View style={styles.progressSection}>
-            <View style={styles.progressHeader}>
-              <Text style={[styles.progressLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Overall Progress</Text>
-              <Text style={[styles.progressPercent, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>{completionRate}%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${completionRate}%` }]} />
-            </View>
-            <Text style={[styles.progressText, { fontFamily: theme.typography.fontFamily }]}>
-              {completedCount} of {totalCount} tasks completed
-            </Text>
+          <View className="flex-row gap-8">
+             <View>
+                <Text className="text-slate-500 text-[10px] font-bold uppercase">Completed</Text>
+                <Text className="text-white font-bold text-lg">{completedCount}</Text>
+             </View>
+             <View>
+                <Text className="text-slate-500 text-[10px] font-bold uppercase">Remaining</Text>
+                <Text className="text-white font-bold text-lg">{totalCount - completedCount}</Text>
+             </View>
           </View>
+        </MotiView>
+
+        {/* Task List */}
+        <View className="mt-10 px-6">
+           <Text className="text-white text-lg font-bold mb-6">Daily Breakdown</Text>
+           {challenge.sub_challenges?.map((task: any, index: number) => (
+             <TaskCard key={task.id} task={task} index={index} />
+           ))}
         </View>
-
-        {/* Sub-Challenges List */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Daily Tasks ({totalCount})</Text>
-        {challenge.sub_challenges?.map((sub: any, index: number) => (
-          <View key={sub.id} style={[styles.subChallengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <View style={styles.subHeader}>
-              <View style={styles.subHeaderLeft}>
-                <Text style={[styles.subDate, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-                  {new Date(sub.assigned_date).toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </Text>
-                <View style={[styles.focusBadge, { backgroundColor: getFocusColor(sub.focus_type) }]}>
-                  <Text style={[styles.focusText, { fontFamily: theme.typography.fontFamily }]}>{sub.focus_type}</Text>
-                </View>
-              </View>
-              {sub.completed ? (
-                <CheckCircle size={24} color="#10b981" />
-              ) : (
-                <View style={styles.incompleteBadge}>
-                  <Text style={[styles.incompleteText, { fontFamily: theme.typography.fontFamily }]}>Pending</Text>
-                </View>
-              )}
-            </View>
-
-            <Text style={[styles.subName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{sub.name}</Text>
-            {sub.description && (
-              <Text style={[styles.subDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{sub.description}</Text>
-            )}
-
-            <View style={styles.subFooter}>
-              <Text style={[styles.intensityText, { fontFamily: theme.typography.fontFamily }]}>Intensity: {sub.intensity}</Text>
-            </View>
-          </View>
-        ))}
       </ScrollView>
-
-      {/* Cancel Button */}
-      {challenge.status === 'active' && (
-        <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-          <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-            <X size={20} color="#ef4444" />
-            <Text style={[styles.cancelButtonText, { fontFamily: theme.typography.fontFamily }]}>Cancel Challenge</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }
 
-function getFocusColor(focusType: string): string {
-  const colors: Record<string, string> = {
-    training: '#3b82f6',
-    nutrition: '#10b981',
-    recovery: '#8b5cf6',
-    consistency: '#f59e0b',
+const TaskCard = ({ task, index }: { task: any, index: number }) => {
+  const getIcon = (type: string) => {
+    switch (type?.toLowerCase()) {
+      case 'training': return <Dumbbell size={24} color="#3B82F6" />;
+      case 'nutrition': return <Apple size={24} color="#10B981" />;
+      case 'recovery': return <Moon size={24} color="#8B5CF6" />;
+      default: return <Zap size={24} color="#F59E0B" />;
+    }
   };
-  return colors[focusType] || '#6b7280';
-}
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyText: { fontSize: 16, color: '#999', marginTop: 12 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: 60, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
-  scrollView: { flex: 1 },
-  card: { backgroundColor: '#fff', margin: 16, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
-  challengeName: { fontSize: 20, fontWeight: 'bold', color: '#111', flex: 1, marginRight: 12 },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: '#f3f4f6' },
-  statusActive: { backgroundColor: '#dcfce7' },
-  statusText: { fontSize: 12, fontWeight: '600', color: '#16a34a', textTransform: 'capitalize' },
-  description: { fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 16 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  infoText: { fontSize: 14, color: '#666' },
-  progressSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  progressLabel: { fontSize: 14, fontWeight: '600', color: '#111' },
-  progressPercent: { fontSize: 18, fontWeight: 'bold', color: '#6366f1' },
-  progressBar: { height: 8, backgroundColor: '#e5e7eb', borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
-  progressFill: { height: '100%', backgroundColor: '#10b981', borderRadius: 4 },
-  progressText: { fontSize: 12, color: '#666' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111', marginHorizontal: 16, marginTop: 8, marginBottom: 12 },
-  subChallengeCard: { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
-  subHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  subHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  subDate: { fontSize: 13, fontWeight: '600', color: '#111' },
-  focusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  focusText: { fontSize: 11, fontWeight: '600', color: '#fff' },
-  incompleteBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#fef3c7' },
-  incompleteText: { fontSize: 11, fontWeight: '600', color: '#92400e' },
-  subName: { fontSize: 16, fontWeight: '600', color: '#111', marginBottom: 4 },
-  subDescription: { fontSize: 13, color: '#666', lineHeight: 18, marginBottom: 8 },
-  subFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  intensityText: { fontSize: 12, color: '#666', textTransform: 'capitalize' },
-  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  cancelButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 12, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fca5a5' },
-  cancelButtonText: { fontSize: 16, fontWeight: '600', color: '#ef4444' },
-});
+  const isPast = new Date(task.assigned_date) < new Date(new Date().setHours(0,0,0,0));
+
+  return (
+    <MotiView
+      from={{ opacity: 0, translateX: -20 }}
+      animate={{ opacity: 1, translateX: 0 }}
+      transition={{ delay: index * 100 }}
+      className="bg-slate-900 mb-4 p-5 rounded-[24px] border border-slate-800"
+    >
+      <View className="flex-row justify-between items-center mb-4">
+        <View className="flex-row items-center gap-3">
+          <View className="w-10 h-10 bg-slate-950 rounded-xl items-center justify-center border border-slate-800">
+             {getIcon(task.focus_type)}
+          </View>
+          <View>
+            <Text className="text-white font-bold text-base">{task.name}</Text>
+            <Text className="text-slate-500 text-xs font-medium capitalize">{task.focus_type} • {task.intensity}</Text>
+          </View>
+        </View>
+        {task.completed ? (
+          <View className="bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+             <Text className="text-emerald-500 text-[10px] font-bold uppercase">Success</Text>
+          </View>
+        ) : isPast ? (
+            <View className="bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
+                <Text className="text-red-500 text-[10px] font-bold uppercase">Missed</Text>
+            </View>
+        ) : (
+          <View className="bg-slate-800 px-3 py-1 rounded-full">
+             <Text className="text-slate-400 text-[10px] font-bold uppercase">Pending</Text>
+          </View>
+        )}
+      </View>
+
+      <View className="pl-[52px]">
+         <Text className="text-slate-400 text-sm leading-5 mb-4" numberOfLines={2}>{task.description}</Text>
+         <View className="flex-row justify-between items-center pt-4 border-t border-slate-950/50">
+           <View className="flex-row items-center gap-2">
+              <Clock size={12} color="#475569" />
+              <Text className="text-slate-500 text-[10px] font-bold uppercase">
+                {new Date(task.assigned_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              </Text>
+           </View>
+           <TouchableOpacity className="flex-row items-center gap-1">
+              <Text className="text-blue-500 text-xs font-bold">Edit Plan</Text>
+              <ChevronRight size={14} color="#3B82F6" />
+           </TouchableOpacity>
+         </View>
+      </View>
+    </MotiView>
+  );
+};

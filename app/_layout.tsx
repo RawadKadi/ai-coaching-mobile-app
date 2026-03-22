@@ -1,3 +1,4 @@
+import 'react-native-reanimated';
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +13,7 @@ import NotificationToast from '@/components/NotificationToast';
 import { loadNotificationSound, unloadNotificationSound } from '@/lib/notification-sound';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import '../global.css';
 
 function RootLayoutNav() {
   const { session, loading, profile } = useAuth();

@@ -1,153 +1,102 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBrand, useTheme } from '@/contexts/BrandContext';
-import { ArrowLeft, Clock, ChevronRight, Palette, Brain } from 'lucide-react-native';
+import { useBrand } from '@/contexts/BrandContext';
+import { ChevronLeft, ChevronRight, Clock, Palette, BrainCircuit, Shield, Bell } from 'lucide-react-native';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { coach } = useAuth();
   const { canManageBrand } = useBrand();
-  const theme = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Settings</Text>
-      </View>
-
-      <ScrollView style={styles.content}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>General</Text>
-        <View style={[styles.menuContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <TouchableOpacity 
-            style={styles.menuItem} 
-            onPress={() => router.push('/(coach)/settings/availability')}
-          >
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: '#EFF6FF' }]}>
-                <Clock size={20} color="#3B82F6" />
-              </View>
-              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Availability</Text>
-            </View>
-            <ChevronRight size={20} color={theme.colors.textSecondary} />
+    <View className="flex-1 bg-slate-950">
+      <SafeAreaView className="flex-1">
+        <View className="flex-row items-center px-6 pt-10 pb-6 gap-4">
+          <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center">
+            <ChevronLeft size={20} color="white" />
           </TouchableOpacity>
+          <View>
+            <Text className="text-white text-xl font-black">System Configuration</Text>
+            <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Engine Parameters</Text>
+          </View>
+        </View>
 
-          {/* Brand Settings - Only show if coach has brand_id or can manage brand */}
+        <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingBottom: 120 }}>
+          <SectionLabel label="Core Systems" />
+          <SettingsItem
+            icon={<Clock size={20} color="#3B82F6" />}
+            iconBg="#3B82F620"
+            label="Availability Hub"
+            desc="Sync your time windows"
+            onPress={() => router.push('/(coach)/settings/availability')}
+          />
+
           {(coach?.brand_id || coach?.can_manage_brand) && (
-            <TouchableOpacity 
-              style={styles.menuItem} 
-              onPress={() => router.push('/(coach)/settings/branding')}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: '#FFF7ED' }]}>
-                  <Palette size={20} color="#F59E0B" />
-                </View>
-                <View>
-                  <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Brand Settings</Text>
-                  {canManageBrand && (
-                    <Text style={[styles.badgeText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Manage brand colors & logo</Text>
-                  )}
-                </View>
-              </View>
-              <ChevronRight size={20} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
+            <>
+              <SectionLabel label="Identity & Brand" />
+              <SettingsItem
+                icon={<Palette size={20} color="#F59E0B" />}
+                iconBg="#F59E0B20"
+                label="Brand Studio"
+                desc={canManageBrand ? "Customize colors & logo" : "View brand settings"}
+                onPress={() => router.push('/(coach)/settings/branding')}
+              />
+            </>
           )}
 
-          {/* AI Brain */}
-          <TouchableOpacity 
-            style={styles.menuItem} 
+          <SectionLabel label="Intelligence Layer" />
+          <SettingsItem
+            icon={<BrainCircuit size={20} color="#8B5CF6" />}
+            iconBg="#8B5CF620"
+            label="Neural Engine Config"
+            desc="Tune your AI persona"
             onPress={() => router.push('/(coach)/(tabs)/ai-brain')}
-          >
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: '#F5F3FF' }]}>
-                <Brain size={20} color="#8B5CF6" />
-              </View>
-              <Text style={[styles.menuItemText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>AI Brain</Text>
-            </View>
-            <ChevronRight size={20} color={theme.colors.textSecondary} />
-          </TouchableOpacity>
-          
-          {/* Future settings can be added here */}
-        </View>
-      </ScrollView>
+          />
+
+          <SectionLabel label="Security" />
+          <SettingsItem
+            icon={<Shield size={20} color="#10B981" />}
+            iconBg="#10B98120"
+            label="Clearance Protocols"
+            desc="Password & access control"
+          />
+          <SettingsItem
+            icon={<Bell size={20} color="#EC4899" />}
+            iconBg="#EC489920"
+            label="Alert Channels"
+            desc="Configure notifications"
+          />
+
+          <View className="mt-16 items-center">
+            <Text className="text-slate-800 text-[10px] font-black uppercase tracking-[4px]">V3.0.Neural-Sync</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    paddingTop: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    gap: 16,
-  },
-  backButton: {
-    padding: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 8,
-    marginLeft: 4,
-    textTransform: 'uppercase',
-  },
-  menuContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuItemText: {
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '500',
-  },
-  badgeText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-});
+const SectionLabel = ({ label }: { label: string }) => (
+  <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest px-1 mt-8 mb-3">{label}</Text>
+);
+
+const SettingsItem = ({ icon, iconBg, label, desc, onPress }: any) => (
+  <MotiView from={{ opacity: 0, translateX: -10 }} animate={{ opacity: 1, translateX: 0 }} className="mb-2">
+    <TouchableOpacity
+      onPress={onPress}
+      className="flex-row items-center p-5 bg-slate-900/40 rounded-[28px] border border-slate-900"
+    >
+      <View style={{ backgroundColor: iconBg }} className="w-12 h-12 rounded-2xl items-center justify-center mr-4">
+        {icon}
+      </View>
+      <View className="flex-1">
+        <Text className="text-slate-200 font-black text-base">{label}</Text>
+        {desc && <Text className="text-slate-600 text-[10px] font-bold uppercase tracking-tighter mt-0.5">{desc}</Text>}
+      </View>
+      <ChevronRight size={18} color="#334155" />
+    </TouchableOpacity>
+  </MotiView>
+);

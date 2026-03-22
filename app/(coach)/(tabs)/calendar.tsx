@@ -1,540 +1,169 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Platform, UIManager, LayoutAnimation } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Platform, SafeAreaView, RefreshControl, ScrollView } from 'react-native';
+import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus } from 'lucide-react-native';
+import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
 import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
-import { Session as SessionType } from '@/types/database';
-
-if (Platform.OS === 'android') {
-  if (UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-  }
-}
-
-type Session = {
-  id: string;
-  client_id: string;
-  coach_id: string;
-  scheduled_at: string;
-  duration_minutes: number;
-  meet_link?: string;
-  status: 'proposed' | 'scheduled' | 'completed' | 'cancelled';
-  session_type: 'training' | 'nutrition' | 'check_in' | 'consultation' | 'other';
-  notes?: string;
-  is_locked: boolean;
-  ai_generated: boolean;
-  created_at: string;
-  client?: {
-    profiles: {
-      full_name: string;
-      avatar_url: string | null;
-    };
-  };
-};
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 export default function CalendarScreen() {
   const { profile, coach } = useAuth();
-  const theme = useTheme();
   const router = useRouter();
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showManualScheduler, setShowManualScheduler] = useState(false);
   const [showAIScheduler, setShowAIScheduler] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<{id: string, name: string, timezone: string} | null>(null);
-  const [initialClientData, setInitialClientData] = useState<any>(null); // For passing to ManualSchedulerModal
+  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [initialClientData, setInitialClientData] = useState<any>(null);
 
-  // When switching back from AI scheduler, we need to fetch the full client data
   useEffect(() => {
     const fetchClientData = async () => {
       if (selectedClient && showManualScheduler && !showAIScheduler) {
-        // Fetch full client data for ManualSchedulerModal
-        const { data } = await supabase
-          .from('clients')
-          .select('id, user_id, profiles(full_name, avatar_url)')
-          .eq('id', selectedClient.id)
-          .single();
-        
-        if (data) {
-          setInitialClientData(data);
-        }
-      } else if (!showManualScheduler) {
-        // Reset when modal closes
-        setInitialClientData(null);
-      }
+        const { data } = await supabase.from('clients').select('id, user_id, profiles(full_name, avatar_url)').eq('id', selectedClient.id).single();
+        if (data) setInitialClientData(data);
+      } else if (!showManualScheduler) setInitialClientData(null);
     };
     fetchClientData();
   }, [selectedClient, showManualScheduler, showAIScheduler]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (profile) {
-        loadSessions();
-      }
-    }, [profile])
-  );
+  useFocusEffect(useCallback(() => { if (profile) loadSessions(); }, [profile]));
 
   const loadSessions = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('sessions')
-        .select(`
-          *,
-          client:clients (
-            profiles (
-              full_name,
-              avatar_url
-            )
-          )
-        `)
-        .eq('coach_id', coach?.id)
-        .order('scheduled_at', { ascending: true });
-
+      const { data, error } = await supabase.from('sessions').select('*, client:clients(profiles(full_name, avatar_url))').eq('coach_id', coach?.id).order('scheduled_at', { ascending: true });
       if (error) throw error;
       setSessions(data || []);
-    } catch (error) {
-      console.error('Error loading sessions:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleConfirmSessions = async (proposedSessions: ProposedSession[]) => {
-    if (!coach || !selectedClient) return;
-
-    try {
-      // Insert sessions as locked
-      const sessionsToInsert = proposedSessions.map(session => ({
-        coach_id: coach.id,
-        client_id: selectedClient.id,
-        scheduled_at: session.scheduled_at,
-        duration_minutes: session.duration_minutes,
-        session_type: session.session_type,
-        notes: session.notes,
-        status: 'scheduled',
-        is_locked: true,
-        ai_generated: true,
-        meet_link: `https://meet.jit.si/${coach.id}-${selectedClient.id}-${Date.now()}`,
-      }));
-
-      const { data: insertedSessions, error } = await supabase
-        .from('sessions')
-        .insert(sessionsToInsert)
-        .select();
-
-      if (error) throw error;
-
-      // Send notification message to client
-      const { data: clientUser } = await supabase
-        .from('clients')
-        .select('user_id')
-        .eq('id', selectedClient.id)
-        .single();
-
-      if (clientUser) {
-        for (const session of insertedSessions) {
-          const messageContent = JSON.stringify({
-            type: 'session_invite',
-            sessionId: session.id,
-            link: session.meet_link,
-            timestamp: session.scheduled_at,
-            description: `${session.session_type} session`,
-            status: 'scheduled',
-          });
-
-          await supabase.from('messages').insert({
-            sender_id: profile?.id,
-            recipient_id: clientUser.user_id,
-            content: messageContent,
-            ai_generated: false,
-          });
-        }
-      }
-
-      // Reload sessions
-      loadSessions();
-    } catch (error) {
-      console.error('Error confirming sessions:', error);
-      throw error;
-    }
+    } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
   };
 
   const getSessionsForDate = (date: Date) => {
-    return sessions.filter(session => {
-      const sessionDate = new Date(session.scheduled_at);
-      return (
-        sessionDate.getDate() === date.getDate() &&
-        sessionDate.getMonth() === date.getMonth() &&
-        sessionDate.getFullYear() === date.getFullYear()
-      );
+    return sessions.filter(s => {
+      const sd = new Date(s.scheduled_at);
+      return sd.getDate() === date.getDate() && sd.getMonth() === date.getMonth() && sd.getFullYear() === date.getFullYear();
     });
   };
 
-  const renderSessionCard = ({ item }: { item: Session }) => {
-    const sessionDate = new Date(item.scheduled_at);
-    const isToday = new Date().toDateString() === sessionDate.toDateString();
-    
-    return (
-      <TouchableOpacity 
-        style={[styles.card, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}
-        onPress={() => router.push({
-          pathname: '/(coach)/chat/[id]',
-          params: { id: item.client_id }
-        })}
-      >
-        <View style={styles.cardHeader}>
-          <View style={[styles.timeContainer, { backgroundColor: theme.colors.primary + '15' }]}>
-            <Clock size={16} color={theme.colors.primary} />
-            <Text style={[styles.timeText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>
-              {sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
-          {isToday && (
-            <View style={[styles.todayBadge, { backgroundColor: theme.colors.primary + '15' }]}>
-              <Text style={[styles.todayText, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>TODAY</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.clientInfo}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceAlt }]}>
-            <User size={20} color={theme.colors.textSecondary} />
-          </View>
-          <View>
-            <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-              {item.client?.profiles?.full_name || 'Unknown Client'}
-            </Text>
-            <Text style={[styles.durationText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{item.duration_minutes} min session</Text>
-          </View>
-        </View>
-
-        <View style={[styles.cardFooter, { borderTopColor: theme.colors.border }]}>
-          <View style={styles.linkContainer}>
-            <Video size={16} color={theme.colors.textSecondary} />
-            <Text style={[styles.linkText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]} numberOfLines={1}>
-              Video Call
-            </Text>
-          </View>
-          <ChevronRight size={20} color={theme.colors.textTertiary} />
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  // Generate next 7 days for horizontal calendar
   const days = Array.from({ length: 14 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
     return d;
   });
 
+  if (loading && !refreshing) return <View className="flex-1 bg-slate-950 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View>;
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Schedule</Text>
-      </View>
+    <View style={{ flex: 1 }} className="bg-slate-950">
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={{ flex: 1 }}>
+          {/* Header */}
+          <View className="px-6 pt-10 pb-6">
+              <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[4px] mb-1">Operational Phase</Text>
+              <Text className="text-white text-3xl font-black">Calendar</Text>
+          </View>
 
-      <View style={[styles.calendarStrip, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={days}
-          keyExtractor={(item) => item.toISOString()}
-          contentContainerStyle={styles.calendarContent}
-          renderItem={({ item }) => {
-            const isSelected = item.toDateString() === selectedDate.toDateString();
-            const hasSession = getSessionsForDate(item).length > 0;
-            
-            return (
-              <TouchableOpacity
-                style={[
-                  styles.dateItem,
-                  { backgroundColor: isSelected ? theme.colors.primary : theme.colors.inputBackground },
-                  isSelected && styles.dateItemSelected
-                ]}
-                onPress={() => setSelectedDate(item)}
-              >
-                <Text style={[styles.dayName, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.textSecondary }, { fontFamily: theme.typography.fontFamily }]}>
-                  {item.toLocaleDateString('en-US', { weekday: 'short' })}
-                </Text>
-                <Text style={[styles.dayNumber, isSelected && { color: theme.colors.textOnPrimary }, !isSelected && { color: theme.colors.text }, { fontFamily: theme.typography.fontFamily }]}>
-                  {item.getDate()}
-                </Text>
-                {hasSession && (
-                  <View style={[styles.dot, { backgroundColor: isSelected ? theme.colors.textOnPrimary : theme.colors.primary }]} />
-                )}
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </View>
+          {/* Date Matrix */}
+          <View className="mb-4">
+              <FlatList
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={days}
+                  keyExtractor={item => item.toISOString()}
+                  contentContainerStyle={{ paddingHorizontal: 24, paddingRight: 40, gap: 12 }}
+                  renderItem={({ item }) => {
+                      const isS = item.toDateString() === selectedDate.toDateString();
+                      const has = getSessionsForDate(item).length > 0;
+                      return (
+                          <TouchableOpacity 
+                              onPress={() => setSelectedDate(item)}
+                              className={`w-14 h-20 rounded-2xl items-center justify-center border ${isS ? 'bg-blue-600 border-blue-400 shadow-lg shadow-blue-500/40' : 'bg-slate-900/50 border-slate-900'}`}
+                          >
+                              <Text className={`text-[10px] font-black uppercase tracking-tighter ${isS ? 'text-white/60' : 'text-slate-600'}`}>{item.toLocaleDateString('en-US', { weekday: 'short' })}</Text>
+                              <Text className={`text-xl font-black mt-1 ${isS ? 'text-white' : 'text-slate-400'}`}>{item.getDate()}</Text>
+                              {has && <View className={`w-1 h-1 rounded-full mt-2 ${isS ? 'bg-white' : 'bg-blue-600'}`} />}
+                          </TouchableOpacity>
+                      );
+                  }}
+              />
+          </View>
 
-      <View style={styles.content}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-          {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </Text>
-        
-        {loading ? (
-          <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 40 }} />
-        ) : (
-          <FlatList
-            data={getSessionsForDate(selectedDate)}
-            renderItem={renderSessionCard}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <CalendarIcon size={48} color={theme.colors.border} />
-                <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No sessions scheduled</Text>
+          <ScrollView 
+              className="flex-1 px-6"
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadSessions(); }} tintColor="#3B82F6" />}
+          >
+              <View className="flex-row items-center gap-3 mb-6 mt-6">
+                  <View className="w-1 h-4 bg-blue-600 rounded-full" />
+                  <Text className="text-white text-lg font-black">{selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
               </View>
-            }
-          />
-        )}
-      </View>
 
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => {
-          // Open manual scheduler for client selection first
-          setShowManualScheduler(true);
-        }}
-      >
-        <Plus size={24} color="#FFF" />
-      </TouchableOpacity>
+              <View className="space-y-4 pb-32">
+                  {getSessionsForDate(selectedDate).length === 0 ? (
+                      <View className="p-12 items-center justify-center bg-slate-900/20 rounded-[40px] border border-slate-900 border-dashed">
+                          <CalendarIcon size={32} color="#1E293B" />
+                          <Text className="text-slate-700 font-black text-xs uppercase tracking-widest mt-6">Clear Window</Text>
+                          <Text className="text-slate-800 font-medium text-[10px] mt-2">Zero operational conflicts detected.</Text>
+                      </View>
+                  ) : (
+                      getSessionsForDate(selectedDate).map((session, idx) => (
+                          <MotiView key={session.id} from={{ opacity: 0, translateX: -10 }} animate={{ opacity: 1, translateX: 0 }} transition={{ delay: idx * 50 }}>
+                              <TouchableOpacity 
+                                  className="bg-slate-900/50 border border-slate-900 rounded-[32px] p-5 flex-row items-center gap-5"
+                                  onPress={() => router.push({ pathname: '/(coach)/(tabs)/chat/[id]', params: { id: session.client_id } })}
+                              >
+                                  <View className="bg-slate-950 p-3 rounded-2xl border border-slate-800 items-center min-w-[70px]">
+                                      <Clock size={14} color="#3B82F6" className="mb-1" />
+                                      <Text className="text-white font-black text-sm">{new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</Text>
+                                  </View>
+                                  <View className="flex-1">
+                                      <View className="flex-row items-center gap-3">
+                                          <BrandedAvatar name={session.client?.profiles?.full_name} imageUrl={session.client?.profiles?.avatar_url} size={32} />
+                                          <Text className="text-white font-black text-base">{session.client?.profiles?.full_name}</Text>
+                                      </View>
+                                      <Text className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-2">{session.duration_minutes} MIN • {session.session_type}</Text>
+                                  </View>
+                                  <View className="w-10 h-10 bg-slate-950 rounded-full items-center justify-center border border-slate-800">
+                                      <Video size={18} color="#475569" />
+                                  </View>
+                              </TouchableOpacity>
+                          </MotiView>
+                      ))
+                  )}
+              </View>
+          </ScrollView>
 
-      {/* Manual Scheduler Modal */}
-      {coach && (
-        <ManualSchedulerModal
-          visible={showManualScheduler}
-          onClose={() => {
-            setShowManualScheduler(false);
-            setSelectedClient(null);
-          }}
-          onConfirm={async (sessions) => {
-            // Manual scheduler handles its own session creation
-            // Just reload sessions afterwards
-            loadSessions();
-          }}
-          existingSessions={sessions as any}
-          coachId={coach.id}
-          initialClient={initialClientData} // Pass the fetched client data
-          onSwitchToAI={(client) => {
-            // Client selected, user wants to use AI scheduler
-            setSelectedClient({
-              id: client.id,
-              name: client.profiles.full_name,
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            });
-            setShowManualScheduler(false);
-            setShowAIScheduler(true);
-          }}
-        />
-      )}
+          <TouchableOpacity 
+              onPress={() => setShowManualScheduler(true)}
+              className="absolute bottom-10 right-6 w-16 h-16 bg-blue-600 rounded-[28px] items-center justify-center shadow-2xl shadow-blue-500/40 border-2 border-white/10"
+          >
+              <Plus size={28} color="white" />
+          </TouchableOpacity>
 
-      {/* AI Scheduler Modal */}
-      {selectedClient && (
-        <SchedulerModal
-          visible={showAIScheduler}
-          onClose={() => {
-            setShowAIScheduler(false);
-            setSelectedClient(null);
-          }}
-          onConfirm={handleConfirmSessions}
-          clientContext={selectedClient}
-          targetClientId={selectedClient.id}
-          existingSessions={sessions}
-          onSwitchToManual={() => {
-            // Switch back to manual scheduler, preserving the client
-            setShowAIScheduler(false);
-            setShowManualScheduler(true);
-            // Client context is already preserved in selectedClient state
-          }}
-        />
-      )}
+          {/* Modals Logic */}
+          {coach && (
+              <ManualSchedulerModal 
+                  visible={showManualScheduler} 
+                  onClose={() => { setShowManualScheduler(false); setSelectedClient(null); }} 
+                  onConfirm={async () => loadSessions()} 
+                  existingSessions={sessions} coachId={coach.id} initialClient={initialClientData}
+                  onSwitchToAI={(c) => { setSelectedClient({ id: c.id, name: c.profiles.full_name, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }); setShowManualScheduler(false); setShowAIScheduler(true); }}
+              />
+          )}
+          {selectedClient && (
+              <SchedulerModal 
+                  visible={showAIScheduler} 
+                  onClose={() => { setShowAIScheduler(false); setSelectedClient(null); }} 
+                  onConfirm={async () => loadSessions()} 
+                  clientContext={selectedClient} targetClientId={selectedClient.id} existingSessions={sessions}
+              />
+          )}
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  calendarStrip: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  calendarContent: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  dateItem: {
-    width: 60,
-    height: 70,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dateItemSelected: {
-    // Applied via inline style
-  },
-  dayName: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  dayNumber: {
-    fontSize: 18,
-    color: '#111827',
-    fontWeight: '700',
-  },
-  dateTextSelected: {
-    color: '#FFFFFF',
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 2,
-  },
-  dotSelected: {
-    // Applied via inline style
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 16,
-  },
-  listContent: {
-    gap: 16,
-  },
-  card: {
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  timeText: {
-    color: '#3B82F6',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  todayBadge: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  todayText: {
-    color: '#059669',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  clientInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  clientName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  durationText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-  linkContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  linkText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 40,
-    gap: 12,
-  },
-  emptyText: {
-    color: '#9CA3AF',
-    fontSize: 16,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-});

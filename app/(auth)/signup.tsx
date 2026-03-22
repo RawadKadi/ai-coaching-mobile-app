@@ -1,20 +1,22 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   ActivityIndicator,
   Alert,
+  SafeAreaView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { validateInviteCode } from '@/lib/brand-service';
 import { supabase } from '@/lib/supabase';
+import { MotiView, AnimatePresence } from 'moti';
+import { User, Mail, Lock, UserPlus, CheckCircle2, AlertCircle, ChevronLeft, Sparkles, Shield } from 'lucide-react-native';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -32,21 +34,14 @@ export default function SignUpScreen() {
   const [validatingInvite, setValidatingInvite] = useState(false);
   const [inviteValid, setInviteValid] = useState(false);
 
-  // Handle deep link invite code (Client or Sub-Coach)
   useEffect(() => {
     const invite = params.invite as string;
     if (invite) {
-      console.log('[Signup] Invite code detected:', invite);
       setInviteCode(invite);
-      
-      // Determine if it's a sub-coach invite (usually a UUID/long token) 
-      // or a client invite (usually shorter 10-char code)
       if (invite.length > 20) {
-        console.log('[Signup] Treating as sub-coach invite');
         setRole('coach');
         validateSubCoachInvite(invite);
       } else {
-        console.log('[Signup] Treating as client invite');
         setRole('client');
         validateInvite(invite);
       }
@@ -56,23 +51,10 @@ export default function SignUpScreen() {
   const validateSubCoachInvite = async (token: string) => {
     setValidatingInvite(true);
     try {
-      const { data, error } = await supabase.rpc('validate_subcoach_invite', {
-        p_invite_token: token
-      });
-
-      if (error || !data?.valid) {
-        setInviteValid(false);
-        Alert.alert('Invalid Invite', data?.message || 'This sub-coach invitation is invalid or has expired.');
-      } else {
-        setInviteValid(true);
-        Alert.alert(
-          'Join Team! 🤝',
-          `You've been invited by ${data.parent_coach_name} to join their coaching team!`,
-          [{ text: 'Great!' }]
-        );
-      }
+      const { data, error } = await supabase.rpc('validate_subcoach_invite', { p_invite_token: token });
+      setInviteValid(!error && data?.valid);
     } catch (err) {
-      console.error('[Signup] Sub-coach validation error:', err);
+      console.error(err);
     } finally {
       setValidatingInvite(false);
     }
@@ -80,33 +62,12 @@ export default function SignUpScreen() {
 
   const validateInvite = async (code: string) => {
     if (!code) return;
-    
     setValidatingInvite(true);
     try {
       const result = await validateInviteCode(code);
-      
-      if (result.valid) {
-        setInviteValid(true);
-        Alert.alert(
-          'Valid Invite!',
-          'This invite code is valid. Complete the signup to join!',
-          [{ text: 'OK' }]
-        );
-      } else {
-        setInviteValid(false);
-        Alert.alert(
-          'Invalid Invite',
-          result.reason === 'expired' ? 'This invite has expired' :
-          result.reason === 'max_uses' ? 'This invite has reached max uses' :
-          'This invite code is not valid',
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => router.back() },
-            { text: 'Continue Anyway', onPress: () => setInviteCode('') }
-          ]
-        );
-      }
+      setInviteValid(result.valid);
     } catch (error) {
-      console.error('[Signup] Invite validation error:', error);
+      console.error(error);
     } finally {
       setValidatingInvite(false);
     }
@@ -114,358 +75,115 @@ export default function SignUpScreen() {
 
   const handleSignUp = async () => {
     if (!fullName || !email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
+      setError('Operational requirement: All fields required.');
       return;
     }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('Neural mismatch: Passwords do not match.');
       return;
     }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
     setLoading(true);
     setError('');
-
     try {
-      const tokenToPass = inviteCode || undefined;
-      console.log('[SignUpScreen] Calling signUp with token:', tokenToPass, '(original inviteCode:', inviteCode, ')');
-      const success = await signUp(email, password, fullName, role, tokenToPass);
-      console.log('[SignUpScreen] SignUp completed:', success);
-      
-      if (!success) {
-        throw new Error('Signup failed. Please try again.');
+      const success = await signUp(email, password, fullName, role, inviteCode || undefined);
+      if (success) {
+        router.replace('/');
       }
-
-      // If signup was successful
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        // Verification required
-        setLoading(false);
-        Alert.alert(
-          'Success!',
-          'Your account has been created. Please check your email to verify your account before signing in.',
-          [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
-        );
-        return;
-      }
-
-      // If we have a session, navigate to dashboard
-      // The TeamInvitationMonitor will handle detecting the auto-linked invite
-      // and showing the welcome slider!
-      console.log('[SignUpScreen] Navigating to dashboard (/)');
-      router.replace('/');
     } catch (err: any) {
-      console.error('[SignUpScreen] Signup error:', err);
-      setError(err.message || 'Failed to sign up');
+      setError(err.message || 'Enlistment failed.');
+    } finally {
       setLoading(false);
     }
   };
 
-  const processCoachInvite = async (token: string, coachId: string) => {
-    console.log('[SignUpScreen] Accepting sub-coach invite:', { token, coachId });
-    
-    const { data: acceptData, error: acceptError } = await supabase.rpc('accept_subcoach_invite', {
-      p_invite_token: token,
-      p_child_coach_id: coachId
-    });
-
-    if (acceptError) {
-      console.error('[SignUpScreen] Accept invite error:', acceptError);
-      // Even if linking fails, let them to dashboard
-      router.replace('/');
-    } else {
-      console.log('[SignUpScreen] Sub-coach invite accepted successfully:', acceptData);
-      
-      // Redirect to welcome screen specifically
-      router.replace({
-        pathname: '/(coach)/team-welcome',
-        params: { 
-          parentCoachName: acceptData.parent_coach_name || 'your lead coach',
-          hierarchyId: acceptData.hierarchy_id
-        }
-      });
-    }
-  };
-
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join the coaching community</Text>
-
-          {/* Invite Code Banner */}
-          {inviteCode && (
-            <View style={[styles.inviteBanner, inviteValid ? styles.inviteBannerValid : styles.inviteBannerInvalid]}>
-              <Text style={styles.inviteLabel}>
-                {validatingInvite ? '  Validating...' :
-                 inviteValid ? '✓ Valid Invite Code' :
-                 '✗ Invalid Invite Code'}
-              </Text>
-              <Text style={styles.inviteCode}>{inviteCode}</Text>
-            </View>
-          )}
-
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <View style={styles.form}>
-            {/* Hide role selector if coming from invite */}
-            {!inviteCode && (
-              <View style={styles.roleSelector}>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === 'client' && styles.roleButtonActive,
-                ]}
-                onPress={() => setRole('client')}
-              >
-                <Text
-                  style={[
-                    styles.roleButtonText,
-                    role === 'client' && styles.roleButtonTextActive,
-                  ]}
-                >
-                  I'm a Client
-                </Text>
+    <View style={{ flex: 1 }} className="bg-slate-950">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <SafeAreaView style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+            <View className="flex-1 px-8 pt-12 pb-12">
+              <TouchableOpacity onPress={() => router.back()} className="mb-8 w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-slate-800">
+                <ChevronLeft size={20} color="#94A3B8" />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === 'coach' && styles.roleButtonActive,
-                ]}
-                onPress={() => setRole('coach')}
-              >
-                <Text
-                  style={[
-                    styles.roleButtonText,
-                    role === 'coach' && styles.roleButtonTextActive,
-                  ]}
+
+              <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} className="mb-10">
+                <Text className="text-white text-4xl font-black tracking-tight">ENLIST<Text className="text-blue-500"> UNIT</Text></Text>
+                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mt-2">New Commander Registration</Text>
+              </MotiView>
+
+              <AnimatePresence>
+                {error && (
+                  <MotiView from={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-8 flex-row items-center gap-3">
+                    <AlertCircle size={18} color="#EF4444" />
+                    <Text className="text-red-400 text-xs font-bold flex-1">{error}</Text>
+                  </MotiView>
+                )}
+              </AnimatePresence>
+
+              <View className="space-y-4">
+                {/* Role Switcher */}
+                {!inviteCode && (
+                  <View className="flex-row bg-slate-900/50 p-1.5 rounded-[24px] border border-slate-900 mb-4">
+                    <TouchableOpacity onPress={() => setRole('client')} className={`flex-1 py-3 items-center rounded-[18px] ${role === 'client' ? 'bg-blue-600 shadow-lg' : ''}`}>
+                      <Text className={`font-black text-[10px] uppercase tracking-widest ${role === 'client' ? 'text-white' : 'text-slate-500'}`}>Client</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setRole('coach')} className={`flex-1 py-3 items-center rounded-[18px] ${role === 'coach' ? 'bg-blue-600 shadow-lg' : ''}`}>
+                      <Text className={`font-black text-[10px] uppercase tracking-widest ${role === 'coach' ? 'text-white' : 'text-slate-500'}`}>Coach</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <InputField icon={<User size={20} color="#334155" />} placeholder="Full Identity Name" value={fullName} onChange={setFullName} />
+                <InputField icon={<Mail size={20} color="#334155" />} placeholder="Command Email" value={email} onChange={setEmail} keyboardType="email-address" />
+                <InputField icon={<Lock size={20} color="#334155" />} placeholder="Secure Key" value={password} onChange={setPassword} secure />
+                <InputField icon={<Lock size={20} color="#334155" />} placeholder="Verify Key" value={confirmPassword} onChange={setConfirmPassword} secure />
+
+                {role === 'client' && !inviteCode && (
+                  <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-2">
+                    <InputField icon={<Shield size={20} color="#334155" />} placeholder="Invite Payload (Optional)" value={inviteCode} onChange={(t) => { setInviteCode(t); if (t.length >= 8) validateInvite(t); }} />
+                  </MotiView>
+                )}
+
+                <TouchableOpacity 
+                   className="mt-8 bg-blue-600 h-20 rounded-[36px] items-center justify-center flex-row gap-3 shadow-2xl shadow-blue-500/20 border-b-4 border-blue-700"
+                   onPress={handleSignUp}
+                   disabled={loading}
                 >
-                  I'm a Coach
-                </Text>
-              </TouchableOpacity>
-            </View>
-            )}
-
-            <TextInput
-              style={styles.input}
-              placeholder="Full Name"
-              value={fullName}
-              onChangeText={setFullName}
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              placeholderTextColor="#9CA3AF"
-            />
-
-            {/* Invite Code Input - Only for clients without deep link */}
-            {role === 'client' && !inviteCode && (
-              <View>
-                <Text style={styles.optionalLabel}>Have an invite code? (Optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter invite code"
-                  value={inviteCode}
-                  onChangeText={(text) => {
-                    setInviteCode(text);
-                    if (text.length >= 10) {
-                      validateInvite(text);
-                    }
-                  }}
-                  autoCapitalize="none"
-                  placeholderTextColor="#9CA3AF"
-                />
+                  {loading ? <ActivityIndicator color="white" /> : (
+                    <>
+                      <Text className="text-white font-black text-xl text-center">ACCESS TERMINAL</Text>
+                      <UserPlus size={20} color="white" />
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
-            )}
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleSignUp}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.buttonText}>Sign Up</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.linkText}>
-                Already have an account? Sign In
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+              <View className="mt-12 items-center">
+                <Text className="text-slate-800 text-[8px] font-black uppercase tracking-[6px] text-center px-4 leading-4">
+                  NeuralSync System Integrity Guaranteed • End-to-End Encrypted Deployment
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 32,
-  },
-  error: {
-    backgroundColor: '#FEE2E2',
-    color: '#991B1B',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  form: {
-    gap: 16,
-  },
-  roleSelector: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 8,
-  },
-  roleButton: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  roleButtonActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
-  },
-  roleButtonText: {
-    color: '#6B7280',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  roleButtonTextActive: {
-    color: '#3B82F6',
-  },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#111827',
-  },
-  button: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  linkButton: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  linkText: {
-    color: '#3B82F6',
-    fontSize: 14,
-  },
-  optionalLabel: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  inviteBanner: {
-    padding: 16,
-    borderRadius: 12,
-    marginVertical: 12,
-    borderWidth: 2,
-  },
-  inviteBannerValid: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
-  },
-  inviteBannerInvalid: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#EF4444',
-  },
-  inviteLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  inviteCode: {
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
-});
+const InputField = ({ icon, placeholder, value, onChange, secure, keyboardType }: any) => (
+  <View className="bg-slate-900/50 border border-slate-900 rounded-[28px] px-6 py-4 flex-row items-center gap-4">
+    {icon}
+    <TextInput
+      className="flex-1 text-white font-bold text-lg"
+      placeholder={placeholder}
+      placeholderTextColor="#1E293B"
+      value={value}
+      onChangeText={onChange}
+      secureTextEntry={secure}
+      keyboardType={keyboardType}
+      selectionColor="#3B82F6"
+      autoCapitalize="none"
+    />
+  </View>
+);

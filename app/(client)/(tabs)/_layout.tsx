@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Home, Activity, MessageCircle, User, Camera } from 'lucide-react-native';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Platform } from 'react-native';
 import { useUnread } from '@/contexts/UnreadContext';
 import { useTheme } from '@/contexts/BrandContext';
 
@@ -13,46 +13,50 @@ export default function ClientTabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textSecondary,
+        tabBarActiveTintColor: '#3B82F6',
+        tabBarInactiveTintColor: '#64748B',
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-          paddingBottom: 24,
-          paddingTop: 8,
-          height: 80,
+          backgroundColor: '#020617',
+          borderTopWidth: 0,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+          paddingTop: 12,
+          height: Platform.OS === 'ios' ? 88 : 72,
+          elevation: 0,
+          shadowOpacity: 0
         },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '700',
+          marginTop: 4
+        }
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ size, color }) => <Home size={size} color={color} />,
+          title: 'Hub',
+          tabBarIcon: ({ color }) => <Home size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="activity"
         options={{
-          title: 'Activity',
-          tabBarIcon: ({ size, color }) => (
-            <Activity size={size} color={color} />
-          ),
+          title: 'Stats',
+          tabBarIcon: ({ color }) => <Activity size={22} color={color} />,
         }}
       />
       
       <Tabs.Screen
-        name="log-meal-button" // Dummy route name
+        name="log-meal-button"
         options={{
           title: '',
-          tabBarButton: (props) => (
+          tabBarButton: () => (
             <TouchableOpacity
-              style={styles.cameraButtonContainer}
+              className="px-4"
               onPress={() => router.push('/(client)/log-meal')}
             >
-              <View style={[styles.cameraButton, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]}>
-                <Camera size={28} color="#FFFFFF" />
+              <View className="w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-500/40 -mt-6 border-4 border-slate-950">
+                <Camera size={26} color="white" />
               </View>
             </TouchableOpacity>
           ),
@@ -62,44 +66,19 @@ export default function ClientTabLayout() {
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'Messages',
-          tabBarIcon: ({ size, color }) => (
-            <MessageCircle size={size} color={color} />
-          ),
+          title: 'Direct',
+          tabBarIcon: ({ color }) => <MessageCircle size={22} color={color} />,
           tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#3B82F6', fontSize: 10, fontWeight: '900' }
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ size, color }) => <User size={size} color={color} />,
+          title: 'Self',
+          tabBarIcon: ({ color }) => <User size={22} color={color} />,
         }}
       />
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  cameraButtonContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    // Removed top: -20 to prevent clipping
-  },
-  cameraButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#3B82F6',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-});

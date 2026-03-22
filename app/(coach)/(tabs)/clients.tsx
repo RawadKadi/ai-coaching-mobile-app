@@ -1,37 +1,22 @@
-import { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  TextInput,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, SafeAreaView } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
-import { Search, ChevronRight, Users } from 'lucide-react-native';
-import { BrandedText } from '@/components/BrandedText';
-import { BrandedCard } from '@/components/BrandedCard';
+import { Search, ChevronRight, Users, MessageSquare, Activity, UserPlus, Zap } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
-import { BrandedInput } from '@/components/BrandedInput';
 
 interface ClientWithProfile {
   id: string;
   goal?: string;
   experience_level?: string;
-  profiles: {
-    full_name: string;
-    avatar_url?: string | null;
-  };
+  profiles: { full_name: string; avatar_url?: string | null };
 }
 
 export default function ClientsScreen() {
   const router = useRouter();
   const { coach } = useAuth();
-  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<ClientWithProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,224 +24,129 @@ export default function ClientsScreen() {
   useEffect(() => {
     if (coach) {
       loadClients();
-
-      // Set up real-time subscription for new client linkings
-      const subscription = supabase
-        .channel('coach_client_links_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'coach_client_links',
-            filter: `coach_id=eq.${coach.id}`,
-          },
-          (payload) => {
-            console.log('[Real-time] New client linked!', payload);
-            // Reload clients when a new link is created
-            loadClients();
-          }
-        )
+      const sub = supabase.channel('coach_client_links_changes')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coach_client_links', filter: `coach_id=eq.${coach.id}` }, () => loadClients())
         .subscribe();
-
-      return () => {
-        subscription.unsubscribe();
-      };
-    } else {
-      setLoading(false);
-    }
+      return () => { sub.unsubscribe(); };
+    } else { setLoading(false); }
   }, [coach]);
+
+  useFocusEffect(useCallback(() => { if (coach) loadClients(); }, [coach]));
 
   const loadClients = async () => {
     if (!coach) return;
-
     try {
       setLoading(true);
-      
-      // Use the secure RPC function to get clients
       const { data, error } = await supabase.rpc('get_my_clients');
-
       if (error) throw error;
-
-      console.log('Clients data:', data);
-
-      // Map the RPC result to the expected format
-      const clientList = data?.map((item: any) => ({
+      setClients(data?.map((item: any) => ({
         id: item.client_id,
         goal: item.client_goal,
         experience_level: item.client_experience,
-        profiles: {
-          full_name: item.client_name,
-          avatar_url: item.client_avatar
-        }
-      })) || [];
-
-      setClients(clientList);
-    } catch (error) {
-      console.error('Error loading clients:', error);
-    } finally {
-      setLoading(false);
-    }
+        profiles: { full_name: item.client_name, avatar_url: item.client_avatar }
+      })) || []);
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
-  const filteredClients = clients.filter((client) =>
-    client.profiles?.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filtered = clients.filter(c => c.profiles?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
-  }
+  if (loading) return <View className="flex-1 bg-slate-950 justify-center items-center"><ActivityIndicator color="#3B82F6" /></View>;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View 
-        style={[
-          styles.header, 
-          { 
-            backgroundColor: theme.colors.surface,
-            borderBottomColor: theme.colors.border,
-            paddingHorizontal: 24 * theme.spacing.scale,
-            paddingTop: 60 * theme.spacing.scale,
-            paddingBottom: 24 * theme.spacing.scale,
-          }
-        ]}
-      >
-        <BrandedText variant="xxl" weight="heading">Clients</BrandedText>
-        <BrandedText variant="sm" color="secondary" style={styles.subtitle}>
-          {clients.length} total
-        </BrandedText>
-      </View>
-
-      {clients.length > 0 && (
-        <View style={[styles.searchContainer, { margin: 16 * theme.spacing.scale }]}>
-          <Search size={20} color={theme.colors.textSecondary} style={styles.searchIcon} />
-          <BrandedInput
-            style={styles.searchInput}
-            placeholder="Search clients..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-      )}
-
-      <ScrollView style={[styles.content, { paddingHorizontal: 16 * theme.spacing.scale }]}>
-        {filteredClients.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Users size={48} color={theme.colors.border} />
-            <BrandedText variant="lg" weight="heading" style={styles.emptyTitle}>
-              {searchQuery ? 'No results found' : 'No clients yet'}
-            </BrandedText>
-            <BrandedText variant="sm" color="secondary" style={styles.emptyText}>
-              {searchQuery
-                ? 'Try adjusting your search'
-                : 'Clients will appear here once they\'re linked to your account'}
-            </BrandedText>
-          </View>
-        ) : (
-          filteredClients.map((client) => (
-            <TouchableOpacity
-              key={client.id}
-              onPress={() => router.push(`/(coach)/clients/${client.id}`)}
-            >
-              <BrandedCard variant="elevated" style={styles.clientCard}>
-                <View style={styles.clientInfo}>
-                  <BrandedAvatar 
-                    name={client.profiles?.full_name || 'Client'}
-                    size={48}
-                    imageUrl={client.profiles?.avatar_url}
-                    useBrandColor={true}
-                  />
-                  <View style={styles.clientDetails}>
-                    <BrandedText variant="base" weight="heading" style={styles.clientName}>
-                      {client.profiles?.full_name || 'Unknown'}
-                    </BrandedText>
-                    {client.goal && (
-                      <BrandedText variant="xs" color="secondary">
-                        Goal: {client.goal}
-                      </BrandedText>
-                    )}
-                    {client.experience_level && (
-                      <BrandedText variant="xs" color="secondary">
-                        {client.experience_level}
-                      </BrandedText>
-                    )}
-                  </View>
+    <View style={{ flex: 1 }} className="bg-slate-950">
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={{ flex: 1 }}>
+          {/* Header */}
+          <View className="px-6 pt-10 pb-6 flex-row justify-between items-center">
+            <View>
+              <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[4px] mb-1">Unit Registry</Text>
+              <View className="flex-row items-center gap-3">
+                <Text className="text-white text-3xl font-black">Clients</Text>
+                <View className="bg-blue-600/10 border border-blue-600/20 px-3 py-1 rounded-full">
+                  <Text className="text-blue-500 font-black text-xs">{clients.length} Active</Text>
                 </View>
-                <ChevronRight size={20} color={theme.colors.textSecondary} />
-              </BrandedCard>
+              </View>
+            </View>
+            <TouchableOpacity
+              className="w-14 h-14 bg-blue-600 rounded-[20px] items-center justify-center shadow-lg shadow-blue-500/30 border border-white/10"
+              onPress={() => router.push('/(coach)/invite-client')}
+            >
+              <UserPlus size={22} color="white" />
             </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+          </View>
+
+          {/* Search */}
+          <View className="px-6 mb-6">
+            <View className="flex-row items-center bg-slate-900/50 border-2 border-slate-900 rounded-[24px] px-5 py-4">
+              <Search size={18} color="#475569" />
+              <TextInput
+                className="flex-1 ml-3 text-white font-bold text-base"
+                placeholder="Search unit database..."
+                placeholderTextColor="#1E293B"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+          </View>
+
+          <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingBottom: 120 }}>
+            <AnimatePresence>
+              {filtered.length === 0 ? (
+                <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-20 items-center">
+                  <View className="w-24 h-24 bg-slate-900/50 rounded-full items-center justify-center border border-slate-900">
+                    <Users size={40} color="#1E293B" />
+                  </View>
+                  <Text className="text-slate-700 font-black text-xs uppercase tracking-widest mt-6">
+                    {searchQuery ? `No results for "${searchQuery}"` : 'No units deployed'}
+                  </Text>
+                </MotiView>
+              ) : (
+                filtered.map((client, i) => <ClientListItem key={client.id} client={client} index={i} />)
+              )}
+            </AnimatePresence>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    borderBottomWidth: 1,
-  },
-  subtitle: {
-    marginTop: 4,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    paddingHorizontal: 16
-  },
-  content: {
-    flex: 1,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-  clientCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    marginBottom: 12,
-  },
-  clientInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  clientDetails: {
-    flex: 1,
-  },
-  clientName: {
-    marginBottom: 4,
-  },
-});
+const ClientListItem = ({ client, index }: { client: ClientWithProfile, index: number }) => {
+  const router = useRouter();
+  return (
+    <MotiView from={{ opacity: 0, translateX: -20 }} animate={{ opacity: 1, translateX: 0 }} transition={{ delay: index * 60 }} className="mb-4">
+      <TouchableOpacity
+        onPress={() => router.push(`/(coach)/clients/${client.id}`)}
+        className="bg-slate-900/40 p-5 rounded-[32px] border border-slate-900 flex-row items-center justify-between"
+      >
+        <View className="flex-row items-center gap-4 flex-1">
+          <View className="relative">
+            <BrandedAvatar size={56} name={client.profiles?.full_name} imageUrl={client.profiles?.avatar_url} useBrandColor={true} />
+            <View className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-950" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-white font-black text-base">{client.profiles?.full_name}</Text>
+            <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mt-0.5" numberOfLines={1}>
+              {client.goal || 'Elite Athlete'} • {client.experience_level || 'Active'}
+            </Text>
+          </View>
+        </View>
+
+        <View className="flex-row items-center gap-3">
+          <View className="flex-row gap-2">
+            <TouchableOpacity 
+              onPress={() => router.push({ pathname: '/(coach)/(tabs)/chat/[id]', params: { id: client.id } })}
+              className="w-8 h-8 bg-slate-950 rounded-xl items-center justify-center border border-slate-800"
+            >
+              <MessageSquare size={14} color="#475569" />
+            </TouchableOpacity>
+            <View className="w-8 h-8 bg-slate-950 rounded-xl items-center justify-center border border-slate-800">
+              <Zap size={14} color="#475569" />
+            </View>
+          </View>
+          <ChevronRight size={18} color="#334155" />
+        </View>
+      </TouchableOpacity>
+    </MotiView>
+  );
+};

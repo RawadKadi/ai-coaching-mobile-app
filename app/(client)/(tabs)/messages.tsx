@@ -1304,24 +1304,27 @@ export default function MessagesScreen() {
   }, [messages, firstUnreadIndex, unreadCountAtOpen, theme, coachProfile, user?.id, setReplyingTo, activeUploads, cancelUpload, handlePostpone, scrollToMessage, highlightedMessageId]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+    <View style={styles.container}>
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ChevronLeft size={28} color={theme.colors.text} />
+          <ChevronLeft size={24} color="#94a3b8" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <BrandedAvatar 
-            name={coachProfile?.profiles?.full_name || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.full_name : 'Coach')} 
-            imageUrl={coachProfile?.profiles?.avatar_url || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.avatar_url : undefined)} 
-            size={40} 
+            name={coachProfile?.profiles?.full_name || 'Coach'} 
+            imageUrl={coachProfile?.profiles?.avatar_url} 
+            size={44} 
           />
           <View>
-            <BrandedText variant="lg" weight="heading">
-              {coachProfile?.profiles?.full_name || (Array.isArray(coachProfile?.profiles) ? coachProfile?.profiles[0]?.full_name : 'Coach')}
-            </BrandedText>
-            <BrandedText variant="xs" color="secondary">
-              Coach
-            </BrandedText>
+            <Text className="text-white text-lg font-black">
+              {coachProfile?.profiles?.full_name || 'Coach'}
+            </Text>
+            <View className="flex-row items-center gap-1.5">
+                <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                  Neural Sync Active
+                </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -1389,7 +1392,7 @@ export default function MessagesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#020617', // Slate-950
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -1397,14 +1400,22 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#020617',
     padding: 16,
-    paddingTop: 60,
+    paddingTop: 64,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#0f172a', // Slate-900
   },
   backButton: {
     marginRight: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#1e293b',
   },
   headerInfo: {
     flex: 1,
@@ -1412,85 +1423,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   messageList: {
     padding: 16,
-    gap: 12,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    alignItems: 'center',
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 16,
-    maxHeight: 100,
-  },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#93C5FD',
+    paddingBottom: 32,
+    gap: 8,
   },
   messageBubble: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 4,
+    maxWidth: '85%',
+    padding: 14,
+    borderRadius: 22,
+    marginBottom: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   ownBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#2563eb', // Blue-600
     borderBottomRightRadius: 4,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  timestamp: {
-    fontSize: 10,
-    marginTop: 4,
-    alignSelf: 'flex-end',
   },
   receivedBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0f172a', // Slate-900
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#1e293b',
   },
-  ownText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  receivedText: {
-    color: '#111827',
-    fontSize: 16,
-    lineHeight: 24,
+  messageText: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   messageFooter: {
     flexDirection: 'row',
@@ -1498,141 +1461,53 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 4,
     marginTop: 4,
+    opacity: 0.7,
   },
-  sentTimestamp: {
+  timestamp: {
     fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  receivedTimestamp: {
-    fontSize: 10,
-    color: '#9CA3AF',
-  },
-  taskMessageContainer: {
-    width: '100%',
-    marginVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  taskHeader: {
-    padding: 12,
-    backgroundColor: '#D1FAE5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#10B981',
-  },
-  taskTitle: {
-    fontSize: 14,
     fontWeight: '600',
-    color: '#065F46',
   },
-  taskContent: {
-    padding: 12,
-  },
-  taskName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#064E3B',
-    marginBottom: 4,
-  },
-  taskTime: {
-    fontSize: 12,
-    color: '#047857',
-    marginBottom: 8,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#10B981',
-    opacity: 0.3,
-    marginBottom: 8,
-  },
-  toggleButton: {
+  unreadSeparator: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginVertical: 24,
+    marginHorizontal: 16,
   },
-  toggleText: {
-    fontSize: 14,
-    color: '#059669',
-    fontWeight: '500',
+  unreadSeparatorBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginHorizontal: 10,
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#3b82f6',
   },
-  taskDetails: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(16, 185, 129, 0.2)',
+  unreadSeparatorText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: '#3b82f6',
   },
-  detailText: {
-    fontSize: 12,
-    color: '#047857',
-    marginBottom: 4,
-  },
-  bannerContainer: {
-    width: '100%',
-    height: 150,
-    backgroundColor: '#F3F4F6',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(16, 185, 129, 0.2)',
-  },
-  bannerPressable: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bannerImage: {
-    width: '100%',
-    height: '100%',
-  },
-  bannerLoading: {
-    position: 'absolute',
-    zIndex: 1,
-  },
-  bannerOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 8,
-    alignItems: 'center',
-  },
-  bannerText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  modalContainer: {
+  unreadSeparatorLine: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullScreenImage: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height * 0.8,
-  },
-  modalLoader: {
-    position: 'absolute',
-    zIndex: 1,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    padding: 10,
+    height: 1,
+    backgroundColor: '#1e293b',
   },
   sessionBanner: {
-    backgroundColor: '#3B82F6',
-    padding: 12,
+    backgroundColor: '#2563eb', // Blue-600
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    margin: 16,
+    borderRadius: 20,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   sessionBannerActive: {
     backgroundColor: '#10B981', // Green when active
-    borderBottomWidth: 2,
-    borderBottomColor: '#059669',
   },
   sessionInfo: {
     flexDirection: 'row',
@@ -1662,65 +1537,68 @@ const styles = StyleSheet.create({
   joinButtonText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#2563eb',
   },
   joinButtonTextDisabled: {
     color: '#FFFFFF',
   },
   inviteContainer: {
     width: 280,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: '#0f172a',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#1e293b',
     overflow: 'hidden',
-    marginVertical: 4,
+    marginVertical: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
   },
   inviteHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
+    backgroundColor: '#1e293b',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    gap: 8,
+    borderBottomColor: '#334155',
+    gap: 10,
   },
   meetLogo: {
     width: 24,
     height: 24,
   },
   inviteTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   inviteBody: {
-    padding: 16,
+    padding: 20,
   },
   inviteDescription: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#f8fafc',
+    marginBottom: 6,
   },
   inviteTime: {
     fontSize: 12,
-    color: '#6B7280',
+    fontWeight: '700',
+    color: '#3b82f6',
   },
   inviteActions: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#1e293b',
   },
   invitePostponeButton: {
     flex: 1,
-    padding: 12,
+    padding: 14,
     alignItems: 'center',
     borderRightWidth: 1,
-    borderRightColor: '#F3F4F6',
+    borderRightColor: '#1e293b',
   },
   invitePostponeText: {
     color: '#F59E0B',
@@ -1729,24 +1607,24 @@ const styles = StyleSheet.create({
   },
   inviteJoinButton: {
     flex: 1,
-    padding: 12,
+    padding: 14,
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#2563eb',
   },
   inviteJoinText: {
-    color: '#0284C7',
-    fontWeight: '700',
+    color: '#ffffff',
+    fontWeight: '800',
     fontSize: 14,
   },
   inviteCancelled: {
     borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#1e1b1b',
     borderWidth: 1,
     opacity: 0.8,
   },
   invitePostponed: {
-    borderColor: '#EAB308', // Yellow-500
-    backgroundColor: '#FEFCE8', // Yellow-50
+    borderColor: '#EAB308', 
+    backgroundColor: '#1e1c16',
     borderWidth: 1,
     opacity: 1,
   },
@@ -1758,7 +1636,7 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   postponedTag: {
-    backgroundColor: '#EAB308', // Yellow-500
+    backgroundColor: '#EAB308', 
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1774,74 +1652,148 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#FDE047', // Yellow-300
+    borderTopColor: '#1e293b',
   },
   cancellationReasonLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#854D0E', // Yellow-800
+    color: '#EAB308',
     marginBottom: 2,
   },
   cancellationReasonText: {
     fontSize: 12,
-    color: '#A16207', // Yellow-700
+    color: '#94a3b8',
     fontStyle: 'italic',
-  },
-  unreadSeparator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-    marginHorizontal: 16,
-  },
-  unreadSeparatorLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  unreadSeparatorBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginHorizontal: 8,
-    borderWidth: 1,
-  },
-  unreadSeparatorText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  scrollButton: {
-    position: 'absolute',
-    bottom: 80,
-    left: 16,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-    borderWidth: 1,
   },
   scrollToBottomButton: {
     position: 'absolute',
     right: 20,
     bottom: 100,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#1e293b',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 4,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#334155',
+  },
+  taskMessageContainer: {
+    maxWidth: '85%',
+    marginVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    backgroundColor: '#0f172a',
+    overflow: 'hidden',
+  },
+  taskHeader: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  taskTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#3b82f6',
+  },
+  taskContent: {
+    padding: 16,
+  },
+  taskName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#f8fafc',
+  },
+  taskTime: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#1e293b',
+    marginVertical: 12,
+  },
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toggleText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '700',
+  },
+  taskDetails: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+  },
+  detailText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 4,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#020617',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.8,
+  },
+  modalLoader: {
+    position: 'absolute',
+    zIndex: 1,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 10,
+  },
+  bannerContainer: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#0f172a',
+  },
+  bannerPressable: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerLoading: {
+    position: 'absolute',
+    zIndex: 1,
+  },
+  bannerOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(2, 6, 23, 0.7)',
+    padding: 8,
+    alignItems: 'center',
+  },
+  bannerText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   scrollButtonBadge: {
     position: 'absolute',

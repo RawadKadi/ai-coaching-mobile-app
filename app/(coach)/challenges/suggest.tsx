@@ -1,24 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Sparkles, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Sparkles, Calendar, Users, ChevronRight, Zap } from 'lucide-react-native';
 import { generateWeeklyChallenges } from '@/lib/ai-challenge-service';
-import { useTheme } from '@/contexts/BrandContext';
-
-/**
- * AI Challenge Generation Screen V3 with Memory
- * Generates contextual challenges and navigates to review screen
- */
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 interface Client {
   id: string;
@@ -28,8 +16,7 @@ interface Client {
 export default function AISuggestChallengeScreen() {
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
-  const { user } = useAuth();
-  const theme = useTheme();
+  const { user, coach } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
@@ -38,65 +25,35 @@ export default function AISuggestChallengeScreen() {
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [coach]);
 
   const loadClients = async () => {
-    if (!user) return;
-
+    if (!coach) return;
     try {
-      const { data: coachData } = await supabase
-        .from('coaches')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!coachData) return;
-
-      const { data, error } = await supabase
-        .rpc('get_coach_clients', { p_coach_id: coachData.id });
-
+      const { data, error } = await supabase.rpc('get_coach_clients', { p_coach_id: coach.id });
       if (error) throw error;
-
       setClients(data || []);
-
-      // Auto-select client if provided via URL
       if (clientId && data) {
-        const preSelectedClient = data.find((c: Client) => c.id === clientId);
-        if (preSelectedClient) {
-          setSelectedClient(preSelectedClient);
-        }
+        const preSelected = data.find((c: Client) => c.id === clientId);
+        if (preSelected) setSelectedClient(preSelected);
       }
     } catch (error) {
       console.error('Error loading clients:', error);
-      Alert.alert('Error', 'Failed to load clients');
     }
   };
 
   const handleGenerate = async () => {
-    if (!selectedClient) {
-      Alert.alert('Select Client', 'Please select a client first');
-      return;
-    }
-
+    if (!selectedClient) return;
     try {
       setGenerating(true);
-
-      // Start date is next Monday
       const startDate = getNextMonday();
-
-      // Generate challenges with AI memory
-      const challenges = await generateWeeklyChallenges(
-        selectedClient.id,
-        selectedClient.full_name,
-        startDate
-      );
+      const challenges = await generateWeeklyChallenges(selectedClient.id, selectedClient.full_name, startDate);
 
       if (!challenges || challenges.length === 0) {
-        Alert.alert('Error', 'AI generated no challenges. Try again.');
+        Alert.alert('Try Again', 'The AI engine is currently optimizing the memory. Please try generating again in a few seconds.');
         return;
       }
 
-      // Navigate to review screen with generated challenges
       router.push({
         pathname: '/(coach)/challenges/review',
         params: {
@@ -106,102 +63,98 @@ export default function AISuggestChallengeScreen() {
           challenges: JSON.stringify(challenges)
         }
       });
-
     } catch (error: any) {
-      console.error('Error generating challenges:', error);
-      Alert.alert('Error', error.message || 'Failed to generate challenges');
+      Alert.alert('Error', error.message || 'AI generation failed');
     } finally {
       setGenerating(false);
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View className="flex-1 bg-slate-950">
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={theme.colors.text} />
+      <View className="px-6 pt-16 pb-6 flex-row items-center gap-4 border-b border-slate-900 bg-slate-950">
+        <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full">
+          <ArrowLeft size={20} color="#94A3B8" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>AI Generate Challenge</Text>
-        <View style={{ width: 24 }} />
+        <Text className="text-white text-xl font-bold">AI Strategist</Text>
       </View>
 
-      <ScrollView style={styles.scrollView}>
-        {/* Info Banner */}
-        <View style={[styles.infoBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Sparkles size={20} color="#6366f1" />
-          <View style={styles.infoText}>
-            <Text style={[styles.infoTitle, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>AI-Powered Weekly Challenges</Text>
-            <Text style={[styles.infoDescription, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-              AI analyzes client history to generate personalized, non-repetitive challenges for the week ahead.
-            </Text>
-          </View>
-        </View>
-
-        {/* Date Info */}
-        <View style={[styles.dateInfo, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Calendar size={18} color="#666" />
-          <Text style={[styles.dateText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-            Week starting: {getNextMonday().toLocaleDateString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric'
-            })}
-          </Text>
-        </View>
-
-        {/* Client Selection */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Select Client</Text>
-        {clients.map((client) => (
-          <TouchableOpacity
-            key={client.id}
-              style={[
-                styles.clientCard,
-                { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-                selectedClient?.id === client.id && { borderColor: theme.colors.primary, borderWidth: 2, backgroundColor: `${theme.colors.primary}10` }
-              ]}
-            onPress={() => setSelectedClient(client)}
-          >
-            <View style={styles.clientInfo}>
-              <View style={[
-                styles.radioOuter,
-                  { borderColor: selectedClient?.id === client.id ? theme.colors.primary : theme.colors.border },
-                  selectedClient?.id === client.id && { borderColor: theme.colors.primary }
-                ]}>
-                  {selectedClient?.id === client.id && <View style={[styles.radioInner, { backgroundColor: theme.colors.primary }]} />}
-              </View>
-              <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.full_name}</Text>
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+        {/* Hero Section */}
+        <MotiView 
+            from={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mx-6 mt-8 p-8 rounded-[40px] bg-blue-600/10 border border-blue-500/20 items-center"
+        >
+            <View className="w-20 h-20 bg-blue-600 rounded-3xl items-center justify-center shadow-2xl shadow-blue-500/50 mb-6">
+                <Zap size={40} color="white" />
             </View>
-          </TouchableOpacity>
-        ))}
+            <Text className="text-white text-2xl font-bold text-center">Plan the Perfect Week</Text>
+            <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm">
+                Our AI analyzes past performance and consistency to suggest the most effective sessions for your clients.
+            </Text>
+        </MotiView>
 
-        {clients.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No clients found</Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.textTertiary, fontFamily: theme.typography.fontFamily }]}>Add clients to generate challenges</Text>
-          </View>
-        )}
+        {/* Date Context */}
+        <View className="px-6 mt-10 mb-6 flex-row justify-between items-center">
+             <Text className="text-white text-lg font-bold">Recommended Start</Text>
+             <View className="flex-row items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-full border border-slate-800">
+                <Calendar size={14} color="#3B82F6" />
+                <Text className="text-blue-400 text-xs font-bold">
+                    {getNextMonday().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </Text>
+             </View>
+        </View>
+
+        {/* Client Picker */}
+        <View className="px-6">
+            {clients.map((client, index) => {
+                const isSelected = selectedClient?.id === client.id;
+                return (
+                    <MotiView
+                        key={client.id}
+                        from={{ opacity: 0, translateX: -20 }}
+                        animate={{ opacity: 1, translateX: 0 }}
+                        transition={{ delay: index * 50 }}
+                    >
+                        <TouchableOpacity
+                            onPress={() => setSelectedClient(client)}
+                            className={`mb-4 p-5 rounded-[28px] border-2 flex-row items-center justify-between ${isSelected ? 'bg-blue-600/5 border-blue-500' : 'bg-slate-900 border-slate-800'}`}
+                        >
+                            <View className="flex-row items-center gap-4">
+                                <BrandedAvatar size={48} />
+                                <View>
+                                    <Text className="text-white font-bold text-base">{client.full_name}</Text>
+                                    <Text className="text-slate-500 text-xs">Active Client</Text>
+                                </View>
+                            </View>
+                            <View className={`w-6 h-6 rounded-full border-2 items-center justify-center ${isSelected ? 'border-blue-500' : 'border-slate-700'}`}>
+                                {isSelected && <View className="w-3 h-3 bg-blue-500 rounded-full" />}
+                            </View>
+                        </TouchableOpacity>
+                    </MotiView>
+                );
+            })}
+        </View>
       </ScrollView>
 
-      {/* Generate Button */}
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-        <TouchableOpacity
-          style={[styles.generateButton, { backgroundColor: theme.colors.primary }, (!selectedClient || generating) && styles.generateButtonDisabled]}
-          onPress={handleGenerate}
-          disabled={!selectedClient || generating}
-        >
-          {generating ? (
-            <>
-              <ActivityIndicator color="#fff" />
-              <Text style={[styles.generateButtonText, { fontFamily: theme.typography.fontFamily }]}>Generating with AI...</Text>
-            </>
-          ) : (
-            <>
-              <Sparkles size={20} color="#fff" />
-              <Text style={[styles.generateButtonText, { fontFamily: theme.typography.fontFamily }]}>Generate Weekly Challenges</Text>
-            </>
-          )}
-        </TouchableOpacity>
+      {/* Action Bar */}
+      <View className="absolute bottom-0 w-full p-6 bg-slate-950/90 border-t border-slate-900">
+          <TouchableOpacity 
+            className={`h-16 rounded-2xl flex-row items-center justify-center gap-3 ${selectedClient ? 'bg-blue-600 shadow-xl shadow-blue-500/20' : 'bg-slate-800'}`}
+            onPress={handleGenerate}
+            disabled={!selectedClient || generating}
+          >
+              {generating ? (
+                  <ActivityIndicator color="white" />
+              ) : (
+                  <>
+                    <Sparkles size={22} color="white" />
+                    <Text className="text-white font-bold text-lg">Generate Training Strategy</Text>
+                  </>
+              )}
+          </TouchableOpacity>
       </View>
     </View>
   );
@@ -216,32 +169,3 @@ function getNextMonday(): Date {
   nextMonday.setHours(0, 0, 0, 0);
   return nextMonday;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: 60, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
-  scrollView: { flex: 1 },
-  infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#f0f9ff', padding: 16, margin: 16, borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe' },
-  infoText: { flex: 1 },
-  infoTitle: { fontSize: 15, fontWeight: '600', color: '#1e40af', marginBottom: 4 },
-  infoDescription: { fontSize: 13, color: '#3b82f6', lineHeight: 18 },
-  dateInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 16, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
-  dateText: { fontSize: 14, fontWeight: '500', color: '#666' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111', marginHorizontal: 16, marginBottom: 12 },
-  clientCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
-  clientCardSelected: { borderColor: '#6366f1', borderWidth: 2, backgroundColor: '#f0f9ff' },
-  clientInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#d1d5db', justifyContent: 'center', alignItems: 'center' },
-  radioOuterSelected: { borderColor: '#6366f1' },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#6366f1' },
-  clientName: { fontSize: 16, fontWeight: '500', color: '#111' },
-  emptyState: { alignItems: 'center', padding: 40 },
-  emptyText: { fontSize: 16, fontWeight: '500', color: '#999', marginBottom: 4 },
-  emptySubtext: { fontSize: 14, color: '#ccc' },
-  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  generateButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 12, backgroundColor: '#6366f1' },
-  generateButtonDisabled: { backgroundColor: '#cbd5e1' },
-  generateButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-});

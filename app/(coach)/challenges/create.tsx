@@ -1,30 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  SafeAreaView,
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChallengeFocusType } from '@/types/database';
-import { X, Plus, Calendar, Target, Trash2 } from 'lucide-react-native';
-import { useTheme } from '@/contexts/BrandContext';
-
-/**
- * V3 Challenge Creation Screen
- * Creates Mother Challenges with daily Sub-Challenges
- */
+import { X, Plus, Calendar, Target, Trash2, ArrowLeft, ChevronDown, Check } from 'lucide-react-native';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 interface Client {
   id: string;
   full_name: string;
+  avatar_url?: string;
 }
 
 interface SubChallenge {
@@ -39,7 +26,6 @@ export default function CreateChallengeScreen() {
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { coach } = useAuth();
-  const theme = useTheme();
 
   // Form State
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -53,62 +39,35 @@ export default function CreateChallengeScreen() {
   // UI State
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [showClientPicker, setShowClientPicker] = useState(false);
 
+  useEffect(() => { loadClients(); }, []);
   useEffect(() => {
-    loadClients();
-  }, []);
-
-  useEffect(() => {
-    // Auto-generate sub-challenges when duration changes
     const duration = parseInt(durationDays);
-    if (!isNaN(duration) && duration >= 3 && duration <= 14) {
-      generateSubChallenges(duration);
-    }
+    if (!isNaN(duration) && duration >= 3 && duration <= 14) generateSubChallenges(duration);
   }, [durationDays, startDate]);
 
   const loadClients = async () => {
     if (!coach) return;
-
     try {
-      const { data, error } = await supabase.rpc('get_coach_clients', {
-        p_coach_id: coach.id
-      });
-
+      const { data, error } = await supabase.rpc('get_coach_clients', { p_coach_id: coach.id });
       if (error) throw error;
-
       setClients(data || []);
-
-      // Pre-select client if provided via URL
       if (clientId && data) {
-        const preSelectedClient = data.find((c: Client) => c.id === clientId);
-        if (preSelectedClient) {
-          setSelectedClient(preSelectedClient);
-        }
+        const preSelected = data.find((c: any) => c.id === clientId);
+        if (preSelected) setSelectedClient(preSelected);
       }
-    } catch (error) {
-      console.error('Error loading clients:', error);
-      Alert.alert('Error', 'Failed to load clients');
-    }
+    } catch (e) { console.error(e); }
   };
 
   const generateSubChallenges = (days: number) => {
     const start = new Date(startDate);
     const subs: SubChallenge[] = [];
-
     for (let i = 0; i < days; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      
-      subs.push({
-        name: `Day ${i + 1} Task`,
-        description: '',
-        assigned_date: date.toISOString().split('T')[0],
-        focus_type: 'training',
-        intensity: 'moderate',
-      });
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      subs.push({ name: `Day ${i + 1} Mission`, description: '', assigned_date: d.toISOString().split('T')[0], focus_type: 'training', intensity: 'moderate' });
     }
-
     setSubChallenges(subs);
   };
 
@@ -118,691 +77,180 @@ export default function CreateChallengeScreen() {
     setSubChallenges(updated);
   };
 
-  const validateForm = (): boolean => {
-    if (!selectedClient) {
-      Alert.alert('Validation Error', 'Please select a client');
-      return false;
-    }
-
-    if (!name.trim()) {
-      Alert.alert('Validation Error', 'Please enter a challenge name');
-      return false;
-    }
-
-    const duration = parseInt(durationDays);
-    if (isNaN(duration) || duration < 3 || duration > 14) {
-      Alert.alert('Validation Error', 'Duration must be between 3 and 14 days');
-      return false;
-    }
-
-    const invalidSubs = subChallenges.filter(s => !s.name.trim());
-    if (invalidSubs.length > 0) {
-      Alert.alert('Validation Error', 'All sub-challenges must have a name');
-      return false;
-    }
-
-    return true;
-  };
-
   const handleCreate = async () => {
-    if (!validateForm() || !coach) return;
-
-    try {
-      setLoading(true);
-
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + parseInt(durationDays) - 1);
-
-      const { data, error } = await supabase.rpc('create_mother_challenge', {
-        p_coach_id: coach.id,
-        p_client_id: selectedClient!.id,
-        p_name: name.trim(),
-        p_description: description.trim() || null,
-        p_start_date: startDate,
-        p_end_date: endDate.toISOString().split('T')[0],
-        p_sub_challenges: subChallenges,
-        p_created_by: 'coach',
-        p_mode: mode,
-      });
-
-      if (error) throw error;
-
-      Alert.alert(
-        'Success',
-        'Challenge created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
-      );
-    } catch (error: any) {
-      console.error('Error creating challenge:', error);
-      Alert.alert('Error', error.message || 'Failed to create challenge');
-    } finally {
-      setLoading(false);
+    if (!selectedClient || !name.trim() || !coach) {
+      Alert.alert('Missing Info', 'Please ensure all required fields are filled.');
+      return;
     }
+    try {
+      setCreating(true);
+      const endDate = new Date(startDate); endDate.setDate(endDate.getDate() + parseInt(durationDays) - 1);
+      const { error } = await supabase.rpc('create_mother_challenge', {
+        p_coach_id: coach.id, p_client_id: selectedClient.id, p_name: name.trim(),
+        p_description: description.trim() || null, p_start_date: startDate,
+        p_end_date: endDate.toISOString().split('T')[0], p_sub_challenges: subChallenges,
+        p_created_by: 'coach', p_mode: mode,
+      });
+      if (error) throw error;
+      Alert.alert('Success', 'Plan launched to client hub.', [{ text: 'Done', onPress: () => router.back() }]);
+    } catch (e: any) { Alert.alert('Error', e.message); } finally { setCreating(false); }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-            <X size={24} color="#666" />
+    <View className="flex-1 bg-slate-950">
+      <SafeAreaView className="flex-1">
+        <View className="px-6 pt-8 pb-4 flex-row items-center justify-between">
+          <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full border border-slate-800">
+            <ArrowLeft size={20} color="#94A3B8" />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Create Challenge</Text>
-          <View style={{ width: 24 }} />
+          <Text className="text-white text-xl font-bold">Manual Create</Text>
+          <View className="w-10" />
         </View>
 
-        {/* Client Selection */}
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Client *</Text>
-          <TouchableOpacity
-            style={[styles.clientSelector, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}
-            onPress={() => setShowClientPicker(!showClientPicker)}
-          >
-            <Text style={selectedClient ? [styles.clientText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }] : [styles.placeholderText, { color: theme.colors.textTertiary, fontFamily: theme.typography.fontFamily }]}>
-              {selectedClient ? selectedClient.full_name : 'Select a client'}
-            </Text>
-          </TouchableOpacity>
-
-          {showClientPicker && (
-            <View style={[styles.clientPicker, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              {clients.map((client) => (
-                <TouchableOpacity
-                  key={client.id}
-                  style={[styles.clientOption, { borderBottomColor: theme.colors.border }]}
-                  onPress={() => {
-                    setSelectedClient(client);
-                    setShowClientPicker(false);
-                  }}
-                >
-                  <Text style={[styles.clientOptionText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.full_name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Mode Selection */}
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Challenge Mode</Text>
-          <View style={styles.modeContainer}>
-            <TouchableOpacity
-              style={[
-                styles.modeOption,
-                mode === 'relative' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                mode !== 'relative' && { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
-              ]}
-              onPress={() => setMode('relative')}
+        <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingBottom: 120 }}>
+          {/* Client Selection */}
+          <View className="mt-6">
+            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Target Client</Text>
+            <TouchableOpacity 
+              onPress={() => setShowClientPicker(!showClientPicker)}
+              className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex-row items-center justify-between"
             >
-              <Target size={18} color={mode === 'relative' ? '#fff' : theme.colors.textSecondary} />
-              <View>
-                <Text style={[styles.modeTitle, { color: mode === 'relative' ? '#fff' : theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Client</Text>
-                <Text style={[styles.modeDesc, { color: mode === 'relative' ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Starts today/on assign</Text>
+              <View className="flex-row items-center gap-3">
+                 <BrandedAvatar size={32} name={selectedClient?.full_name || 'C'} imageUrl={selectedClient?.avatar_url} />
+                 <Text className={`font-bold ${selectedClient ? 'text-white' : 'text-slate-500'}`}>
+                    {selectedClient ? selectedClient.full_name : 'Select Recipient'}
+                 </Text>
               </View>
+              <ChevronDown size={18} color="#475569" />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.modeOption,
-                mode === 'fixed' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                mode !== 'fixed' && { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
-              ]}
-              onPress={() => setMode('fixed')}
-            >
-              <Calendar size={18} color={mode === 'fixed' ? '#fff' : theme.colors.textSecondary} />
-              <View>
-                <Text style={[styles.modeTitle, { color: mode === 'fixed' ? '#fff' : theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Campaign</Text>
-                <Text style={[styles.modeDesc, { color: mode === 'fixed' ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Fixed calendar dates</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Challenge Name */}
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Challenge Name *</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-            placeholder="e.g., 7-Day Wellness Challenge"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={name}
-            onChangeText={setName}
-            maxLength={100}
-          />
-        </View>
-
-        {/* Description */}
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Description</Text>
-          <TextInput
-            style={[styles.input, styles.textArea, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-            placeholder="Explain what this challenge is about..."
-            placeholderTextColor={theme.colors.textTertiary}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-          />
-        </View>
-
-        {/* Duration */}
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Duration (3-14 days) *</Text>
-          <View style={styles.durationRow}>
-            <TextInput
-              style={[styles.input, styles.durationInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="7"
-              placeholderTextColor={theme.colors.textTertiary}
-              value={durationDays}
-              onChangeText={setDurationDays}
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-            <Text style={[styles.durationText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>days</Text>
-          </View>
-        </View>
-
-
-
-        {/* Start Date (Only for Campaign Mode) */}
-        {mode === 'fixed' && (
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Start Date *</Text>
-            <View style={[styles.dateRow, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
-              <Calendar size={20} color="#666" />
-              <TextInput
-                style={[styles.input, styles.dateInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-                value={startDate}
-                onChangeText={setStartDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={theme.colors.textTertiary}
-              />
-            </View>
-          </View>
-        )}
-
-        {/* Sub-Challenges */}
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Daily Tasks ({subChallenges.length})</Text>
-          <Text style={[styles.helperText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-            Customize the daily tasks for each day of the challenge
-          </Text>
-          
-          {subChallenges.map((sub, index) => (
-            <View key={index} style={[styles.subChallengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              <View style={styles.subChallengeHeader}>
-                <Text style={[styles.subChallengeDay, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>
-                  Day {index + 1} - {sub.assigned_date}
-                </Text>
-              </View>
-              
-              <TextInput
-                style={[styles.input, styles.subInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-                placeholder={`Day ${index + 1} task name`}
-                placeholderTextColor={theme.colors.textTertiary}
-                value={sub.name}
-                onChangeText={(value) => updateSubChallenge(index, 'name', value)}
-              />
-              
-              <TextInput
-                style={[styles.input, styles.textArea, { marginTop: 8, backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-                placeholder="Task description (optional)"
-                placeholderTextColor={theme.colors.textTertiary}
-                value={sub.description}
-                onChangeText={(value) => updateSubChallenge(index, 'description', value)}
-                multiline
-                numberOfLines={2}
-              />
-
-              <View style={styles.subMeta}>
-                <View style={styles.metaRow}>
-                  <Text style={[styles.metaLabel, { color: theme.colors.text }]}>Focus:</Text>
-                  <View style={styles.focusButtons}>
-                    {(['training', 'nutrition', 'recovery', 'consistency'] as ChallengeFocusType[]).map(
-                      (type) => (
-                        <TouchableOpacity
-                          key={type}
-                            style={[
-                              styles.metaChip,
-                              { backgroundColor: sub.focus_type === type ? theme.colors.primary : theme.colors.surface, borderColor: sub.focus_type === type ? theme.colors.primary : theme.colors.border },
-                            ]}
-                          onPress={() => updateSubChallenge(index, 'focus_type', type)}
-                        >
-                          <Text
-                            style={[
-                              styles.metaChipText,
-                              { color: sub.focus_type === type ? '#FFFFFF' : theme.colors.text },
-                            ]}
-                          >
-                            {type}
-                          </Text>
-                        </TouchableOpacity>
-                      )
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.metaRow}>
-                  <Text style={[styles.metaLabel, { color: theme.colors.text }]}>Intensity:</Text>
-                  <View style={styles.focusButtons}>
-                    {(['light', 'moderate', 'intense'] as const).map((intensity) => (
-                      <TouchableOpacity
-                        key={intensity}
-                          style={[
-                            styles.metaChip,
-                            { backgroundColor: sub.intensity === intensity ? theme.colors.primary : theme.colors.surface, borderColor: sub.intensity === intensity ? theme.colors.primary : theme.colors.border },
-                          ]}
-                        onPress={() => updateSubChallenge(index, 'intensity', intensity)}
-                      >
-                        <Text
-                          style={[
-                            styles.metaChipText,
-                            { color: sub.intensity === intensity ? '#FFFFFF' : theme.colors.text },
-                          ]}
-                        >
-                          {intensity}
-                        </Text>
+            <AnimatePresence>
+              {showClientPicker && (
+                <MotiView from={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden">
+                  <View className="bg-slate-900/50 mt-2 rounded-2xl border border-slate-800">
+                    {clients.map((c) => (
+                      <TouchableOpacity key={c.id} onPress={() => { setSelectedClient(c); setShowClientPicker(false); }} className="p-4 border-b border-slate-800 flex-row items-center gap-3">
+                         <BrandedAvatar size={24} name={c.full_name} imageUrl={c.avatar_url} />
+                         <Text className="text-slate-300 font-medium">{c.full_name}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
-                </View>
+                </MotiView>
+              )}
+            </AnimatePresence>
+          </View>
+
+          {/* Mode Switch */}
+          <View className="mt-8">
+             <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-3">Protocol Mode</Text>
+             <View className="flex-row bg-slate-900 p-1.5 rounded-2xl border border-slate-800">
+                <TouchableOpacity onPress={() => setMode('relative')} className={`flex-1 py-3 items-center rounded-xl flex-row justify-center gap-2 ${mode === 'relative' ? 'bg-blue-600' : ''}`}>
+                   <Target size={16} color={mode === 'relative' ? 'white' : '#475569'} />
+                   <Text className={`font-bold text-xs ${mode === 'relative' ? 'text-white' : 'text-slate-500'}`}>Adaptive</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setMode('fixed')} className={`flex-1 py-3 items-center rounded-xl flex-row justify-center gap-2 ${mode === 'fixed' ? 'bg-blue-600' : ''}`}>
+                   <Calendar size={16} color={mode === 'fixed' ? 'white' : '#475569'} />
+                   <Text className={`font-bold text-xs ${mode === 'fixed' ? 'text-white' : 'text-slate-500'}`}>Fixed</Text>
+                </TouchableOpacity>
+             </View>
+          </View>
+
+          {/* Details */}
+          <View className="mt-10 gap-6">
+              <View>
+                 <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Plan Identity</Text>
+                 <TextInput 
+                    className="bg-slate-900 p-5 rounded-2xl border border-slate-800 text-white font-bold text-lg"
+                    placeholder="e.g. 10-Day Hypertrophy Push" placeholderTextColor="#475569"
+                    value={name} onChangeText={setName}
+                 />
               </View>
-            </View>
-          ))}
+              <View>
+                 <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Meta Description</Text>
+                 <TextInput 
+                    className="bg-slate-900 p-5 rounded-2xl border border-slate-800 text-white font-medium min-h-[100px]"
+                    placeholder="Core objectives of this protocol..." placeholderTextColor="#475569"
+                    multiline value={description} onChangeText={setDescription}
+                 />
+              </View>
+              <View className="flex-row gap-4">
+                  <View className="flex-1">
+                    <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Cycle Days</Text>
+                    <TextInput 
+                        className="bg-slate-900 p-5 rounded-2xl border border-slate-800 text-white font-bold"
+                        keyboardType="number-pad" value={durationDays} onChangeText={setDurationDays}
+                    />
+                  </View>
+                  {mode === 'fixed' && (
+                    <View className="flex-2">
+                       <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Launch Date</Text>
+                       <TextInput className="bg-slate-900 p-5 rounded-2xl border border-slate-800 text-white font-bold" value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor="#475569" />
+                    </View>
+                  )}
+              </View>
+          </View>
+
+          {/* Daily Missions */}
+          <View className="mt-12">
+              <View className="flex-row justify-between items-center mb-6">
+                 <Text className="text-white text-lg font-bold">Daily Missions</Text>
+                 <View className="px-3 py-1 bg-blue-600/10 rounded-full border border-blue-500/20">
+                    <Text className="text-blue-400 text-[10px] font-black uppercase tracking-widest">{subChallenges.length} Total</Text>
+                 </View>
+              </View>
+
+              {subChallenges.map((sub, i) => (
+                <MotiView key={i} from={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-slate-900 p-6 rounded-[32px] border border-slate-800 mb-6">
+                   <View className="flex-row justify-between items-center mb-4">
+                      <Text className="text-blue-500 font-bold text-xs">Mission Day {i + 1}</Text>
+                      <Text className="text-slate-600 font-medium text-[10px]">{sub.assigned_date}</Text>
+                   </View>
+                   <TextInput 
+                      className="text-white font-bold text-lg mb-4"
+                      placeholder="Mission Name" placeholderTextColor="#475569"
+                      value={sub.name} onChangeText={(v) => updateSubChallenge(i, 'name', v)}
+                   />
+                   
+                   <View className="flex-row flex-wrap gap-2 mt-2">
+                      {(['training', 'nutrition', 'recovery'] as ChallengeFocusType[]).map((f) => {
+                         const isActive = sub.focus_type === f;
+                         return (
+                            <TouchableOpacity key={f} onPress={() => updateSubChallenge(i, 'focus_type', f)} className={`px-4 py-2 rounded-xl border ${isActive ? 'bg-blue-600 border-blue-400' : 'bg-slate-950 border-slate-800'}`}>
+                               <Text className={`text-[10px] font-black uppercase tracking-tighter ${isActive ? 'text-white' : 'text-slate-500'}`}>{f}</Text>
+                            </TouchableOpacity>
+                         );
+                      })}
+                   </View>
+                   <View className="flex-row flex-wrap gap-2 mt-3">
+                      {(['light', 'moderate', 'intense'] as const).map((int) => {
+                         const isActive = sub.intensity === int;
+                         return (
+                            <TouchableOpacity key={int} onPress={() => updateSubChallenge(i, 'intensity', int)} className={`px-4 py-2 rounded-xl border ${isActive ? 'bg-slate-200 border-white' : 'bg-slate-950 border-slate-800'}`}>
+                               <Text className={`text-[10px] font-black uppercase tracking-tighter ${isActive ? 'text-slate-950' : 'text-slate-500'}`}>{int}</Text>
+                            </TouchableOpacity>
+                         );
+                      })}
+                   </View>
+                </MotiView>
+              ))}
+          </View>
+        </ScrollView>
+
+        {/* Action Bar */}
+        <View className="absolute bottom-0 w-full p-6 bg-slate-950/90 border-t border-slate-900">
+            <TouchableOpacity 
+               onPress={handleCreate} disabled={creating}
+               className="h-16 bg-blue-600 rounded-3xl flex-row items-center justify-center gap-3 shadow-2xl shadow-blue-500/20"
+            >
+               {creating ? <ActivityIndicator color="white" /> : (
+                 <>
+                   <Plus size={22} color="white" />
+                   <Text className="text-white font-bold text-lg">Launch Sequence</Text>
+                 </>
+               )}
+            </TouchableOpacity>
         </View>
-      </ScrollView>
-
-      {/* Footer */}
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-        <TouchableOpacity
-          style={[styles.cancelButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-          onPress={() => router.back()}
-          disabled={loading}
-        >
-          <Text style={[styles.cancelButtonText, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Cancel</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.createButton, { backgroundColor: theme.colors.primary }, loading && styles.createButtonDisabled]}
-          onPress={handleCreate}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Target size={20} color="#fff" />
-              <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily }]}>Create Challenge</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
-
-function getFocusEmoji(focusType: ChallengeFocusType): string {
-  const emojis: Record<ChallengeFocusType, string> = {
-    training: '💪',
-    nutrition: '🥗',
-    recovery: '😴',
-    consistency: '🎯',
-  };
-  return emojis[focusType];
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  closeButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginBottom: 12,
-  },
-  subChallengeCard: {
-   backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  subChallengeHeader: {
-    marginBottom: 12,
-  },
-  subChallengeDay: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#3B82F6',
-  },
-  subInput: {
-    fontWeight: '600',
-  },
-  subMeta: {
-    marginTop: 12,
-    gap: 8,
-  },
-  metaRow: {
-    gap: 8,
-  },
-  metaLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
-  },
-  focusButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  metaChip: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  metaChipActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
-  },
-  metaChipText: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '500',
-    textTransform: 'capitalize',
-  },
-  metaChipTextActive: {
-    color: '#3B82F6',
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#111',
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  clientSelector: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-  },
-  clientText: {
-    fontSize: 14,
-    color: '#111',
-  },
-  placeholderText: {
-    fontSize: 14,
-    color: '#9ca3af',
-  },
-  clientPicker: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    marginTop: 8,
-    maxHeight: 200,
-  },
-  clientOption: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  clientOptionText: {
-    fontSize: 14,
-    color: '#111',
-  },
-  modeContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modeOption: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  modeTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modeDesc: {
-    fontSize: 11,
-  },
-  focusGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  focusChip: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  focusChipActive: {
-    borderColor: '#6366f1',
-    backgroundColor: '#ede9fe',
-  },
-  focusChipText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-    textTransform: 'capitalize',
-  },
-  focusChipTextActive: {
-    color: '#6366f1',
-    fontWeight: '600',
-  },
-  durationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  durationInput: {
-    flex: 1,
-    maxWidth: 80,
-  },
-  durationText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-  },
-  dateInput: {
-    flex: 1,
-    borderWidth: 0,
-    padding: 0,
-  },
-  rulesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  addRuleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  addRuleText: {
-    fontSize: 14,
-    color: '#6366f1',
-    fontWeight: '600',
-  },
-  ruleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 12,
-  },
-  ruleNumber: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '600',
-    marginTop: 12,
-  },
-  ruleInput: {
-    flex: 1,
-  },
-  previewSection: {
-    marginTop: 16,
-  },
-  previewTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
-  },
-  previewCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  previewName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111',
-    marginBottom: 8,
-  },
-  previewDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  previewMeta: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  previewMetaText: {
-    fontSize: 12,
-    color: '#666',
-    textTransform: 'capitalize',
-  },
-  previewRules: {
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 12,
-  },
-  previewRulesTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  previewRule: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  createButton: {
-    flex: 2,
-    flexDirection: 'row',
-    backgroundColor: '#6366f1',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  createButtonDisabled: {
-    opacity: 0.5,
-  },
-  createButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-});

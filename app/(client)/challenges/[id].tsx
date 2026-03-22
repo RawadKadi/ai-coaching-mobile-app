@@ -1,24 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { X, Check, Calendar as CalendarIcon, TrendingUp, CheckCircle } from 'lucide-react-native';
-import { useTheme } from '@/contexts/BrandContext';
-
-/**
- * Client Progress Tracker
- * Daily check-in interface for clients to mark challenge progress
- */
+import { X, Check, TrendingUp, Calendar, ChevronLeft, Zap, Info, Clock, AlertCircle } from 'lucide-react-native';
 
 interface ProgressEntry {
   id: string;
@@ -35,14 +21,12 @@ interface Challenge {
   duration_days: number;
   start_date: string;
   end_date: string;
-  rules: string[];
 }
 
 export default function ChallengeProgressScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
-  const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -51,573 +35,173 @@ export default function ChallengeProgressScreen() {
   const [todayProgress, setTodayProgress] = useState<ProgressEntry | null>(null);
   const [notes, setNotes] = useState('');
 
-  useEffect(() => {
-    loadChallengeAndProgress();
-  }, [id]);
+  useEffect(() => { loadChallengeAndProgress(); }, [id]);
 
   const loadChallengeAndProgress = async () => {
     if (!id || !user) return;
-
     try {
       setLoading(true);
-
-      // Get full challenge with progress
-      const { data, error } = await supabase.rpc('get_challenge_with_progress', {
-        p_challenge_id: id,
-      });
-
+      const { data, error } = await supabase.rpc('get_challenge_with_progress', { p_challenge_id: id });
       if (error) throw error;
-
       if (data) {
         setChallenge(data.challenge);
         setProgress(data.progress || []);
-
-        // Check if today's progress exists
-        const today = new Date().toISOString().split('T')[0];
-        const todayEntry = data.progress?.find((p: any) => p.date === today);
-        
-        if (todayEntry) {
-          setTodayProgress(todayEntry);
-          setNotes(todayEntry.notes || '');
-        } else {
-          setTodayProgress(null);
-          setNotes('');
-        }
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayEntry = data.progress?.find((p: any) => p.date === todayStr);
+        if (todayEntry) { setTodayProgress(todayEntry); setNotes(todayEntry.notes || ''); }
       }
-    } catch (error) {
-      console.error('Error loading challenge:', error);
-      Alert.alert('Error', 'Failed to load challenge');
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { Alert.alert('Error'); } finally { setLoading(false); }
   };
 
   const handleMarkProgress = async (completed: boolean) => {
     if (!challenge || !user) return;
-
     try {
       setSubmitting(true);
-
-      // Get client ID
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!clientData) throw new Error('Client not found');
-
-      const today = new Date().toISOString().split('T')[0];
-
+      const { data: cData } = await supabase.from('clients').select('id').eq('user_id', user.id).single();
+      if (!cData) return;
+      
       const { error } = await supabase.rpc('mark_challenge_progress', {
         p_challenge_id: id,
-        p_client_id: clientData.id,
-        p_date: today,
+        p_client_id: cData.id,
+        p_date: new Date().toISOString().split('T')[0],
         p_completed: completed,
         p_notes: notes.trim() || null,
         p_proof_url: null,
       });
-
       if (error) throw error;
-
-      Alert.alert(
-        'Success',
-        completed ? 'Great job! Keep up the momentum! 🎉' : 'Progress saved',
-        [
-          {
-            text: 'OK',
-            onPress: () => loadChallengeAndProgress(),
-          },
-        ]
-      );
-    } catch (error: any) {
-      console.error('Error marking progress:', error);
-      Alert.alert('Error', error.message || 'Failed to save progress');
-    } finally {
-      setSubmitting(false);
-    }
+      loadChallengeAndProgress();
+      if (completed) Alert.alert('Objective Secured', 'Neural link synchronized.');
+    } catch (e) { Alert.alert('Error saving'); } finally { setSubmitting(false); }
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
-  }
+  if (loading) return <View className="flex-1 bg-slate-950 justify-center items-center"><ActivityIndicator color="#3B82F6" /></View>;
+  if (!challenge) return <View className="flex-1 bg-slate-950 items-center justify-center"><Text className="text-white">Not found</Text></View>;
 
-  if (!challenge) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Challenge not found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const completedDays = progress.filter((p) => p.completed).length;
-  const completionRate = Math.round((completedDays / challenge.duration_days) * 100);
-  const today = new Date().toISOString().split('T')[0];
+  const completedDays = progress.filter(p => p.completed).length;
+  const progressPercent = Math.round((completedDays / challenge.duration_days) * 100);
+  const todayStr = new Date().toISOString().split('T')[0];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-          <X size={24} color={theme.colors.textSecondary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Track Progress</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Challenge Info */}
-        <View style={[styles.challengeInfo, { backgroundColor: theme.colors.primary }]}>
-          <Text style={[styles.challengeName, { color: theme.colors.textOnPrimary }]}>{challenge.name}</Text>
-          <View style={styles.progressSummary}>
-            <TrendingUp size={20} color={theme.colors.textOnPrimary} />
-            <Text style={[styles.progressSummaryText, { color: theme.colors.textOnPrimary }]}>
-              {completedDays}/{challenge.duration_days} days • {completionRate}%
-            </Text>
-          </View>
-        </View>
-
-        {/* Today's Check-in */}
-        <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.sectionHeader}>
-            <CalendarIcon size={20} color={theme.colors.primary} />
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Today's Check-in</Text>
-          </View>
-
-          <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>{new Date().toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })}</Text>
-
-          {todayProgress ? (
-            <View style={[styles.completedBanner, { backgroundColor: theme.colors.success + '20' }]}>
-              <CheckCircle size={24} color={theme.colors.success} />
-              <Text style={[styles.completedText, { color: theme.colors.success }]}>
-                {todayProgress.completed ? '✓ Completed for today!' : '✓ Logged for today'}
-              </Text>
+    <View className="flex-1 bg-slate-950">
+        <SafeAreaView className="flex-1">
+            <View className="flex-row justify-between items-center px-6 py-4">
+                <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center">
+                    <ChevronLeft size={20} color="white" />
+                </TouchableOpacity>
+                <Text className="text-white font-black text-lg">Protocol Tracker</Text>
+                <View className="w-10" />
             </View>
-          ) : (
-            <View style={[styles.pendingBanner, { backgroundColor: theme.colors.warning + '20' }]}>
-              <Text style={[styles.pendingText, { color: theme.colors.warning }]}>⏰ Pending for today</Text>
-            </View>
-          )}
 
-          {/* Notes Input */}
-          <View style={styles.notesContainer}>
-            <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Notes (Optional)</Text>
-            <TextInput
-              style={[styles.notesInput, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="How did it go today? Any challenges or wins?"
-              placeholderTextColor={theme.colors.textSecondary}
-              multiline
-              numberOfLines={4}
-              maxLength={500}
-            />
-            <Text style={[styles.charCount, { color: theme.colors.textDisabled }]}>{notes.length}/500</Text>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.skipButton, { backgroundColor: theme.colors.surfaceAlt }]}
-              onPress={() => handleMarkProgress(false)}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={theme.colors.textSecondary} />
-              ) : (
-                <>
-                  <X size={20} color={theme.colors.textSecondary} />
-                  <Text style={[styles.skipButtonText, { color: theme.colors.textSecondary }]}>Skip Today</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, styles.completeButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => handleMarkProgress(true)}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={theme.colors.textOnPrimary} />
-              ) : (
-                <>
-                  <Check size={20} color={theme.colors.textOnPrimary} />
-                  <Text style={[styles.completeButtonText, { color: theme.colors.textOnPrimary }]}>Mark Complete</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Progress Calendar */}
-        <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Progress Calendar</Text>
-          <View style={styles.calendar}>
-            {Array.from({ length: challenge.duration_days }, (_, i) => {
-              const date = new Date(challenge.start_date);
-              date.setDate(date.getDate() + i);
-              const dateString = date.toISOString().split('T')[0];
-              const dayProgress = progress.find((p) => p.date === dateString);
-              const isToday = dateString === today;
-              const isPast = new Date(dateString) < new Date(today);
-              const isFuture = new Date(dateString) > new Date(today);
-
-              return (
-                <View
-                  key={i}
-                  style={[
-                    styles.calendarDay,
-                    { backgroundColor: theme.colors.surfaceAlt },
-                    dayProgress?.completed && { backgroundColor: theme.colors.success },
-                    isToday && { borderColor: theme.colors.primary, borderWidth: 2 },
-                    isFuture && { opacity: 0.4 },
-                  ]}
+            <ScrollView className="flex-1 px-6">
+                {/* Status Dashboard */}
+                <MotiView 
+                    from={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-blue-600 rounded-[32px] p-6 mb-8 mt-4 shadow-xl shadow-blue-500/20"
                 >
-                  <Text
-                    style={[
-                      styles.calendarDayNumber,
-                      { color: theme.colors.textSecondary },
-                      dayProgress?.completed && { color: theme.colors.textOnPrimary },
-                      isToday && { color: theme.colors.primary },
-                      isFuture && { color: theme.colors.textDisabled },
-                    ]}
-                  >
-                    {i + 1}
-                  </Text>
-                  {dayProgress?.completed && (
-                    <Check size={12} color={theme.colors.textOnPrimary} style={styles.calendarCheck} />
-                  )}
-                  {isToday && !dayProgress && (
-                    <Text style={[styles.todayIndicator, { color: theme.colors.primary }]}>•</Text>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
+                    <View className="flex-row justify-between items-start mb-6">
+                        <View className="flex-1">
+                            <Text className="text-white/60 font-black text-[10px] uppercase tracking-widest mb-1">Active Mission</Text>
+                            <Text className="text-white text-xl font-black">{challenge.name}</Text>
+                        </View>
+                        <View className="w-12 h-12 rounded-2xl bg-white/20 items-center justify-center">
+                            <Zap size={20} color="white" />
+                        </View>
+                    </View>
+                    
+                    <View className="flex-row items-end justify-between">
+                        <View>
+                            <Text className="text-white text-3xl font-black">{progressPercent}%</Text>
+                            <Text className="text-white/70 font-bold text-xs">Completion Rate</Text>
+                        </View>
+                        <View className="items-end">
+                            <Text className="text-white font-black text-base">{completedDays}/{challenge.duration_days}</Text>
+                            <Text className="text-white/70 font-bold text-xs uppercase">Days Secured</Text>
+                        </View>
+                    </View>
+                </MotiView>
 
-        {/* Previous Entries */}
-        {progress.length > 0 && (
-          <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Previous Entries</Text>
-            {progress
-              .filter((p) => p.date !== today)
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-              .slice(0, 5)
-              .map((entry) => (
-                <View key={entry.id} style={[styles.historyEntry, { borderBottomColor: theme.colors.border }]}>
-                  <View style={styles.historyHeader}>
-                    <Text style={[styles.historyDate, { color: theme.colors.text }]}>
-                      {new Date(entry.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </Text>
-                    {entry.completed ? (
-                      <View style={[styles.completedBadge, { backgroundColor: theme.colors.success + '20' }]}>
-                        <Check size={12} color={theme.colors.success} />
-                        <Text style={[styles.completedBadgeText, { color: theme.colors.success }]}>Completed</Text>
-                      </View>
-                    ) : (
-                      <Text style={[styles.skippedText, { color: theme.colors.textDisabled }]}>Skipped</Text>
-                    )}
-                  </View>
-                  {entry.notes && (
-                    <Text style={[styles.historyNotes, { color: theme.colors.textSecondary }]}>{entry.notes}</Text>
-                  )}
+                {/* Today's Sync */}
+                <View className="mb-8">
+                    <View className="flex-row items-center gap-3 mb-4">
+                        <View className="w-1 h-4 bg-blue-600 rounded-full" />
+                        <Text className="text-white text-lg font-black">Daily Synchronization</Text>
+                    </View>
+
+                    <View className="bg-slate-900/40 border border-slate-900 rounded-[32px] p-6">
+                        <Text className="text-slate-500 font-bold text-xs uppercase tracking-widest mb-4">
+                            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                        </Text>
+
+                        {todayProgress ? (
+                            <View className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex-row items-center mb-6">
+                                <View className="w-8 h-8 rounded-full bg-emerald-500 items-center justify-center mr-3">
+                                    <Check size={16} color="white" />
+                                </View>
+                                <Text className="text-emerald-500 font-black text-sm">Protocol synchronized for this cycle.</Text>
+                            </View>
+                        ) : (
+                            <View className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex-row items-center mb-6">
+                                <Clock size={16} color="#F59E0B" className="mr-3" />
+                                <Text className="text-amber-500 font-black text-sm">Awaiting daily log transmission.</Text>
+                            </View>
+                        )}
+
+                        <Text className="text-slate-500 font-black text-[10px] uppercase tracking-widest mb-2 px-1">Mission Notes</Text>
+                        <TextInput 
+                            className="bg-slate-950 p-4 rounded-2xl text-white font-medium border border-slate-800 mb-6 min-h-[100px]"
+                            multiline
+                            placeholder="Add mission context..."
+                            placeholderTextColor="#1E293B"
+                            value={notes}
+                            onChangeText={setNotes}
+                        />
+
+                        <View className="flex-row gap-3">
+                            <TouchableOpacity 
+                                onPress={() => handleMarkProgress(false)}
+                                className="flex-1 p-4 bg-slate-900 border border-slate-800 rounded-2xl items-center"
+                            >
+                                <Text className="text-slate-400 font-bold">Inhibit</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                onPress={() => handleMarkProgress(true)}
+                                className="flex-2 p-4 bg-blue-600 rounded-2xl items-center shadow-lg shadow-blue-500/20"
+                            >
+                                <Text className="text-white font-black">Synchronize</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 </View>
-              ))}
-          </View>
-        )}
-      </ScrollView>
+
+                {/* Performance History */}
+                <View className="mb-12">
+                    <View className="flex-row items-center gap-3 mb-4">
+                        <View className="w-1 h-4 bg-blue-600 rounded-full" />
+                        <Text className="text-white text-lg font-black">Memory Matrix</Text>
+                    </View>
+                    <View className="flex-row flex-wrap gap-2">
+                        {Array.from({ length: challenge.duration_days }, (_, i) => {
+                            const date = new Date(challenge.start_date);
+                            date.setDate(date.getDate() + i);
+                            const ds = date.toISOString().split('T')[0];
+                            const done = progress.find(p => p.date === ds)?.completed;
+                            const isT = ds === todayStr;
+                            
+                            return (
+                                <View 
+                                    key={i} 
+                                    className={`w-10 h-10 rounded-xl items-center justify-center border ${done ? 'bg-emerald-500 border-emerald-400' : 'bg-slate-900 border-slate-800 opacity-40'} ${isT ? 'border-blue-500 border-2 scale-110 opacity-100 shadow-lg shadow-blue-500/40' : ''}`}
+                                >
+                                    <Text className={`text-[10px] font-black ${done ? 'text-white' : 'text-slate-600'}`}>{i + 1}</Text>
+                                    {done && <Check size={8} color="white" className="absolute bottom-1 right-1" />}
+                                </View>
+                            );
+                        })}
+                    </View>
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-  },
-  backButton: {
-    marginTop: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#6366f1',
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    paddingTop: 60,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  closeButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  challengeInfo: {
-    backgroundColor: '#6366f1',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  challengeName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  progressSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  progressSummaryText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  section: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
-  },
-  dateText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  completedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#d1fae5',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  completedText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#065f46',
-  },
-  pendingBanner: {
-    backgroundColor: '#fef3c7',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  pendingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#92400e',
-  },
-  notesContainer: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-  },
-  notesInput: {
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#111',
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  charCount: {
-    fontSize: 11,
-    color: '#999',
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: 14,
-    borderRadius: 8,
-  },
-  skipButton: {
-    backgroundColor: '#f3f4f6',
-  },
-  skipButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  completeButton: {
-    backgroundColor: '#10b981',
-  },
-  completeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  calendar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  calendarDay: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    position: 'relative',
-  },
-  calendarDayCompleted: {
-    backgroundColor: '#10b981',
-  },
-  calendarDayToday: {
-    borderColor: '#6366f1',
-    borderWidth: 2,
-  },
-  calendarDayFuture: {
-    opacity: 0.4,
-  },
-  calendarDayNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  calendarDayNumberCompleted: {
-    color: '#fff',
-  },
-  calendarDayNumberToday: {
-    color: '#6366f1',
-  },
-  calendarDayNumberFuture: {
-    color: '#999',
-  },
-  calendarCheck: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-  },
-  todayIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    fontSize: 16,
-    color: '#6366f1',
-  },
-  historyEntry: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  historyDate: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111',
-  },
-  completedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#d1fae5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  completedBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#10b981',
-  },
-  skippedText: {
-    fontSize: 11,
-    color: '#999',
-  },
-  historyNotes: {
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 18,
-  },
-});

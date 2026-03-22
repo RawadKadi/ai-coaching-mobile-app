@@ -1,97 +1,87 @@
 import { Tabs } from 'expo-router';
-import { Home, Users, User, Calendar, MessageSquare } from 'lucide-react-native';
+import { Platform, View } from 'react-native';
+import { Home, Users, User, Calendar, MessageSquare, BrainCircuit, Target } from 'lucide-react-native';
 import { useUnread } from '@/contexts/UnreadContext';
-import { useTheme } from '@/contexts/BrandContext';
 
 export default function CoachTabLayout() {
   const { unreadCount } = useUnread();
-  const theme = useTheme();
   
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textSecondary,
+        tabBarActiveTintColor: '#3B82F6', 
+        tabBarInactiveTintColor: '#475569', 
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: '#020617',
           borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-          paddingBottom: 24,
-          paddingTop: 8,
-          height: 80,
+          borderTopColor: '#0F172A',
+          paddingBottom: Platform.OS === 'ios' ? 32 : 12,
+          paddingTop: 12,
+          height: Platform.OS === 'ios' ? 96 : 72,
+          elevation: 0,
+          shadowOpacity: 0,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
         },
         tabBarLabelStyle: {
-          fontFamily: theme.typography.fontFamily,
-          fontSize: 12,
-          fontWeight: '500',
+          fontSize: 10,
+          fontFamily: 'Outfit_700Bold', 
+          fontWeight: 'black',
+          marginTop: 4,
+          textTransform: 'uppercase',
+          letterSpacing: 0.5,
         },
+        tabBarBackground: () => (
+          <View style={{ flex: 1, backgroundColor: '#020617' }} />
+        ),
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ size, color }) => <Home size={size} color={color} />,
+          title: 'Hub',
+          tabBarIcon: ({ size, color }) => <Home size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
-          title: 'Schedule',
-          tabBarIcon: ({ size, color }) => <Calendar size={size} color={color} />,
+          title: 'Phase',
+          tabBarIcon: ({ size, color }) => <Calendar size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="clients"
         options={{
-          title: 'Clients',
-          tabBarIcon: ({ size, color }) => <Users size={size} color={color} />,
+          title: 'Units',
+          tabBarIcon: ({ size, color }) => <Users size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'Messages',
-          tabBarIcon: ({ size, color }) => <MessageSquare size={size} color={color} />,
+          title: 'Comms',
+          tabBarIcon: ({ size, color }) => <MessageSquare size={22} color={color} />,
           tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#3B82F6', color: 'white', fontSize: 10, fontWeight: 'bold' },
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ size, color }) => <User size={size} color={color} />,
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
         }}
       />
-      {/* Keep ai-brain file but hide from tabs - accessible from Profile */}
-      <Tabs.Screen
-        name="ai-brain"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      {/* Challenges - hide from tabs, accessible via navigation */}
-      <Tabs.Screen
-        name="challenges"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      {/* Client Chat - hide from tabs, keeps navbar visible */}
-      <Tabs.Screen
-        name="chat/[id]"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      {/* Coach-to-Coach Chat - hide from tabs */}
-      <Tabs.Screen
-        name="chat/coach/[coachId]"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
+      {/* Hidden Screens */}
+      <Tabs.Screen name="ai-brain" options={{ href: null }} />
+      <Tabs.Screen name="challenges" options={{ href: null }} />
+      <Tabs.Screen name="chat/[id]" options={{ href: null }} />
+      <Tabs.Screen name="chat/coach/[coachId]" options={{ href: null }} />
     </Tabs>
   );
 }

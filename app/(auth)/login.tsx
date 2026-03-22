@@ -1,19 +1,20 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Eye, EyeOff } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, LogIn, Sparkles, ShieldCheck, ChevronRight } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MotiView, AnimatePresence } from 'moti';
 
 const PENDING_INVITE_KEY = '@pending_invite_token';
 
@@ -28,7 +29,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setError('Please fill in all fields');
+      setError('Operational credentials required.');
       return;
     }
 
@@ -37,175 +38,133 @@ export default function LoginScreen() {
 
     try {
       await signIn(email, password);
-      
-      // Check for pending invite
       const pendingInvite = await AsyncStorage.getItem(PENDING_INVITE_KEY);
       if (pendingInvite) {
-        console.log('[Login] Found pending invite, processing:', pendingInvite);
-        // Navigate to join-team to process it
-        router.replace(`/join-team?invite=${pendingInvite}`);
+        router.replace(`/(coach)/join-team?invite=${pendingInvite}`);
       }
-      // If no pending invite, navigation will be handled by AuthContext
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in');
+      setError(err.message || 'Authentication failed.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
-
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <View style={styles.form}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                placeholderTextColor="#9CA3AF"
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
+    <View style={{ flex: 1 }} className="bg-slate-950">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <SafeAreaView style={{ flex: 1 }}>
+          <ScrollView 
+            contentContainerStyle={{ flexGrow: 1 }} 
+            showsVerticalScrollIndicator={false}
+          >
+            <View className="flex-1 px-8 pt-20 pb-12">
+              {/* V3 Identity Header */}
+              <MotiView 
+                from={{ opacity: 0, scale: 0.9 }} 
+                animate={{ opacity: 1, scale: 1 }}
+                className="items-center mb-16"
               >
-                {showPassword ? (
-                  <EyeOff size={20} color="#9CA3AF" />
-                ) : (
-                  <Eye size={20} color="#9CA3AF" />
+                <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/40 border-2 border-white/10 mb-6">
+                  <ShieldCheck size={40} color="white" />
+                </View>
+                <Text className="text-white text-4xl font-black text-center tracking-tight">
+                  NEURAL<Text className="text-blue-500">SYNC</Text>
+                </Text>
+                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[6px] mt-2">
+                  Command Protocol V3.0
+                </Text>
+              </MotiView>
+
+              {/* Error Alert */}
+              <AnimatePresence>
+                {error && (
+                  <MotiView 
+                    from={{ opacity: 0, translateY: -10 }} 
+                    animate={{ opacity: 1, translateY: 0 }} 
+                    exit={{ opacity: 0, translateY: -10 }}
+                    className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-8 flex-row items-center gap-3"
+                  >
+                    <View className="w-2 h-2 rounded-full bg-red-500" />
+                    <Text className="text-red-400 text-xs font-bold flex-1">{error}</Text>
+                  </MotiView>
                 )}
-              </TouchableOpacity>
+              </AnimatePresence>
+
+              {/* Form Matrix */}
+              <View className="space-y-4">
+                <View className="bg-slate-900/50 border border-slate-900 rounded-[32px] px-6 py-5 flex-row items-center gap-4">
+                  <Mail size={20} color="#334155" />
+                  <TextInput
+                    className="flex-1 text-white font-bold text-lg"
+                    placeholder="Command Email"
+                    placeholderTextColor="#1E293B"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    selectionColor="#3B82F6"
+                  />
+                </View>
+
+                <View className="bg-slate-900/50 border border-slate-900 rounded-[32px] px-6 py-5 flex-row items-center gap-4">
+                  <Lock size={20} color="#334155" />
+                  <TextInput
+                    className="flex-1 text-white font-bold text-lg"
+                    placeholder="Clearance Key"
+                    placeholderTextColor="#1E293B"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    selectionColor="#3B82F6"
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <EyeOff size={20} color="#475569" /> : <Eye size={20} color="#475569" />}
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity 
+                   className="mt-6 bg-blue-600 h-20 rounded-[36px] items-center justify-center flex-row gap-3 shadow-2xl shadow-blue-500/20 border-b-4 border-blue-700"
+                   onPress={handleLogin}
+                   disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <>
+                      <Text className="text-white font-black text-xl">INITIALIZE</Text>
+                      <LogIn size={20} color="white" />
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <View className="pt-8 items-center">
+                  <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
+                    <Text className="text-slate-500 font-bold text-xs uppercase tracking-widest">
+                      New Commander? <Text className="text-blue-500">ENLIST HERE</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Cyber Footer */}
+              <View className="mt-auto items-center pt-20">
+                <View className="flex-row items-center gap-2 mb-2">
+                  <Sparkles size={12} color="#1E293B" />
+                  <Text className="text-slate-800 text-[10px] font-black uppercase tracking-[4px]">
+                    Encrypted Connection Active
+                  </Text>
+                </View>
+                <Text className="text-slate-900 text-[8px] font-bold uppercase">
+                  By logging in you agree to global security protocols
+                </Text>
+              </View>
             </View>
-
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={() => router.push('/(auth)/signup')}
-            >
-              <Text style={styles.linkText}>
-                Don't have an account? Sign Up
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 32,
-  },
-  error: {
-    backgroundColor: '#FEE2E2',
-    color: '#991B1B',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  form: {
-    gap: 16,
-  },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#111827',
-  },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingRight: 16,
-  },
-  passwordInput: {
-    flex: 1,
-    padding: 16,
-    fontSize: 16,
-    color: '#111827',
-  },
-  eyeButton: {
-    padding: 4,
-  },
-  button: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  linkButton: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  linkText: {
-    color: '#3B82F6',
-    fontSize: 14,
-  },
-});

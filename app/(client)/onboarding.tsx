@@ -1,19 +1,10 @@
-import { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Check, ChevronRight, ChevronLeft } from 'lucide-react-native';
+import { Check, ChevronRight, ChevronLeft, Target, Shield, Zap, Flame, User, Activity, Bot } from 'lucide-react-native';
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -25,7 +16,6 @@ export default function OnboardingScreen() {
     date_of_birth: '',
     gender: '',
     height_cm: '',
-    weight_kg: '', // We'll store this in check_ins initially or just use for calculations
     goal: '',
     experience_level: '',
     dietary_restrictions: [] as string[],
@@ -36,365 +26,201 @@ export default function OnboardingScreen() {
   };
 
   const handleNext = () => {
+    const isStepValid = () => {
+        if (step === 1) return formData.date_of_birth && formData.gender && formData.height_cm;
+        if (step === 2) return formData.goal;
+        if (step === 3) return formData.experience_level;
+        return true;
+    };
+
+    if (!isStepValid()) {
+        Alert.alert('Protocol Incomplete', 'Please provide all required synchronization data.');
+        return;
+    }
+
     if (step < 4) setStep(step + 1);
     else handleSubmit();
   };
 
-  const handleBack = () => {
-    if (step > 1) setStep(step - 1);
-  };
+  const handleBack = () => { if (step > 1) setStep(step - 1); };
 
   const handleSubmit = async () => {
     if (!user) return;
     setLoading(true);
-
     try {
-      // 1. Update Client Profile
-      const { error: clientError } = await supabase
-        .from('clients')
-        .update({
-          date_of_birth: formData.date_of_birth || null,
-          gender: formData.gender,
-          height_cm: parseFloat(formData.height_cm) || null,
-          goal: formData.goal,
-          experience_level: formData.experience_level,
-          dietary_restrictions: formData.dietary_restrictions,
-        })
-        .eq('user_id', user.id);
-
+      const { error: clientError } = await supabase.from('clients').update({
+        date_of_birth: formData.date_of_birth || null,
+        gender: formData.gender,
+        height_cm: parseFloat(formData.height_cm) || null,
+        goal: formData.goal,
+        experience_level: formData.experience_level,
+        dietary_restrictions: formData.dietary_restrictions,
+      }).eq('user_id', user.id);
       if (clientError) throw clientError;
 
-      // 2. Create Initial Challenges (Habits) based on Goal
-      const habits = [
-        {
-          name: 'Drink Water',
-          description: 'Stay hydrated throughout the day',
-          target_value: 2000,
-          unit: 'ml',
-          verification_type: 'none',
-        },
-        {
-          name: 'Daily Steps',
-          description: 'Keep moving!',
-          target_value: 8000,
-          unit: 'steps',
-          verification_type: 'none',
-        },
-      ];
-
-      if (formData.goal === 'Weight Loss') {
-        habits.push({
-          name: 'Meal Photo',
-          description: 'Take a photo of your lunch',
-          target_value: 1,
-          unit: 'photo',
-          verification_type: 'camera',
-        });
-      } else {
-        habits.push({
-          name: 'Protein Intake',
-          description: 'Hit your protein goal',
-          target_value: 150,
-          unit: 'g',
-          verification_type: 'none',
-        });
-      }
-
-      // Get client ID
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
+      const { data: clientData } = await supabase.from('clients').select('id').eq('user_id', user.id).single();
       if (clientData) {
-        const habitsToInsert = habits.map(h => ({
-          client_id: clientData.id,
-          ...h,
-          is_active: true,
-        }));
-        
-        await supabase.from('habits').insert(habitsToInsert);
+        const habits = [
+            { name: 'Hydration Protocol', description: 'Maintain optimal hydration', target_value: 2000, unit: 'ml', verification_type: 'none', client_id: clientData.id, is_active: true },
+            { name: 'Motion Metric', description: 'Daily step threshold', target_value: 8000, unit: 'steps', verification_type: 'none', client_id: clientData.id, is_active: true }
+        ];
+        await supabase.from('habits').insert(habits);
       }
 
-      // 3. Mark Onboarding as Completed
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ onboarding_completed: true })
-        .eq('id', user.id);
-
-      if (profileError) throw profileError;
-
-      // 4. Refresh and Redirect
+      await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', user.id);
       await refreshProfile();
       router.replace('/(client)/(tabs)');
-
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error: any) { Alert.alert('Error', error.message); } finally { setLoading(false); }
   };
 
-  const renderStep1 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Basic Info</Text>
-      <Text style={styles.stepSubtitle}>Let's get to know you better</Text>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Date of Birth (YYYY-MM-DD)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="1990-01-01"
-          value={formData.date_of_birth}
-          onChangeText={(text) => updateForm('date_of_birth', text)}
-        />
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Gender</Text>
-        <View style={styles.row}>
-          {['Male', 'Female', 'Other'].map((g) => (
-            <TouchableOpacity
-              key={g}
-              style={[styles.optionButton, formData.gender === g && styles.optionSelected]}
-              onPress={() => updateForm('gender', g)}
-            >
-              <Text style={[styles.optionText, formData.gender === g && styles.optionTextSelected]}>{g}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Height (cm)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="175"
-          keyboardType="numeric"
-          value={formData.height_cm}
-          onChangeText={(text) => updateForm('height_cm', text)}
-        />
-      </View>
-    </View>
-  );
-
-  const renderStep2 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Your Goal</Text>
-      <Text style={styles.stepSubtitle}>What do you want to achieve?</Text>
-
-      {['Weight Loss', 'Muscle Gain', 'Maintenance', 'Improve Health'].map((g) => (
-        <TouchableOpacity
-          key={g}
-          style={[styles.cardOption, formData.goal === g && styles.cardSelected]}
-          onPress={() => updateForm('goal', g)}
-        >
-          <Text style={[styles.cardText, formData.goal === g && styles.cardTextSelected]}>{g}</Text>
-          {formData.goal === g && <Check size={20} color="#3B82F6" />}
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const renderStep3 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Experience Level</Text>
-      <Text style={styles.stepSubtitle}>How active are you currently?</Text>
-
-      {['Beginner', 'Intermediate', 'Advanced'].map((l) => (
-        <TouchableOpacity
-          key={l}
-          style={[styles.cardOption, formData.experience_level === l && styles.cardSelected]}
-          onPress={() => updateForm('experience_level', l)}
-        >
-          <Text style={[styles.cardText, formData.experience_level === l && styles.cardTextSelected]}>{l}</Text>
-          {formData.experience_level === l && <Check size={20} color="#3B82F6" />}
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const renderStep4 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Almost Done!</Text>
-      <Text style={styles.stepSubtitle}>Any dietary restrictions?</Text>
-
-      {['None', 'Vegetarian', 'Vegan', 'Gluten Free', 'Keto'].map((d) => {
-        const isSelected = formData.dietary_restrictions.includes(d);
-        return (
-          <TouchableOpacity
-            key={d}
-            style={[styles.cardOption, isSelected && styles.cardSelected]}
-            onPress={() => {
-              const current = formData.dietary_restrictions;
-              if (isSelected) {
-                updateForm('dietary_restrictions', current.filter(i => i !== d));
-              } else {
-                updateForm('dietary_restrictions', [...current, d]);
-              }
-            }}
-          >
-            <Text style={[styles.cardText, isSelected && styles.cardTextSelected]}>{d}</Text>
-            {isSelected && <Check size={20} color="#3B82F6" />}
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
-      </View>
+    <View className="flex-1 bg-slate-950">
+      <SafeAreaView className="flex-1">
+        <View className="px-6 pt-10 pb-6 flex-row items-center justify-between">
+            <View>
+                <Text className="text-white text-3xl font-black">Sync Protocol</Text>
+                <Text className="text-slate-500 font-bold text-xs uppercase tracking-[4px] mt-1">Initialize Identity</Text>
+            </View>
+            <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center border border-blue-600/20">
+                <Bot size={24} color="#3B82F6" />
+            </View>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
-        {step === 4 && renderStep4()}
-      </ScrollView>
+        <View className="h-1 bg-slate-900 mx-6 rounded-full overflow-hidden mb-8">
+            <MotiView 
+                animate={{ width: `${(step / 4) * 100}%` }}
+                className="h-full bg-blue-600 shadow-sm shadow-blue-500"
+            />
+        </View>
 
-      <View style={styles.footer}>
-        {step > 1 ? (
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <ChevronLeft size={24} color="#6B7280" />
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
-        ) : <View />}
+        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140 }}>
+          <AnimatePresence mode="wait">
+            <MotiView
+                key={step}
+                from={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ type: 'timing', duration: 400 }}
+            >
+                {step === 1 && (
+                    <View className="gap-8">
+                        <SectionLabel label="01. Foundation" desc="Establishing your biological baseline." />
+                        <View className="gap-6">
+                            <InputGroup label="Solar Cycle Origin" value={formData.date_of_birth} onChange={(v: string) => updateForm('date_of_birth', v)} placeholder="YYYY-MM-DD" />
+                            <View>
+                                <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-4 px-1">Biological Identity</Text>
+                                <View className="flex-row gap-3">
+                                    {['Male', 'Female', 'Neutral'].map(g => (
+                                        <TouchableOpacity key={g} onPress={() => updateForm('gender', g)} className={`flex-1 py-5 items-center rounded-[24px] border-2 ${formData.gender === g ? 'bg-blue-600 border-blue-400' : 'bg-slate-900/50 border-slate-900'}`}>
+                                            <Text className={`font-black ${formData.gender === g ? 'text-white' : 'text-slate-500'}`}>{g}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                            <InputGroup label="Altitude (CM)" value={formData.height_cm} onChange={(v: string) => updateForm('height_cm', v)} placeholder="E.g. 180" keyboardType="numeric" />
+                        </View>
+                    </View>
+                )}
 
-        <TouchableOpacity style={styles.nextButton} onPress={handleNext} disabled={loading}>
-          <Text style={styles.nextButtonText}>{step === 4 ? (loading ? 'Saving...' : 'Finish') : 'Next'}</Text>
-          {!loading && <ChevronRight size={20} color="#FFFFFF" />}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+                {step === 2 && (
+                    <View className="gap-8">
+                        <SectionLabel label="02. Core Objective" desc="Selecting your primary performance target." />
+                        <View className="gap-4">
+                            <CardOption label="Metabolic Optimization" desc="Fat loss & caloric efficiency" icon={<Flame size={20} color="#E11D48" />} selected={formData.goal === 'Weight Loss'} onSelect={() => updateForm('goal', 'Weight Loss')} activeColor="#E11D48" />
+                            <CardOption label="Hypertrophy Induction" desc="Muscle density & power density" icon={<Zap size={20} color="#F59E0B" />} selected={formData.goal === 'Muscle Gain'} onSelect={() => updateForm('goal', 'Muscle Gain')} activeColor="#F59E0B" />
+                            <CardOption label="Elite Consistency" desc="Daily performance maintenance" icon={<Activity size={20} color="#10B981" />} selected={formData.goal === 'Maintenance'} onSelect={() => updateForm('goal', 'Maintenance')} activeColor="#10B981" />
+                        </View>
+                    </View>
+                )}
+
+                {step === 3 && (
+                    <View className="gap-8">
+                        <SectionLabel label="03. Neural Load" desc="Calibrating for current expertise levels." />
+                        <View className="gap-4">
+                            <CardOption label="Initiate" desc="Entry level protocol loading" icon={<Shield size={20} color="#94A3B8" />} selected={formData.experience_level === 'Beginner'} onSelect={() => updateForm('experience_level', 'Beginner')} />
+                            <CardOption label="Operative" desc="Standard operational capacity" icon={<Target size={20} color="#94A3B8" />} selected={formData.experience_level === 'Intermediate'} onSelect={() => updateForm('experience_level', 'Intermediate')} />
+                            <CardOption label="Vanguard" desc="Advanced performance architecture" icon={<Zap size={20} color="#3B82F6" />} selected={formData.experience_level === 'Advanced'} onSelect={() => updateForm('experience_level', 'Advanced')} activeColor="#3B82F6" />
+                        </View>
+                    </View>
+                )}
+
+                {step === 4 && (
+                    <View className="gap-8">
+                        <SectionLabel label="04. Bio-Fueling" desc="Configuring dietary restriction parameters." />
+                        <View className="gap-4">
+                            {['Standard', 'Vegetarian', 'Vegan', 'Ketogenic'].map(d => {
+                                const active = formData.dietary_restrictions.includes(d);
+                                return <CardOption key={d} label={d} desc={`Run ${d} fueling logic`} selected={active} onSelect={() => {
+                                    const cur = formData.dietary_restrictions;
+                                    updateForm('dietary_restrictions', active ? cur.filter(i => i !== d) : [...cur, d]);
+                                }} activeColor="#3B82F6" />;
+                            })}
+                        </View>
+                    </View>
+                )}
+            </MotiView>
+          </AnimatePresence>
+        </ScrollView>
+
+        <View className="absolute bottom-0 left-0 right-0 p-6 bg-slate-950/80 border-t border-slate-900/50 backdrop-blur-xl flex-row gap-4 items-center">
+            {step > 1 && (
+                <TouchableOpacity onPress={handleBack} className="w-16 h-16 bg-slate-900/50 rounded-[28px] items-center justify-center border border-slate-800">
+                    <ChevronLeft size={24} color="#475569" />
+                </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+                onPress={handleNext} disabled={loading}
+                className={`flex-1 h-16 rounded-[28px] items-center justify-center flex-row gap-3 ${loading ? 'bg-slate-800' : 'bg-blue-600 shadow-2xl shadow-blue-500/40'}`}
+            >
+                {loading ? <ActivityIndicator color="white" /> : (
+                    <>
+                        <Text className="text-white font-black text-lg">{step === 4 ? 'Deploy Agent' : 'Advance Stage'}</Text>
+                        <ChevronRight size={20} color="white" />
+                    </>
+                )}
+            </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: '#E5E7EB',
-    marginTop: 60,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#3B82F6',
-  },
-  content: {
-    padding: 24,
-    flexGrow: 1,
-  },
-  stepContainer: {
-    gap: 24,
-  },
-  stepTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  stepSubtitle: {
-    fontSize: 18,
-    color: '#6B7280',
-    marginTop: -16,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  optionButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  optionSelected: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
-  },
-  optionText: {
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  optionTextSelected: {
-    color: '#3B82F6',
-  },
-  cardOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  cardSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
-  },
-  cardText: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  cardTextSelected: {
-    color: '#3B82F6',
-  },
-  footer: {
-    padding: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginLeft: 4,
-  },
-  nextButton: {
-    backgroundColor: '#3B82F6',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    gap: 8,
-  },
-  nextButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+const SectionLabel = ({ label, desc }: any) => (
+    <View className="mb-2">
+        <Text className="text-white text-3xl font-black">{label}</Text>
+        <Text className="text-slate-500 font-bold mt-1 text-base">{desc}</Text>
+    </View>
+);
+
+const InputGroup = ({ label, value, onChange, placeholder, ...rest }: any) => (
+    <View>
+        <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-3 px-1">{label}</Text>
+        <TextInput 
+            className="bg-slate-900/50 p-6 rounded-[24px] border-2 border-slate-900 text-white font-black text-base"
+            placeholder={placeholder} placeholderTextColor="#1E293B"
+            value={value} onChangeText={onChange} {...rest}
+        />
+    </View>
+);
+
+const CardOption = ({ label, desc, icon, selected, onSelect, activeColor = '#3B82F6' }: any) => (
+    <TouchableOpacity 
+        onPress={onSelect}
+        className={`p-6 rounded-[32px] border-2 flex-row items-center justify-between transition-all ${selected ? 'bg-slate-900 border-blue-600/50' : 'bg-slate-900/30 border-slate-900'}`}
+    >
+        <View className="flex-row items-center gap-5 flex-1">
+            <View style={selected ? { backgroundColor: activeColor + '20' } : {}} className={`w-14 h-14 rounded-2xl items-center justify-center ${selected ? '' : 'bg-slate-950 border border-slate-800'}`}>
+                {icon || <Shield size={20} color={selected ? activeColor : '#475569'} />}
+            </View>
+            <View className="flex-1">
+                <Text className={`text-lg font-black ${selected ? 'text-white' : 'text-slate-400'}`}>{label}</Text>
+                <Text className={`text-xs font-bold ${selected ? 'text-slate-500' : 'text-slate-600'}`}>{desc}</Text>
+            </View>
+        </View>
+        {selected && (
+            <MotiView from={{ scale: 0 }} animate={{ scale: 1 }} className="w-6 h-6 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-500/50">
+                <Check size={14} color="white" strokeWidth={4} />
+            </MotiView>
+        )}
+    </TouchableOpacity>
+);
