@@ -139,6 +139,12 @@ export interface Session {
     cancellation_reason?: string;
     ai_generated: boolean;
     created_at: string;
+    client?: {
+        id: string;
+        profiles: {
+            full_name: string;
+        };
+    };
 }
 
 export interface Workout {

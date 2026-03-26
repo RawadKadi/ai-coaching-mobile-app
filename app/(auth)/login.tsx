@@ -96,10 +96,10 @@ export default function LoginScreen() {
               {/* Form Matrix */}
               <View>
                 <View className="mb-6">
-                  <View className="bg-slate-900/50 border border-slate-900 rounded-[32px] px-6 py-5 flex-row items-center gap-4">
+                  <View className="bg-slate-900/50 border border-slate-900 rounded-[32px] px-6 py-2 flex-row items-center gap-4">
                     <Mail size={20} color="#64748B" />
                     <TextInput
-                      className="flex-1 text-white font-bold text-lg"
+                      className="flex-1 text-white text-2xl  h-14"
                       placeholder="Email"
                       placeholderTextColor="#64748B"
                       value={email}
@@ -112,10 +112,10 @@ export default function LoginScreen() {
                 </View>
 
                 <View className="mb-8">
-                  <View className="bg-slate-900/50 border border-slate-900 rounded-[32px] px-6 py-5 flex-row items-center gap-4">
+                  <View className="bg-slate-900/50 border border-slate-900 rounded-[32px] px-6 py-2 flex-row items-center gap-4">
                     <Lock size={20} color="#64748B" />
                     <TextInput
-                      className="flex-1 text-white font-bold text-lg"
+                      className="flex-1 text-white text-2xl h-14"
                       placeholder="Password"
                       placeholderTextColor="#64748B"
                       value={password}

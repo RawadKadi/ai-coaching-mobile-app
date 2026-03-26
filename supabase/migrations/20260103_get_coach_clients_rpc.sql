@@ -4,13 +4,15 @@ CREATE OR REPLACE FUNCTION get_coach_clients(
 )
 RETURNS TABLE (
   id UUID,
-  full_name TEXT
+  full_name TEXT,
+  avatar_url TEXT
 ) AS $$
 BEGIN
   RETURN QUERY
   SELECT 
     c.id,
-    p.full_name
+    p.full_name,
+    p.avatar_url
   FROM clients c
   JOIN coach_client_links ccl ON c.id = ccl.client_id
   JOIN profiles p ON c.user_id = p.id

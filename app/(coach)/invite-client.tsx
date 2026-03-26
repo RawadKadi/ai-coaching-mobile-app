@@ -2,26 +2,37 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   Alert,
   Share,
-  SafeAreaView,
   TextInput,
-  Clipboard,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { Link, QrCode, Copy, MessageCircle, Mail, Calendar, Users } from 'lucide-react-native';
+import { MotiView, AnimatePresence } from 'moti';
+import { 
+  Link as LinkIcon, 
+  QrCode, 
+  Copy, 
+  MessageCircle, 
+  Mail, 
+  Calendar, 
+  ArrowLeft,
+  Check,
+  Zap,
+  Smartphone,
+  Users
+} from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { generateInviteCode } from '@/lib/brand-service';
-import { BrandedHeader } from '@/components/BrandedHeader';
-import { BrandedButton } from '@/components/BrandedButton';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function InviteClientScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { coach } = useAuth();
   const { brand } = useBrand();
   const { primary, secondary } = useBrandColors();
@@ -32,6 +43,7 @@ export default function InviteClientScreen() {
   const [maxUses, setMaxUses] = useState('1');
   const [expiresInDays, setExpiresInDays] = useState('7');
   const [unlimited, setUnlimited] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleGenerate = async () => {
     if (!coach?.id) {
@@ -55,7 +67,6 @@ export default function InviteClientScreen() {
 
       if (result.success && result.code) {
         setInviteCode(result.code);
-        Alert.alert('Success!', 'Invite code generated successfully');
       } else {
         Alert.alert('Error', result.error || 'Failed to generate invite code');
       }
@@ -68,57 +79,30 @@ export default function InviteClientScreen() {
   };
 
   const getInviteLink = () => {
-    // ✅ CONNECTED TO VERCEL LANDING PAGE!
     const PRODUCTION_DOMAIN = 'https://ai-coach-app-landing-page.vercel.app';
-    
-    // 🧪 TEMPORARILY DISABLED FOR TESTING
-    // Uncomment the __DEV__ check before publishing to production!
-    // if (__DEV__) {
-    //   return `coachingapp://signup?invite=${inviteCode}`;
-    // }
-    
-    // Always use HTTPS link for testing
     return `${PRODUCTION_DOMAIN}/join/${inviteCode}`;
   };
 
   const handleCopyLink = async () => {
-    Clipboard.setString(getInviteLink());
-    Alert.alert('Copied!', 'Invite link copied to clipboard');
+    await Clipboard.setStringAsync(getInviteLink());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShareWhatsApp = async () => {
-    const message = `Join ${brand?.name || 'my coaching program'}! 💪\n\nClick here to get started:\n${getInviteLink()}`;
+  const shareInvite = async (type: 'whatsapp' | 'email' | 'sms' | 'generic') => {
+    const link = getInviteLink();
+    const brandName = brand?.name || 'my coaching program';
     
+    let message = `Join ${brandName}! 💪\n\nClick here to get started:\n${link}`;
+    
+    if (type === 'email') {
+      message = `You're invited to join ${brandName}!\n\nClick the link below to get started:\n${link}\n\nLooking forward to working with you!`;
+    }
+
     try {
       await Share.share({
         message,
-        title: 'Coaching Invite',
-      });
-    } catch (error) {
-      console.error('Share error:', error);
-    }
-  };
-
-  const handleShareEmail = async () => {
-    const subject = `Join ${brand?.name || 'My Coaching Program'}`;
-    const body = `You're invited to join ${brand?.name || 'my coaching program'}!\n\nClick the link below to get started:\n${getInviteLink()}\n\nLooking forward to working with you!`;
-    
-    try {
-      await Share.share({
-        message: body,
-        title: subject,
-      });
-    } catch (error) {
-      console.error('Share error:', error);
-    }
-  };
-
-  const handleShareSMS = async () => {
-    const message = `Join ${brand?.name || 'my coaching'}! ${getInviteLink()}`;
-    
-    try {
-      await Share.share({
-        message,
+        title: type === 'email' ? `Join ${brandName}` : 'Coaching Invite',
       });
     } catch (error) {
       console.error('Share error:', error);
@@ -126,380 +110,256 @@ export default function InviteClientScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <BrandedHeader
-        title="Invite Client"
-        showBackButton
-        onBackPress={() => router.back()}
-      />
+    <View className="flex-1 bg-slate-950">
+      {/* Header */}
+      <View 
+        style={{ paddingTop: insets.top + 16 }} 
+        className="px-6 pb-6 flex-row items-center gap-4 border-b border-white/5 bg-slate-950"
+      >
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          className="p-2 bg-slate-900 rounded-full border border-white/5"
+        >
+          <ArrowLeft size={20} color="#94A3B8" />
+        </TouchableOpacity>
+        <View>
+            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Growth Center</Text>
+            <Text className="text-white text-xl font-black tracking-tight">Invite New Athlete</Text>
+        </View>
+      </View>
 
-      <ScrollView style={styles.content}>
-        {/* Invite Settings */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Invite Settings</Text>
+      <ScrollView 
+        className="flex-1" 
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero Section */}
+        <MotiView
+          from={{ opacity: 0, translateY: 20 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          className="mx-6 mt-8 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden"
+        >
+            <View className="absolute top-0 right-0 p-4 opacity-10">
+                <Users size={120} color="#3B82F6" />
+            </View>
+            <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
+                <Zap size={36} color="white" fill="white" />
+            </View>
+            <Text className="text-white text-2xl font-black text-center tracking-tighter">Expand Your Roster</Text>
+            <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
+                Generate a secure, personalized invite link to onboard new clients directly into your performance ecosystem.
+            </Text>
+        </MotiView>
+
+        {/* Invite Settings Card */}
+        <MotiView
+           from={{ opacity: 0, scale: 0.95 }}
+           animate={{ opacity: 1, scale: 1 }}
+           transition={{ delay: 100 }}
+           className="mx-6 mt-8 p-8 rounded-[40px] bg-slate-900/40 border border-white/5 shadow-2xl"
+        >
+          <View className="flex-row items-center gap-2 mb-8">
+            <View className="w-8 h-8 rounded-xl bg-slate-950 items-center justify-center border border-white/5">
+                <Smartphone size={16} color="#3B82F6" />
+            </View>
+            <Text className="text-white text-lg font-black tracking-tight">Access Control</Text>
+          </View>
           
-          {/* Max Uses */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Maximum Uses</Text>
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }, unlimited && styles.inputDisabled]}
-                value={maxUses}
-                onChangeText={setMaxUses}
-                keyboardType="number-pad"
-                editable={!unlimited}
-                placeholder="1"
-                placeholderTextColor={theme.colors.textTertiary}
-              />
+          {/* Max Uses Selector */}
+          <View className="mb-8">
+            <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Maximum Redemptions</Text>
+                {unlimited && <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">∞ Unlimited</Text>}
+            </View>
+            
+            <View className="flex-row gap-3">
+              <View className={`flex-1 flex-row items-center h-16 rounded-2xl border-2 px-4 transition-all ${unlimited ? 'border-slate-800 bg-slate-950/50' : 'border-blue-600/50 bg-slate-950'}`}>
+                <TextInput
+                  value={maxUses}
+                  onChangeText={setMaxUses}
+                  keyboardType="number-pad"
+                  editable={!unlimited}
+                  placeholder="1"
+                  placeholderTextColor="#475569"
+                  className={`flex-1 font-black text-xl ${unlimited ? 'text-slate-700' : 'text-white'}`}
+                />
+                {!unlimited && <Users size={20} color="#3B82F6" />}
+              </View>
+              
               <TouchableOpacity
-                style={[styles.checkbox, unlimited && styles.checkboxActive]}
                 onPress={() => setUnlimited(!unlimited)}
+                className={`w-32 h-16 rounded-2xl items-center justify-center border-2 ${unlimited ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-500/30' : 'bg-slate-950 border-slate-800'}`}
               >
-                <Text style={[styles.checkboxText, unlimited && styles.checkboxTextActive, { fontFamily: theme.typography.fontFamily }]}>
+                <Text className={`font-black text-xs uppercase tracking-widest ${unlimited ? 'text-white' : 'text-slate-500'}`}>
                   Unlimited
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Expiration */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Expires In (Days)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border, color: theme.colors.text }]}
-              value={expiresInDays}
-              onChangeText={setExpiresInDays}
-              keyboardType="number-pad"
-              placeholder="7"
-              placeholderTextColor={theme.colors.textTertiary}
-            />
+          {/* Expiration Settings */}
+          <View className="mb-10">
+            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4">Link Longevity (Days)</Text>
+            <View className="flex-row items-center h-16 rounded-2xl border-2 border-slate-800 bg-slate-950 px-4">
+              <TextInput
+                value={expiresInDays}
+                onChangeText={setExpiresInDays}
+                keyboardType="number-pad"
+                placeholder="7"
+                placeholderTextColor="#475569"
+                className="flex-1 font-black text-xl text-white"
+              />
+              <Calendar size={20} color="#94A3B8" />
+            </View>
           </View>
 
-          {/* Generate Button */}
-          <BrandedButton
-            title="Generate Invite Code"
-            variant="primary"
+          {/* Strategic Action Button */}
+          <TouchableOpacity
             onPress={handleGenerate}
-            loading={loading}
             disabled={loading}
-            icon={<QrCode size={20} color="#FFFFFF" />}
-            style={styles.generateButton}
+            className={`h-18 py-5 rounded-[24px] flex-row items-center justify-center gap-3 ${loading ? 'bg-slate-800' : 'bg-blue-600 shadow-2xl shadow-blue-500/50'}`}
+          >
+            {loading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <QrCode size={22} color="white" strokeWidth={2.5} />
+                <Text className="text-white font-black text-lg tracking-tight">Deploy Invite Link</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </MotiView>
+
+        {/* Generated Invite Presence */}
+        <AnimatePresence>
+          {inviteCode && (
+            <MotiView
+              from={{ opacity: 0, translateY: 20, scale: 0.9 }}
+              animate={{ opacity: 1, translateY: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="mx-6 mt-8 rounded-[48px] overflow-hidden"
+            >
+              <View className="p-1 bg-white/5 border border-white/10 rounded-[48px]">
+                <View className="bg-slate-900 rounded-[44px] p-8 border border-white/5">
+                  <View className="flex-row items-center justify-between mb-8">
+                     <View className="flex-row items-center gap-3">
+                        <View className="w-10 h-10 rounded-2xl bg-emerald-500/10 items-center justify-center border border-emerald-500/20">
+                            <LinkIcon size={20} color="#10B981" />
+                        </View>
+                        <View>
+                            <Text className="text-white font-black text-base tracking-tight">Live Invite Link</Text>
+                            <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Active & Ready</Text>
+                        </View>
+                     </View>
+                     <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-white/5">
+                        <Text className="text-slate-500 font-mono text-xs">{inviteCode}</Text>
+                     </View>
+                  </View>
+
+                  {/* Copy Link Terminal Style */}
+                  <TouchableOpacity 
+                    onPress={handleCopyLink}
+                    className="bg-slate-950 p-6 rounded-3xl border border-white/5 mb-8 flex-row items-center justify-between"
+                  >
+                    <Text className="text-slate-400 font-mono text-xs flex-1 mr-4" numberOfLines={1}>
+                        {getInviteLink()}
+                    </Text>
+                    <MotiView animate={{ scale: copied ? 1.2 : 1 }}>
+                        {copied ? <Check size={20} color="#10B981" /> : <Copy size={20} color="#3B82F6" />}
+                    </MotiView>
+                  </TouchableOpacity>
+
+                  {/* High Intensity Share Grid */}
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Distribution Channels</Text>
+                  <View className="flex-row gap-3">
+                    <ShareButton 
+                       icon={<MessageCircle size={24} color="white" fill="#25D366" />} 
+                       bg="bg-emerald-600/10"
+                       borderColor="border-emerald-500/20"
+                       onPress={() => shareInvite('whatsapp')} 
+                    />
+                    <ShareButton 
+                       icon={<Mail size={24} color="#F87171" />} 
+                       bg="bg-red-500/10"
+                       borderColor="border-red-500/20"
+                       onPress={() => shareInvite('email')} 
+                    />
+                    <ShareButton 
+                       icon={<MessageCircle size={24} color="#3B82F6" />} 
+                       bg="bg-blue-600/10"
+                       borderColor="border-blue-500/20"
+                       onPress={() => shareInvite('sms')} 
+                    />
+                  </View>
+
+                  <View className="h-px bg-white/5 my-8" />
+
+                  <View className="flex-row items-center gap-4 px-2">
+                    <Calendar size={18} color="#475569" />
+                    <Text className="text-slate-500 font-black text-[10px] uppercase tracking-widest flex-1">
+                      {unlimited ? 'Infinite capacity' : `Limit: ${maxUses} Uses`} • Valid for {expiresInDays} Days
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </MotiView>
+          )}
+        </AnimatePresence>
+
+        {/* Onboarding Logic Section */}
+        <View className="px-6 mt-12 mb-12">
+          <View className="flex-row items-end justify-between mb-8">
+            <Text className="text-white text-2xl font-black tracking-tighter">Onboarding Process</Text>
+            <View className="w-12 h-0.5 bg-blue-600 rounded-full mb-3" />
+          </View>
+          
+          <StepItem 
+            number="01" 
+            title="Configure Secure Token" 
+            desc="Set usage limits and expiration parameters for client link." 
+          />
+          <StepItem 
+            number="02" 
+            title="Strategic Deployment" 
+            desc="Share the personalized link via high-conversion channels." 
+          />
+          <StepItem 
+            number="03" 
+            title="Neural Sync" 
+            desc="Athlete creates identity and automatically syncs to your roster." 
+          />
+          <StepItem 
+            number="04" 
+            title="Ready for Performance" 
+            desc="Commence tracking, strategy generation, and performance coaching." 
+            isLast
           />
         </View>
-
-        {/* Generated Invite */}
-        {inviteCode && (
-          <View style={[styles.inviteCard, { borderColor: primary, backgroundColor: theme.colors.surface }]}>
-            <View style={styles.inviteHeader}>
-              <Link size={24} color={primary} />
-              <Text style={[styles.inviteTitle, { fontFamily: theme.typography.fontFamily }]}>Your Invite Link</Text>
-            </View>
-
-            {/* Invite Code */}
-            <View style={styles.codeBox}>
-              <Text style={[styles.codeLabel, { fontFamily: theme.typography.fontFamily }]}>Code:</Text>
-              <Text style={[styles.codeText, { fontFamily: theme.typography.fontFamily }]}>{inviteCode}</Text>
-            </View>
-
-            {/* Full Link */}
-            <View style={styles.linkBox}>
-              <Text style={styles.linkText} numberOfLines={1}>
-                {getInviteLink()}
-              </Text>
-            </View>
-
-            {/* Copy Button */}
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: `${primary}15` }]}
-              onPress={handleCopyLink}
-            >
-              <Copy size={18} color={primary} />
-              <Text style={[styles.actionButtonText, { color: primary, fontFamily: theme.typography.fontFamily }]}>
-                Copy Link
-              </Text>
-            </TouchableOpacity>
-
-            {/* Share Options */}
-            <Text style={[styles.shareTitle, { fontFamily: theme.typography.fontFamily }]}>Share via:</Text>
-            <View style={styles.shareButtons}>
-              <TouchableOpacity
-                style={[styles.shareButton, { backgroundColor: '#25D366' }]}
-                onPress={handleShareWhatsApp}
-              >
-                <MessageCircle size={20} color="#FFFFFF" />
-                <Text style={[styles.shareButtonText, { fontFamily: theme.typography.fontFamily }]}>WhatsApp</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.shareButton, { backgroundColor: '#EA4335' }]}
-                onPress={handleShareEmail}
-              >
-                <Mail size={20} color="#FFFFFF" />
-                <Text style={[styles.shareButtonText, { fontFamily: theme.typography.fontFamily }]}>Email</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.shareButton, { backgroundColor: secondary }]}
-                onPress={handleShareSMS}
-              >
-                <MessageCircle size={20} color="#FFFFFF" />
-                <Text style={[styles.shareButtonText, { fontFamily: theme.typography.fontFamily }]}>SMS</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Info */}
-            <View style={styles.infoBox}>
-              <Calendar size={16} color="#6B7280" />
-              <Text style={[styles.infoText, { fontFamily: theme.typography.fontFamily }]}>
-                {unlimited ? 'Unlimited' : maxUses} use(s) • Expires in {expiresInDays} days
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* How It Works */}
-        <View style={[styles.howItWorks, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.howTitle, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>How It Works:</Text>
-          <View style={styles.step}>
-            <View style={[styles.stepNumber, { backgroundColor: primary }]}>
-              <Text style={styles.stepNumberText}>1</Text>
-            </View>
-            <Text style={[styles.stepText, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>
-              Generate an invite code with your preferred settings
-            </Text>
-          </View>
-          <View style={styles.step}>
-            <View style={[styles.stepNumber, { backgroundColor: primary }]}>
-              <Text style={styles.stepNumberText}>2</Text>
-            </View>
-            <Text style={[styles.stepText, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>
-              Share the link via WhatsApp, email, or SMS
-            </Text>
-          </View>
-          <View style={styles.step}>
-            <View style={[styles.stepNumber, { backgroundColor: primary }]}>
-              <Text style={styles.stepNumberText}>3</Text>
-            </View>
-            <Text style={[styles.stepText, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>
-              Client clicks link, creates account, and joins your program
-            </Text>
-          </View>
-          <View style={styles.step}>
-            <View style={[styles.stepNumber, { backgroundColor: primary }]}>
-              <Text style={styles.stepNumberText}>4</Text>
-            </View>
-            <Text style={[styles.stepText, { color: theme.colors.textOnSurface, fontFamily: theme.typography.fontFamily }]}>
-              They're automatically added to your client list!
-            </Text>
-          </View>
-        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#111827',
-  },
-  inputDisabled: {
-    backgroundColor: '#F3F4F6',
-    color: '#9CA3AF',
-  },
-  checkbox: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxActive: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
-  },
-  checkboxText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  checkboxTextActive: {
-    color: '#3B82F6',
-  },
-  generateButton: {
-    marginTop: 8,
-  },
-  inviteCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    borderWidth: 2,
-  },
-  inviteHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  inviteTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  codeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-  },
-  codeLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginRight: 8,
-  },
-  codeText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    fontFamily: 'monospace',
-  },
-  linkBox: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  linkText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontFamily: 'monospace',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    gap: 8,
-    marginBottom: 20,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  shareTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
-  },
-  shareButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  shareButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 12,
-    gap: 6,
-  },
-  shareButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  howItWorks: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 32,
-  },
-  howTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  stepNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  stepNumberText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  stepText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 20,
-    paddingTop: 4,
-  },
-});
+const ShareButton = ({ icon, onPress, bg, borderColor }: any) => (
+    <TouchableOpacity 
+      onPress={onPress}
+      className={`flex-1 h-16 rounded-[22px] items-center justify-center border ${bg} ${borderColor}`}
+    >
+      {icon}
+    </TouchableOpacity>
+);
+
+const StepItem = ({ number, title, desc, isLast }: any) => (
+    <View className="flex-row gap-6 mb-8 flex-1">
+        <View className="items-center">
+            <View className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5">
+                <Text className="text-blue-500 font-black text-base">{number}</Text>
+            </View>
+            {!isLast && <View className="w-0.5 flex-1 bg-slate-900 my-2" />}
+        </View>
+        <View className="flex-1 mt-1">
+            <Text className="text-white font-black text-lg tracking-tight mb-1">{title}</Text>
+            <Text className="text-slate-500 text-sm font-medium leading-5">{desc}</Text>
+        </View>
+    </View>
+);

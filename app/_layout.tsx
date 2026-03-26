@@ -1,5 +1,5 @@
 import 'react-native-reanimated';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
@@ -13,13 +13,20 @@ import NotificationToast from '@/components/NotificationToast';
 import { loadNotificationSound, unloadNotificationSound } from '@/lib/notification-sound';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
-
 function RootLayoutNav() {
   const { session, loading, profile } = useAuth();
   const segments = useSegments() as string[];
   const router = useRouter();
   const { activeToast, dismissToast } = useNotification();
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    if (!loading && profile) {
+      setHasMounted(true);
+    }
+  }, [loading, profile]);
 
   useEffect(() => {
     if (loading) return;
@@ -59,9 +66,9 @@ function RootLayoutNav() {
     }
   }, [session, loading, segments, profile]);
 
-  if (loading) {
+  if (loading && !hasMounted) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -117,15 +124,17 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <BrandProvider>
-          <UnreadProvider>
-            <NotificationProvider>
-              <RootLayoutNav />
-            </NotificationProvider>
-          </UnreadProvider>
-        </BrandProvider>
-      </AuthProvider>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <BrandProvider>
+            <UnreadProvider>
+              <NotificationProvider>
+                <RootLayoutNav />
+              </NotificationProvider>
+            </UnreadProvider>
+          </BrandProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

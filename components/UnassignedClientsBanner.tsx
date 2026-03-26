@@ -24,11 +24,9 @@ export function UnassignedClientsBanner() {
     }
   };
 
-  useFocusEffect(
-    React.useCallback(() => {
-      checkUnassigned();
-    }, [coach?.id])
-  );
+  useEffect(() => {
+    checkUnassigned();
+  }, [coach?.id]);
 
   if (unassignedCount === 0) return null;
 

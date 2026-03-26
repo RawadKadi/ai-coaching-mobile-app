@@ -169,10 +169,10 @@ export default function SignUpScreen() {
 
 const InputField = ({ icon, placeholder, value, onChange, secure, keyboardType }: any) => (
   <View className="mb-6">
-    <View className="bg-slate-900/50 border border-slate-900 rounded-[28px] px-6 py-4 flex-row items-center gap-4">
+    <View className="bg-slate-900/50 border border-slate-900 rounded-[28px] px-6 py-2 flex-row items-center gap-4">
       {icon}
       <TextInput
-        className="flex-1 text-white font-bold text-lg"
+        className="flex-1 text-white text-2xl h-14"
         placeholder={placeholder}
         placeholderTextColor="#64748B"
         value={value}

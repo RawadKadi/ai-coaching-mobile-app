@@ -59,16 +59,16 @@ export function ChatInputBar({
 
   React.useEffect(() => {
     if (replyingTo) {
-      Animated.spring(replyAnim, {
+      Animated.timing(replyAnim, {
         toValue: 1,
+        duration: 50, // Instant feel
         useNativeDriver: true,
-        tension: 180, // Much higher tension for instant feel
-        friction: 10, // Lower friction for snappiness
+        easing: Easing.out(Easing.quad),
       }).start();
     } else {
       Animated.timing(replyAnim, {
         toValue: 0,
-        duration: 150, // Faster close
+        duration: 100, // Quick close
         useNativeDriver: true,
         easing: Easing.out(Easing.quad),
       }).start();

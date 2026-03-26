@@ -219,7 +219,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         )}
                         <View>
                             <Text className="text-white text-xl font-bold">AI Scheduler</Text>
-                            <Text className="text-slate-500 text-xs">Setup sessions with {clientContext.name}</Text>
+                            <Text className="text-slate-500 text-xs">Setup sessions with {clientContext?.name || 'Athlete'}</Text>
                         </View>
                     </View>
                     <TouchableOpacity onPress={() => { resetForm(); onClose(); }} className="p-2 bg-slate-900 rounded-full">
@@ -235,7 +235,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                       className="flex-1 px-6 pt-8"
                     >
                         <Text className="text-slate-400 text-sm font-medium mb-6 leading-relaxed">
-                            Describe the training plan for {clientContext.name.split(' ')[0]}.
+                            Describe the training plan for {(clientContext?.name || 'the athlete').split(' ')[0]}.
                         </Text>
                         
                         <View className="bg-slate-900/50 rounded-3xl border border-slate-800 p-6 min-h-[200px]">

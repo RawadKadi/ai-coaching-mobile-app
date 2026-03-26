@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, RefreshControl, StatusBar } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, RefreshControl, StatusBar, TextInput, Pressable } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { ChevronRight, MessageCircle, Users, Zap, Search, Bell } from 'lucide-react-native';
+import { ChevronRight, MessageCircle, Users, Zap, Search, Bell, X } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,7 +19,7 @@ type CoachPreview = {
 type Tab = 'clients' | 'team';
 
 export default function CoachMessagesScreen() {
-
+  const router = useRouter();
   const { coach, user } = useAuth();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<Tab>('clients');
@@ -28,10 +28,13 @@ export default function CoachMessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [teamUnreadCount, setTeamUnreadCount] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    if (coach) { loadClients(); loadTeammates(); }
-  }, [coach]);
+  const filteredClients = clients.filter(c => c.full_name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredTeammates = teammates.filter(t => t.full_name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  // Note: Initial data loading is handled by useFocusEffect below
 
   useEffect(() => {
     if (!user?.id) return;
@@ -127,31 +130,56 @@ export default function CoachMessagesScreen() {
                 <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[4px] mb-2">Message Center</Text>
                 <Text className="text-white text-4xl font-black tracking-tighter">Messages</Text>
             </View>
-            <TouchableOpacity className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5">
-                <Search size={22} color="#64748B" />
+            <TouchableOpacity 
+              onPress={() => {
+                setIsSearching(!isSearching);
+                if (isSearching) setSearchQuery('');
+              }}
+              className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5"
+            >
+                {isSearching ? <X size={22} color="#EF4444" /> : <Search size={22} color="#64748B" />}
             </TouchableOpacity>
           </View>
+
+          {/* Search Bar */}
+          {isSearching && (
+            <View className="px-6 mb-6">
+              <View className="flex-row items-center bg-slate-900/80 rounded-3xl px-4 py-2 border border-white/10 shadow-2xl">
+                <Search size={20} color="#3B82F6" />
+                <TextInput
+                  autoFocus
+                  placeholder={`Search ${activeTab === 'clients' ? 'clients' : 'team'}...`}
+                  placeholderTextColor="#475569"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  className="flex-1 text-white text-2xl ml-3 h-10"
+                />
+              </View>
+            </View>
+          )}
 
           {/* Tab Switch */}
           <View className="px-6 mb-8">
             <View className="flex-row bg-slate-900/50 rounded-[28px] p-1.5 border border-white/5">
-              <TouchableOpacity
+              <Pressable
                 onPress={() => setActiveTab('clients')}
-                className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'clients' ? 'bg-slate-800 shadow-xl' : ''}`}
+                className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'clients' ? 'bg-slate-800' : ''}`}
+                style={activeTab === 'clients' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
               >
                 <Users size={18} color={activeTab === 'clients' ? '#3B82F6' : '#475569'} />
                 <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'clients' ? 'text-white' : 'text-slate-500'}`}>Clients</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
                 onPress={() => setActiveTab('team')}
-                className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'team' ? 'bg-slate-800 shadow-xl' : ''}`}
+                className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'team' ? 'bg-slate-800' : ''}`}
+                style={activeTab === 'team' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
               >
                 <Zap size={18} color={activeTab === 'team' ? '#3B82F6' : '#475569'} />
                 <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'team' ? 'text-white' : 'text-slate-500'}`}>Team</Text>
                 {teamUnreadCount > 0 && activeTab !== 'team' && (
                   <View className="w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-slate-900" />
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
 
@@ -160,7 +188,7 @@ export default function CoachMessagesScreen() {
             <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View>
           ) : (
             <FlatList
-              data={(activeTab === 'clients' ? clients : teammates) as any[]}
+              data={(activeTab === 'clients' ? filteredClients : filteredTeammates) as any[]}
               renderItem={({ item, index }) => {
                 if ('id' in item) {
                     const c = item as ClientPreview;

@@ -98,13 +98,13 @@ export default function CoachChatScreen() {
       const { data: cData, error: cError } = await supabase.rpc('get_client_details', { target_client_id: id });
       if (cError) throw cError;
       
-      setClientProfile({ profiles: { full_name: cData.full_name, avatar_url: cData.avatar_url, id: cData.id } });
-      setClientUserId(cData.id); // In main logic, id from RPC is the profile/user id
+      setClientProfile(cData);
+      setClientUserId(cData.user_id); // In main logic, user_id from RPC is the profile/user id
 
       // 2. Get messages (between coach-auth-user-id and client-auth-user-id)
       const { data: mData, error: mError } = await supabase.from('messages')
         .select('*')
-        .or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${cData.id}),and(sender_id.eq.${cData.id},recipient_id.eq.${profile?.id})`)
+        .or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${cData.user_id}),and(sender_id.eq.${cData.user_id},recipient_id.eq.${profile?.id})`)
         .order('created_at', { ascending: false });
       
       if (mError) throw mError;
@@ -114,7 +114,7 @@ export default function CoachChatScreen() {
       const channel = supabase.channel(`coach-convo-${id}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
           const nm = p.new as Message;
-          if (nm.sender_id === cData.id || nm.sender_id === profile?.id) {
+          if (nm.sender_id === cData.user_id || nm.sender_id === profile?.id) {
             setMessages(prev => [nm, ...prev]);
             if (nm.sender_id !== profile?.id) markAsRead(nm.id);
           }
@@ -137,7 +137,7 @@ export default function CoachChatScreen() {
   const sendMessage = async (text: string, replyId?: string) => {
     if (!profile || !clientUserId || !text.trim()) return;
     setSending(true);
-    const msg = { sender_id: profile.id, recipient_id: clientUserId, content: text, read: false, reply_to_id: replyId, ai_generated: false };
+    const msg = { sender_id: user?.id, recipient_id: clientUserId, content: text, read: false, reply_to_id: replyId, ai_generated: false };
     const { error } = await supabase.from('messages').insert(msg);
     if (error) Alert.alert('Error', 'Failed to send');
     setSending(false);
@@ -148,7 +148,7 @@ export default function CoachChatScreen() {
      const idx = messages.findIndex(m => m.id === messageId);
      if (idx !== -1) {
          setHighlightedMessageId(messageId);
-         flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+         flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5, viewOffset: 80 });
          setTimeout(() => setHighlightedMessageId(null), 2000);
      }
   }, [messages]);
@@ -159,21 +159,28 @@ export default function CoachChatScreen() {
 
     return (
         <MotiView 
+            from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
             animate={{ 
                 scale: isHighlighted ? 1.05 : 1,
-                backgroundColor: isHighlighted ? '#60A5FA' : (isMe ? '#2563EB' : '#1E293B') 
+                backgroundColor: isHighlighted 
+                    ? (isMe ? '#60A5FA' : '#475569') // High-contrast light blink
+                    : (isMe ? theme.colors.primary : '#334155') 
             }}
-            transition={{ type: 'spring', damping: 15 }}
+            transition={{ type: 'timing', duration: 250 }}
             className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-            style={{ maxWidth: '85%' }}
+            style={{ 
+                maxWidth: '85%',
+                minWidth: isMe ? 0 : 120, // Lengthier received bubbles
+                backgroundColor: isMe ? theme.colors.primary : '#334155' 
+            }}
         >
           {repliedMsg && (
              <TouchableOpacity 
                 activeOpacity={0.8}
                 onPress={() => scrollToMessage(item.reply_to_id!)}
-                className="bg-black/20 px-3 py-2 rounded-2xl mb-2 border-l-2 border-white/30"
+                className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
              >
-                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === profile?.id ? 'You' : 'Client'}</Text>
+                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Client'}</Text>
                 <Text className="text-white/80 text-xs" numberOfLines={1}>{repliedMsg.content}</Text>
              </TouchableOpacity>
           )}
@@ -187,10 +194,10 @@ export default function CoachChatScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.sender_id === profile?.id;
+    const isMe = item.sender_id === user?.id;
     
-    const renderRightActions = (progress: any, dragX: any) => {
-        const trans = dragX.interpolate({ inputRange: [-100, 0], outputRange: [1, 0], extrapolate: 'clamp' });
+    const renderLeftActions = (progress: any, dragX: any) => {
+        const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
         return (
             <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
                 <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color="#3B82F6" /></Animated.View>
@@ -201,11 +208,14 @@ export default function CoachChatScreen() {
     return (
       <Swipeable
         ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderRightActions={renderRightActions}
-        onSwipeableOpen={() => {
+        renderLeftActions={renderLeftActions}
+        onSwipeableWillOpen={() => {
             setReplyingTo(item);
             swipeableRefs.current[item.id]?.close();
         }}
+        friction={1}
+        overshootLeft={false}
+        enableTrackpadTwoFingerGesture
         containerStyle={{ marginBottom: 16 }}
       >
         <TouchableOpacity 
@@ -291,7 +301,10 @@ export default function CoachChatScreen() {
           visible={schedulerVisible}
           onClose={() => setSchedulerVisible(false)}
           onConfirm={async () => { setSchedulerVisible(false); }}
-          clientContext={{ name: clientProfile.profiles?.full_name, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }}
+          clientContext={{ 
+            name: clientProfile?.profiles?.full_name || 'Athlete', 
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone 
+          }}
           existingSessions={[]}
           targetClientId={id as string}
         />

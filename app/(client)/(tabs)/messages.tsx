@@ -171,7 +171,7 @@ export default function ClientMessagesScreen() {
      const idx = messages.findIndex(m => m.id === messageId);
      if (idx !== -1) {
          setHighlightedMessageId(messageId);
-         flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+         flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5, viewOffset: 80 });
          setTimeout(() => setHighlightedMessageId(null), 2000);
      }
   }, [messages]);
@@ -190,19 +190,26 @@ export default function ClientMessagesScreen() {
 
     return (
         <MotiView 
+            from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
             animate={{ 
                 scale: isHighlighted ? 1.05 : 1,
-                backgroundColor: isHighlighted ? '#3B82F6' : (isMe ? '#2563EB' : '#1E293B') 
+                backgroundColor: isHighlighted 
+                    ? (isMe ? '#60A5FA' : '#475569') // High-contrast light blink
+                    : (isMe ? theme.colors.primary : '#334155') 
             }}
-            transition={{ type: 'spring', damping: 15 }}
+            transition={{ type: 'timing', duration: 250 }}
             className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5'} shadow-2xl`}
-            style={{ maxWidth: '85%' }}
+            style={{ 
+                maxWidth: '85%',
+                minWidth: isMe ? 0 : 120, // Lengthier received bubbles
+                backgroundColor: isMe ? theme.colors.primary : '#334155' // Robust fallback
+            }}
         >
           {repliedMsg && (
              <TouchableOpacity 
                 activeOpacity={0.8}
                 onPress={() => scrollToMessage(item.reply_to_id!)}
-                className="bg-black/20 px-3 py-2 rounded-2xl mb-2 border-l-2 border-white/30"
+                className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
              >
                 <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
                 <Text className="text-white/80 text-xs" numberOfLines={1}>{repliedMsg.content}</Text>
@@ -219,8 +226,8 @@ export default function ClientMessagesScreen() {
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender_id === user?.id;
-    const renderRightActions = (progress: any, dragX: any) => {
-        const trans = dragX.interpolate({ inputRange: [-100, 0], outputRange: [1, 0], extrapolate: 'clamp' });
+    const renderLeftActions = (progress: any, dragX: any) => {
+        const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
         return (
             <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
                 <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color="#3B82F6" /></Animated.View>
@@ -231,11 +238,14 @@ export default function ClientMessagesScreen() {
     return (
       <Swipeable
         ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderRightActions={renderRightActions}
-        onSwipeableOpen={() => {
+        renderLeftActions={renderLeftActions}
+        onSwipeableWillOpen={() => {
             setReplyingTo(item);
             swipeableRefs.current[item.id]?.close();
         }}
+        friction={1}
+        overshootLeft={false}
+        enableTrackpadTwoFingerGesture
         containerStyle={{ marginBottom: 16 }}
       >
         <TouchableOpacity 
