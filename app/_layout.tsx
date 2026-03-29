@@ -87,9 +87,6 @@ function RootLayoutNav() {
       <StatusBar style="auto" />
       {/* Global overlays — rendered after Stack so navigation context is available */}
       <NotificationToastWrapper router={router} />
-      <SessionMonitor />
-      <TeamInvitationMonitor />
-      <UnassignedClientsBanner />
     </>
   );
 }

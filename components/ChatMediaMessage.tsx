@@ -8,17 +8,29 @@ import Slider from '@react-native-community/slider';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '@/contexts/BrandContext';
-import { FileText, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X } from 'lucide-react-native';
+import { FileText, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target } from 'lucide-react-native';
 import { ChatReplyContext } from './ChatReplyContext';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type MediaContent = {
-  type: 'image' | 'video' | 'document' | 'gif';
-  url: string;
+  type: 'image' | 'video' | 'document' | 'gif' | 'challenge_completed' | 'task_completion';
+  url?: string;
   previewUrl?: string;
   fileName?: string;
   mimeType?: string;
+  // Challenge fields
+  title?: string;
+  taskName?: string;
+  taskDescription?: string;
+  completedAt?: string;
+  focusType?: string;
+  intensity?: string;
+  // Protocol Task fields
+  isCompletion?: boolean;
+  clientName?: string;
+  description?: string;
+  timestamp?: string;
 };
 
 interface Props {
@@ -466,6 +478,100 @@ function CustomImagePlayer({
   );
 }
 
+function ChallengeCompletedCard({ media, isOwn }: { media: MediaContent, isOwn: boolean }) {
+  const theme = useTheme();
+  
+  const intensityColor = (intensity?: string) => {
+    switch(intensity?.toLowerCase()) {
+      case 'high': return '#EF4444'; // Red
+      case 'medium': return '#F59E0B'; // Amber
+      case 'low': return '#10B981'; // Emerald
+      default: return '#64748B';
+    }
+  };
+
+  return (
+    <View style={[
+      styles.challengeCard,
+      { backgroundColor: '#0F172A', borderColor: 'rgba(16, 185, 129, 0.2)' }
+    ]}>
+      <View style={styles.challengeHeader}>
+        <View style={styles.challengeIconBox}>
+          <Trophy size={18} color="#10B981" />
+        </View>
+        <Text style={[styles.challengeTitle, { fontFamily: theme.typography.fontFamily }]}>
+          Protocol Achieved
+        </Text>
+      </View>
+
+      <View style={styles.challengeBody}>
+        <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>
+          {media.taskName || 'Daily Mission'}
+        </Text>
+        
+        <View style={styles.challengeDetailsRow}>
+           <View style={styles.challengeDetailItem}>
+             <Target size={12} color="#94A3B8" />
+             <Text style={styles.challengeDetailText}>{media.focusType || 'Training'}</Text>
+           </View>
+           <View style={[styles.challengeDetailItem, { marginLeft: 12 }]}>
+             <Zap size={12} color={intensityColor(media.intensity)} />
+             <Text style={[styles.challengeDetailText, { color: intensityColor(media.intensity) }]}>
+               {media.intensity || 'Normal'}
+             </Text>
+           </View>
+        </View>
+
+        {media.taskDescription ? (
+          <Text style={styles.challengeDesc} numberOfLines={2}>{media.taskDescription}</Text>
+        ) : null}
+      </View>
+
+      <View style={styles.challengeFooter}>
+        <Text style={styles.challengeFooterText}>
+          Completed at {media.completedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function TaskCompletedCard({ media }: { media: MediaContent }) {
+  const theme = useTheme();
+  
+  return (
+    <View style={[
+      styles.challengeCard,
+      { backgroundColor: '#0F172A', borderColor: 'rgba(59, 130, 246, 0.2)' } // Slightly different blue border for tasks
+    ]}>
+      <View style={styles.challengeHeader}>
+        <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
+          <Check size={18} color="#3B82F6" />
+        </View>
+        <Text style={[styles.challengeTitle, { color: '#3B82F6', fontFamily: theme.typography.fontFamily }]}>
+          Task Completed
+        </Text>
+      </View>
+
+      <View style={styles.challengeBody}>
+        <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>
+          {media.taskName || 'Protocol Task'}
+        </Text>
+        
+        {media.description ? (
+          <Text style={styles.challengeDesc} numberOfLines={2}>{media.description}</Text>
+        ) : null}
+      </View>
+
+      <View style={styles.challengeFooter}>
+        <Text style={styles.challengeFooterText}>
+          Completed at {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function ChatMediaMessage({ 
   content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted 
 }: Props) {
@@ -497,7 +603,7 @@ export default function ChatMediaMessage({
     return null;
   }
 
-  if (!media || !['image', 'video', 'document', 'gif'].includes(media.type)) {
+  if (!media || !['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion'].includes(media.type)) {
     return null;
   }
 
@@ -508,7 +614,7 @@ export default function ChatMediaMessage({
       : [styles.theirBubble, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }],
   ];
 
-  if (media.type === 'image' || media.type === 'gif') {
+  if ((media.type === 'image' || media.type === 'gif') && media.url) {
     return (
       <View style={[
         styles.bubble,
@@ -561,7 +667,7 @@ export default function ChatMediaMessage({
     );
   }
 
-  if (media.type === 'video') {
+  if (media.type === 'video' && media.url) {
     return (
       <View style={[
         styles.bubble,
@@ -671,6 +777,32 @@ export default function ChatMediaMessage({
       </TouchableOpacity>
     );
   }
+  
+  if (media.type === 'task_completion') {
+    return (
+      <View style={[
+        styles.bubble,
+        isOwn ? styles.myBubble : styles.theirBubble,
+        { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }
+      ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, borderRadius: 24, zIndex: 10 }]} pointerEvents="none" />
+        <TaskCompletedCard media={media} />
+      </View>
+    );
+  }
+
+  if (media.type === 'challenge_completed') {
+    return (
+      <View style={[
+        styles.bubble,
+        isOwn ? styles.myBubble : styles.theirBubble,
+        { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }
+      ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, borderRadius: 24, zIndex: 10 }]} pointerEvents="none" />
+        <ChallengeCompletedCard media={media} isOwn={isOwn} />
+      </View>
+    );
+  }
 
   return null;
 }
@@ -752,5 +884,84 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '500',
+  },
+  // Challenge Card Styles
+  challengeCard: {
+    width: 260,
+    borderRadius: 24,
+    borderWidth: 1,
+    overflow: 'hidden',
+    padding: 16,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  challengeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  challengeIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  challengeTitle: {
+    color: '#10B981',
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+  challengeBody: {
+    marginBottom: 16,
+  },
+  challengeTaskName: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  challengeDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  challengeDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  challengeDetailText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  challengeDesc: {
+    color: '#64748B',
+    fontSize: 12,
+    marginTop: 10,
+    lineHeight: 18,
+  },
+  challengeFooter: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+    paddingTop: 12,
+  },
+  challengeFooterText: {
+    color: '#475569',
+    fontSize: 10,
+    fontWeight: '600',
   },
 });

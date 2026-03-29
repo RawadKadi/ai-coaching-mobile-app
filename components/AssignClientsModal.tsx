@@ -3,15 +3,17 @@ import {
   View,
   Text,
   Modal,
-  StyleSheet,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { X, Check, UserCheck, AlertTriangle } from 'lucide-react-native';
+import { X, Check, UserCheck, AlertTriangle, Users, Plus, Shield } from 'lucide-react-native';
+import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useBrandColors, useTheme } from '@/contexts/BrandContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BrandedAvatar } from './BrandedAvatar';
 
 interface Client {
   client_id: string;
@@ -20,6 +22,7 @@ interface Client {
   current_coach_id: string | null;
   current_coach_name: string;
   is_assigned: boolean;
+  avatar_url?: string | null;
 }
 
 interface AssignClientsModalProps {
@@ -39,6 +42,7 @@ export function AssignClientsModal({
   onClose,
   onSuccess,
 }: AssignClientsModalProps) {
+  const insets = useSafeAreaInsets();
   const { primary, secondary } = useBrandColors();
   const theme = useTheme();
   
@@ -58,26 +62,15 @@ export function AssignClientsModal({
   const loadClients = async () => {
     try {
       setLoading(true);
-      console.log('[AssignClientsModal] Loading clients for main coach:', mainCoachId);
-      console.log('[AssignClientsModal] Sub-coach to filter out:', subCoachId);
-      
       const { data, error } = await supabase.rpc('get_clients_for_assignment', {
         p_main_coach_id: mainCoachId
       });
 
-      console.log('[AssignClientsModal] RPC response - data:', data);
-      console.log('[AssignClientsModal] RPC response - error:', error);
-
       if (error) throw error;
       
-      // Filter out clients already assigned to this sub-coach
       const availableClients = (data || []).filter(
         (c: Client) => c.current_coach_id !== subCoachId
       );
-      
-      console.log('[AssignClientsModal] Available clients after filter:', availableClients.length);
-      console.log('[AssignClientsModal] Total clients from RPC:', (data || []).length);
-      console.log('[AssignClientsModal] Filtered out:', (data || []).length - availableClients.length);
       
       setClients(availableClients);
     } catch (error: any) {
@@ -98,44 +91,9 @@ export function AssignClientsModal({
     setSelectedClients(newSelection);
   };
 
-  const handleAssign = async () => {
-    if (selectedClients.size === 0) {
-      Alert.alert('No Selection', 'Please select at least one client');
-      return;
-    }
-
-    const selectedClientsList = clients.filter(c => selectedClients.has(c.client_id));
-    const reassignedClients = selectedClientsList.filter(c => c.is_assigned);
-
-    // Show confirmation if there are reassignments
-    if (reassignedClients.length > 0) {
-      const message = reassignedClients.length === 1
-        ? `${reassignedClients[0].client_name} is currently assigned to ${reassignedClients[0].current_coach_name}.\n\nReassign to ${subCoachName}?`
-        : `${reassignedClients.length} clients will be reassigned:\n\n` +
-          reassignedClients.map(c => `• ${c.client_name} (from ${c.current_coach_name})`).join('\n') +
-          `\n\nContinue?`;
-
-      Alert.alert(
-        '⚠️ Reassignment Confirmation',
-        message,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Reassign',
-            style: 'destructive',
-            onPress: () => performAssignment(),
-          },
-        ]
-      );
-    } else {
-      performAssignment();
-    }
-  };
-
   const performAssignment = async () => {
     try {
       setAssigning(true);
-      
       const clientIds = Array.from(selectedClients);
       const { data, error } = await supabase.rpc('assign_clients_to_subcoach', {
         p_main_coach_id: mainCoachId,
@@ -148,60 +106,60 @@ export function AssignClientsModal({
       const result = data as { success: boolean; reassigned_count: number; new_assigned_count: number; total_count: number };
 
       if (result.success) {
-        const message = result.reassigned_count > 0
-          ? `✅ Assigned ${result.total_count} client(s)\n• ${result.new_assigned_count} new\n• ${result.reassigned_count} reassigned`
-          : `✅ Assigned ${result.total_count} client(s)`;
-
-        Alert.alert('Success', message);
+        Alert.alert('Success', `✅ Assigned ${result.total_count} client(s)`);
         onSuccess();
         onClose();
       } else {
         throw new Error('Assignment failed');
       }
     } catch (error: any) {
-      console.error('[AssignClientsModal] Assignment error:', error);
       Alert.alert('Error', error.message || 'Failed to assign clients');
     } finally {
       setAssigning(false);
     }
   };
 
-  const renderClient = ({ item }: { item: Client }) => {
+  const renderClient = ({ item, index }: { item: Client, index: number }) => {
     const isSelected = selectedClients.has(item.client_id);
     
     return (
-      <TouchableOpacity
-        style={[
-          styles.clientCard,
-          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-          isSelected && { borderColor: primary, backgroundColor: `${primary}10` },
-        ]}
-        onPress={() => toggleClient(item.client_id)}
+      <MotiView
+        from={{ opacity: 0, translateY: 10 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ delay: index * 50 }}
+        className="mb-3"
       >
-        <View style={styles.clientInfo}>
-          <View style={[
-            styles.checkbox,
-            { borderColor: isSelected ? primary : '#D1D5DB' },
-            isSelected && { backgroundColor: primary },
-          ]}>
-            {isSelected && <Check size={16} color="#FFFFFF" />}
+        <TouchableOpacity
+          style={{ borderWidth: isSelected ? 2 : 1 }}
+          className={`p-5 rounded-[28px] flex-row items-center gap-4 ${isSelected ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-slate-900/40'}`}
+          onPress={() => toggleClient(item.client_id)}
+        >
+          <View className={`w-6 h-6 rounded-lg border-2 items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-700 bg-slate-950'}`}>
+            {isSelected && <Check size={14} color="white" strokeWidth={3} />}
           </View>
           
-          <View style={styles.clientDetails}>
-            <Text style={[styles.clientName, { color: theme.colors.text }]}>{item.client_name}</Text>
-            <Text style={[styles.clientEmail, { color: theme.colors.textSecondary }]}>{item.client_email}</Text>
+          <BrandedAvatar 
+            name={item.client_name}
+            size={44}
+            imageUrl={item.avatar_url}
+            useBrandColor={true}
+          />
+          
+          <View className="flex-1">
+            <Text className="text-white font-black text-base tracking-tight mb-0.5">{item.client_name}</Text>
+            <Text className="text-slate-500 text-xs font-medium mb-1">{item.client_email}</Text>
             
             {item.is_assigned && (
-              <View style={styles.assignmentBadge}>
-                <UserCheck size={12} color="#F59E0B" />
-                <Text style={styles.assignmentText}>
-                  Currently: {item.current_coach_name}
+              <View className="flex-row items-center gap-1.5 opacity-60">
+                <UserCheck size={10} color="#F59E0B" />
+                <Text className="text-amber-500 text-[8px] font-black uppercase tracking-widest">
+                  Currently with {item.current_coach_name}
                 </Text>
               </View>
             )}
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </MotiView>
     );
   };
 
@@ -212,225 +170,81 @@ export function AssignClientsModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+      <View className="flex-1 bg-slate-950">
+        <View className="px-6 py-6 flex-row items-center justify-between border-b border-white/5">
           <View>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Assign Clients</Text>
-            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>to {subCoachName}</Text>
+            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Growth Center</Text>
+            <Text className="text-white text-xl font-black tracking-tight" numberOfLines={1}>Assign to {subCoachName}</Text>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <X size={24} color={theme.colors.textSecondary} />
+          <TouchableOpacity 
+            onPress={onClose} 
+            className="p-2 bg-slate-900 rounded-full border border-white/5"
+          >
+            <X size={20} color="#94A3B8" />
           </TouchableOpacity>
         </View>
 
-        {/* Content */}
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading clients...</Text>
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator color="#3B82F6" />
+            <Text className="text-slate-500 mt-4 font-bold tracking-widest text-[10px] uppercase">Mapping Identities...</Text>
           </View>
         ) : clients.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <UserCheck size={48} color="#D1D5DB" />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>All Clients Assigned</Text>
-            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-              All available clients are already assigned to {subCoachName}.
+          <View className="flex-1 items-center justify-center p-8">
+            <Shield size={48} color="#1E293B" />
+            <Text className="text-white text-xl font-black text-center mt-6 tracking-tighter">Full Sync Achieved</Text>
+            <Text className="text-slate-500 text-center mt-3 leading-5 font-medium px-4">
+              All eligible athletes are already integrated into {subCoachName}'s roster.
             </Text>
           </View>
         ) : (
-          <>
-            <View style={styles.info}>
-              <AlertTriangle size={16} color="#F59E0B" />
-              <Text style={styles.infoText}>
-                Assigning a client will remove them from their current coach
-              </Text>
-            </View>
+          <View className="flex-1">
+             <View className="px-6 py-4 flex-row items-center gap-3 bg-amber-500/10 border-b border-white/5">
+                <AlertTriangle size={16} color="#F59E0B" />
+                <Text className="text-amber-500 text-[10px] font-black uppercase tracking-widest flex-1">
+                    Assigning will re-route existing coach connections.
+                </Text>
+             </View>
 
-            <FlatList
-              data={clients}
-              renderItem={renderClient}
-              keyExtractor={(item) => item.client_id}
-              contentContainerStyle={styles.list}
-            />
-          </>
+             <FlatList
+               data={clients}
+               renderItem={renderClient}
+               keyExtractor={(item) => item.client_id}
+               contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
+               showsVerticalScrollIndicator={false}
+             />
+          </View>
         )}
 
         {/* Footer */}
-        {!loading && clients.length > 0 && (
-          <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-            <Text style={[styles.selectionCount, { color: theme.colors.textSecondary }]}>
-              {selectedClients.size} selected
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.assignButton,
-                { backgroundColor: primary },
-                (selectedClients.size === 0 || assigning) && styles.assignButtonDisabled,
-              ]}
-              onPress={handleAssign}
-              disabled={selectedClients.size === 0 || assigning}
-            >
-              {assigning ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.assignButtonText}>
-                  Assign {selectedClients.size > 0 ? `(${selectedClients.size})` : ''}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
+        <AnimatePresence>
+            {!loading && clients.length > 0 && (
+                <MotiView 
+                    from={{ translateY: 100 }}
+                    animate={{ translateY: 0 }}
+                    className="absolute bottom-0 left-0 right-0 p-8 bg-slate-950 border-t border-white/5"
+                >
+                    <TouchableOpacity
+                        disabled={selectedClients.size === 0 || assigning}
+                        onPress={performAssignment}
+                        style={{ opacity: (selectedClients.size === 0 || assigning) ? 0.5 : 1 }}
+                        className="h-16 bg-blue-600 rounded-[22px] flex-row items-center justify-center gap-3 shadow-2xl shadow-blue-500/40 border border-white/10"
+                    >
+                        {assigning ? (
+                            <ActivityIndicator color="white" />
+                        ) : (
+                            <>
+                                <Users size={20} color="white" strokeWidth={2.5} />
+                                <Text className="text-white font-black text-lg tracking-tight">
+                                    Finalize Assignment {selectedClients.size > 0 ? `(${selectedClients.size})` : ''}
+                                </Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </MotiView>
+            )}
+        </AnimatePresence>
       </View>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 2,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  closeButton: {
-    padding: 8,
-  },
-  info: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEF3C7',
-    padding: 12,
-    margin: 16,
-    borderRadius: 8,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#92400E',
-  },
-  list: {
-    padding: 16,
-    paddingTop: 0,
-  },
-  clientCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-  },
-  clientInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  clientDetails: {
-    flex: 1,
-  },
-  clientName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  clientEmail: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 6,
-  },
-  assignmentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
-  },
-  assignmentText: {
-    fontSize: 12,
-    color: '#F59E0B',
-    fontWeight: '500',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  selectionCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  assignButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  assignButtonDisabled: {
-    opacity: 0.5,
-  },
-  assignButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

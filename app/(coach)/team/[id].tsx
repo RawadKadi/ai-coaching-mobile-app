@@ -2,15 +2,26 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { UserCheck, Mail, Calendar, Users, TrendingUp, Award, ChevronRight } from 'lucide-react-native';
+import { 
+  UserCheck, 
+  Mail, 
+  Calendar, 
+  Users, 
+  TrendingUp, 
+  Award, 
+  ChevronRight,
+  ArrowLeft,
+  Shield,
+  Trash2,
+  Zap
+} from 'lucide-react-native';
+import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +29,7 @@ import { BrandedHeader } from '@/components/BrandedHeader';
 import { AssignClientsModal } from '@/components/AssignClientsModal';
 import { TerminationSuccessModal } from '@/components/TerminationSuccessModal';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SubCoachDetails {
   coach_id: string;
@@ -37,6 +49,7 @@ interface SubCoachDetails {
 
 export default function SubCoachDetailsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const { coach } = useAuth();
   const { primary, secondary } = useBrandColors();
@@ -57,37 +70,22 @@ export default function SubCoachDetailsScreen() {
   const loadSubCoachDetails = async () => {
     try {
       setLoading(true);
-      
-      console.log('[SubCoachDetails] Loading details for ID:', id);
-      
-      // Use RPC to bypass RLS
       const { data: coachDetailsRaw, error: coachError } = await supabase.rpc('get_subcoach_details', {
         p_coach_id: id
       });
 
-      console.log('[SubCoachDetails] RPC result:', { coachDetailsRaw, coachError });
-
-      if (coachError) {
-        console.error('[SubCoachDetails] RPC error:', coachError);
-        throw coachError;
-      }
+      if (coachError) throw coachError;
       
       if (!coachDetailsRaw) {
         throw new Error('Sub-coach not found. They may not have accepted the invitation yet.');
       }
 
-      // Get assigned clients using RPC (bypasses RLS)
-      console.log('[SubCoachDetails] Fetching clients for coach:', id);
       const { data: clientsRaw, error: clientsError } = await supabase.rpc('get_subcoach_clients', {
         p_coach_id: id
       });
 
-      console.log('[SubCoachDetails] Clients RPC response:', clientsRaw);
-      console.log('[SubCoachDetails] Clients error:', clientsError);
-
       if (clientsError) throw clientsError;
 
-      // Parse the JSON array from RPC
       const formattedClients = (clientsRaw || []).map((client: any) => ({
         id: client.client_id,
         full_name: client.full_name,
@@ -107,10 +105,7 @@ export default function SubCoachDetailsScreen() {
       });
     } catch (error: any) {
       console.error('[SubCoachDetails] Error loading details:', error);
-      Alert.alert(
-        'Error', 
-        error.message || 'Failed to load sub-coach details. They may not have signed up yet.'
-      );
+      Alert.alert('Error', error.message || 'Failed to load sub-coach details.');
       router.back();
     } finally {
       setLoading(false);
@@ -129,8 +124,6 @@ export default function SubCoachDetailsScreen() {
           onPress: async () => {
             try {
               setLoading(true);
-              
-              // Capture clients before termination for the success modal
               const clientsToReassign = subCoach?.clients.map(c => ({
                 id: c.id,
                 full_name: c.full_name,
@@ -145,11 +138,11 @@ export default function SubCoachDetailsScreen() {
               if (error) throw error;
 
               setUnassignedClients(clientsToReassign);
-              setLoading(false); // Stop loading to allow modal to show
+              setLoading(false);
               setShowSuccessModal(true);
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to terminate sub-coach');
-              setLoading(false); // Only stop loading on error, keep loading on success until modal handling
+              setLoading(false);
             }
           }
         }
@@ -162,136 +155,165 @@ export default function SubCoachDetailsScreen() {
     router.replace('/(coach)/team/reassign');
   };
 
-  if (loading) {
+  if (loading && !subCoach) {
     return (
-      <SafeAreaView style={styles.container}>
-        <BrandedHeader title="Sub-Coach Details" showBackButton onBackPress={() => router.back()} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={primary} />
-          <Text style={[styles.loadingText, { fontFamily: theme.typography.fontFamily }]}>Loading details...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!subCoach) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <BrandedHeader title="Sub-Coach Details" showBackButton onBackPress={() => router.back()} />
-        <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { fontFamily: theme.typography.fontFamily }]}>Sub-coach not found</Text>
-        </View>
-      </SafeAreaView>
+      <View className="flex-1 bg-slate-950 items-center justify-center">
+        <ActivityIndicator color="#3B82F6" />
+        <Text className="text-slate-500 mt-4 font-bold tracking-widest text-[10px] uppercase">Decrypting Identity...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <BrandedHeader 
-        title="Sub-Coach Details" 
-        showBackButton 
-        onBackPress={() => router.back()} 
-      />
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Profile Card */}
-        <View style={[styles.profileCard, { borderTopColor: primary, backgroundColor: theme.colors.surface }]}>
-          <BrandedAvatar 
-            name={subCoach.full_name}
-            size={80}
-            imageUrl={subCoach.avatar_url}
-            useBrandColor={true}
-          />
-          
-          <Text style={[styles.name, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{subCoach.full_name}</Text>
-          
-          <View style={styles.infoRow}>
-            <Mail size={16} color="#6B7280" />
-            <Text style={[styles.email, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{subCoach.email}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Calendar size={16} color="#6B7280" />
-            <Text style={[styles.joinedText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-              Joined {new Date(subCoach.joined_at).toLocaleDateString()}
-            </Text>
-          </View>
-        </View>
-
-        {/* Stats Card */}
-        <View style={styles.statsCard}>
-          <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
-            <Users size={24} color={primary} />
-            <Text style={[styles.statValue, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{subCoach.client_count}</Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Assigned Clients</Text>
-          </View>
-          
-          <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
-            <TrendingUp size={24} color={secondary} />
-            <Text style={[styles.statValue, { color: secondary, fontFamily: theme.typography.fontFamily }]}>Active</Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Status</Text>
-          </View>
-        </View>
-
-        {/* Clients List */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Assigned Clients ({subCoach.client_count})</Text>
-            <TouchableOpacity
-              style={[styles.assignButton, { backgroundColor: primary }]}
-              onPress={() => setShowAssignModal(true)}
+    <View className="flex-1 bg-slate-950">
+      <View 
+        style={{ paddingTop: insets.top + 16 }} 
+        className="px-6 pb-6 flex-row items-center justify-between border-b border-white/5 bg-slate-950"
+      >
+        <View className="flex-row items-center gap-4">
+            <TouchableOpacity 
+              onPress={() => router.back()} 
+              className="p-2 bg-slate-900 rounded-full border border-white/5"
             >
-              <Users size={16} color="#FFFFFF" />
-              <Text style={[styles.assignButtonText, { fontFamily: theme.typography.fontFamily }]}>Assign Clients</Text>
+              <ArrowLeft size={20} color="#94A3B8" />
             </TouchableOpacity>
-          </View>
-          
-          {subCoach.clients.length === 0 ? (
-            <View style={[styles.emptyClientsCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              <Users size={32} color={theme.colors.textTertiary} />
-              <Text style={[styles.emptyClientsText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>No clients assigned yet</Text>
+            <View>
+                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Growth Center</Text>
+                <Text className="text-white text-xl font-black tracking-tight" numberOfLines={1}>Sub-Coach Details</Text>
             </View>
-          ) : (
-            subCoach.clients.map((client) => (
-              <TouchableOpacity
-                key={client.id}
-                style={[styles.clientCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-                onPress={() => {
-                  router.push(`/(coach)/clients/${client.id}`);
-                }}
-              >
-                <View style={styles.clientInfo}>
-                  <BrandedAvatar 
-                    name={client.full_name}
-                    size={44}
-                    imageUrl={client.avatar_url}
+        </View>
+        
+        <TouchableOpacity 
+          onPress={handleTerminate}
+          className="w-10 h-10 bg-red-500/10 rounded-xl items-center justify-center border border-red-500/20"
+        >
+          <Trash2 size={18} color="#F87171" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <MotiView
+          from={{ opacity: 0, translateY: 20 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          className="mx-6 mt-8 p-10 rounded-[48px] bg-slate-900/40 border border-white/5 items-center overflow-hidden"
+        >
+            <View className="absolute top-0 right-0 p-4 opacity-10">
+                <Shield size={120} color="#3B82F6" />
+            </View>
+            
+            <View className="w-24 h-24 rounded-[36px] bg-slate-950 items-center justify-center border-4 border-blue-600 shadow-2xl shadow-blue-500/50 mb-6">
+                <BrandedAvatar 
+                    name={subCoach?.full_name || ''}
+                    size={84}
+                    imageUrl={subCoach?.avatar_url}
                     useBrandColor={true}
-                  />
-                  <View style={styles.clientDetails}>
-                    <Text style={[styles.clientName, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.full_name}</Text>
-                    <Text style={[styles.clientEmail, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{client.email}</Text>
-                    <Text style={[styles.clientDate, { color: theme.colors.textTertiary, fontFamily: theme.typography.fontFamily }]}>
-                      Added {new Date(client.added_at).toLocaleDateString()}
+                />
+            </View>
+
+            <Text className="text-white text-3xl font-black text-center tracking-tighter mb-2">{subCoach?.full_name}</Text>
+            <Text className="text-slate-400 font-medium mb-6">{subCoach?.email}</Text>
+            
+            <View className="flex-row items-center gap-4">
+                <View className="bg-blue-600/10 px-4 py-2 rounded-full border border-blue-600/20 flex-row items-center gap-2">
+                    <Calendar size={14} color="#3B82F6" />
+                    <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">
+                        Joined {new Date(subCoach?.joined_at || '').toLocaleDateString()}
                     </Text>
-                  </View>
                 </View>
-                <ChevronRight size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-            ))
-          )}
+                <View className="bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20 flex-row items-center gap-2">
+                    <UserCheck size={14} color="#10B981" />
+                    <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Active</Text>
+                </View>
+            </View>
+        </MotiView>
+
+        {/* Stats Section */}
+        <View className="flex-row px-6 mt-8 gap-4">
+            <MotiView 
+                from={{ opacity: 0, scale: 0.9 }} 
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 200 }}
+                className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5 items-center"
+            >
+                <View className="w-10 h-10 rounded-2xl bg-blue-600/10 items-center justify-center border border-blue-600/20 mb-3">
+                    <Users size={18} color="#3B82F6" />
+                </View>
+                <Text className="text-white text-2xl font-black tracking-tighter">{subCoach?.client_count}</Text>
+                <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest mt-1">Assigned Clients</Text>
+            </MotiView>
+            <MotiView 
+                from={{ opacity: 0, scale: 0.9 }} 
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 300 }}
+                className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5 items-center"
+            >
+                <View className="w-10 h-10 rounded-2xl bg-emerald-500/10 items-center justify-center border border-emerald-500/20 mb-3">
+                    <TrendingUp size={18} color="#10B981" />
+                </View>
+                <Text className="text-white text-2xl font-black tracking-tighter">98%</Text>
+                <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest mt-1">Productivity</Text>
+            </MotiView>
         </View>
 
-        {/* Terminate Button */}
-        <TouchableOpacity
-          style={[styles.terminateButton, { borderColor: theme.colors.error }]}
-          onPress={handleTerminate}
-        >
-          <Text style={[styles.terminateButtonText, { color: theme.colors.error, fontFamily: theme.typography.fontFamily }]}>Terminate Coach</Text>
-        </TouchableOpacity>
+        {/* Clients Section */}
+        <View className="px-6 mt-10">
+            <View className="flex-row items-center justify-between mb-8">
+                <Text className="text-white text-xl font-black tracking-tighter">Assigned Roster</Text>
+                <TouchableOpacity 
+                    onPress={() => setShowAssignModal(true)}
+                    className="flex-row items-center gap-2 bg-blue-600 px-4 py-2.5 rounded-2xl shadow-lg shadow-blue-500/30 border border-white/10"
+                >
+                    <Plus size={16} color="white" strokeWidth={3} />
+                    <Text className="text-white font-black text-xs uppercase tracking-widest">Assign</Text>
+                </TouchableOpacity>
+            </View>
+
+            {subCoach?.clients.length === 0 ? (
+                <View className="py-16 items-center justify-center bg-slate-900/20 rounded-[40px] border border-white/5 border-dashed">
+                    <Users size={48} color="#1E293B" />
+                    <Text className="text-slate-400 font-bold mt-4">No active assignments</Text>
+                </View>
+            ) : (
+                subCoach?.clients.map((client, index) => (
+                    <MotiView
+                        key={client.id}
+                        from={{ opacity: 0, translateX: -20 }}
+                        animate={{ opacity: 1, translateX: 0 }}
+                        transition={{ delay: 400 + (index * 50) }}
+                        className="mb-4"
+                    >
+                        <TouchableOpacity
+                            onPress={() => router.push(`/(coach)/clients/${client.id}`)}
+                            className="p-5 rounded-[32px] bg-slate-900/40 border border-white/5 flex-row items-center gap-4"
+                        >
+                            <BrandedAvatar 
+                                name={client.full_name}
+                                size={48}
+                                imageUrl={client.avatar_url}
+                                useBrandColor={true}
+                            />
+                            <View className="flex-1">
+                                <Text className="text-white font-black text-base tracking-tight mb-0.5">{client.full_name}</Text>
+                                <Text className="text-slate-500 text-xs font-medium mb-2">{client.email}</Text>
+                                <View className="flex-row items-center gap-2">
+                                    <View className="w-1 h-1 rounded-full bg-slate-800" />
+                                    <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">
+                                        Assigned {new Date(client.added_at).toLocaleDateString()}
+                                    </Text>
+                                </View>
+                            </View>
+                            <ChevronRight size={18} color="#334155" />
+                        </TouchableOpacity>
+                    </MotiView>
+                ))
+            )}
+        </View>
+
+        <View className="h-20" />
       </ScrollView>
 
-      {/* Assignment Modal */}
-      {coach?.id && (
+      {/* Modals */}
+      {coach?.id && subCoach && (
         <AssignClientsModal
           visible={showAssignModal}
           subCoachId={subCoach.coach_id}
@@ -302,214 +324,11 @@ export default function SubCoachDetailsScreen() {
         />
       )}
 
-      {/* Termination Success Modal */}
       <TerminationSuccessModal
         visible={showSuccessModal}
         unassignedClients={unassignedClients}
         onAssignClients={handleAssignClientsNavigation}
       />
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  content: {
-    padding: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
-    borderTopWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  email: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  joinedText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  statsCard: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
-  },
-  section: {
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  assignButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  assignButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  clientCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  clientInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  clientAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  clientInitial: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#3B82F6',
-  },
-  clientDetails: {
-    flex: 1,
-  },
-  clientName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  clientEmail: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  clientDate: {
-    fontSize: 11,
-    color: '#9CA3AF',
-  },
-  emptyClientsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-  },
-  emptyClientsText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-  terminateButton: {
-    marginTop: 24,
-    marginBottom: 40,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  terminateButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

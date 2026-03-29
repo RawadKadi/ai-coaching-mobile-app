@@ -5,9 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Video, X, AlertCircle, Clock } from 'lucide-react-native';
 
-export default function SessionMonitor() {
+export default function SessionMonitor({ router }: { router: ReturnType<typeof useRouter> }) {
   const { user, coach } = useAuth();
-  const router = useRouter();
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [currentSession, setCurrentSession] = useState<any>(null);
@@ -296,9 +295,9 @@ export default function SessionMonitor() {
 
     if (toastType === 'join') {
       if (coach) {
-        router.push(`/(coach)/chat/${currentSession.client_id}`);
+        router.push(`/(coach)/chat/${currentSession.client_id}` as any);
       } else {
-        router.push('/(client)/(tabs)/chat'); 
+        router.push('/(client)/(tabs)/chat' as any); 
       }
     } else if (toastType === 'postponed' && coach) {
       // Check Up Logic
@@ -317,7 +316,7 @@ export default function SessionMonitor() {
 
       // Navigate to chat with suggested message
       router.push({
-        pathname: `/(coach)/chat/${currentSession.client_id}`,
+        pathname: `/(coach)/chat/${currentSession.client_id}` as any,
         params: { suggestedMessage }
       });
     }

@@ -543,7 +543,7 @@ export function ChatInputBar({
         <TouchableOpacity
           style={[
             styles.sendBtn,
-            { backgroundColor: '#FB923C' },
+            { backgroundColor: '#3B82F6' },
             ((!text.trim() && !selectedMedia) || isDisabled) && { opacity: 0.5 },
           ]}
           onPress={handleSend}
@@ -564,8 +564,8 @@ export function ChatInputBar({
           style={[
             styles.panel,
             {
-              backgroundColor: theme.colors.surface,
-              borderTopColor: theme.colors.border,
+              backgroundColor: '#0F172A',
+              borderTopColor: 'rgba(255,255,255,0.05)',
               height: panelHeightAnim,
             },
           ]}
@@ -581,48 +581,48 @@ export function ChatInputBar({
           {/* ── Attach panel ─────────────────────────────────────────────── */}
           {activePanel === 'attach' && (
             <View style={styles.attachList}>
-              <Text style={[styles.panelTitle, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
+              <Text style={[styles.panelTitle, { color: '#64748B', fontFamily: theme.typography.fontFamily }]}>
                 Send file
               </Text>
               
-              <TouchableOpacity style={[styles.attachItem, { borderColor: theme.colors.border }]} onPress={pickFromLibrary}>
-                <View style={[styles.attachIcon, { backgroundColor: `${theme.colors.primary}18` }]}>
-                  <ImageIcon size={24} color={theme.colors.primary} />
+              <TouchableOpacity style={[styles.attachItem, { borderBottomColor: 'rgba(255,255,255,0.03)' }]} onPress={pickFromLibrary}>
+                <View style={[styles.attachIcon, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
+                  <ImageIcon size={22} color="#3B82F6" />
                 </View>
                 <View>
-                  <Text style={[styles.attachLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Photo / Video</Text>
-                  <Text style={[styles.attachSub, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>From your library</Text>
+                  <Text style={[styles.attachLabel, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}>Photo / Video</Text>
+                  <Text style={[styles.attachSub, { color: '#64748B', fontFamily: theme.typography.fontFamily }]}>From your library</Text>
                 </View>
               </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.attachItem, { borderColor: theme.colors.border }]} onPress={openCamera}>
-                <View style={[styles.attachIcon, { backgroundColor: `${theme.colors.primary}18` }]}>
-                  <Camera size={24} color={theme.colors.primary} />
+    
+              <TouchableOpacity style={[styles.attachItem, { borderBottomColor: 'rgba(255,255,255,0.03)' }]} onPress={openCamera}>
+                <View style={[styles.attachIcon, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
+                  <Camera size={22} color="#3B82F6" />
                 </View>
                 <View>
-                  <Text style={[styles.attachLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Camera</Text>
-                  <Text style={[styles.attachSub, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>Take a photo</Text>
+                  <Text style={[styles.attachLabel, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}>Camera</Text>
+                  <Text style={[styles.attachSub, { color: '#64748B', fontFamily: theme.typography.fontFamily }]}>Take a photo</Text>
                 </View>
               </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.attachItem, { borderColor: theme.colors.border }]} onPress={pickDocument}>
-                <View style={[styles.attachIcon, { backgroundColor: `${theme.colors.primary}18` }]}>
-                  <FileText size={24} color={theme.colors.primary} />
+    
+              <TouchableOpacity style={[styles.attachItem, { borderBottomColor: 'rgba(255,255,255,0.03)' }]} onPress={pickDocument}>
+                <View style={[styles.attachIcon, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
+                  <FileText size={22} color="#3B82F6" />
                 </View>
                 <View>
-                  <Text style={[styles.attachLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Document</Text>
-                  <Text style={[styles.attachSub, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>PDF, Word, etc.</Text>
+                  <Text style={[styles.attachLabel, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}>Document</Text>
+                  <Text style={[styles.attachSub, { color: '#64748B', fontFamily: theme.typography.fontFamily }]}>PDF, Word, etc.</Text>
                 </View>
               </TouchableOpacity>
-
+    
               {hasClipboardImage && (
-                <TouchableOpacity style={[styles.attachItem, { borderColor: theme.colors.border, borderBottomWidth: 0 }]} onPress={pasteFromClipboard}>
-                  <View style={[styles.attachIcon, { backgroundColor: `${theme.colors.primary}18` }]}>
-                    <ClipboardPaste size={24} color={theme.colors.primary} />
+                <TouchableOpacity style={[styles.attachItem, { borderBottomWidth: 0 }]} onPress={pasteFromClipboard}>
+                  <View style={[styles.attachIcon, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
+                    <ClipboardPaste size={22} color="#3B82F6" />
                   </View>
                   <View>
-                    <Text style={[styles.attachLabel, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>Paste Image</Text>
-                    <Text style={[styles.attachSub, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>From clipboard</Text>
+                    <Text style={[styles.attachLabel, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}>Paste Image</Text>
+                    <Text style={[styles.attachSub, { color: '#64748B', fontFamily: theme.typography.fontFamily }]}>From clipboard</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -633,12 +633,12 @@ export function ChatInputBar({
           {activePanel === 'emoji' && (
             <View style={{ flex: 1 }}>
               {/* Search bar */}
-              <View style={[styles.searchRow, { backgroundColor: theme.colors.surfaceAlt ?? theme.colors.background }]}>
-                <Search size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
+              <View style={[styles.searchRow, { backgroundColor: '#020617' }]}>
+                <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
                 <TextInput
-                  style={[styles.searchInput, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}
+                  style={[styles.searchInput, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}
                   placeholder="Search GIFs…"
-                  placeholderTextColor={theme.colors.textSecondary}
+                  placeholderTextColor="#475569"
                   value={gifQuery}
                   onChangeText={(v) => {
                     setGifQuery(v);
@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#D1D5DB', // fallback
+    backgroundColor: '#334155',
   },
   mediaPreviewImage: {
     width: '100%',
@@ -896,9 +896,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   attachIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 16, // More modern squared-circle
     justifyContent: 'center',
     alignItems: 'center',
   },

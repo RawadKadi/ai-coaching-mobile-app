@@ -4,10 +4,8 @@ import { useRouter } from 'expo-router';
 import { AlertTriangle, ChevronRight } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFocusEffect } from '@react-navigation/native';
 
-export function UnassignedClientsBanner() {
-  const router = useRouter();
+export function UnassignedClientsBanner({ router }: { router: ReturnType<typeof useRouter> }) {
   const { coach } = useAuth();
   const [unassignedCount, setUnassignedCount] = useState(0);
 
@@ -33,7 +31,15 @@ export function UnassignedClientsBanner() {
   return (
     <TouchableOpacity
       style={styles.banner}
-      onPress={() => router.push('/(coach)/team/reassign')}
+      onPress={() => {
+        requestAnimationFrame(() => {
+          try {
+            router.push('/(coach)/team/reassign');
+          } catch (e) {
+            console.error('[UnassignedClientsBanner] Navigation failed', e);
+          }
+        });
+      }}
     >
       <View style={styles.content}>
         <AlertTriangle size={20} color="#B45309" />

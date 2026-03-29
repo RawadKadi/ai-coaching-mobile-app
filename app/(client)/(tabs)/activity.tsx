@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Modal, StatusBar, RefreshControl, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
@@ -376,39 +375,35 @@ export default function ActivityScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
+      <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View style={{ flex: 1, backgroundColor: '#020617' }}>
       <StatusBar barStyle="light-content" translucent />
       
       <View style={{ flex: 1, paddingTop: insets.top }}>
         {/* Header Section */}
-        <MotiView 
-          from={{ opacity: 0, translateY: -10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          className="px-6 pt-10 pb-6"
-        >
-          <View className="flex-row items-center justify-between mb-2">
+        <View style={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <View>
-              <Text className="text-white text-3xl font-black tracking-tighter">Your Progress</Text>
-              <Text className="text-blue-500 font-bold uppercase tracking-[2px] text-[10px] mt-1">{formattedDate}</Text>
+              <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>Your Progress</Text>
+              <Text style={{ color: '#3b82f6', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 2, fontSize: 10, marginTop: 4 }}>{formattedDate}</Text>
             </View>
             <TouchableOpacity 
-              className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5"
+              style={{ width: 48, height: 48, backgroundColor: '#0f172a', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b' }}
               onPress={() => {/* Date Picker functionality */}}
             >
               <CalendarIcon size={20} color="#3B82F6" />
             </TouchableOpacity>
           </View>
-        </MotiView>
+        </View>
 
         <ScrollView 
-          className="flex-1" 
+          style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
           refreshControl={
@@ -420,12 +415,7 @@ export default function ActivityScreen() {
           }
         >
           {/* Summary Metric Grid */}
-          <MotiView 
-            from={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'timing', duration: 400, delay: 100 }}
-            className="px-6 flex-row flex-wrap justify-between gap-y-4 mb-10"
-          >
+          <View style={{ paddingHorizontal: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16, marginBottom: 40 }}>
             <MetricCard 
               label="KCAL Burnt" 
               value={totalCalories.toString()} 
@@ -446,17 +436,17 @@ export default function ActivityScreen() {
               value="Protocol-A" 
               icon={<Zap size={18} color="#3B82F6" />} 
             />
-          </MotiView>
+          </View>
 
           {/* Activity Logs Section */}
-          <View className="px-6">
+          <View style={{ paddingHorizontal: 24 }}>
             
             {/* Challenges Section */}
             <SectionHeader title="Active Challenges" count={challenges.length} />
             {challenges.length === 0 ? (
               <EmptyState message="No active challenges assigned." />
             ) : (
-              <View className="gap-3">
+              <View style={{ gap: 12 }}>
                 {challenges.map((challenge, idx) => (
                   <ActivityCard 
                     key={challenge.id}
@@ -477,7 +467,7 @@ export default function ActivityScreen() {
             {habits.length === 0 ? (
               <EmptyState message="No habits established for this protocol." />
             ) : (
-              <View className="gap-3">
+              <View style={{ gap: 12 }}>
                 {habits.map((habit, idx) => {
                   const log = habitLogs.find(l => l.habit_id === habit.id);
                   const isCompleted = log?.completed || false;
@@ -501,7 +491,7 @@ export default function ActivityScreen() {
             {meals.length === 0 ? (
               <EmptyState message="No meals tracked for today." />
             ) : (
-              <View className="gap-3">
+              <View style={{ gap: 12 }}>
                 {meals.map((meal, idx) => (
                   <ActivityCard 
                     key={meal.id}
@@ -521,7 +511,7 @@ export default function ActivityScreen() {
             {workouts.length === 0 ? (
               <EmptyState message="No workouts recorded for today." />
             ) : (
-              <View className="gap-3">
+              <View style={{ gap: 12 }}>
                 {workouts.map((workout, idx) => (
                   <ActivityCard 
                     key={workout.id}
@@ -540,65 +530,55 @@ export default function ActivityScreen() {
         </ScrollView>
       </View>
 
-      {/* Modern Details Overlay (Replaces Modal to fix context issues) */}
-      <AnimatePresence>
+      {/* Modern Details Overlay */}
         {showDetailsModal && selectedChallenge && (
-          <MotiView
-            from={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] flex-1 justify-end"
-            pointerEvents={showDetailsModal ? 'auto' : 'none'}
-          >
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, justifyContent: 'flex-end' }}>
             {/* Backdrop */}
             <TouchableOpacity 
               activeOpacity={1} 
-              className="absolute inset-0 bg-black/60" 
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }} 
               onPress={() => setShowDetailsModal(false)} 
             />
             
-            <MotiView
-              from={{ translateY: 600 }}
-              animate={{ translateY: 0 }}
-              exit={{ translateY: 600 }}
-              transition={{
-                type: 'spring',
-                damping: 25,
-                stiffness: 200,
-              }}
-              className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10"
-              style={{ maxHeight: '85%', paddingBottom: insets.bottom + 32 }}
-            >
-              <View className="w-12 h-1.5 bg-slate-800 rounded-full self-center mb-8" />
+            <View style={{ backgroundColor: '#0f172a', borderTopLeftRadius: 48, borderTopRightRadius: 48, padding: 32, borderTopWidth: 1, borderTopColor: '#1e293b', maxHeight: '85%', paddingBottom: insets.bottom + 32 }}>
+              <View style={{ width: 48, height: 6, backgroundColor: '#1e293b', borderRadius: 3, alignSelf: 'center', marginBottom: 32 }} />
               
-              <View className="flex-row items-center justify-between mb-8">
-                <View className="flex-row items-center gap-3">
-                  <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center border border-blue-600/20">
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 48, height: 48, backgroundColor: '#3b82f61a', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#3b82f633' }}>
                     <Sparkles size={24} color="#3B82F6" />
                   </View>
                   <View>
-                    <Text className="text-white text-2xl font-black tracking-tight">{selectedChallenge.name}</Text>
-                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Global Protocol</Text>
+                    <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{selectedChallenge.name}</Text>
+                    <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Global Protocol</Text>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => setShowDetailsModal(false)} className="w-10 h-10 bg-slate-950 rounded-full items-center justify-center border border-white/5">
+                <TouchableOpacity onPress={() => setShowDetailsModal(false)} style={{ width: 40, height: 40, backgroundColor: '#020617', borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b' }}>
                   <X size={20} color="#94A3B8" />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} className="mb-0">
-                <View className="flex-row flex-wrap gap-2 mb-8">
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
                   <Badge label={selectedChallenge.focus_type} />
                   {selectedChallenge.intensity && <Badge label={selectedChallenge.intensity} color="border-orange-500/20 text-orange-500 bg-orange-500/5" />}
                   <Badge label="Daily Objective" color="border-green-500/20 text-green-500 bg-green-500/5" />
                 </View>
 
-                <Text className="text-slate-400 text-base leading-7 font-medium mb-10">
+                <Text style={{ color: '#94a3b8', fontSize: 16, lineHeight: 28, fontWeight: '500', marginBottom: 40 }}>
                   {selectedChallenge.description || 'No detailed instructions provided for this challenge. Ensure you maintain proper form and stay hydrated.'}
                 </Text>
 
                 <TouchableOpacity 
-                  className={`p-6 rounded-[32px] items-center justify-center flex-row gap-3 ${selectedChallenge.completed ? 'bg-slate-800' : 'bg-blue-600 shadow-2xl shadow-blue-500/40'}`}
+                  style={{ 
+                    padding: 24, 
+                    borderRadius: 32, 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    flexDirection: 'row', 
+                    gap: 12, 
+                    backgroundColor: selectedChallenge.completed ? '#1e293b' : '#2563eb' 
+                  }}
                   onPress={() => {
                     handleToggleChallenge(selectedChallenge);
                     setShowDetailsModal(false);
@@ -607,70 +587,72 @@ export default function ActivityScreen() {
                   {selectedChallenge.completed ? (
                     <>
                       <X size={20} color="#94A3B8" />
-                      <Text className="text-slate-400 font-black uppercase tracking-[2px] text-sm">Remove Completion</Text>
+                      <Text style={{ color: '#94a3b8', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Remove Completion</Text>
                     </>
                   ) : (
                     <>
                       <CheckCircle size={20} color="white" />
-                      <Text className="text-white font-black uppercase tracking-[2px] text-sm">Confirm Completion</Text>
+                      <Text style={{ color: 'white', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Confirm Completion</Text>
                     </>
                   )}
                 </TouchableOpacity>
               </ScrollView>
-            </MotiView>
-          </MotiView>
+            </View>
+          </View>
         )}
-      </AnimatePresence>
     </View>
   );
 }
 
 // Support Components
 const MetricCard = ({ label, value, icon }: any) => (
-  <View className="w-[47%] bg-slate-900/40 p-5 rounded-[36px] border border-white/5 items-center justify-center">
-    <View className="w-10 h-10 bg-slate-950 rounded-xl items-center justify-center border border-white/5 mb-3">
+  <View style={{ width: '47%', backgroundColor: '#0f172a66', padding: 20, borderRadius: 36, borderWidth: 1, borderColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: 40, height: 40, backgroundColor: '#020617', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b', marginBottom: 12 }}>
       {icon}
     </View>
-    <Text className="text-white text-xl font-black tracking-tighter">{value}</Text>
-    <Text className="text-slate-500 text-[8px] font-black uppercase tracking-[2px] mt-1">{label}</Text>
+    <Text style={{ color: 'white', fontSize: 20, fontWeight: '900', letterSpacing: -0.5 }}>{value}</Text>
+    <Text style={{ color: '#64748b', fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, marginTop: 4 }}>{label}</Text>
   </View>
 );
 
 const SectionHeader = ({ title, count, marginTop = 0 }: any) => (
-  <View style={{ marginTop }} className="flex-row items-center justify-between mb-5 px-1">
-    <Text className="text-white text-xl font-black tracking-tight">{title}</Text>
-    <View className="bg-slate-900 px-3 py-1 rounded-full border border-white/5">
-      <Text className="text-slate-500 text-[10px] font-bold">{count}</Text>
+  <View style={{ marginTop, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingHorizontal: 4 }}>
+    <Text style={{ color: 'white', fontSize: 20, fontWeight: '900', letterSpacing: -0.5 }}>{title}</Text>
+    <View style={{ backgroundColor: '#0f172a', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: '#1e293b' }}>
+      <Text style={{ color: '#64748b', fontSize: 10, fontWeight: 'bold' }}>{count}</Text>
     </View>
   </View>
 );
 
 const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly, delay = 0 }: any) => (
-  <MotiView
-    from={{ opacity: 0, translateX: -20 }}
-    animate={{ opacity: 1, translateX: 0 }}
-    transition={{ type: 'timing', duration: 300, delay }}
-  >
+  <View style={{ marginBottom: 12 }}>
     <TouchableOpacity 
       activeOpacity={0.7}
       disabled={!onPress}
       onPress={onPress}
-      className={`flex-row items-center p-5 bg-slate-900/40 rounded-[32px] border ${completed ? 'border-blue-500/20' : 'border-white/5'}`}
+      style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        padding: 20, 
+        backgroundColor: '#0f172a66', 
+        borderRadius: 32, 
+        borderWidth: 1, 
+        borderColor: completed ? '#3b82f633' : '#1e293b' 
+      }}
     >
-      <View className={`w-12 h-12 rounded-2xl items-center justify-center mr-4 border ${completed ? 'bg-blue-600/10 border-blue-600/20' : 'bg-slate-950 border-white/5'}`}>
-        {icon}
+      <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: completed ? '#3b82f61a' : '#020617', borderColor: completed ? '#3b82f633' : '#1e293b' }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
       </View>
-      <View className="flex-1">
-        <Text className={`text-base font-bold tracking-tight ${completed ? 'text-white' : 'text-slate-300'}`}>{title}</Text>
-        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-0.5">{sub}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: completed ? 'white' : '#cbd5e1' }}>{title}</Text>
+        <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>{sub}</Text>
       </View>
       {!readOnly && (
         <TouchableOpacity 
-          onPress={(e) => {
-            e.stopPropagation();
+          onPress={() => {
             onToggle && onToggle();
           }}
-          className={`w-10 h-10 rounded-full items-center justify-center border ${completed ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-500/40' : 'bg-slate-950 border-white/10'}`}
+          style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, backgroundColor: completed ? '#2563eb' : '#020617', borderColor: completed ? '#3b82f6' : '#1e293b' }}
         >
           {completed ? <CheckCircle size={20} color="white" /> : <Circle size={20} color="#475569" />}
         </TouchableOpacity>
@@ -679,17 +661,27 @@ const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly
         <ArrowUpRight size={18} color="#475569" />
       )}
     </TouchableOpacity>
-  </MotiView>
+  </View>
 );
 
 const EmptyState = ({ message }: { message: string }) => (
-  <View className="p-8 bg-slate-900/20 rounded-[32px] border border-white/5 border-dashed items-center justify-center">
-    <Text className="text-slate-600 text-[11px] font-black uppercase tracking-widest text-center">{message}</Text>
+  <View style={{ padding: 32, backgroundColor: '#0f172a33', borderRadius: 32, borderWidth: 1, borderColor: '#1e293b', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}>
+    <Text style={{ color: '#475569', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, textAlign: 'center' }}>{message}</Text>
   </View>
 );
 
-const Badge = ({ label, color = "border-blue-500/20 text-blue-500 bg-blue-500/5" }: any) => (
-  <View className={`px-4 py-2 rounded-full border ${color}`}>
-    <Text className={`${color.split(' ')[1]} text-[9px] font-black uppercase tracking-widest`}>{label}</Text>
-  </View>
-);
+const Badge = ({ label, color = "#3b82f6" }: any) => {
+  const isCustom = color !== "#3b82f6";
+  return (
+    <View style={{ 
+        paddingHorizontal: 16, 
+        paddingVertical: 8, 
+        borderRadius: 999, 
+        borderWidth: 1, 
+        borderColor: isCustom ? 'rgba(249, 115, 22, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+        backgroundColor: isCustom ? 'rgba(249, 115, 22, 0.05)' : 'rgba(59, 130, 246, 0.05)'
+    }}>
+      <Text style={{ color: isCustom ? '#f97316' : '#3b82f6', fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>{label}</Text>
+    </View>
+  );
+};

@@ -3,13 +3,12 @@ import {
   View,
   Text,
   Modal,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { AlertCircle, CheckCircle, Users } from 'lucide-react-native';
+import { AlertCircle, CheckCircle, Users, ArrowRight, Shield } from 'lucide-react-native';
+import { MotiView, AnimatePresence } from 'moti';
 import { useBrandColors, useTheme } from '@/contexts/BrandContext';
-import { BrandedText } from './BrandedText';
 
 interface TerminationSuccessModalProps {
   visible: boolean;
@@ -19,7 +18,6 @@ interface TerminationSuccessModalProps {
     email: string;
   }>;
   onAssignClients: () => void;
-  // Intentionally no onClose prop - user MUST take action or close app
 }
 
 export function TerminationSuccessModal({
@@ -33,129 +31,79 @@ export function TerminationSuccessModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      // Intentionally not closing on request close (android back button)
+      animationType="fade"
+      transparent={true}
       onRequestClose={() => {}}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={styles.content}>
-          <View style={styles.iconContainer}>
-            <CheckCircle size={64} color={theme.colors.success} />
-          </View>
+      <View className="flex-1 bg-slate-950/90 items-center justify-center p-6">
+        <MotiView
+          from={{ opacity: 0, scale: 0.9, translateY: 20 }}
+          animate={{ opacity: 1, scale: 1, translateY: 0 }}
+          className="w-full max-w-md bg-slate-900 rounded-[48px] border border-white/10 p-10 items-center shadow-2xl"
+        >
+          <MotiView
+            from={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', delay: 200 }}
+            className="w-24 h-24 rounded-[36px] bg-emerald-500/10 items-center justify-center border-4 border-emerald-500 mb-8"
+          >
+            <CheckCircle size={48} color="#10B981" strokeWidth={2.5} />
+          </MotiView>
           
-          <BrandedText variant="xl" weight="heading" style={styles.title}>
-            Sub-Coach Terminated
-          </BrandedText>
+          <Text className="text-white text-3xl font-black text-center tracking-tighter mb-4">
+            Deployment Terminated
+          </Text>
           
-          <BrandedText variant="base" style={StyleSheet.flatten([styles.subtitle, { color: theme.colors.textSecondary }])}>
-            The sub-coach has been successfully removed from your team.
-          </BrandedText>
+          <Text className="text-slate-400 text-center font-medium leading-5 mb-10 px-4">
+            The sub-coach has been successfully decoupled from your brand ecosystem.
+          </Text>
 
           {unassignedClients.length > 0 && (
-            <View style={[styles.warningBox, { backgroundColor: `${primary}10`, borderColor: primary }]}>
-              <View style={styles.warningHeader}>
-                <AlertCircle size={20} color={primary} />
-                <BrandedText variant="sm" weight="600" style={{ color: primary, flex: 1, marginLeft: 8 }}>
-                  Action Required
-                </BrandedText>
+            <MotiView 
+                from={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 400 }}
+                className="w-full bg-amber-500/10 rounded-[32px] border border-amber-500/20 p-6 mb-10"
+            >
+              <View className="flex-row items-center gap-3 mb-4">
+                <AlertCircle size={20} color="#F59E0B" />
+                <Text className="text-amber-500 text-xs font-black uppercase tracking-widest flex-1">
+                    Neural Re-Routing Required
+                </Text>
               </View>
-              <Text style={[styles.warningText, { color: theme.colors.textSecondary }]}>
-                The following clients are now unassigned and require reassignment:
+              
+              <Text className="text-slate-400 text-xs font-medium mb-4">
+                These athletes are currently floating without a strategic lead:
               </Text>
               
-              <ScrollView style={styles.clientList} nestedScrollEnabled>
-                {unassignedClients.map((client) => (
-                  <View key={client.id} style={styles.clientItem}>
-                    <Users size={16} color={primary} />
-                    <Text style={[styles.clientName, { color: theme.colors.text }]}>{client.full_name}</Text>
+              <ScrollView 
+                className="max-h-40" 
+                nestedScrollEnabled 
+                showsVerticalScrollIndicator={false}
+              >
+                {unassignedClients.map((client, index) => (
+                  <View key={client.id} className="flex-row items-center gap-3 py-2 border-b border-white/5 last:border-b-0">
+                    <View className="w-1 h-1 rounded-full bg-amber-500" />
+                    <Text className="text-white font-bold text-sm tracking-tight flex-1">{client.full_name}</Text>
+                    <ArrowRight size={14} color="#334155" />
                   </View>
                 ))}
               </ScrollView>
-            </View>
+            </MotiView>
           )}
 
-          <View style={styles.spacer} />
-        </View>
-
-        <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
           <TouchableOpacity
-            style={[styles.assignButton, { backgroundColor: primary }]}
+            style={{ width: '100%' }}
             onPress={onAssignClients}
+            className="h-18 bg-blue-600 rounded-[24px] flex-row items-center justify-center gap-3 shadow-2xl shadow-blue-500/40 border border-white/10"
           >
-            <BrandedText variant="base" weight="600" style={styles.buttonText}>
-              Assign Clients
-            </BrandedText>
+            <Users size={20} color="white" strokeWidth={2.5} />
+            <Text className="text-white font-black text-lg tracking-tight">
+               Reassign Roster Now
+            </Text>
           </TouchableOpacity>
-        </View>
+        </MotiView>
       </View>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconContainer: {
-    marginBottom: 24,
-  },
-  title: {
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  subtitle: {
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  warningBox: {
-    width: '100%',
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    maxHeight: 300,
-  },
-  warningHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  warningText: {
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  clientList: {
-    maxHeight: 150,
-  },
-  clientItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    gap: 8,
-  },
-  clientName: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  spacer: {
-    flex: 1,
-  },
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-  },
-  assignButton: {
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-  },
-});

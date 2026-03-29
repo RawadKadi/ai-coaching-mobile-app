@@ -2,27 +2,35 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   TouchableOpacity,
   ScrollView,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { UserPlus, Mail, Search as SearchIcon, Check, Send, AlertTriangle } from 'lucide-react-native';
+import { 
+  UserPlus, 
+  Mail, 
+  Search as SearchIcon, 
+  Check, 
+  Send, 
+  AlertTriangle,
+  ArrowLeft,
+  ChevronRight
+} from 'lucide-react-native';
+import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrandColors } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { sendSubCoachInvite } from '@/lib/brevo-service';
-import { BrandedHeader } from '@/components/BrandedHeader';
-import { BrandedButton } from '@/components/BrandedButton';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type SearchState = 'idle' | 'searching' | 'found' | 'not_found';
 
 export default function AddSubCoachScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { coach } = useAuth();
   const { primary, secondary } = useBrandColors();
   
@@ -41,11 +49,8 @@ export default function AddSubCoachScreen() {
     setFoundCoach(null);
 
     try {
-      // 1. Search for coach by email using RPC
       const { data: searchResult, error: searchError } = await supabase
         .rpc('find_coach_by_email', { p_email: email.trim().toLowerCase() });
-
-      console.log('[AddSubCoach] Search result:', searchResult);
 
       if (searchError) throw searchError;
 
@@ -102,9 +107,6 @@ export default function AddSubCoachScreen() {
     setLoading(true);
 
     try {
-      console.log('[AddSubCoach] Processing invite for:', email);
-
-      // 1. Generate or Retrieve invite token via RPC
       const { data, error } = await supabase.rpc('generate_subcoach_invite', {
         p_parent_coach_id: coach?.id,
         p_invite_email: email.trim().toLowerCase(),
@@ -116,7 +118,6 @@ export default function AddSubCoachScreen() {
         throw new Error(data?.message || 'Failed to generate invite');
       }
 
-      // 2. If an active invite already exists, prompt the user
       if (data.active_exists) {
         setLoading(false);
         Alert.alert(
@@ -133,7 +134,6 @@ export default function AddSubCoachScreen() {
         return;
       }
 
-      // 3. New invite - Send the email immediately
       await sendInviteEmail(data, isRegistered);
       
     } catch (error: any) {
@@ -145,31 +145,49 @@ export default function AddSubCoachScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <BrandedHeader
-        title="Add Sub-Coach"
-        showBackButton
-        onBackPress={() => router.back()}
-      />
-
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Step 1: Search */}
-        <View style={styles.instructionsCard}>
-          <UserPlus size={24} color={primary} />
-          <Text style={styles.instructionsTitle}>Invite a Team Member</Text>
-          <Text style={styles.instructionsText}>
-            Enter the email address of the coach you'd like to invite. 
-            They will receive a secure link to join your coaching team.
-          </Text>
+    <View className="flex-1 bg-slate-950">
+      <View 
+        style={{ paddingTop: insets.top + 16 }} 
+        className="px-6 pb-6 flex-row items-center gap-4 border-b border-white/5 bg-slate-950"
+      >
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          className="p-2 bg-slate-900 rounded-full border border-white/5"
+        >
+          <ArrowLeft size={20} color="#94A3B8" />
+        </TouchableOpacity>
+        <View>
+            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Growth Center</Text>
+            <Text className="text-white text-xl font-black tracking-tight">Expand Your Team</Text>
         </View>
+      </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Coach Email Address</Text>
-          <View style={styles.searchContainer}>
-            <Mail size={20} color="#9CA3AF" style={styles.searchIcon} />
+      <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <MotiView
+          from={{ opacity: 0, translateY: 20 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          className="mx-6 mt-8 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden"
+        >
+            <View className="absolute top-0 right-0 p-4 opacity-10">
+                <UserPlus size={120} color="#3B82F6" />
+            </View>
+            <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
+                <Send size={36} color="white" fill="white" />
+            </View>
+            <Text className="text-white text-2xl font-black text-center tracking-tighter">Invite Collaborator</Text>
+            <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
+                Onboard a new coach into your ecosystem to distribute client load and scale your collective performance.
+            </Text>
+        </MotiView>
+
+        <View className="px-6 mt-10">
+          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Engagement Detail</Text>
+          <View className="flex-row items-center h-18 rounded-[24px] border-2 border-slate-800 bg-slate-900/50 px-5 mb-6">
+            <Mail size={20} color="#94A3B8" />
             <TextInput
-              style={styles.input}
-              placeholder="coach@example.com"
+              style={{ fontSize: 16 }}
+              className="flex-1 ml-4 text-white font-bold"
+              placeholder="coach@performance.ai"
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -177,249 +195,142 @@ export default function AddSubCoachScreen() {
               }}
               keyboardType="email-address"
               autoCapitalize="none"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="#475569"
               editable={!loading && searchState !== 'searching'}
             />
           </View>
 
           {searchState === 'idle' && (
-            <BrandedButton
-              title="Search Coach"
-              variant="primary"
+            <TouchableOpacity
               onPress={handleSearch}
-              icon={<SearchIcon size={20} color="#FFFFFF" />}
-              style={styles.actionButton}
-            />
+              className="h-16 bg-blue-600 rounded-[22px] flex-row items-center justify-center gap-3 shadow-xl shadow-blue-500/30 border border-white/10"
+            >
+              <SearchIcon size={20} color="white" strokeWidth={2.5} />
+              <Text className="text-white font-black text-lg tracking-tight">Analyze Identifier</Text>
+            </TouchableOpacity>
           )}
 
           {searchState === 'searching' && (
-            <View style={styles.statusContainer}>
-              <ActivityIndicator size="small" color={primary} />
-              <Text style={styles.statusText}>Checking database...</Text>
+            <View className="py-6 items-center flex-row justify-center gap-3">
+              <ActivityIndicator color="#3B82F6" />
+              <Text className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Querying Neural Roster...</Text>
             </View>
           )}
-        </View>
 
-        {/* Step 2: Found Coach Flow */}
-        {searchState === 'found' && foundCoach && (
-          <View style={[styles.resultCard, { borderColor: secondary }]}>
-            <View style={styles.resultHeader}>
-              <View style={[styles.statusBadge, { backgroundColor: secondary }]}>
-                <Check size={18} color="#FFFFFF" />
-              </View>
-              <Text style={styles.resultTitle}>Coach Found</Text>
-            </View>
+          <AnimatePresence>
+            {searchState === 'found' && foundCoach && (
+              <MotiView
+                from={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mt-4 p-8 rounded-[40px] bg-emerald-500/10 border border-emerald-500/20"
+              >
+                <View className="flex-row items-center gap-3 mb-6">
+                    <View className="w-10 h-10 rounded-2xl bg-emerald-500 items-center justify-center shadow-lg shadow-emerald-500/50">
+                        <Check size={20} color="white" strokeWidth={3} />
+                    </View>
+                    <Text className="text-white font-black text-xl tracking-tight">Identity Verified</Text>
+                </View>
+                
+                <View className="mb-8">
+                  <Text className="text-white font-black text-2xl tracking-tighter mb-1">{foundCoach.full_name}</Text>
+                  <Text className="text-slate-400 font-medium mb-4">{foundCoach.email}</Text>
+                  <View className="flex-row items-center gap-2">
+                    <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Platform Veteran</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => handleInvite(true)}
+                  disabled={loading}
+                  className="h-16 bg-emerald-600 rounded-[22px] flex-row items-center justify-center gap-3 shadow-xl shadow-emerald-500/30 border border-white/10"
+                >
+                  {loading ? <ActivityIndicator color="white" /> : (
+                      <>
+                        <Send size={18} color="white" strokeWidth={2.5} />
+                        <Text className="text-white font-black text-lg tracking-tight">Transmit Team Invite</Text>
+                      </>
+                  )}
+                </TouchableOpacity>
+              </MotiView>
+            )}
+
+            {searchState === 'not_found' && (
+              <MotiView
+                from={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mt-4 p-8 rounded-[40px] bg-amber-500/10 border border-amber-500/20"
+              >
+                <View className="flex-row items-center gap-3 mb-6">
+                    <View className="w-10 h-10 rounded-2xl bg-amber-500 items-center justify-center shadow-lg shadow-amber-500/50">
+                        <AlertTriangle size={20} color="white" strokeWidth={3} />
+                    </View>
+                    <Text className="text-white font-black text-xl tracking-tight">External Identity</Text>
+                </View>
+                
+                <Text className="text-slate-400 font-medium leading-5 mb-8">
+                  This entity is not yet registered in the core database. Would you like to transmit a registration invitation?
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() => handleInvite(false)}
+                  disabled={loading}
+                  className="h-16 bg-amber-600 rounded-[22px] flex-row items-center justify-center gap-3 shadow-xl shadow-amber-500/30 border border-white/10"
+                >
+                  {loading ? <ActivityIndicator color="white" /> : (
+                      <>
+                        <Send size={18} color="white" strokeWidth={2.5} />
+                        <Text className="text-white font-black text-lg tracking-tight">Deploy Registration</Text>
+                      </>
+                  )}
+                </TouchableOpacity>
+              </MotiView>
+            )}
+          </AnimatePresence>
+
+          {/* Strategic Info Box */}
+          <MotiView 
+            transition={{ delay: 500 }}
+            from={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-12 p-8 rounded-[40px] bg-slate-900/40 border border-white/5 mb-12"
+          >
+            <Text className="text-white font-black text-lg tracking-tight mb-6">Onboarding Lifecycle</Text>
             
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{foundCoach.full_name}</Text>
-              <Text style={styles.profileEmail}>{foundCoach.email}</Text>
-              <View style={styles.infoRow}>
-                <Check size={14} color="#10B981" />
-                <Text style={styles.infoLabel}>Already registered on platform</Text>
-              </View>
-            </View>
-
-            <BrandedButton
-              title="Send Team Invite"
-              variant="primary"
-              onPress={() => handleInvite(true)}
-              loading={loading}
-              icon={<Send size={18} color="#FFFFFF" />}
-              style={styles.actionButton}
+            <OnboardingStep 
+                num="01" 
+                title="Transmit Link" 
+                desc="A secure neural handshake is dispatched via encrypted email." 
             />
-          </View>
-        )}
-
-        {/* Step 2: Not Found Flow */}
-        {searchState === 'not_found' && (
-          <View style={[styles.resultCard, { borderColor: '#F59E0B' }]}>
-            <View style={styles.resultHeader}>
-              <View style={[styles.statusBadge, { backgroundColor: '#F59E0B' }]}>
-                <AlertTriangle size={18} color="#FFFFFF" />
-              </View>
-              <Text style={styles.resultTitle}>Email Not Registered</Text>
-            </View>
-            
-            <Text style={styles.promptText}>
-              This email isn't registered yet. Would you like to invite them to download the app and join your team?
-            </Text>
-
-            <BrandedButton
-              title="Send Registration Invite"
-              variant="primary"
-              onPress={() => handleInvite(false)}
-              loading={loading}
-              icon={<Send size={18} color="#FFFFFF" />}
-              style={styles.actionButton}
+            <OnboardingStep 
+                num="02" 
+                title="Identity Sync" 
+                desc="Tapping the link establishes identity and brand alignment." 
             />
-          </View>
-        )}
-
-        {/* Info Box */}
-        <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>What happens next?</Text>
-          <Text style={styles.infoText}>
-            • The coach receives an invite email with a link{'\n'}
-            • Tapping the link connects them to your brand{'\n'}
-            • They automatically become a sub-coach in your team{'\n'}
-            • You can then assign clients and collaborate
-          </Text>
+            <OnboardingStep 
+                num="03" 
+                title="Full Integration" 
+                desc="The coach is unified with your roster, ready for deployment." 
+                isLast
+            />
+          </MotiView>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  instructionsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  instructionsTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  instructionsText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  searchIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: '#111827',
-  },
-  actionButton: {
-    marginTop: 4,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-  },
-  statusText: {
-    marginLeft: 8,
-    color: '#6B7280',
-    fontSize: 14,
-  },
-  resultCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 24,
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  resultHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  statusBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  resultTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  profileInfo: {
-    marginBottom: 16,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  profileEmail: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 8,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: '#10B981',
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-  promptText: {
-    fontSize: 15,
-    color: '#4B5563',
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  infoBox: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    marginBottom: 32,
-  },
-  infoTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E40AF',
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#1E3A8A',
-    lineHeight: 20,
-  },
-});
+const OnboardingStep = ({ num, title, desc, isLast }: any) => (
+    <View className={`flex-row gap-5 ${isLast ? '' : 'mb-8'}`}>
+        <View className="items-center">
+            <View className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
+                <Text className="text-blue-500 font-black text-xs">{num}</Text>
+            </View>
+            {!isLast && <View className="w-px flex-1 bg-slate-800 my-2" />}
+        </View>
+        <View className="flex-1">
+            <Text className="text-white font-black text-base tracking-tight mb-1">{title}</Text>
+            <Text className="text-slate-500 text-xs font-medium leading-4">{desc}</Text>
+        </View>
+    </View>
+);

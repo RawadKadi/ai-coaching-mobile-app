@@ -9,8 +9,7 @@ import { supabase } from '@/lib/supabase';
  * - Listens for real-time additions to coach_hierarchy
  * - Has periodic polling backup for reliability
  */
-export default function TeamInvitationMonitor() {
-  const router = useRouter();
+export default function TeamInvitationMonitor({ router }: { router: ReturnType<typeof useRouter> }) {
   const { coach } = useAuth();
   const [hasChecked, setHasChecked] = useState(false);
   const [invitationFound, setInvitationFound] = useState(false); // NEW: Track if we found an invitation
@@ -94,16 +93,20 @@ export default function TeamInvitationMonitor() {
     setHasChecked(true);
     setInvitationFound(true); // STOP all further checks!
     
-    // Navigate to welcome screen
-    setTimeout(() => {
-      router.push({
-        pathname: '/(coach)/team-welcome',
-        params: {
-          hierarchyId: data.id,
-          parentCoachName: data.parent_coach_name || 'Your Coach',
-        },
-      });
-    }, 200);
+    // Navigate to welcome screen safely
+    requestAnimationFrame(() => {
+      try {
+        router.push({
+          pathname: '/(coach)/team-welcome',
+          params: {
+            hierarchyId: data.id,
+            parentCoachName: data.parent_coach_name || 'Your Coach',
+          },
+        });
+      } catch (e) {
+        console.error('[TeamInvitationMonitor] Navigation failed', e);
+      }
+    });
   };
 
   // Check whenever coach ID becomes available or changes
@@ -165,15 +168,19 @@ export default function TeamInvitationMonitor() {
             pollInterval = null;
           }
           
-          setTimeout(() => {
-            router.push({
-              pathname: '/(coach)/team-welcome',
-              params: {
-                hierarchyId: newRecord.id,
-                parentCoachName: newRecord.parent_coach_name || 'Your Coach',
-              },
-            });
-          }, 100);
+          requestAnimationFrame(() => {
+            try {
+              router.push({
+                pathname: '/(coach)/team-welcome',
+                params: {
+                  hierarchyId: newRecord.id,
+                  parentCoachName: newRecord.parent_coach_name || 'Your Coach',
+                },
+              });
+            } catch (e) {
+              console.error('[TeamInvitationMonitor] Subscription navigation failed', e);
+            }
+          });
         }
       )
       .subscribe((status, err) => {

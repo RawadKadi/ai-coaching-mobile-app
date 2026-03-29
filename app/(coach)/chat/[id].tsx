@@ -40,12 +40,21 @@ import {
   Plus,
   Reply,
   Dumbbell,
-  Shield
+  Shield,
+  ArrowRight
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { ChatInputBar } from '@/components/ChatInputBar';
+import ChatMediaMessage from '@/components/ChatMediaMessage';
 import SchedulerModal from '@/components/SchedulerModal';
+import { MessageOverlay } from '@/components/MessageOverlay';
+import MealMessageCard from '@/components/MealMessageCard';
+import { uploadChatMedia } from '@/lib/uploadChatMedia';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { MotiView } from 'moti';
 import { Swipeable } from 'react-native-gesture-handler';
 
@@ -64,7 +73,7 @@ type Message = {
 };
 
 export default function CoachChatScreen() {
-  const { id } = useLocalSearchParams(); // This is the CLIENT ID (UUID)
+  const { id } = useLocalSearchParams(); 
   const router = useRouter();
   const { user, profile } = useAuth();
   const theme = useTheme();
@@ -80,6 +89,7 @@ export default function CoachChatScreen() {
   const [schedulerVisible, setSchedulerVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -93,15 +103,12 @@ export default function CoachChatScreen() {
   const loadChatData = async () => {
     try {
       setLoading(true);
-      
-      // 1. Get client details using the RPC which is the source of truth in main/v2
       const { data: cData, error: cError } = await supabase.rpc('get_client_details', { target_client_id: id });
       if (cError) throw cError;
       
       setClientProfile(cData);
-      setClientUserId(cData.user_id); // In main logic, user_id from RPC is the profile/user id
+      setClientUserId(cData.user_id);
 
-      // 2. Get messages (between coach-auth-user-id and client-auth-user-id)
       const { data: mData, error: mError } = await supabase.from('messages')
         .select('*')
         .or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${cData.user_id}),and(sender_id.eq.${cData.user_id},recipient_id.eq.${profile?.id})`)
@@ -111,7 +118,6 @@ export default function CoachChatScreen() {
       if (mError) throw mError;
       setMessages(mData || []);
       
-      // 3. Real-time subscription
       const channel = supabase.channel(`coach-convo-${id}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
           const nm = p.new as Message;
@@ -119,6 +125,9 @@ export default function CoachChatScreen() {
             setMessages(prev => [nm, ...prev]);
             if (nm.sender_id !== profile?.id) markAsRead(nm.id);
           }
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
+          setMessages(prev => prev.map(m => m.id === p.new.id ? (p.new as Message) : m));
         })
         .subscribe();
 
@@ -135,8 +144,8 @@ export default function CoachChatScreen() {
     refreshUnreadCount();
   };
 
-  const sendMessage = async (text: string, replyId?: string) => {
-    if (!profile || !clientUserId || !text.trim()) return;
+  const handleSendText = async (text: string, replyId?: string) => {
+    if (!profile || !clientUserId) return;
     setSending(true);
     const msg = { sender_id: user?.id, recipient_id: clientUserId, content: text, read: false, reply_to_id: replyId, ai_generated: false };
     const { error } = await supabase.from('messages').insert(msg);
@@ -145,58 +154,225 @@ export default function CoachChatScreen() {
     setReplyingTo(null);
   };
 
+  const handleSendMedia = async (jsonContent: string, replyId?: string) => {
+    if (!profile || !clientUserId) return;
+    
+    let finalContent = jsonContent;
+    try {
+      const p = JSON.parse(jsonContent);
+      // Only upload if it's a local file (has isOptimistic flag or file:// uri)
+      if (p.isOptimistic && p.url && p.url.startsWith('file://')) {
+        setSending(true);
+        const folder = p.type === 'video' ? 'videos' : (p.type === 'document' ? 'documents' : 'images');
+        const publicUrl = await uploadChatMedia(p.url, folder);
+        finalContent = JSON.stringify({ ...p, url: publicUrl, isOptimistic: false });
+      }
+    } catch (e) {
+      console.error('[CoachChat] Media upload failed:', e);
+      Alert.alert('Upload Error', 'Failed to upload media. Please try again.');
+      setSending(false);
+      return;
+    }
+
+    setSending(true);
+    const msg = { 
+      sender_id: user?.id, 
+      recipient_id: clientUserId, 
+      content: finalContent, 
+      read: false, 
+      reply_to_id: replyId, 
+      ai_generated: false 
+    };
+    const { error } = await supabase.from('messages').insert(msg);
+    if (error) {
+      console.error('[CoachChat] Message insert failed:', error);
+      Alert.alert('Error', 'Failed to send media');
+    }
+    setSending(false);
+    setReplyingTo(null);
+  };
+
+  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward') => {
+    if (!activeMessageForMenu) return;
+    
+    if (action === 'reply') {
+      setReplyingTo(activeMessageForMenu);
+    } else if (action === 'copy') {
+      let textToCopy = activeMessageForMenu.content;
+      try {
+        const p = JSON.parse(activeMessageForMenu.content);
+        if (p.text) textToCopy = p.text;
+      } catch {}
+      await Clipboard.setStringAsync(textToCopy);
+    } else if (action === 'delete') {
+      if (activeMessageForMenu.sender_id !== user?.id) {
+        Alert.alert('Access Denied', 'You can only delete your own messages.');
+        return;
+      }
+
+      // Optimistic update
+      const msgId = activeMessageForMenu.id;
+      const deletedContent = JSON.stringify({
+        type: 'deleted',
+        deleted_by: user?.id,
+        original_type: 'text'
+      });
+
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: deletedContent } : m));
+      
+      const { error } = await supabase.from('messages').update({ content: deletedContent }).eq('id', msgId);
+      if (error) {
+        console.error('[CoachChat] Deletion failed:', error);
+        Alert.alert('Error', 'Failed to delete message: ' + error.message);
+      }
+    }
+    setActiveMessageForMenu(null);
+  };
+
+  const handleReaction = async (emoji: string) => {
+    if (!activeMessageForMenu || !user) return;
+    
+    const msgId = activeMessageForMenu.id;
+    let currentContent: any = {};
+    try {
+      currentContent = JSON.parse(activeMessageForMenu.content);
+    } catch {
+      currentContent = { text: activeMessageForMenu.content, type: 'text' };
+    }
+    
+    const reactions = currentContent.reactions || [];
+    const existingIndex = reactions.findIndex((r: any) => r.user_id === user.id && r.emoji === emoji);
+    
+    let newReactions = [...reactions];
+    if (existingIndex > -1) {
+      newReactions.splice(existingIndex, 1);
+    } else {
+      newReactions.push({ emoji, user_id: user.id });
+    }
+    
+    const updatedContent = JSON.stringify({ ...currentContent, reactions: newReactions });
+    
+    // Optimistic update
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: updatedContent } : m));
+    
+    const { error } = await supabase
+      .from('messages')
+      .update({ content: updatedContent })
+      .eq('id', msgId);
+      
+    if (error) {
+      console.error('[CoachChat] Reaction failed:', error);
+      Alert.alert('Error', 'Failed to react: ' + error.message);
+    }
+    setActiveMessageForMenu(null);
+  };
+
   const scrollToMessage = useCallback((messageId: string) => {
      const idx = messages.findIndex(m => m.id === messageId);
      if (idx !== -1) {
-         setHighlightedMessageId(messageId);
          flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5, viewOffset: 80 });
-         setTimeout(() => setHighlightedMessageId(null), 2000);
+         setHighlightedMessageId(messageId);
+         setTimeout(() => setHighlightedMessageId(null), 1500);
      }
   }, [messages]);
 
-  const renderMessageContent = (item: Message, isMe: boolean) => {
-    const isHighlighted = item.id === highlightedMessageId;
-    const repliedMsg = item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null;
+  const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme }: any) => {
+    const [isExpanded, setIsExpanded] = React.useState(false);
+    let displayContent = item.content;
+    let reactions: any[] = [];
+    let isDeleted = false;
+    let deletedBy = '';
+
+    let isMedia = false;
+    try {
+      const p = JSON.parse(item.content);
+      displayContent = p.text || item.content;
+      reactions = p.reactions || [];
+      if (p.type === 'deleted') {
+        isDeleted = true;
+        deletedBy = p.deleted_by;
+      }
+      if (['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion'].includes(p.type)) isMedia = true;
+      if (p.type === 'meal' || p.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
+    } catch {}
+
+    if (isDeleted) {
+      const isDeletedByMe = deletedBy === user?.id;
+      const deleterName = isDeletedByMe ? 'You' : (clientProfile?.profiles?.full_name || 'User');
+      return (
+        <View className="px-5 py-3 rounded-[24px] border border-slate-800 bg-slate-900/40 italic">
+          <Text className="text-slate-500 text-sm">
+            {isDeletedByMe ? 'You deleted this message' : `${deleterName} deleted this message`}
+          </Text>
+        </View>
+      );
+    }
+
+    if (isMedia) return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+
+    const shouldTruncate = displayContent.length > 300;
+    const truncatedContent = shouldTruncate && !isExpanded ? displayContent.slice(0, 300) + '...' : displayContent;
 
     return (
+      <View style={{ position: 'relative' }}>
         <MotiView 
             from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
             animate={{ 
                 scale: isHighlighted ? 1.05 : 1,
-                backgroundColor: isHighlighted 
-                    ? (isMe ? '#60A5FA' : '#475569') // High-contrast light blink
-                    : (isMe ? theme.colors.primary : '#334155') 
+                backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
             }}
             transition={{ type: 'timing', duration: 250 }}
             className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-            style={{ 
-                maxWidth: '85%',
-                minWidth: isMe ? 0 : 120, // Lengthier received bubbles
-                backgroundColor: isMe ? theme.colors.primary : '#334155' 
-            }}
+            style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
         >
           {repliedMsg && (
              <TouchableOpacity 
                 activeOpacity={0.8}
-                onPress={() => scrollToMessage(item.reply_to_id!)}
+                onPress={onReplyPress}
                 className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
              >
                 <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Client'}</Text>
-                <Text className="text-white/80 text-xs" numberOfLines={1}>{repliedMsg.content}</Text>
+                <Text className="text-white/80 text-xs" numberOfLines={1}>
+                  {(() => {
+                    try { const p = JSON.parse(repliedMsg.content); return p.text || repliedMsg.content; } 
+                    catch { return repliedMsg.content; }
+                  })()}
+                </Text>
              </TouchableOpacity>
           )}
-          <Text className="text-[15px] font-medium leading-[22px] text-white">{item.content}</Text>
+          <Text className="text-[15px] font-medium leading-[22px] text-white">
+            {truncatedContent}
+          </Text>
+          {shouldTruncate && (
+            <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
+              <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
+                {isExpanded ? 'Show Less' : 'Read More'}
+              </Text>
+            </TouchableOpacity>
+          )}
           <View className="flex-row items-center justify-end gap-1.5 mt-2">
              <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
              {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
           </View>
         </MotiView>
+
+        {reactions.length > 0 && (
+          <View className="flex-row flex-wrap mt-[-8px] ml-2">
+            {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+              .map(([emoji, count]: any) => (
+                <View key={emoji} className="bg-slate-800 rounded-full px-2 py-0.5 border border-white/5 flex-row items-center mr-1 mb-1">
+                  <Text className="text-[12px]">{emoji}</Text>
+                  {count > 1 && <Text className="text-[10px] text-white ml-1 font-bold">{count}</Text>}
+                </View>
+            ))}
+          </View>
+        )}
+      </View>
     );
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender_id === user?.id;
-    
     const renderLeftActions = (progress: any, dragX: any) => {
         const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
         return (
@@ -210,21 +386,22 @@ export default function CoachChatScreen() {
       <Swipeable
         ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
         renderLeftActions={renderLeftActions}
-        onSwipeableWillOpen={() => {
-            setReplyingTo(item);
-            swipeableRefs.current[item.id]?.close();
-        }}
-        friction={1}
-        overshootLeft={false}
-        enableTrackpadTwoFingerGesture
-        containerStyle={{ marginBottom: 16 }}
+        onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
+        friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
       >
         <TouchableOpacity 
             activeOpacity={0.9} 
-            onLongPress={() => { setReplyingTo(item); }}
+            onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
         >
-            {renderMessageContent(item, isMe)}
+                  <MessageBubble 
+                    item={item} 
+                    isMe={isMe} 
+                    repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
+                    isHighlighted={item.id === highlightedMessageId}
+                    onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+                    theme={theme}
+                  />
         </TouchableOpacity>
       </Swipeable>
     );
@@ -232,64 +409,55 @@ export default function CoachChatScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
-      <StatusBar barStyle="light-content" translucent />
-      
-      {/* Precision Header */}
-      <View style={{ paddingTop: insets.top, backgroundColor: '#020617' }} className="border-b border-white/5">
-        <View className="flex-row items-center justify-between px-6 py-4">
-            <View className="flex-row items-center gap-4">
-                <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
-                    <ArrowLeft size={18} color="white" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => router.push(`/(coach)/clients/${id}`)} className="flex-row items-center gap-3">
-                    <BrandedAvatar name={clientProfile?.profiles?.full_name} size={42} imageUrl={clientProfile?.profiles?.avatar_url} />
-                    <View>
-                        <Text className="text-white font-black text-lg tracking-tight">{clientProfile?.profiles?.full_name || 'Protocol Hub'}</Text>
-                        <View className="flex-row items-center gap-1.5">
-                            <View className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                            <Text className="text-slate-500 text-[9px] font-black uppercase tracking-[2px]">Encrypted Stream</Text>
-                        </View>
-                    </View>
-                </TouchableOpacity>
-            </View>
-            <TouchableOpacity onPress={() => setMenuVisible(true)} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
-                <MoreVertical size={20} color="#64748B" />
-            </TouchableOpacity>
+      <StatusBar barStyle="light-content" />
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]} className="border-b border-white/5 bg-[#020617]/80">
+        <View className="flex-row items-center justify-between px-4 pb-4">
+          <View className="flex-row items-center gap-3">
+             <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 items-center justify-center rounded-full bg-white/5">
+                <ArrowLeft size={20} color="#94A3B8" />
+             </TouchableOpacity>
+             <TouchableOpacity className="flex-row items-center gap-3">
+                 <BrandedAvatar imageUrl={clientProfile?.profiles?.avatar_url} name={clientProfile?.profiles?.full_name || 'Protocol Hub'} size={40} />
+                <View>
+                    <Text className="text-white font-bold text-base">{clientProfile?.profiles?.full_name || 'Protocol Hub'}</Text>
+                    <View className="flex-row items-center gap-1.5"><View className="w-2 h-2 rounded-full bg-emerald-500" /><Text className="text-slate-400 text-[10px] font-medium">Online</Text></View>
+                </View>
+             </TouchableOpacity>
+          </View>
+          <View className="flex-row items-center gap-2">
+            <TouchableOpacity onPress={() => setSchedulerVisible(true)} className="w-10 h-10 items-center justify-center rounded-full bg-white/5"><Calendar size={20} color="#F8FAFC" /></TouchableOpacity>
+            <TouchableOpacity onPress={() => setMenuVisible(true)} className="w-10 h-10 items-center justify-center rounded-full bg-white/5"><MoreVertical size={20} color="#94A3B8" /></TouchableOpacity>
+          </View>
         </View>
       </View>
 
-      <View style={{ flex: 1 }} className="px-6">
-          {loading ? (
-            <View className="flex-1 items-center justify-center">
-                <ActivityIndicator color="#3B82F6" />
-                <Text className="text-slate-500 text-xs mt-4 font-black uppercase tracking-widest">Opening Secure Comms...</Text>
-            </View>
-          ) : (
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                renderItem={renderMessage}
-                keyExtractor={item => item.id}
-                inverted
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 24 }}
-                initialNumToRender={15}
-                maxToRenderPerBatch={10}
-                windowSize={10}
-                removeClippedSubviews={Platform.OS !== 'web'}
-                onScrollToIndexFailed={(info) => {
-                    flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
-                }}
-            />
-          )}
-      </View>
-
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }} className="bg-slate-950 border-t border-white/5">
-              <ChatInputBar onSendText={sendMessage} onSendMedia={async () => {}} sending={sending} replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
-          </View>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View> : (
+             <FlatList
+                ref={flatListRef} data={messages} renderItem={renderMessage} keyExtractor={item => item.id}
+                inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
+                initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
+                onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
+             />
+        )}
+        <ChatInputBar onSendText={handleSendText} onSendMedia={handleSendMedia} replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
       </KeyboardAvoidingView>
 
+      <SchedulerModal 
+        visible={schedulerVisible} 
+        onClose={() => setSchedulerVisible(false)} 
+        targetClientId={id as string}
+        clientContext={{ 
+          name: clientProfile?.profiles?.full_name || 'Athlete', 
+          timezone: 'UTC' 
+        }}
+        existingSessions={[]} 
+        onConfirm={async (sessions) => {
+          // Handle confirm logic here
+          console.log('Confirmed sessions:', sessions);
+        }}
+      />
+      
       <Modal visible={menuVisible} transparent animationType="slide">
           <Pressable className="flex-1 bg-black/60 justify-end" onPress={() => setMenuVisible(false)}>
               <MotiView from={{ translateY: 300 }} animate={{ translateY: 0 }} className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10">
@@ -301,19 +469,18 @@ export default function CoachChatScreen() {
           </Pressable>
       </Modal>
 
-      {clientProfile && (
-        <SchedulerModal
-          visible={schedulerVisible}
-          onClose={() => setSchedulerVisible(false)}
-          onConfirm={async () => { setSchedulerVisible(false); }}
-          clientContext={{ 
-            name: clientProfile?.profiles?.full_name || 'Athlete', 
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone 
-          }}
-          existingSessions={[]}
-          targetClientId={id as string}
-        />
-      )}
+      <MessageOverlay 
+          visible={!!activeMessageForMenu} message={activeMessageForMenu} isMe={activeMessageForMenu?.sender_id === user?.id}
+          onClose={() => setActiveMessageForMenu(null)} onReaction={handleReaction} onAction={handleAction} 
+          renderMessageContent={(msg: any, isMe: boolean) => (
+            <MessageBubble 
+              item={msg} 
+              isMe={isMe} 
+              theme={theme} 
+              repliedMsg={msg.reply_to_id ? messages.find(m => m.id === msg.reply_to_id) : null}
+            />
+          )}
+      />
     </View>
   );
 }
@@ -321,9 +488,8 @@ export default function CoachChatScreen() {
 const OptionItem = ({ icon, title, sub, onPress }: any) => (
     <TouchableOpacity onPress={onPress} className="flex-row items-center gap-5 p-5 bg-slate-950 rounded-[32px] border border-white/5 mb-4">
         <View className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5">{icon}</View>
-        <View>
-            <Text className="text-white font-black text-base">{title}</Text>
-            <Text className="text-slate-500 text-[11px] font-medium">{sub}</Text>
-        </View>
+        <View><Text className="text-white font-black text-base">{title}</Text><Text className="text-slate-500 text-[11px] font-medium">{sub}</Text></View>
     </TouchableOpacity>
 );
+
+const styles = StyleSheet.create({ header: { backgroundColor: '#020617' } });

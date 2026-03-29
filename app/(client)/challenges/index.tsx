@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
-import { MotiView } from 'moti';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Target, CheckCircle, Circle, Lock, ChevronRight, Zap, Info, MessageSquare } from 'lucide-react-native';
+import { Target, CheckCircle, Circle, Lock, ChevronRight, Zap, Info, MessageSquare, ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import type { TodaysSubChallenge } from '@/types/challenges-v3';
 
 export default function ClientChallengesScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const theme = useTheme();
 
@@ -68,10 +69,14 @@ export default function ClientChallengesScreen() {
 
   const grouped = todaysChallenges.reduce((acc, sub) => {
     const key = sub.mother_challenge_id;
-    if (!acc[key]) acc[key] = { motherName: sub.mother_name, subs: [] };
+    if (!acc[key]) acc[key] = { 
+        motherId: sub.mother_challenge_id, 
+        motherName: sub.mother_name, 
+        subs: [] 
+    };
     acc[key].subs.push(sub);
     return acc;
-  }, {} as Record<string, { motherName: string; subs: TodaysSubChallenge[] }>);
+  }, {} as Record<string, { motherId: string; motherName: string; subs: TodaysSubChallenge[] }>);
 
   const motherChallenges = Object.values(grouped);
   const completedCount = todaysChallenges.filter(s => s.completed).length;
@@ -79,37 +84,48 @@ export default function ClientChallengesScreen() {
   const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   return (
-    <View className="flex-1 bg-slate-950">
-      <SafeAreaView className="flex-1">
-        <ScrollView className="flex-1" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3B82F6" />}>
+    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3B82F6" />}
+          showsVerticalScrollIndicator={false}
+        >
             {/* Header Content */}
-            <MotiView from={{ opacity: 0, translateY: -10 }} animate={{ opacity: 1, translateY: 0 }} className="px-6 pt-10 pb-6">
-                <Text className="text-white text-3xl font-black">Daily Missions</Text>
-                <Text className="text-slate-500 font-bold text-xs uppercase tracking-widest mt-1">
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                </Text>
-            </MotiView>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 40, paddingBottom: 16 }}>
+                <TouchableOpacity 
+                    onPress={() => router.back()} 
+                    style={{ padding: 12, backgroundColor: '#0f172a', borderRadius: 16, borderWidth: 1, borderColor: '#1e293b', marginRight: 16 }}
+                >
+                    <ArrowLeft size={20} color="#94A3B8" />
+                </TouchableOpacity>
+                <View>
+                    <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>Daily Missions</Text>
+                    <Text style={{ color: '#64748b', fontWeight: 'bold', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                    </Text>
+                </View>
+            </View>
 
             {/* Progress Engine Card */}
-            <View className="px-6 mb-8">
-                <View className="bg-slate-900/50 border border-slate-900 rounded-[32px] p-6">
-                    <View className="flex-row justify-between items-center mb-4">
-                        <View className="flex-row items-center gap-2">
-                            <View className="w-8 h-8 rounded-xl bg-blue-600/10 items-center justify-center">
+            <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
+                <View style={{ backgroundColor: '#0f172a80', borderWidth: 1, borderColor: '#0f172a', borderRadius: 32, padding: 24 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ width: 32, height: 32, borderRadius: 12, backgroundColor: '#3b82f61a', alignItems: 'center', justifyContent: 'center' }}>
                                 <Zap size={16} color="#3B82F6" />
                             </View>
-                            <Text className="text-white font-black">Deployment Status</Text>
+                            <Text style={{ color: 'white', fontWeight: '900' }}>Deployment Status</Text>
                         </View>
-                        <Text className="text-blue-500 font-black text-lg">{Math.round(progressPercent)}%</Text>
+                        <Text style={{ color: '#3B82F6', fontWeight: '900', fontSize: 18 }}>{Math.round(progressPercent)}%</Text>
                     </View>
-                    <View className="h-2 bg-slate-950 rounded-full overflow-hidden">
-                        <MotiView 
-                            from={{ width: '0%' }}
-                            animate={{ width: `${progressPercent}%` }}
-                            className="h-full bg-blue-600 rounded-full"
+                    <View style={{ height: 8, backgroundColor: '#020617', borderRadius: 999, overflow: 'hidden' }}>
+                        <View 
+                            style={{ height: '100%', backgroundColor: '#2563eb', borderRadius: 999, width: `${progressPercent}%` }}
                         />
                     </View>
-                    <Text className="text-slate-600 text-[10px] font-bold uppercase tracking-widest mt-4">
+                    <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 16 }}>
                         {completedCount} of {totalCount} objectives secured
                     </Text>
                 </View>
@@ -117,49 +133,56 @@ export default function ClientChallengesScreen() {
 
             {/* Mother Groupings */}
             {motherChallenges.length === 0 ? (
-                <View className="mx-6 p-12 bg-slate-900/30 rounded-[32px] border border-slate-900 items-center">
+                <View style={{ marginHorizontal: 24, padding: 48, backgroundColor: '#0f172a4d', borderRadius: 32, borderWidth: 1, borderColor: '#0f172a', alignItems: 'center' }}>
                     <Target size={48} color="#1E293B" />
-                    <Text className="text-slate-600 font-bold mt-4 italic">No protocols active for local sector</Text>
+                    <Text style={{ color: '#475569', fontWeight: 'bold', marginTop: 16, fontStyle: 'italic' }}>No protocols active for local sector</Text>
                 </View>
             ) : (
                 motherChallenges.map((mother, mIdx) => (
-                    <View key={mother.motherName} className="mb-8">
-                        <View className="px-6 flex-row items-center gap-3 mb-4">
-                            <View className="w-1 h-4 bg-blue-600 rounded-full" />
-                            <Text className="text-slate-400 font-black text-sm uppercase tracking-widest">{mother.motherName}</Text>
-                        </View>
-                        <View className="px-6 space-y-3">
+                    <View key={mother.motherId} style={{ marginBottom: 32 }}>
+                        <TouchableOpacity 
+                            onPress={() => router.push(`/(client)/challenges/${mother.motherId}`)}
+                            style={{ paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}
+                        >
+                            <View style={{ width: 4, height: 16, backgroundColor: '#2563eb', borderRadius: 999 }} />
+                            <Text style={{ color: '#94a3b8', fontWeight: '900', fontSize: 14, textTransform: 'uppercase', letterSpacing: 1.5, flex: 1 }}>{mother.motherName}</Text>
+                            <ChevronRight size={14} color="#475569" />
+                        </TouchableOpacity>
+                        <View style={{ paddingHorizontal: 24, gap: 12 }}>
                             {mother.subs.map((sub, sIdx) => (
-                                <MotiView 
+                                <TouchableOpacity 
                                     key={sub.id}
-                                    from={{ opacity: 0, translateX: -20 }}
-                                    animate={{ opacity: 1, translateX: 0 }}
-                                    transition={{ delay: (mIdx * 100) + (sIdx * 50) }}
+                                    onPress={() => toggleSubChallenge(sub)}
+                                    style={{ 
+                                        flexDirection: 'row', 
+                                        alignItems: 'flex-start', 
+                                        padding: 20, 
+                                        borderRadius: 32, 
+                                        borderWidth: 2, 
+                                        backgroundColor: sub.completed ? '#0f172a' : '#0f172a4d',
+                                        borderColor: sub.completed ? '#1e293b' : '#0f172a',
+                                        opacity: sub.completed ? 0.6 : 1
+                                    }}
                                 >
-                                    <TouchableOpacity 
-                                        onPress={() => toggleSubChallenge(sub)}
-                                        className={`flex-row items-start p-5 rounded-[32px] border-2 ${sub.completed ? 'bg-slate-900 border-slate-800 opacity-60' : 'bg-slate-900/30 border-slate-900'}`}
-                                    >
-                                        <Text className="text-2xl mr-4">{getFocusEmoji(sub.focus_type)}</Text>
-                                        <View className="flex-1 pr-2">
-                                            <Text className={`text-base font-black ${sub.completed ? 'text-slate-500 line-through' : 'text-white'}`}>{sub.name}</Text>
-                                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
-                                                {sub.focus_type} • {sub.intensity}
-                                            </Text>
-                                        </View>
-                                        <View className="pt-1">
-                                            {sub.completed ? (
-                                                <View className="w-7 h-7 rounded-full bg-blue-600 items-center justify-center">
-                                                    <CheckCircle size={16} color="white" />
-                                                </View>
-                                            ) : (
-                                                <View className="w-7 h-7 rounded-full border-2 border-slate-800 items-center justify-center">
-                                                    <Info size={12} color="#1E293B" />
-                                                </View>
-                                            )}
-                                        </View>
-                                    </TouchableOpacity>
-                                </MotiView>
+                                    <Text style={{ fontSize: 24, marginRight: 16 }}>{getFocusEmoji(sub.focus_type)}</Text>
+                                    <View style={{ flex: 1, paddingRight: 8 }}>
+                                        <Text style={{ fontSize: 16, fontWeight: '900', color: sub.completed ? '#64748b' : 'white', textDecorationLine: sub.completed ? 'line-through' : 'none' }}>{sub.name}</Text>
+                                        <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
+                                            {sub.focus_type} • {sub.intensity}
+                                        </Text>
+                                    </View>
+                                    <View style={{ paddingTop: 4 }}>
+                                        {sub.completed ? (
+                                            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
+                                                <CheckCircle size={16} color="white" />
+                                            </View>
+                                        ) : (
+                                            <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Info size={12} color="#1E293B" />
+                                            </View>
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
                             ))}
                         </View>
                     </View>
@@ -168,13 +191,13 @@ export default function ClientChallengesScreen() {
 
             {/* Upcoming protocols */}
             {upcomingChallenges.length > 0 && (
-                <View className="px-6 mt-4">
-                    <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-4 px-1">Upcoming Sequences</Text>
+                <View style={{ paddingHorizontal: 24, marginTop: 16 }}>
+                    <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16, paddingHorizontal: 4 }}>Upcoming Sequences</Text>
                     {upcomingChallenges.map((c, i) => (
-                        <View key={c.id} className="p-5 bg-slate-900/20 rounded-[28px] border border-slate-900 mb-2 opacity-50 flex-row items-center">
-                            <Lock size={16} color="#475569" className="mr-4" />
-                            <Text className="text-slate-400 font-bold flex-1">{c.name}</Text>
-                            <Text className="text-slate-600 text-[10px] font-black">LOCKED</Text>
+                        <View key={c.id} style={{ padding: 20, backgroundColor: '#0f172a33', borderRadius: 28, borderWidth: 1, borderColor: '#0f172a', marginBottom: 8, opacity: 0.5, flexDirection: 'row', alignItems: 'center' }}>
+                            <Lock size={16} color="#475569" style={{ marginRight: 16 }} />
+                            <Text style={{ color: '#94a3b8', fontWeight: 'bold', flex: 1 }}>{c.name}</Text>
+                            <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900' }}>LOCKED</Text>
                         </View>
                     ))}
                 </View>
@@ -182,13 +205,13 @@ export default function ClientChallengesScreen() {
 
             {/* Coach Signal */}
             {coachName ? (
-                <View className="mx-6 mt-12 mb-12 p-6 bg-blue-600/5 rounded-[32px] border border-blue-600/10 flex-row items-center">
-                    <View className="w-12 h-12 rounded-2xl bg-blue-600/10 items-center justify-center mr-4">
+                <View style={{ marginHorizontal: 24, marginTop: 48, marginBottom: 48, padding: 24, backgroundColor: '#2563eb0d', borderRadius: 32, borderWidth: 1, borderColor: '#2563eb1a', flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: '#2563eb1a', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
                         <MessageSquare size={20} color="#3B82F6" />
                     </View>
-                    <View className="flex-1">
-                        <Text className="text-blue-500 font-black text-xs uppercase tracking-widest">Signal from {coachName}</Text>
-                        <Text className="text-slate-400 font-bold mt-1 text-sm italic">"Complete today's protocols to advance to the next stage."</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#3B82F6', fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>Signal from {coachName}</Text>
+                        <Text style={{ color: '#94a3b8', fontWeight: 'bold', marginTop: 4, fontSize: 14, fontStyle: 'italic' }}>"Complete today's protocols to advance to the next stage."</Text>
                     </View>
                 </View>
             ) : null}

@@ -2,19 +2,18 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Check, Users, UserPlus, AlertCircle } from 'lucide-react-native';
+import { Check, Users, UserPlus, AlertCircle, ArrowLeft, ChevronRight, Shield } from 'lucide-react-native';
+import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrandColors, useTheme } from '@/contexts/BrandContext';
-import { BrandedHeader } from '@/components/BrandedHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Client {
   client_id: string;
@@ -31,8 +30,9 @@ interface SubCoach {
 
 export default function ReassignClientsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { coach } = useAuth();
-  const { primary } = useBrandColors();
+  const { primary, secondary } = useBrandColors();
   const theme = useTheme();
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -93,7 +93,6 @@ export default function ReassignClientsScreen() {
 
       Alert.alert('Success', `Assigned ${clientIds.length} clients successfully.`);
       
-      // Refresh list or go back if empty
       const remaining = clients.filter(c => !selectedClients.has(c.client_id));
       if (remaining.length === 0) {
         router.back();
@@ -111,86 +110,112 @@ export default function ReassignClientsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <BrandedHeader title="Reassign Clients" showBackButton onBackPress={router.back} />
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={primary} />
-        </View>
-      </SafeAreaView>
+      <View className="flex-1 bg-slate-950 items-center justify-center">
+        <ActivityIndicator color="#3B82F6" />
+        <Text className="text-slate-500 mt-4 font-bold tracking-widest text-[10px] uppercase">Reconfiguring Neural Network...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <BrandedHeader title="Reassign Clients" showBackButton onBackPress={router.back} />
+    <View className="flex-1 bg-slate-950">
+      <View 
+        style={{ paddingTop: insets.top + 16 }} 
+        className="px-6 pb-6 flex-row items-center gap-4 border-b border-white/5 bg-slate-950"
+      >
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          className="p-2 bg-slate-900 rounded-full border border-white/5"
+        >
+          <ArrowLeft size={20} color="#94A3B8" />
+        </TouchableOpacity>
+        <View>
+            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Growth Center</Text>
+            <Text className="text-white text-xl font-black tracking-tight">Reassign Clients</Text>
+        </View>
+      </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Unassigned Clients List */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-            1. Select Unassigned Clients ({clients.length})
-          </Text>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Step 1: Select Clients */}
+        <View className="px-6 mt-8">
+            <View className="flex-row items-center justify-between mb-6">
+                <Text className="text-white text-xl font-black tracking-tighter">1. Select Target Athletes</Text>
+                <View className="bg-blue-600/10 px-3 py-1 rounded-full border border-blue-600/20">
+                    <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">{clients.length} Unassigned</Text>
+                </View>
+            </View>
           
           {clients.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Check size={24} color={theme.colors.success} />
-              <Text style={[styles.emptyText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-                No unassigned clients. Great job!
-              </Text>
-            </View>
+            <MotiView 
+                from={{ opacity: 0 }} 
+                animate={{ opacity: 1 }}
+                className="py-12 items-center justify-center bg-emerald-500/5 rounded-[32px] border border-emerald-500/20 border-dashed"
+            >
+              <Check size={32} color="#10B981" />
+              <Text className="text-emerald-500 font-bold mt-4 tracking-tight">All identities synchronized.</Text>
+            </MotiView>
           ) : (
-            clients.map(client => {
+            clients.map((client, index) => {
               const isSelected = selectedClients.has(client.client_id);
               return (
-                <TouchableOpacity
+                <MotiView
                   key={client.client_id}
-                  style={[
-                    styles.card,
-                    { backgroundColor: theme.colors.surface, borderColor: isSelected ? primary : theme.colors.border },
-                    isSelected && { backgroundColor: `${primary}10` }
-                  ]}
-                  onPress={() => toggleClient(client.client_id)}
+                  from={{ opacity: 0, translateX: -10 }}
+                  animate={{ opacity: 1, translateX: 0 }}
+                  transition={{ delay: index * 50 }}
+                  className="mb-3"
                 >
-                  <View style={[styles.checkbox, { borderColor: isSelected ? primary : '#D1D5DB', backgroundColor: isSelected ? primary : 'transparent' }]}>
-                    {isSelected && <Check size={14} color="#FFF" />}
-                  </View>
-                  <View>
-                    <Text style={[styles.name, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{client.client_name}</Text>
-                    <Text style={[styles.email, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{client.client_email}</Text>
-                  </View>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ borderWidth: isSelected ? 2 : 1 }}
+                    className={`p-5 rounded-[24px] flex-row items-center gap-4 ${isSelected ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-slate-900/40'}`}
+                    onPress={() => toggleClient(client.client_id)}
+                  >
+                    <View className={`w-6 h-6 rounded-lg border-2 items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-700 bg-slate-950'}`}>
+                      {isSelected && <Check size={14} color="white" strokeWidth={3} />}
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-white font-black text-base tracking-tight">{client.client_name}</Text>
+                      <Text className="text-slate-500 text-xs font-medium">{client.client_email}</Text>
+                    </View>
+                  </TouchableOpacity>
+                </MotiView>
               );
             })
           )}
         </View>
 
-        {/* Target Coach Selection */}
+        {/* Step 2: Select Coach */}
         {clients.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>
-              2. Select New Coach
-            </Text>
+          <View className="px-6 mt-10">
+            <Text className="text-white text-xl font-black tracking-tighter mb-6">2. Strategic Deployment</Text>
             
-            {coaches.map(c => {
+            {coaches.map((c, index) => {
               const isSelected = selectedCoachId === c.coach_id;
               return (
-                <TouchableOpacity
+                <MotiView
                   key={c.coach_id}
-                  style={[
-                    styles.card,
-                    { backgroundColor: theme.colors.surface, borderColor: isSelected ? primary : theme.colors.border },
-                    isSelected && { backgroundColor: `${primary}10` }
-                  ]}
-                  onPress={() => setSelectedCoachId(c.coach_id)}
+                  from={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 200 + (index * 50) }}
+                  className="mb-3"
                 >
-                  <View style={[styles.radio, { borderColor: isSelected ? primary : '#D1D5DB' }]}>
-                    {isSelected && <View style={[styles.radioInner, { backgroundColor: primary }]} />}
-                  </View>
-                  <View>
-                    <Text style={[styles.name, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}>{c.full_name}</Text>
-                    <Text style={[styles.email, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>{c.client_count} clients</Text>
-                  </View>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ borderWidth: isSelected ? 2 : 1 }}
+                    className={`p-5 rounded-[24px] flex-row items-center gap-4 ${isSelected ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/5 bg-slate-900/40'}`}
+                    onPress={() => setSelectedCoachId(c.coach_id)}
+                  >
+                    <View className={`w-6 h-6 rounded-full border-2 items-center justify-center ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-700 bg-slate-950'}`}>
+                      {isSelected && <View className="w-2 h-2 rounded-full bg-white" />}
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-white font-black text-base tracking-tight">{c.full_name}</Text>
+                      <View className="flex-row items-center gap-2 mt-1">
+                        <Users size={12} color="#94A3B8" />
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{c.client_count} Assigned</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </MotiView>
               );
             })}
           </View>
@@ -199,91 +224,30 @@ export default function ReassignClientsScreen() {
 
       {/* Footer Action */}
       {clients.length > 0 && (
-        <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-          <View>
-            <Text style={[styles.footerText, { color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily }]}>
-              Assigning {selectedClients.size} clients to {selectedCoachId ? coaches.find(c => c.coach_id === selectedCoachId)?.full_name : '...'}
-            </Text>
-          </View>
+        <MotiView 
+            from={{ translateY: 100 }}
+            animate={{ translateY: 0 }}
+            className="absolute bottom-0 left-0 right-0 p-6 bg-slate-950 border-t border-white/5"
+        >
           <TouchableOpacity
-            style={[
-              styles.assignButton,
-              { backgroundColor: primary },
-              (selectedClients.size === 0 || !selectedCoachId || assigning) && { opacity: 0.5 }
-            ]}
+            style={{ opacity: (selectedClients.size === 0 || !selectedCoachId || assigning) ? 0.5 : 1 }}
             disabled={selectedClients.size === 0 || !selectedCoachId || assigning}
             onPress={handleAssign}
+            className="h-16 bg-blue-600 rounded-[22px] flex-row items-center justify-center gap-3 shadow-2xl shadow-blue-500/40 border border-white/10"
           >
             {assigning ? (
-              <ActivityIndicator color="#FFF" />
+              <ActivityIndicator color="white" />
             ) : (
-              <Text style={[styles.buttonText, { fontFamily: theme.typography.fontFamily }]}>Confirm Assignment</Text>
+              <>
+                <Shield size={20} color="white" strokeWidth={2.5} />
+                <Text className="text-white font-black text-lg tracking-tight">
+                    Confirm Deployment {selectedClients.size > 0 ? `(${selectedClients.size})` : ''}
+                </Text>
+              </>
             )}
           </TouchableOpacity>
-        </View>
+        </MotiView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: { padding: 16 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
-  card: {
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 12,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  name: { fontSize: 14, fontWeight: '600' },
-  email: { fontSize: 12 },
-  emptyBox: {
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    opacity: 0.7,
-  },
-  emptyText: { fontSize: 14 },
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  footerText: { fontSize: 12, maxWidth: '60%' },
-  assignButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  buttonText: { color: '#FFF', fontWeight: '600' },
-});
