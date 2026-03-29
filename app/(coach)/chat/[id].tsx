@@ -105,7 +105,8 @@ export default function CoachChatScreen() {
       const { data: mData, error: mError } = await supabase.from('messages')
         .select('*')
         .or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${cData.user_id}),and(sender_id.eq.${cData.user_id},recipient_id.eq.${profile?.id})`)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
       
       if (mError) throw mError;
       setMessages(mData || []);
@@ -272,6 +273,10 @@ export default function CoachChatScreen() {
                 inverted
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingVertical: 24 }}
+                initialNumToRender={15}
+                maxToRenderPerBatch={10}
+                windowSize={10}
+                removeClippedSubviews={Platform.OS !== 'web'}
                 onScrollToIndexFailed={(info) => {
                     flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
                 }}

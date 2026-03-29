@@ -188,13 +188,25 @@ export function ChatInputBar({
   React.useEffect(() => {
     const checkClipboard = async () => {
       try {
+        // hasImageAsync might also not be perfectly supported on all web browsers
         const hasImg = await Clipboard.hasImageAsync();
         setHasClipboardImage(hasImg);
       } catch (e) {}
     };
+    
     checkClipboard();
-    const sub = Clipboard.addClipboardListener(checkClipboard);
-    return () => Clipboard.removeClipboardListener(sub);
+
+    // Clipboard listener is not supported on web and can cause a crash
+    let sub: any = null;
+    if (Platform.OS !== 'web' && typeof Clipboard.addClipboardListener === 'function') {
+      sub = Clipboard.addClipboardListener(checkClipboard);
+    }
+
+    return () => {
+      if (sub && typeof Clipboard.removeClipboardListener === 'function') {
+        Clipboard.removeClipboardListener(sub);
+      }
+    };
   }, []);
 
   // ─── Send text & media ─────────────────────────────────────────────────────
@@ -379,7 +391,7 @@ export function ChatInputBar({
   const isDisabled = !!sending;
 
   return (
-    <View style={{ backgroundColor: theme.colors.surface }}>
+    <View style={{ backgroundColor: 'transparent' }}>
       {/* ── Optional Media Preview ───────────────────────────────────────────── */}
       {selectedMedia && (
         <View style={styles.mediaPreviewContainer}>
@@ -414,11 +426,13 @@ export function ChatInputBar({
           style={[
             styles.replyPreviewContainer, 
             { 
-              backgroundColor: theme.colors.surfaceAlt || '#f0f0f0',
+              backgroundColor: '#0F172A', // Pure dark for brand consistency
               opacity: replyAnim,
+              borderTopWidth: 1,
+              borderTopColor: 'rgba(255,255,255,0.05)',
               transform: [
                 { translateY: replyAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
-                { scale: replyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }
+                { scale: replyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }
               ]
             }
           ]}
@@ -426,9 +440,9 @@ export function ChatInputBar({
           <View style={[styles.replySideBar, { backgroundColor: theme.colors.primary }]} />
           <View style={styles.replyContent}>
             <Text style={[styles.replySender, { color: theme.colors.primary }]}>
-              {replyingTo.isOwn ? 'You' : (replyingTo.sender_name || 'Sender')}
+              {replyingTo.isOwn ? 'You' : (replyingTo.sender_name || 'Protocol Hub')}
             </Text>
-            <Text style={[styles.replySnippet, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            <Text style={[styles.replySnippet, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={1}>
               {(() => {
                 try {
                   const content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
@@ -457,9 +471,9 @@ export function ChatInputBar({
           <TouchableOpacity 
             style={styles.replyCloseBtn} 
             onPress={onCancelReply}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
           >
-            <X size={18} color={theme.colors.textSecondary} />
+            <X size={16} color="rgba(255,255,255,0.4)" />
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -497,7 +511,7 @@ export function ChatInputBar({
             style={[
               styles.input,
               {
-                color: '#F8FAFC',
+                color: '#FFFFFF',
                 fontFamily: theme.typography.fontFamily,
               },
             ]}
@@ -892,19 +906,19 @@ const styles = StyleSheet.create({
   replyPreviewContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    marginHorizontal: 8,
-    marginBottom: -4,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    // Removed marginHorizontal to match input bar width exactly
+    marginBottom: -1, 
     zIndex: 5,
   },
   replySideBar: {
-    width: 4,
-    height: '100%',
+    width: 3,
+    height: '70%', // More elegant partial height bar
     borderRadius: 2,
-    marginRight: 10,
+    marginRight: 12,
   },
   replyContent: {
     flex: 1,

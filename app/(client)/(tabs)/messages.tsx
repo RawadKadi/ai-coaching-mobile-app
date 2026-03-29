@@ -100,48 +100,40 @@ export default function ClientMessagesScreen() {
     try {
       setLoading(true);
       
-      // 1. Get the coach via coach_client_links (Most reliable as seen in main)
-      const { data: link, error: linkError } = await supabase
+      // Single joined query: coach_client_links → coaches → profiles (was 3 sequential queries)
+      const { data: linkWithCoach, error: linkError } = await supabase
         .from('coach_client_links')
-        .select('coach_id')
+        .select(`
+          coach_id,
+          coaches:coach_id (
+            user_id,
+            profiles:user_id (id, full_name, avatar_url)
+          )
+        `)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (linkError) throw linkError;
-      if (!link) {
+      if (!linkWithCoach?.coaches) {
           console.log('[ClientChat] No active coach link found');
           setLoading(false);
           return;
       }
 
-      // 2. Get coach's user_id
-      const { data: coachRecord, error: coachError } = await supabase
-        .from('coaches')
-        .select('user_id')
-        .eq('id', link.coach_id)
-        .single();
-      
-      if (coachError) throw coachError;
-      setCoachUserId(coachRecord.user_id);
+      const coachData = linkWithCoach.coaches as any;
+      const resolvedCoachUserId = coachData.user_id;
+      setCoachUserId(resolvedCoachUserId);
+      setCoachProfile(coachData.profiles);
 
-      // 3. Get coach's profile
-      const { data: cData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', coachRecord.user_id)
-        .single();
-      
-      if (profileError) throw profileError;
-      setCoachProfile(cData);
-
-      // 4. Get messages
+      // Messages query runs after we have coachUserId
       const { data: mData, error: msgError } = await supabase
         .from('messages')
         .select('*')
-        .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${coachRecord.user_id}),and(sender_id.eq.${coachRecord.user_id},recipient_id.eq.${user?.id})`)
-        .order('created_at', { ascending: false });
+        .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${resolvedCoachUserId}),and(sender_id.eq.${resolvedCoachUserId},recipient_id.eq.${user?.id})`)
+        .order('created_at', { ascending: false })
+        .limit(100);
       
       if (msgError) throw msgError;
       setMessages(mData || []);
@@ -309,6 +301,10 @@ export default function ClientMessagesScreen() {
                 inverted
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingVertical: 24 }}
+                initialNumToRender={15}
+                maxToRenderPerBatch={10}
+                windowSize={10}
+                removeClippedSubviews={Platform.OS !== 'web'}
                 onScrollToIndexFailed={(info) => {
                     flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
                 }}

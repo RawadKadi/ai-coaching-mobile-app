@@ -1,5 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, useSegments } from 'expo-router';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import { playNotificationSound } from '@/lib/notification-sound';
@@ -14,6 +13,7 @@ interface ToastNotification {
 interface NotificationContextType {
   activeToast: ToastNotification | null;
   dismissToast: () => void;
+  suppressToast: (suppressed: boolean) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -21,17 +21,15 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [activeToast, setActiveToast] = useState<ToastNotification | null>(null);
   const { user } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
-
-  // Check if user is currently on messages page
-  const isOnMessagesPage = () => {
-    const path = segments.join('/');
-    return path.includes('messages') || path.includes('chat');
-  };
+  const suppressedRef = useRef(false);
 
   const dismissToast = () => {
     setActiveToast(null);
+  };
+
+  const suppressToast = (suppressed: boolean) => {
+    suppressedRef.current = suppressed;
+    if (suppressed) setActiveToast(null);
   };
 
   useEffect(() => {
@@ -50,8 +48,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         async (payload) => {
           const newMessage = payload.new as any;
 
-          // Don't show notification if user is on messages page
-          if (isOnMessagesPage()) {
+          // Don't show notification if suppressed (e.g. user is on messages page)
+          if (suppressedRef.current) {
             return;
           }
 
@@ -60,7 +58,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           try {
             let senderName = 'Someone';
 
-            // 1. Try direct profiles query (works for client → coach messages where RLS allows it)
             const { data: senderProfile } = await supabase
               .from('profiles')
               .select('full_name')
@@ -70,13 +67,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             if (senderProfile?.full_name) {
               senderName = senderProfile.full_name;
             } else {
-              // 2. RLS blocked profiles read (coach sender) — use get_team_coaches RPC which is SECURITY DEFINER
               const { data: teammates } = await supabase.rpc('get_team_coaches');
               const match = (teammates || []).find((tm: any) => tm.user_id === newMessage.sender_id);
               if (match?.full_name) senderName = match.full_name;
             }
 
-            // Parse message content (could be JSON or plain text)
             let messageText = '';
             try {
               const parsed = JSON.parse(newMessage.content);
@@ -88,7 +83,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                 messageText = 'Sent a message';
               }
             } catch {
-              // Plain text message — show actual content preview
               messageText = newMessage.content.substring(0, 50);
               if (newMessage.content.length > 50) {
                 messageText += '...';
@@ -111,10 +105,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, segments]);
+  }, [user?.id]);
 
   return (
-    <NotificationContext.Provider value={{ activeToast, dismissToast }}>
+    <NotificationContext.Provider value={{ activeToast, dismissToast, suppressToast }}>
       {children}
     </NotificationContext.Provider>
   );

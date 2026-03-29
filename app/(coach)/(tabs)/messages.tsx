@@ -47,40 +47,109 @@ export default function CoachMessagesScreen() {
 
   useFocusEffect(useCallback(() => { if (coach) { loadClients(); loadTeammates(); } }, [coach]));
 
-  const loadClients = async (silent = false) => {
+  const loadClients = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const { data: links } = await supabase.from('coach_client_links').select(`client_id, clients:client_id(id, user_id, profiles:user_id(full_name, avatar_url))`).eq('coach_id', coach?.id).eq('status', 'active');
-      const list = await Promise.all((links || []).map(async (link: any) => {
+
+      // 1. Get all clients with their profiles (1 query)
+      const { data: links } = await supabase
+        .from('coach_client_links')
+        .select(`client_id, clients:client_id(id, user_id, profiles:user_id(full_name, avatar_url))`)
+        .eq('coach_id', coach?.id)
+        .eq('status', 'active');
+
+      if (!links?.length) { setClients([]); return; }
+
+      const clientUserIds = links.map((l: any) => l.clients?.user_id).filter(Boolean);
+
+      // 2. Get last message for ALL clients in ONE query, then group in JS
+      const { data: allMsgs } = await supabase
+        .from('messages')
+        .select('content, created_at, sender_id, recipient_id')
+        .or(clientUserIds.map((uid: string) => `sender_id.eq.${uid},recipient_id.eq.${uid}`).join(','))
+        .order('created_at', { ascending: false });
+
+      // 3. Get unread counts for ALL clients in ONE query
+      const { data: unreadData } = await supabase
+        .from('messages')
+        .select('sender_id')
+        .in('sender_id', clientUserIds)
+        .eq('recipient_id', user?.id)
+        .eq('read', false);
+
+      // Build lookup maps in JS (no more per-client round-trips)
+      const lastMsgMap: Record<string, any> = {};
+      for (const msg of allMsgs || []) {
+        const uid = clientUserIds.find((id: string) => id === msg.sender_id || id === msg.recipient_id);
+        if (uid && !lastMsgMap[uid]) lastMsgMap[uid] = msg;
+      }
+      const unreadMap: Record<string, number> = {};
+      for (const row of unreadData || []) {
+        unreadMap[row.sender_id] = (unreadMap[row.sender_id] || 0) + 1;
+      }
+
+      const list: ClientPreview[] = (links || []).map((link: any) => {
         const client = link.clients;
         if (!client?.profiles) return null;
-        const { data: lastMsg } = await supabase.from('messages').select('content, created_at').or(`sender_id.eq.${client.user_id},recipient_id.eq.${client.user_id}`).order('created_at', { ascending: false }).limit(1).single();
-        const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('sender_id', client.user_id).eq('recipient_id', user?.id).eq('read', false);
+        const lastMsg = lastMsgMap[client.user_id];
         let preview = lastMsg?.content || 'No messages yet';
         try { const p = JSON.parse(preview); preview = p?.text || (p?.type === 'meal_log' ? '🍽️ Meal Log' : p?.type === 'session_invite' ? '🎥 Session Invite' : 'Message'); } catch {}
-        return { id: client.id, user_id: client.user_id, full_name: client.profiles.full_name, avatar_url: client.profiles.avatar_url, last_message: preview, last_message_time: lastMsg?.created_at, unread_count: count || 0 };
-      }));
-      const valid = (list.filter(Boolean) as ClientPreview[]).sort((a, b) => new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime());
-      setClients(valid);
-    } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
-  };
+        return { id: client.id, user_id: client.user_id, full_name: client.profiles.full_name, avatar_url: client.profiles.avatar_url, last_message: preview, last_message_time: lastMsg?.created_at, unread_count: unreadMap[client.user_id] || 0 };
+      }).filter(Boolean) as ClientPreview[];
 
-  const loadTeammates = async (silent = false) => {
+      list.sort((a, b) => new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime());
+      setClients(list);
+    } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
+  }, [coach?.id, user?.id]);
+
+  const loadTeammates = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
+
+      // 1. Get team coaches (1 RPC call)
       const { data } = await supabase.rpc('get_team_coaches');
-      const list = await Promise.all((data || []).map(async (tm: any) => {
-        const { data: lastMsg } = await supabase.from('messages').select('content, created_at').or(`and(sender_id.eq.${user?.id},recipient_id.eq.${tm.user_id}),and(sender_id.eq.${tm.user_id},recipient_id.eq.${user?.id})`).order('created_at', { ascending: false }).limit(1).single();
-        const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('sender_id', tm.user_id).eq('recipient_id', user?.id).eq('read', false);
+      if (!data?.length) { setTeammates([]); return; }
+
+      const teamUserIds = data.map((tm: any) => tm.user_id).filter(Boolean);
+
+      // 2. Get last message for ALL teammates in ONE query
+      const { data: allMsgs } = await supabase
+        .from('messages')
+        .select('content, created_at, sender_id, recipient_id')
+        .or(teamUserIds.map((uid: string) => `and(sender_id.eq.${user?.id},recipient_id.eq.${uid}),and(sender_id.eq.${uid},recipient_id.eq.${user?.id})`).join(','))
+        .order('created_at', { ascending: false });
+
+      // 3. Get unread counts for ALL teammates in ONE query
+      const { data: unreadData } = await supabase
+        .from('messages')
+        .select('sender_id')
+        .in('sender_id', teamUserIds)
+        .eq('recipient_id', user?.id)
+        .eq('read', false);
+
+      // Build lookup maps in JS
+      const lastMsgMap: Record<string, any> = {};
+      for (const msg of allMsgs || []) {
+        const uid = teamUserIds.find((id: string) => id === msg.sender_id || id === msg.recipient_id);
+        if (uid && !lastMsgMap[uid]) lastMsgMap[uid] = msg;
+      }
+      const unreadMap: Record<string, number> = {};
+      for (const row of unreadData || []) {
+        unreadMap[row.sender_id] = (unreadMap[row.sender_id] || 0) + 1;
+      }
+
+      const list = data.map((tm: any) => {
+        const lastMsg = lastMsgMap[tm.user_id];
         let preview = lastMsg?.content || 'No messages yet';
         try { const p = JSON.parse(preview); if (p?.text) preview = p.text; } catch {}
-        return { coach_id: tm.coach_id, user_id: tm.user_id, full_name: tm.full_name, avatar_url: tm.avatar_url, last_message: preview, last_message_time: lastMsg?.created_at, unread_count: count || 0 };
-      }));
-      list.sort((a, b) => new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime());
+        return { coach_id: tm.coach_id, user_id: tm.user_id, full_name: tm.full_name, avatar_url: tm.avatar_url, last_message: preview, last_message_time: lastMsg?.created_at, unread_count: unreadMap[tm.user_id] || 0 };
+      });
+
+      list.sort((a: any, b: any) => new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime());
       setTeammates(list);
-      setTeamUnreadCount(list.reduce((s, t) => s + (t.unread_count || 0), 0));
+      setTeamUnreadCount(list.reduce((s: number, t: any) => s + (t.unread_count || 0), 0));
     } catch (e) { console.error(e); } finally { setLoading(false); }
-  };
+  }, [user?.id]);
 
   const formatTime = (iso?: string) => {
     if (!iso) return '';
