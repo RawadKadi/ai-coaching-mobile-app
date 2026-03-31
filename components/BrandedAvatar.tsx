@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@/contexts/BrandContext';
 import { getInitials, getContrastColor } from '@/lib/theme-utils';
 
@@ -47,6 +48,9 @@ export function BrandedAvatar({
             height: size,
             borderRadius: size / 2,
           }}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="disk"
         />
       ) : (
         <Text

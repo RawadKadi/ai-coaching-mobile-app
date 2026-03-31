@@ -70,6 +70,9 @@ type Message = {
   created_at: string;
   read: boolean;
   reply_to_id?: string;
+  ai_generated?: boolean;
+  isUploading?: boolean;
+  progress?: number;
 };
 
 export default function CoachChatScreen() {
@@ -122,7 +125,15 @@ export default function CoachChatScreen() {
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
           const nm = p.new as Message;
           if (nm.sender_id === cData.user_id || nm.sender_id === profile?.id) {
-            setMessages(prev => [nm, ...prev]);
+            setMessages(prev => {
+              // Check if message already exists (either from optimistic update or duplicate event)
+              if (prev.some(m => m.id === nm.id)) return prev;
+              
+              // Remove any optimistic version of this message if we can identify it
+              // (Usually by checking content for specific temporary markers if we used them, 
+              // but here we just check for uniqueness by ID)
+              return [nm, ...prev];
+            });
             if (nm.sender_id !== profile?.id) markAsRead(nm.id);
           }
         })
@@ -157,39 +168,74 @@ export default function CoachChatScreen() {
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
     if (!profile || !clientUserId) return;
     
-    let finalContent = jsonContent;
+    let parsedContent: any = {};
     try {
-      const p = JSON.parse(jsonContent);
-      // Only upload if it's a local file (has isOptimistic flag or file:// uri)
-      if (p.isOptimistic && p.url && p.url.startsWith('file://')) {
-        setSending(true);
-        const folder = p.type === 'video' ? 'videos' : (p.type === 'document' ? 'documents' : 'images');
-        const publicUrl = await uploadChatMedia(p.url, folder);
-        finalContent = JSON.stringify({ ...p, url: publicUrl, isOptimistic: false });
-      }
+      parsedContent = JSON.parse(jsonContent);
     } catch (e) {
-      console.error('[CoachChat] Media upload failed:', e);
-      Alert.alert('Upload Error', 'Failed to upload media. Please try again.');
-      setSending(false);
+      console.error('[CoachChat] Failed to parse media content:', e);
       return;
     }
 
-    setSending(true);
-    const msg = { 
-      sender_id: user?.id, 
-      recipient_id: clientUserId, 
-      content: finalContent, 
-      read: false, 
-      reply_to_id: replyId, 
-      ai_generated: false 
+    // 1. Create Optimistic Message
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: tempId,
+      sender_id: user?.id || '',
+      recipient_id: clientUserId,
+      content: jsonContent,
+      created_at: new Date().toISOString(),
+      read: false,
+      reply_to_id: replyId,
+      ai_generated: false,
+      isUploading: true,
+      progress: 0
     };
-    const { error } = await supabase.from('messages').insert(msg);
-    if (error) {
-      console.error('[CoachChat] Message insert failed:', error);
-      Alert.alert('Error', 'Failed to send media');
+
+    // Add to state immediately
+    setMessages(prev => [optimisticMsg, ...prev]);
+
+    let finalContent = jsonContent;
+    try {
+      // 2. Upload if local
+      if (parsedContent.isOptimistic && parsedContent.url && (parsedContent.url.startsWith('file://') || parsedContent.url.startsWith('data:'))) {
+        const folder = parsedContent.type === 'video' ? 'videos' : (parsedContent.type === 'document' ? 'documents' : 'images');
+        
+        const publicUrl = await uploadChatMedia(
+          parsedContent.url, 
+          folder, 
+          (pct) => {
+            // Update progress in state
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, progress: pct } : m));
+          }
+        );
+        finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false });
+      }
+
+      // 3. Insert into Supabase
+      const { data: insertedData, error } = await supabase.from('messages').insert({ 
+        sender_id: user?.id, 
+        recipient_id: clientUserId, 
+        content: finalContent, 
+        read: false, 
+        reply_to_id: replyId, 
+        ai_generated: false 
+      }).select().single();
+
+      if (error) throw error;
+
+      // 4. Replace optimistic message with real one to maintain position/ID
+      if (insertedData) {
+        setMessages(prev => prev.map(m => m.id === tempId ? insertedData : m));
+      }
+    } catch (e: any) {
+      console.error('[CoachChat] Media upload/send failed:', e);
+      Alert.alert('Send Error', 'Failed to send media: ' + (e.message || 'Unknown error'));
+      // Remove optimistic message on failure
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    } finally {
+      setSending(false);
+      setReplyingTo(null);
     }
-    setSending(false);
-    setReplyingTo(null);
   };
 
   const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward') => {

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { MotiView, AnimatePresence } from 'moti';
@@ -189,7 +190,13 @@ export default function LogMealScreen() {
             className="items-center px-8"
         >
             <View className="w-64 h-64 rounded-[48px] overflow-hidden border border-slate-900 shadow-2xl">
-                <Image source={{ uri: capturedImage! }} className="w-full h-full" />
+                <Image 
+                    source={{ uri: capturedImage! }} 
+                    className="w-full h-full" 
+                    contentFit="cover"
+                    transition={200}
+                    cachePolicy="disk"
+                />
                 <MotiView 
                     from={{ translateY: -256 }}
                     animate={{ translateY: 256 }}
@@ -219,7 +226,13 @@ export default function LogMealScreen() {
 
             <ScrollView className="flex-1 px-6">
                 <View className="w-full h-48 rounded-[32px] overflow-hidden mb-6 border border-slate-900">
-                    <Image source={{ uri: capturedImage! }} className="w-full h-full" />
+                    <Image 
+                        source={{ uri: capturedImage! }} 
+                        className="w-full h-full" 
+                        contentFit="cover"
+                        transition={200}
+                        cachePolicy="disk"
+                    />
                 </View>
 
                 <View className="mb-8">
@@ -294,7 +307,13 @@ export default function LogMealScreen() {
 
                   <ScrollView className="flex-1 px-6">
                       <View className="w-full aspect-video rounded-[32px] overflow-hidden mb-8 border border-slate-900">
-                          <Image source={{ uri: capturedImage! }} className="w-full h-full" />
+                          <Image 
+                            source={{ uri: capturedImage! }} 
+                            className="w-full h-full" 
+                            contentFit="cover"
+                            transition={200}
+                            cachePolicy="disk"
+                          />
                       </View>
 
                       {/* Power Cards */}

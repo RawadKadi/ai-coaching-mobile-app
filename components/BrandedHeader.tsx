@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { ChevronLeft } from 'lucide-react-native';
 import { useBrand, useTheme } from '@/contexts/BrandContext';
 import { BrandedText } from './BrandedText';
@@ -48,6 +49,9 @@ export function BrandedHeader({ title, subtitle, showLogo = true, showBackButton
               borderRadius: scaleBorderRadius(12, theme.spacing.borderRadiusScale),
             },
           ]}
+          contentFit="contain"
+          cachePolicy="disk"
+          transition={200}
         />
       )}
       

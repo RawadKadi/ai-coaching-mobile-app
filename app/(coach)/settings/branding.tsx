@@ -8,12 +8,12 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Image,
   SafeAreaView,
   Switch,
   Modal,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Upload, Save, Eye, Palette, Check, Home, Users, MessageSquare as MessageCircle, Calendar, Settings, X, TrendingUp, CheckCircle, Target, Sparkles, ChevronRight, LayoutGrid, Type, Square, LayoutTemplate, Moon, Sliders, ShieldAlert } from 'lucide-react-native';
 import { MotiView, AnimatePresence } from 'moti';
@@ -191,7 +191,13 @@ export default function BrandSettingsScreen() {
               <View style={[styles.logoPreviewContainer, { width: '100%', borderTopWidth: 1, borderTopColor: '#ffffff08', paddingTop: 20, marginTop: 20 }]}>
                 <Text style={[styles.label, { color: '#64748B', marginBottom: 16 }]}>CURRENT BRAND IDENTITY</Text>
                 {brand.logo_url && (
-                  <Image source={{ uri: brand.logo_url }} style={styles.logoPreview} />
+                  <Image 
+                    source={{ uri: brand.logo_url }} 
+                    style={styles.logoPreview} 
+                    contentFit="contain"
+                    transition={200}
+                    cachePolicy="disk"
+                  />
                 )}
                 <Text style={[styles.premiumHeaderTitle, { marginTop: 12, fontSize: 24 }]}>{brand.name}</Text>
               </View>
@@ -451,7 +457,13 @@ export default function BrandSettingsScreen() {
                   
                   {logoUrl && (
                     <View style={styles.logoPreviewContainer}>
-                      <Image source={{ uri: logoUrl }} style={styles.logoPreview} />
+                      <Image 
+                        source={{ uri: logoUrl }} 
+                        style={styles.logoPreview} 
+                        contentFit="contain"
+                        transition={200}
+                        cachePolicy="disk"
+                      />
                     </View>
                   )}
                 </View>

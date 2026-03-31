@@ -20,59 +20,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
 
 function RootLayoutNav() {
-  const { session, loading, profile } = useAuth();
-  const segments = useSegments() as string[];
-  const router = useRouter();
-  const [hasMounted, setHasMounted] = useState(false);
-
-  useEffect(() => {
-    if (!loading && profile) {
-      setHasMounted(true);
-    }
-  }, [loading, profile]);
-
-  useEffect(() => {
-    if (loading) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-    const inOnboarding = segments.includes('onboarding');
-
-    if (!session && !inAuthGroup) {
-      try {
-        router.replace('/(auth)/login');
-      } catch (e) {
-        console.log('[Routing] Navigation not ready yet');
-      }
-    } else if (session && profile) {
-      if (inAuthGroup || segments.length === 0 || (segments.length === 1 && segments[0] === 'index')) {
-        if (profile.role === 'client') {
-          if (profile.onboarding_completed !== true) {
-            console.log('[Routing] Client onboarding not completed, redirecting to onboarding');
-            router.replace('/(client)/onboarding');
-          } else {
-            console.log('[Routing] Client onboarding completed, going to dashboard');
-            router.replace('/(client)/(tabs)');
-          }
-        } else if (profile.role === 'coach') {
-          router.replace('/(coach)/(tabs)');
-        } else if (profile.role === 'admin') {
-          router.replace('/(admin)/(tabs)');
-        }
-      } else if (profile.role === 'client' && profile.onboarding_completed !== true && !inOnboarding) {
-        console.log('[Routing] Client accessed non-onboarding route without completing onboarding');
-        router.replace('/(client)/onboarding');
-      }
-    }
-  }, [session, loading, segments, profile]);
-
-  if (loading && !hasMounted) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-      </View>
-    );
-  }
-
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
@@ -85,13 +32,13 @@ function RootLayoutNav() {
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
-      {/* Global overlays — rendered after Stack so navigation context is available */}
-      <NotificationToastWrapper router={router} />
+      <NotificationToastWrapper />
     </>
   );
 }
 
-function NotificationToastWrapper({ router }: { router: ReturnType<typeof useRouter> }) {
+function NotificationToastWrapper() {
+  const router = useRouter();
   const { activeToast, dismissToast } = useNotification();
   if (!activeToast) return null;
   return (

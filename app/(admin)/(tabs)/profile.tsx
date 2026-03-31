@@ -8,12 +8,27 @@ export default function AdminProfileScreen() {
   const { profile, signOut } = useAuth();
 
   const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.replace('/(auth)/login');
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
+    Alert.alert(
+      'Log Out', 
+      'Are you sure you want to log out of your admin account?', 
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Log Out', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await signOut();
+              // Root layout will handle redirect, but we add a fallback
+              router.replace('/(auth)/login');
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to log out.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (

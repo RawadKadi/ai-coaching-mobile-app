@@ -366,8 +366,9 @@ function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'imag
             source={{ uri }}
             style={{ width: '100%', height: '100%' }}
             contentFit="contain"
-            cachePolicy="memory-disk"
+            cachePolicy="disk"
             autoplay={type === 'gif'}
+            transition={200}
           />
         </View>
       </SafeAreaView>
@@ -401,7 +402,8 @@ function CustomImagePlayer({
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             blurRadius={isOwn ? 0 : 14}
-            cachePolicy="memory-disk"
+            cachePolicy="disk"
+            transition={200}
           />
         ) : null}
 
@@ -411,8 +413,9 @@ function CustomImagePlayer({
             source={{ uri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            cachePolicy="memory-disk"
+            cachePolicy="disk"
             autoplay={type === 'gif'}
+            transition={200}
             onProgress={(e) => {
               if (e.loaded && e.total) {
                 setDownloadPct(Math.round((e.loaded / e.total) * 100));

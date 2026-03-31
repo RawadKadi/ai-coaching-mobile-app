@@ -18,10 +18,28 @@ export default function CoachProfileScreen() {
   const [uploading, setUploading] = useState(false);
 
   const handleSignOut = async () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out of your account?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: async () => { await signOut(); router.replace('/(auth)/login'); } }
-    ]);
+    Alert.alert(
+      'Log Out', 
+      'Are you sure you want to log out of your account?', 
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Log Out', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await signOut();
+              // The root layout will automatically handle redirection to login 
+              // because the session is now null. We add a fallback just in case.
+              router.replace('/(auth)/login');
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to log out. Please try again.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const uploadAvatar = async (uri: string) => {

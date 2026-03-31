@@ -164,15 +164,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    
-    // Clear all state
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    setCoach(null);
-    setClient(null);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) console.error('Supabase signOut error:', error);
+    } catch (err) {
+      console.error('Unexpected error during signOut:', err);
+    } finally {
+      // Always clear local state to ensure UI transitions regardless of network status
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setCoach(null);
+      setClient(null);
+    }
   };
 
   const refreshProfile = async () => {

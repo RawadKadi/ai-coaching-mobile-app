@@ -50,6 +50,7 @@ export default function MealMessageCard({ content, isOwn }: Props) {
             style={styles.image} 
             contentFit="cover"
             transition={200}
+            cachePolicy="disk"
           />
         )}
         

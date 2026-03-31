@@ -79,7 +79,13 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
       </View>
       {mediaUrl && (
         <View style={styles.thumbBox}>
-          <Image source={{ uri: mediaUrl }} style={styles.thumb} />
+          <Image 
+            source={{ uri: mediaUrl }} 
+            style={styles.thumb} 
+            contentFit="cover"
+            cachePolicy="disk"
+            transition={150}
+          />
         </View>
       )}
     </TouchableOpacity>

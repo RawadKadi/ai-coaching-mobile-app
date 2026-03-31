@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, SafeAreaView, Dimensions, Platform } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, Dimensions, Platform, StatusBar } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
-import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat, Sparkles, ArrowLeft, ArrowRight, Zap, Target, Search, Filter, ChevronRight, Info, Lock } from 'lucide-react-native';
+import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat, Sparkles, ArrowLeft, ArrowRight, Zap, Target, Search, Filter, ChevronRight, Info, Lock, Users } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
@@ -9,6 +9,7 @@ import { availabilityService } from '@/lib/availability-service';
 import { supabase } from '@/lib/supabase';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -24,7 +25,7 @@ interface ManualSchedulerModalProps {
 
 interface Client {
     id: string;
-    user_id: string;
+    user_id?: string;
     profiles: {
         full_name: string;
         avatar_url: string | null;
@@ -43,6 +44,8 @@ interface TimeSlot {
 type StepType = 'client' | 'days' | 'time' | 'details' | 'confirm';
 type RecurrenceType = 'once' | 'weekly';
 
+import { NavigationContext } from '@react-navigation/native';
+
 export default function ManualSchedulerModal({
     visible,
     onClose,
@@ -52,7 +55,11 @@ export default function ManualSchedulerModal({
     onSwitchToAI,
     initialClient,
 }: ManualSchedulerModalProps) {
+    // We already have router passed as a prop if we use it, but here we need to satisfy hooks
+    // Let's ensure we use a stable context for the Modal contents
+    
     const theme = useTheme();
+    const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState<StepType>('client');
     
@@ -92,22 +99,26 @@ export default function ManualSchedulerModal({
 
     const loadClients = async () => {
         try {
-            const { data, error } = await supabase.from('coach_client_links').select('client_id, clients!inner(id, user_id, profiles!inner(full_name, avatar_url))').eq('coach_id', coachId);
+            setLoading(true);
+            // Use the secure RPC 'get_my_clients' to ensure data displays correctly
+            const { data, error } = await supabase.rpc('get_my_clients');
             if (error) throw error;
-            const processed = data?.map(link => {
-                const clientObj: any = Array.isArray(link.clients) ? link.clients[0] : link.clients;
-                const profiles = Array.isArray(clientObj.profiles) ? clientObj.profiles[0] : clientObj.profiles;
-                return { 
-                    id: clientObj.id, 
-                    user_id: clientObj.user_id, 
-                    profiles: {
-                        ...profiles,
-                        subtype: Math.random() > 0.5 ? 'PRO ELITE' : 'STRENGTH LAB' // Placeholder as per target images
-                    }
-                };
-            }) || [];
-            setClients(processed as any);
-        } catch (e) { console.error(e); }
+            
+            const processed = data?.map((item: any) => ({
+                id: item.client_id,
+                profiles: {
+                    full_name: item.client_name,
+                    avatar_url: item.client_avatar,
+                    subtype: item.client_experience || (Math.random() > 0.5 ? 'PRO ELITE' : 'STRENGTH LAB')
+                }
+            })) || [];
+            
+            setClients(processed);
+        } catch (e) { 
+            console.error('[ManualScheduler] Load clients error:', e); 
+        } finally {
+            setLoading(false);
+        }
     };
 
     const loadAvailabilityData = async () => {
@@ -271,91 +282,140 @@ export default function ManualSchedulerModal({
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+          <NavigationContext.Provider value={{} as any}>
             <View className="flex-1 bg-[#020617]">
-                <SafeAreaView className="flex-1">
+                <StatusBar barStyle="light-content" />
+                <View className="flex-1">
                     {/* Top Status Bar */}
-                    <View className="px-6 py-6 flex-row items-center justify-between border-b border-white/5">
+                    <View 
+                       style={{ paddingTop: insets.top + 16 }}
+                       className="px-6 pb-6 flex-row items-center justify-between border-b border-white/5 bg-[#020617]"
+                    >
                         <View className="flex-row items-center gap-3">
-                            <TouchableOpacity onPress={onClose} className="w-10 h-10 bg-white/5 rounded-full items-center justify-center">
+                            <TouchableOpacity onPress={onClose} className="w-10 h-10 bg-white/5 rounded-full items-center justify-center border border-white/10">
                                 <X size={20} color="#94A3B8" />
                             </TouchableOpacity>
-                            <Text className="text-white/40 font-black text-[10px] uppercase tracking-[3px]">Manual Scheduler</Text>
+                            <View>
+                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Scheduler</Text>
+                                <Text className="text-white text-lg font-black tracking-tight">Manual Booking</Text>
+                            </View>
                         </View>
                         <View className="flex-row gap-1">
                              {steps.map((s, i) => (
-                                 <View key={s} className={`h-1 rounded-full ${i <= currentStepIdx ? 'bg-orange-500 w-6' : 'bg-slate-800 w-3'}`} />
+                                 <View key={s} className={`h-1.5 rounded-full ${i <= currentStepIdx ? 'bg-orange-500 w-6' : 'bg-slate-800 w-3'}`} />
                              ))}
                         </View>
                     </View>
 
-                    <ScrollView className="flex-1 px-6 mt-10" showsVerticalScrollIndicator={false}>
-                        <AnimatePresence exitBeforeEnter>
+                    <ScrollView className="flex-1 px-0" showsVerticalScrollIndicator={false}>
+                        <AnimatePresence>
                             <MotiView
                                 key={step}
                                 from={{ opacity: 0, translateY: 10 }}
                                 animate={{ opacity: 1, translateY: 0 }}
                                 exit={{ opacity: 0, translateY: -10 }}
                                 transition={{ type: 'timing', duration: 300 }}
+                                className="px-6 pt-8 pb-12"
                             >
                                 {step === 'client' && (
                                     <View>
+                                        {/* Banner Hero Section */}
+                                        <MotiView
+                                          from={{ opacity: 0, translateY: 20 }}
+                                          animate={{ opacity: 1, translateY: 0 }}
+                                          className="mb-10 p-10 rounded-[48px] bg-orange-500/10 border border-orange-500/20 items-center overflow-hidden"
+                                        >
+                                            <View className="absolute top-0 right-0 p-4 opacity-10">
+                                                <Users size={120} color="#F97316" />
+                                            </View>
+                                            <View className="w-20 h-20 bg-orange-500 rounded-[30px] items-center justify-center shadow-2xl shadow-orange-500/50 mb-6 border-2 border-white/20">
+                                                <Calendar size={36} color="white" fill="white" />
+                                            </View>
+                                            <Text className="text-white text-2xl font-black text-center tracking-tighter">Command Center</Text>
+                                            <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
+                                                Take direct control of your schedule. Select an athlete below to precisely deploy your next high-performance coaching session.
+                                            </Text>
+                                        </MotiView>
+
                                         {renderHeader("Select Client", "Identify the athlete for this session.")}
                                         
                                         <View className="flex-row items-center gap-3 mb-8">
-                                            <View className="flex-1 bg-slate-900 border border-white/5 rounded-2xl p-4 flex-row items-center gap-3">
-                                                <Search size={18} color="#475569" />
+                                            <View className="flex-1 bg-slate-900 border border-white/5 rounded-[28px] px-6 py-5 flex-row items-center gap-4">
+                                                <Search size={20} color="#475569" />
                                                 <TextInput 
-                                                    className="flex-1 text-white font-bold"
+                                                    className="flex-1 text-white font-bold text-lg"
                                                     placeholder="Search clients..."
                                                     placeholderTextColor="#475569"
                                                     value={searchQuery}
                                                     onChangeText={setSearchQuery}
                                                 />
                                             </View>
-                                            <TouchableOpacity className="w-14 h-14 bg-slate-900 border border-white/5 rounded-2xl items-center justify-center">
-                                                <Filter size={18} color="#475569" />
+                                            <TouchableOpacity className="w-16 h-16 bg-slate-900 border border-white/5 rounded-[24px] items-center justify-center">
+                                                <Filter size={20} color="#475569" />
                                             </TouchableOpacity>
                                         </View>
 
                                         {onSwitchToAI && (
                                             <TouchableOpacity 
                                                 onPress={() => selectedClient && onSwitchToAI(selectedClient)}
-                                                className="mb-8"
+                                                className="mb-12"
                                             >
                                                 <LinearGradient 
                                                     colors={['#4F46E5', '#2563EB']} 
-                                                    className="p-6 rounded-[32px] flex-row items-center justify-between shadow-xl shadow-blue-500/20"
+                                                    className="p-8 rounded-[40px] flex-row items-center justify-between shadow-2xl shadow-blue-500/30"
                                                 >
-                                                    <View>
-                                                        <Text className="text-white/70 text-[10px] font-black uppercase tracking-[3px] mb-2">Accelerate Workflow</Text>
-                                                        <Text className="text-white text-2xl font-black">AI Scheduler</Text>
+                                                    <View className="flex-1 mr-4">
+                                                        <Text className="text-white/70 text-[10px] font-black uppercase tracking-[3px] mb-2">Neural Optimization</Text>
+                                                        <Text className="text-white text-2xl font-black tracking-tight">AI Scheduler</Text>
+                                                        <Text className="text-white/60 text-xs font-medium mt-1">Let the engine find the optimal window</Text>
                                                     </View>
-                                                    <Sparkles size={28} color="white" />
+                                                    <View className="w-14 h-14 bg-white/20 rounded-2xl items-center justify-center">
+                                                        <Sparkles size={28} color="white" />
+                                                    </View>
                                                 </LinearGradient>
                                             </TouchableOpacity>
                                         )}
 
-                                        <View className="gap-3">
-                                            {filteredClients.map(c => (
-                                                <TouchableOpacity 
-                                                    key={c.id} 
-                                                    onPress={() => setSelectedClient(c)}
-                                                    className={`p-6 rounded-[32px] border flex-row items-center justify-between ${selectedClient?.id === c.id ? 'bg-blue-600/10 border-blue-500/40' : 'bg-slate-900/50 border-white/5'}`}
-                                                >
-                                                    <View className="flex-row items-center gap-4">
-                                                       <BrandedAvatar size={48} name={c.profiles.full_name} imageUrl={c.profiles.avatar_url} />
-                                                       <View>
-                                                            <Text className="text-white text-lg font-black tracking-tight">{c.profiles.full_name}</Text>
-                                                            <Text className="text-blue-500/60 text-[8px] font-black uppercase tracking-widest">{c.profiles.subtype || 'Athlete'}</Text>
-                                                       </View>
-                                                    </View>
-                                                    {selectedClient?.id === c.id && (
-                                                        <View className="w-6 h-6 bg-blue-500 rounded-full items-center justify-center">
-                                                            <Check size={14} color="white" strokeWidth={3} />
+                                        <View className="gap-4">
+                                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 ml-1">Active Roster</Text>
+                                            {loading ? (
+                                                <View className="py-20 items-center justify-center">
+                                                    <ActivityIndicator color="#F97316" />
+                                                    <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mt-4">Syncing Athletes...</Text>
+                                                </View>
+                                            ) : filteredClients.length === 0 ? (
+                                                <View className="py-16 items-center justify-center bg-slate-900/20 rounded-[40px] border border-white/5 border-dashed">
+                                                    <Users size={48} color="#1E293B" />
+                                                    <Text className="text-slate-600 font-bold mt-4">No athletes found</Text>
+                                                </View>
+                                            ) : (
+                                                filteredClients.map(c => (
+                                                    <TouchableOpacity 
+                                                        key={c.id} 
+                                                        onPress={() => setSelectedClient(c)}
+                                                        className={`p-6 rounded-[36px] border flex-row items-center justify-between ${selectedClient?.id === c.id ? 'bg-orange-500/10 border-orange-500/40 shadow-xl' : 'bg-slate-900/50 border-white/5'}`}
+                                                    >
+                                                        <View className="flex-row items-center gap-5">
+                                                            <View className="relative">
+                                                                <BrandedAvatar size={64} name={c.profiles.full_name} imageUrl={c.profiles.avatar_url} useBrandColor={true} />
+                                                                {selectedClient?.id === c.id && (
+                                                                    <View className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange-500 rounded-full border-4 border-slate-950 items-center justify-center">
+                                                                        <Check size={10} color="white" strokeWidth={4} />
+                                                                    </View>
+                                                                )}
+                                                            </View>
+                                                            <View>
+                                                                <Text className="text-white text-xl font-black tracking-tight">{c.profiles.full_name}</Text>
+                                                                <View className="flex-row items-center gap-2 mt-1">
+                                                                    <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                                    <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">{c.profiles.subtype || 'Athlete'}</Text>
+                                                                </View>
+                                                            </View>
                                                         </View>
-                                                    )}
-                                                </TouchableOpacity>
-                                            ))}
+                                                        <ChevronRight size={20} color={selectedClient?.id === c.id ? '#F97316' : '#334155'} />
+                                                    </TouchableOpacity>
+                                                ))
+                                            )}
                                         </View>
                                     </View>
                                 )}
@@ -371,13 +431,13 @@ export default function ManualSchedulerModal({
                                         <View className="flex-row bg-slate-900 p-2 rounded-[32px] border border-white/5 mb-10">
                                             <TouchableOpacity 
                                                 onPress={() => { setRecurrence('once'); setSelectedWeekdays([]); }} 
-                                                className={`flex-1 py-5 items-center rounded-[24px] ${recurrence === 'once' ? 'bg-blue-600 shadow-lg shadow-blue-500/30' : ''}`}
+                                                className={`flex-1 py-5 items-center rounded-[24px] ${recurrence === 'once' ? 'bg-orange-600 shadow-lg shadow-orange-500/30' : ''}`}
                                             >
                                                 <Text className={`font-black tracking-tight ${recurrence === 'once' ? 'text-white' : 'text-slate-600'}`}>One-time</Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity 
                                                 onPress={() => { setRecurrence('weekly'); setSelectedDates([]); }} 
-                                                className={`flex-1 py-5 items-center rounded-[24px] ${recurrence === 'weekly' ? 'bg-blue-600 shadow-lg shadow-blue-500/30' : ''}`}
+                                                className={`flex-1 py-5 items-center rounded-[24px] ${recurrence === 'weekly' ? 'bg-orange-600 shadow-lg shadow-orange-500/30' : ''}`}
                                             >
                                                 <Text className={`font-black tracking-tight ${recurrence === 'weekly' ? 'text-white' : 'text-slate-600'}`}>Recurrent</Text>
                                             </TouchableOpacity>
@@ -385,14 +445,14 @@ export default function ManualSchedulerModal({
 
                                         {recurrence === 'once' ? (
                                             <View>
-                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6">Select Specific Dates</Text>
+                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Select Specific Dates</Text>
                                                 <View className="flex-row flex-wrap justify-between">
                                                     {next14Days.map((d, i) => {
                                                         const isSelected = selectedDates.some(sd => sd.toDateString() === d.toDateString());
                                                         return (
                                                             <TouchableOpacity 
                                                                 key={i} onPress={() => toggleDate(d, isSelected)}
-                                                                className={`w-[30%] aspect-square rounded-[36px] items-center justify-center border mb-6 ${isSelected ? 'bg-blue-600 border-blue-400' : 'bg-slate-900 border-white/5'}`}
+                                                                className={`w-[30%] aspect-square rounded-[36px] items-center justify-center border mb-6 ${isSelected ? 'bg-orange-500 border-orange-400 shadow-lg shadow-orange-500/20' : 'bg-slate-900 border-white/5'}`}
                                                             >
                                                                 <Text className={`text-[9px] font-black uppercase ${isSelected ? 'text-white/60' : 'text-slate-600'}`}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</Text>
                                                                 <Text className={`text-3xl font-black my-1 ${isSelected ? 'text-white' : 'text-slate-300'}`}>{d.getDate()}</Text>
@@ -403,7 +463,7 @@ export default function ManualSchedulerModal({
                                             </View>
                                         ) : (
                                             <View>
-                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6">Weekly Frequency</Text>
+                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Weekly Frequency</Text>
                                                 <View className="flex-row justify-between mb-12">
                                                     {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
                                                         const dayIdx = (i + 1) % 7;
@@ -411,22 +471,22 @@ export default function ManualSchedulerModal({
                                                         return (
                                                             <TouchableOpacity 
                                                                 key={i} onPress={() => toggleWeekday(dayIdx, isSelected)}
-                                                                className={`w-11 h-11 rounded-full items-center justify-center ${isSelected ? 'bg-blue-600 border border-blue-400' : 'bg-slate-900 border border-white/5'}`}
+                                                                className={`w-12 h-12 rounded-2xl items-center justify-center ${isSelected ? 'bg-orange-500 border border-orange-400' : 'bg-slate-900 border border-white/5'}`}
                                                             >
-                                                                <Text className={`font-black ${isSelected ? 'text-white' : 'text-slate-500'}`}>{day}</Text>
+                                                                <Text className={`font-black text-base ${isSelected ? 'text-white' : 'text-slate-500'}`}>{day}</Text>
                                                             </TouchableOpacity>
                                                         );
                                                     })}
                                                 </View>
 
-                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3">Termination</Text>
-                                                <TouchableOpacity className="flex-row items-center justify-between p-8 bg-slate-900/50 rounded-[40px] border border-white/5">
+                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Termination</Text>
+                                                <TouchableOpacity className="flex-row items-center justify-between p-8 bg-slate-900 rounded-[40px] border border-white/5">
                                                     <View>
                                                         <Text className="text-slate-500 text-[10px] font-bold">Repeat until:</Text>
                                                         <Text className="text-white text-xl font-black mt-1">Dec 31, 2026</Text>
                                                     </View>
-                                                    <View className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5">
-                                                        <Calendar size={20} color="#3B82F6" />
+                                                    <View className="w-14 h-14 bg-slate-950 rounded-2xl items-center justify-center border border-white/10">
+                                                        <Calendar size={24} color="#F97316" />
                                                     </View>
                                                 </TouchableOpacity>
                                             </View>
@@ -442,21 +502,21 @@ export default function ManualSchedulerModal({
                                         </View>
                                         {renderHeader("Available Times", `${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} · ${sessionType.toUpperCase()} Session`)}
                                         
-                                        {loading ? <ActivityIndicator size="large" color="#3B82F6" className="mt-20" /> : (
+                                        {loading ? <ActivityIndicator size="large" color="#F97316" className="mt-20" /> : (
                                             <View className="gap-8">
                                                 {/* Morning Slots */}
                                                 <View>
-                                                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4">Morning Slots</Text>
+                                                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Morning Slots</Text>
                                                     <View className="gap-3">
                                                         {availableSlots.filter(s => s.time.getHours() < 12).map((slot, i) => (
                                                             <TouchableOpacity 
                                                                 key={i} onPress={() => slot.available && setSelectedTime(slot.time)}
                                                                 disabled={!slot.available}
-                                                                className={`p-6 rounded-[32px] border flex-row justify-between items-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-blue-600 border-blue-400 shadow-xl shadow-blue-500/20' : 'bg-slate-900 border-white/5'} ${!slot.available ? 'opacity-20' : ''}`}
+                                                                className={`p-6 rounded-[32px] border flex-row justify-between items-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-orange-500 border-orange-400 shadow-xl shadow-orange-500/20' : 'bg-slate-900 border-white/5'} ${!slot.available ? 'opacity-20' : ''}`}
                                                             >
                                                                 <View className="flex-row items-center gap-4">
-                                                                    <View className={`w-10 h-10 rounded-2xl items-center justify-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-white/20' : 'bg-slate-950/50'}`}>
-                                                                        <Clock size={18} color="#3B82F6" />
+                                                                    <View className={`w-12 h-12 rounded-2xl items-center justify-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-white/20' : 'bg-slate-950/50'}`}>
+                                                                        <Clock size={20} color="#F97316" />
                                                                     </View>
                                                                     <View>
                                                                         <Text className={`text-xl font-black ${selectedTime?.getTime() === slot.time.getTime() ? 'text-white' : 'text-slate-200'}`}>
@@ -466,8 +526,8 @@ export default function ManualSchedulerModal({
                                                                     </View>
                                                                 </View>
                                                                 {selectedTime?.getTime() === slot.time.getTime() ? (
-                                                                    <View className="w-6 h-6 bg-white rounded-full items-center justify-center">
-                                                                        <Check size={14} color="#2563EB" strokeWidth={4} />
+                                                                    <View className="w-7 h-7 bg-white rounded-full items-center justify-center">
+                                                                        <Check size={16} color="#F97316" strokeWidth={4} />
                                                                     </View>
                                                                 ) : (
                                                                     <ChevronRight size={18} color="#475569" />
@@ -480,7 +540,7 @@ export default function ManualSchedulerModal({
                                                 {/* Afternoon Slots */}
                                                 <View>
                                                     <View className="flex-row items-center gap-4 mb-4">
-                                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Afternoon Slots</Text>
+                                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest ml-1">Afternoon Slots</Text>
                                                         <View className="flex-1 h-[1px] bg-white/5" />
                                                     </View>
                                                     <View className="gap-3">
@@ -488,11 +548,11 @@ export default function ManualSchedulerModal({
                                                             <TouchableOpacity 
                                                                 key={i} onPress={() => slot.available && setSelectedTime(slot.time)}
                                                                 disabled={!slot.available}
-                                                                className={`p-6 rounded-[32px] border flex-row justify-between items-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-blue-600 border-blue-400 shadow-xl shadow-blue-500/20' : 'bg-slate-900 border-white/5'} ${!slot.available ? 'opacity-20' : ''}`}
+                                                                className={`p-6 rounded-[32px] border flex-row justify-between items-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-orange-500 border-orange-400 shadow-xl shadow-orange-500/20' : 'bg-slate-900 border-white/5'} ${!slot.available ? 'opacity-20' : ''}`}
                                                             >
                                                                 <View className="flex-row items-center gap-4">
-                                                                    <View className={`w-10 h-10 rounded-2xl items-center justify-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-white/20' : 'bg-slate-950/50'}`}>
-                                                                        <Clock size={18} color="#3B82F6" />
+                                                                    <View className={`w-12 h-12 rounded-2xl items-center justify-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-white/20' : 'bg-slate-950/50'}`}>
+                                                                        <Clock size={20} color="#F97316" />
                                                                     </View>
                                                                     <View>
                                                                         <Text className={`text-xl font-black ${selectedTime?.getTime() === slot.time.getTime() ? 'text-white' : 'text-slate-200'}`}>
@@ -502,8 +562,8 @@ export default function ManualSchedulerModal({
                                                                     </View>
                                                                 </View>
                                                                 {selectedTime?.getTime() === slot.time.getTime() ? (
-                                                                    <View className="w-6 h-6 bg-white rounded-full items-center justify-center">
-                                                                        <Check size={14} color="#2563EB" strokeWidth={4} />
+                                                                    <View className="w-7 h-7 bg-white rounded-full items-center justify-center">
+                                                                        <Check size={16} color="#F97316" strokeWidth={4} />
                                                                     </View>
                                                                 ) : (
                                                                     <ChevronRight size={18} color="#475569" />
@@ -534,22 +594,22 @@ export default function ManualSchedulerModal({
                                         </View>
                                         {renderHeader("Refine Your Session", "Define the core parameters and context for today's high-performance training session.")}
                                         
-                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3">Duration</Text>
+                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Duration</Text>
                                         <View className="p-8 bg-slate-900/50 border border-white/5 rounded-[40px] flex-row items-center justify-between mb-10">
                                             <View className="flex-row items-center gap-5">
-                                                <View className="w-14 h-14 bg-slate-950 rounded-2xl items-center justify-center border border-white/5">
-                                                    <Clock size={24} color="#3B82F6" />
+                                                <View className="w-16 h-16 bg-slate-950 rounded-2xl items-center justify-center border border-white/5">
+                                                    <Clock size={28} color="#F97316" />
                                                 </View>
                                                 <View>
                                                     <Text className="text-white text-2xl font-black">60 minutes</Text>
-                                                    <Text className="text-slate-600 text-[10px] font-medium mt-1">Session duration is fixed at 60 minutes</Text>
+                                                    <Text className="text-slate-600 text-[10px] font-medium mt-1">Session duration is managed by the engine</Text>
                                                 </View>
                                             </View>
                                             <Lock size={20} color="#1E293B" />
                                         </View>
 
-                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4">Session Type</Text>
-                                        <View className="flex-row flex-wrap gap-2 mb-12">
+                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Session Type</Text>
+                                        <View className="flex-row flex-wrap gap-3 mb-12">
                                             {[
                                                 { type: 'training', icon: Zap },
                                                 { type: 'nutrition', icon: Info },
@@ -559,23 +619,23 @@ export default function ManualSchedulerModal({
                                             ].map(({ type, icon: Icon }) => (
                                                 <TouchableOpacity 
                                                     key={type} onPress={() => setSessionType(type as any)}
-                                                    className={`px-6 py-4 rounded-full border flex-row items-center gap-3 ${sessionType === type ? 'bg-blue-600 border-blue-400 shadow-lg shadow-blue-500/20' : 'bg-slate-900 border-white/5'}`}
+                                                    className={`px-8 py-5 rounded-[22px] border flex-row items-center gap-3 ${sessionType === type ? 'bg-orange-500 border-orange-400 shadow-lg shadow-orange-500/20' : 'bg-slate-900 border-white/5'}`}
                                                 >
-                                                    <Zap size={14} color={sessionType === type ? 'white' : '#475569'} />
-                                                    <Text className={`font-black text-[11px] uppercase tracking-widest ${sessionType === type ? 'text-white' : 'text-slate-500'}`}>{type.replace('_', ' ')}</Text>
+                                                    <Icon size={16} color={sessionType === type ? 'white' : '#475569'} />
+                                                    <Text className={`font-black text-[12px] uppercase tracking-widest ${sessionType === type ? 'text-white' : 'text-slate-500'}`}>{type.replace('_', ' ')}</Text>
                                                 </TouchableOpacity>
                                             ))}
                                         </View>
 
-                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4">Notes (Optional)</Text>
+                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Notes (Optional)</Text>
                                         <View className="bg-slate-900/50 rounded-[48px] border border-white/5 p-8">
                                             <TextInput 
-                                                className="text-white font-bold text-lg min-h-[140px]"
+                                                className="text-white font-bold text-lg min-h-[160px]"
                                                 placeholder="Add session notes..." placeholderTextColor="#334155"
                                                 multiline value={notes} onChangeText={setNotes} textAlignVertical="top"
                                             />
                                             <View className="flex-row justify-end mt-4">
-                                                <Target size={20} color="#1E293B" />
+                                                <Target size={24} color="#1E293B" />
                                             </View>
                                         </View>
                                     </View>
@@ -589,41 +649,44 @@ export default function ManualSchedulerModal({
                                         </View>
                                         {renderHeader("Review Session", "Double check everything before creating.")}
                                         
-                                        <View className="bg-[#064E3B]/20 border border-[#059669]/30 p-5 rounded-3xl flex-row items-center gap-4 mb-8">
-                                            <View className="w-10 h-10 bg-[#10B981] rounded-full items-center justify-center">
-                                                <Check size={20} color="white" strokeWidth={3} />
+                                        <View className="bg-[#064E3B]/20 border border-[#059669]/30 p-6 rounded-[32px] flex-row items-center gap-5 mb-10">
+                                            <View className="w-12 h-12 bg-[#10B981] rounded-2xl items-center justify-center">
+                                                <Check size={24} color="white" strokeWidth={3} />
                                             </View>
-                                            <Text className="text-[#10B981] font-black text-[11px] uppercase tracking-[3px]">Ready to book - No Conflicts</Text>
+                                            <View>
+                                                <Text className="text-[#10B981] font-black text-[11px] uppercase tracking-[3px]">Schedule Validated</Text>
+                                                <Text className="text-[#10B981]/70 text-[10px] font-bold mt-0.5">No biological or logistical conflicts found</Text>
+                                            </View>
                                         </View>
 
-                                        <View className="bg-slate-900/50 p-10 rounded-[56px] border border-white/5 mb-4">
+                                        <View className="bg-slate-900/50 p-10 rounded-[64px] border border-white/5 mb-6">
                                             <View className="flex-row items-center gap-6">
-                                               <BrandedAvatar size={84} name={selectedClient?.profiles.full_name || ''} imageUrl={selectedClient?.profiles.avatar_url} />
-                                               <View>
-                                                  <Text className="text-slate-500 text-[11px] font-black uppercase tracking-[3px] mb-2">Client</Text>
-                                                  <Text className="text-white text-4xl font-black tracking-tighter leading-none">{selectedClient?.profiles.full_name}</Text>
-                                                  <View className="bg-indigo-500/20 self-start px-3 py-1 rounded-lg mt-3">
-                                                      <Text className="text-indigo-400 font-black text-[9px] uppercase tracking-widest">{selectedClient?.profiles.subtype || 'Athlete'}</Text>
+                                               <BrandedAvatar size={96} name={selectedClient?.profiles.full_name || ''} imageUrl={selectedClient?.profiles.avatar_url} useBrandColor={true} />
+                                               <View className="flex-1">
+                                                  <Text className="text-slate-500 text-[11px] font-black uppercase tracking-[3px] mb-2">Subject</Text>
+                                                  <Text className="text-white text-4xl font-black tracking-tighter leading-none" numberOfLines={1}>{selectedClient?.profiles.full_name}</Text>
+                                                  <View className="bg-orange-500/20 self-start px-3 py-1.5 rounded-xl mt-4 border border-orange-500/20">
+                                                      <Text className="text-orange-400 font-black text-[9px] uppercase tracking-widest">{selectedClient?.profiles.subtype || 'Athlete'}</Text>
                                                   </View>
                                                </View>
                                             </View>
                                         </View>
 
                                         <View className="gap-4">
-                                            <View className="bg-slate-900/30 p-8 rounded-[48px] border border-white/5 flex-row items-center gap-5">
-                                                <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/5">
-                                                   <Repeat size={20} color="#3B82F6" />
+                                            <View className="bg-slate-900/30 p-8 rounded-[48px] border border-white/5 flex-row items-center gap-6">
+                                                <View className="w-14 h-14 bg-slate-950 rounded-2xl items-center justify-center border border-white/10">
+                                                   <Repeat size={24} color="#F97316" />
                                                 </View>
-                                                <View>
-                                                    <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Frequency</Text>
-                                                    <Text className="text-white font-bold text-xl mt-1">{recurrence === 'once' ? 'One-time Session' : `Recurrent (${selectedWeekdays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')})`}</Text>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Temporal Frequency</Text>
+                                                    <Text className="text-white font-bold text-xl mt-1">{recurrence === 'once' ? 'Single Engagement' : `Weekly Roster (${selectedWeekdays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')})`}</Text>
                                                 </View>
                                             </View>
-                                            <View className="bg-slate-900/30 p-8 rounded-[48px] border border-white/5 flex-row items-center gap-5">
-                                                <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/5">
-                                                   <Clock size={20} color="#A78BFA" />
+                                            <View className="bg-slate-900/30 p-8 rounded-[48px] border border-white/5 flex-row items-center gap-6">
+                                                <View className="w-14 h-14 bg-slate-950 rounded-2xl items-center justify-center border border-white/10">
+                                                   <Clock size={24} color="#A78BFA" />
                                                 </View>
-                                                <View>
+                                                <View style={{ flex: 1 }}>
                                                     <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Time Window</Text>
                                                     <Text className="text-white font-bold text-xl mt-1">{selectedTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {new Date(selectedTime!.getTime() + duration*60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</Text>
                                                 </View>
@@ -639,7 +702,7 @@ export default function ManualSchedulerModal({
                     <View className="p-8 pb-12 border-t border-white/5 flex-row gap-4 items-center bg-[#020617]">
                         <TouchableOpacity 
                             onPress={() => currentStepIdx === 0 ? onClose() : setStep(steps[currentStepIdx - 1])}
-                            className={`h-16 px-8 rounded-full items-center justify-center ${currentStepIdx === 0 ? '' : 'bg-slate-900 border border-white/5'}`}
+                            className={`h-18 px-10 rounded-[28px] items-center justify-center ${currentStepIdx === 0 ? '' : 'bg-slate-900 border border-white/5'}`}
                         >
                             <Text className="text-slate-400 font-black text-lg">{currentStepIdx === 0 ? 'Cancel' : 'Back'}</Text>
                         </TouchableOpacity>
@@ -648,20 +711,21 @@ export default function ManualSchedulerModal({
                             disabled={!canContinue() || loading}
                             onPress={() => step === 'confirm' ? handleConfirm() : setStep(steps[currentStepIdx + 1])}
                             style={{ backgroundColor: canContinue() ? '#FF5C00' : '#1E293B' }}
-                            className={`flex-1 h-20 rounded-[32px] items-center justify-center flex-row gap-4 shadow-2xl shadow-orange-500/40`}
+                            className={`flex-1 h-20 rounded-[32px] items-center justify-center flex-row gap-4 shadow-2xl ${canContinue() ? 'shadow-orange-500/40' : ''}`}
                         >
                             {loading ? (
                                 <ActivityIndicator color="white" />
                             ) : (
                                 <>
-                                    <Text className="text-white font-black text-2xl tracking-tighter">{step === 'confirm' ? 'CREATE SESSION' : 'Next Step'}</Text>
+                                    <Text className="text-white font-black text-2xl tracking-tighter">{step === 'confirm' ? 'FINALIZE BOOKING' : 'Next Step'}</Text>
                                     <ArrowRight size={24} color="white" strokeWidth={3} />
                                 </>
                             )}
                         </TouchableOpacity>
                     </View>
-                </SafeAreaView>
+                </View>
             </View>
+          </NavigationContext.Provider>
         </Modal>
     );
 }
