@@ -93,59 +93,77 @@ export default function ClientMessagesScreen() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (user) {
-        // Start listening immediately for any messages involving the current user
-        const channel = supabase.channel(`client-realtime-${user.id}`)
-          .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages',
-            filter: `recipient_id=eq.${user.id}` 
-          }, (p) => {
-            const nm = p.new as Message;
-            setMessages(prev => {
-              if (prev.some(m => m.id === nm.id)) return prev;
-              return [nm, ...prev];
-            });
-            markAsRead(nm.id);
-          })
-          .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages',
-            filter: `sender_id=eq.${user.id}`
-          }, (p) => {
-            const nm = p.new as Message;
-            setMessages(prev => {
-              // Extract CID if present
-              let newMsgCid: string | undefined;
-              try {
-                const parsed = JSON.parse(nm.content);
-                newMsgCid = parsed.cid;
-              } catch {}
+    if (!user) return;
 
-              // 1. ID Check
-              if (prev.some(m => m.id === nm.id)) return prev;
+    const channelId = `client-chat-realtime-${user.id}`;
+    console.log('[ClientChat] Initializing channel:', channelId);
 
-              // 2. CID Check (Deduplication)
-              if (newMsgCid) {
-                const existingIndex = prev.findIndex(m => m.cid === newMsgCid || (m.isUploading && m.content.includes(`"cid":"${newMsgCid}"`)));
-                if (existingIndex !== -1) {
-                  const updated = [...prev];
-                  updated[existingIndex] = nm;
-                  return updated;
-                }
-              }
-              return [nm, ...prev];
-            });
-          })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
-            setMessages(prev => prev.map(m => m.id === p.new.id ? (p.new as Message) : m));
-          })
-          .subscribe();
-        return () => { supabase.removeChannel(channel); };
-    }
-  }, [user?.id]);
+    const channel = supabase.channel(channelId)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages',
+        filter: `recipient_id=eq.${user.id}` 
+      }, (p) => {
+        const nm = p.new as Message;
+        // Verify this belongs to the active coach
+        if (coachUserId && nm.sender_id === coachUserId) {
+          processIncoming(nm);
+        }
+      })
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages',
+        filter: `sender_id=eq.${user.id}`
+      }, (p) => {
+        const nm = p.new as Message;
+        if (coachUserId && nm.recipient_id === coachUserId) {
+          processOutgoingEcho(nm);
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
+        const updated = p.new as Message;
+        if (coachUserId && (updated.sender_id === coachUserId || updated.recipient_id === coachUserId)) {
+          setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      console.log('[ClientChat] Removing channel:', channelId);
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, coachUserId]);
+
+  const processIncoming = (nm: Message) => {
+    console.log('[ClientChat] Processing incoming:', nm.id);
+    setMessages(prev => {
+      if (prev.some(m => m.id === nm.id)) return prev;
+      return [nm, ...prev];
+    });
+    markAsRead(nm.id);
+  };
+
+  const processOutgoingEcho = (nm: Message) => {
+    console.log('[ClientChat] Processing outgoing echo:', nm.id);
+    setMessages(prev => {
+      if (prev.some(m => m.id === nm.id)) return prev;
+
+      let echoCid: string | undefined;
+      try { echoCid = JSON.parse(nm.content).cid; } catch {}
+
+      if (echoCid) {
+        const existingIdx = prev.findIndex(m => m.cid === echoCid || (m.isUploading && m.content.includes(`"cid":"${echoCid}"`)));
+        if (existingIdx !== -1) {
+          const updated = [...prev];
+          updated[existingIdx] = nm;
+          return updated;
+        }
+      }
+      return [nm, ...prev];
+    });
+  };
 
   const loadChatData = async () => {
     try {
@@ -401,7 +419,14 @@ export default function ClientMessagesScreen() {
             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
         >
           {isMedia ? (
-            <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />
+            <ChatMediaMessage 
+              content={item.content} 
+              isOwn={isMe} 
+              createdAt={item.created_at} 
+              isRead={item.read} 
+              isUploading={item.isUploading}
+              progress={item.progress}
+            />
           ) : (
             <MessageBubble 
               item={item} 

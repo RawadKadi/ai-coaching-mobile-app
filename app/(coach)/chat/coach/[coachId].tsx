@@ -372,7 +372,14 @@ export default function CoachToCoachChat() {
             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
         >
           {isMedia ? (
-            <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />
+            <ChatMediaMessage 
+              content={item.content} 
+              isOwn={isMe} 
+              createdAt={item.created_at} 
+              isRead={item.read} 
+              isUploading={item.isUploading}
+              progress={item.progress}
+            />
           ) : (
             <MessageBubble 
               item={item} 

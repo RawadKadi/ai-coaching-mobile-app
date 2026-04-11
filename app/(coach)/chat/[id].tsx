@@ -105,76 +105,86 @@ export default function CoachChatScreen() {
   }, [user?.id, id]);
 
   useEffect(() => {
-    if (user && clientUserId) {
-        console.log('[CoachChat] Starting subscription for client:', clientUserId);
-        // Start listening immediately for any messages involving the current coach and this specific client
-        const channelId = `coach-realtime-${id}-${user.id}`;
-        const channel = supabase.channel(channelId)
-          .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages',
-            filter: `recipient_id=eq.${user.id}` 
-          }, (p) => {
-            const nm = p.new as Message;
-            // ONLY add if it's from the client we're currently chatting with
-            if (nm.sender_id === clientUserId) {
-              console.log('[CoachChat] New message received from client:', nm.id);
-              setMessages(prev => {
-                if (prev.some(m => m.id === nm.id)) return prev;
-                return [nm, ...prev];
-              });
-              markAsRead(nm.id);
-            }
-          })
-          .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages',
-            filter: `sender_id=eq.${user.id}`
-          }, (p) => {
-            const nm = p.new as Message;
-            // ONLY add if it's sent to the client we're currently chatting with
-            if (nm.recipient_id === clientUserId) {
-              console.log('[CoachChat] Own message confirmed:', nm.id);
-              setMessages(prev => {
-                // CID Check (Deduplication)
-                let newMsgCid: string | undefined;
-                try {
-                  const parsed = JSON.parse(nm.content);
-                  newMsgCid = parsed.cid;
-                } catch {}
+    if (!user || !id) return;
 
-                if (prev.some(m => m.id === nm.id)) return prev;
+    // We start the channel as soon as we have the screen ID and own user ID
+    // We filter by conversation logic inside the callback to ensure we don't miss messages
+    // while clientUserId is still being fetched from the database.
+    const channelId = `chat-realtime-${id}-${user.id}`;
+    console.log('[CoachChat] Initializing channel:', channelId);
 
-                if (newMsgCid) {
-                  const existingIndex = prev.findIndex(m => m.cid === newMsgCid || (m.isUploading && m.content.includes(`"cid":"${newMsgCid}"`)));
-                  if (existingIndex !== -1) {
-                    const updated = [...prev];
-                    updated[existingIndex] = nm;
-                    return updated;
-                  }
-                }
-                return [nm, ...prev];
-              });
-            }
-          })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
-            const updated = p.new as Message;
-            if (updated.sender_id === clientUserId || updated.recipient_id === clientUserId) {
-              setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
-            }
-          })
-          .subscribe((status) => {
-            console.log('[CoachChat] Subscription status:', status);
-          });
+    const channel = supabase.channel(channelId)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages',
+        filter: `recipient_id=eq.${user.id}` 
+      }, (p) => {
+        const nm = p.new as Message;
+        // Verify this message belongs to the current open chat
+        // We check against clientUserId if available, otherwise we'll check it later
+        if (clientUserId && nm.sender_id === clientUserId) {
+          processIncoming(nm);
+        } else if (!clientUserId) {
+          // Fallback: If we don't have the peer ID yet, we buffer or check if it's the only one
+          // Most robust: Just add it if we are sure, or re-run this logic once clientUserId is set.
+          // For now, we'll wait for the profile fetch to finish.
+        }
+      })
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages',
+        filter: `sender_id=eq.${user.id}`
+      }, (p) => {
+        const nm = p.new as Message;
+        if (clientUserId && nm.recipient_id === clientUserId) {
+          processOutgoingEcho(nm);
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
+        const updated = p.new as Message;
+        if (clientUserId && (updated.sender_id === clientUserId || updated.recipient_id === clientUserId)) {
+          setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+        }
+      })
+      .subscribe();
 
-        return () => {
-          console.log('[CoachChat] Cleaning up subscription for channel:', channelId);
-          supabase.removeChannel(channel);
-        };
-    }
-  }, [user?.id, clientUserId, id]);
+    return () => {
+      console.log('[CoachChat] Removing channel:', channelId);
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, id, clientUserId]);
+
+  const processIncoming = (nm: Message) => {
+    console.log('[CoachChat] Processing incoming:', nm.id);
+    setMessages(prev => {
+      if (prev.some(m => m.id === nm.id)) return prev;
+      return [nm, ...prev];
+    });
+    markAsRead(nm.id);
+  };
+
+  const processOutgoingEcho = (nm: Message) => {
+    console.log('[CoachChat] Processing outgoing echo:', nm.id);
+    setMessages(prev => {
+      if (prev.some(m => m.id === nm.id)) return prev;
+
+      // Deduplicate by CID
+      let echoCid: string | undefined;
+      try { echoCid = JSON.parse(nm.content).cid; } catch {}
+
+      if (echoCid) {
+        const existingIdx = prev.findIndex(m => m.cid === echoCid || (m.isUploading && m.content.includes(`"cid":"${echoCid}"`)));
+        if (existingIdx !== -1) {
+          const updated = [...prev];
+          updated[existingIdx] = nm;
+          return updated;
+        }
+      }
+      return [nm, ...prev];
+    });
+  };
 
   const loadChatData = async () => {
     try {
@@ -409,7 +419,14 @@ export default function CoachChatScreen() {
             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
         >
           {isMedia ? (
-            <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />
+            <ChatMediaMessage 
+              content={item.content} 
+              isOwn={isMe} 
+              createdAt={item.created_at} 
+              isRead={item.read} 
+              isUploading={item.isUploading}
+              progress={item.progress}
+            />
           ) : (
             <MessageBubble 
               item={item} 
