@@ -408,7 +408,7 @@ function CustomImagePlayer({
         ) : null}
 
         {/* Main image — streams in, tracked by onProgress */}
-        {!imgError && !isUploading && (
+        {!imgError && !isUploading && uri && uri.startsWith('http') && (
           <Image
             source={{ uri }}
             style={StyleSheet.absoluteFill}
@@ -426,7 +426,11 @@ function CustomImagePlayer({
               // Small delay so user can see the "100%" for a moment
               setTimeout(() => setImgLoaded(true), 300);
             }}
-            onError={() => { setImgError(true); setImgLoaded(true); }}
+            onError={(err) => { 
+                console.error('[ChatMedia] Image load error:', err, 'URI:', uri);
+                setImgError(true); 
+                setImgLoaded(true); 
+            }}
           />
         )}
 

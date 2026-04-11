@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 
 function getMimeType(ext: string): string {
@@ -7,6 +8,8 @@ function getMimeType(ext: string): string {
         png: 'image/png',
         gif: 'image/gif',
         webp: 'image/webp',
+        heic: 'image/heic',
+        heif: 'image/heif',
         mp4: 'video/mp4',
         mov: 'video/quicktime',
         avi: 'video/x-msvideo',
@@ -20,12 +23,6 @@ function getMimeType(ext: string): string {
 
 /**
  * Upload a local URI to Supabase "chat-media" with real-time upload progress.
- * Uses XMLHttpRequest so we can get precise onprogress events (unlike fetch).
- *
- * @param localUri - Local file URI from expo-image-picker / expo-document-picker
- * @param folder   - Bucket subfolder: 'images' | 'videos' | 'documents'
- * @param onProgress - callback(0–100) called repeatedly as bytes are sent
- * @returns Public URL of the uploaded file
  */
 export async function uploadChatMedia(
     localUri: string,
@@ -33,7 +30,20 @@ export async function uploadChatMedia(
     onProgress?: (pct: number) => void,
     onXhrCreated?: (xhr: XMLHttpRequest) => void,
 ): Promise<string> {
-    const ext = localUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+    // 1. Extract extension safely
+    let ext = 'jpg';
+    const cleanUri = localUri.split('?')[0].split('#')[0];
+    const match = cleanUri.match(/\.(jpg|jpeg|png|gif|webp|heic|heif|mp4|mov|avi|pdf|doc|docx|txt)$/i);
+    if (match) {
+        ext = match[1].toLowerCase();
+    } else if (localUri.startsWith('data:')) {
+        const dataMatch = localUri.match(/^data:([^;]+);base64,/);
+        if (dataMatch) {
+            const mime = dataMatch[1];
+            ext = mime.split('/').pop() || 'jpg';
+        }
+    }
+
     const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
     const mimeType = getMimeType(ext);
 
@@ -49,10 +59,40 @@ export async function uploadChatMedia(
 
     const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-media/${fileName}`;
 
-    // FormData – React Native streams this natively to avoid loading file into JS memory
+    // 2. Platform-agnostic file reading
+    let fileToUpload: any;
+    try {
+        const blobResponse = await fetch(localUri);
+        const fileBlob = await blobResponse.blob();
+        
+        console.log(`[uploadChatMedia] Prepared blob: ${fileBlob.size} bytes, type: ${fileBlob.type || mimeType}`);
+        
+        if (fileBlob.size === 0) {
+            throw new Error('File is empty (0 bytes)');
+        }
+
+        if (Platform.OS === 'web') {
+            fileToUpload = fileBlob;
+        } else {
+            // On Native, even if fetch().blob() works, some storage drivers 
+            // still prefer the object syntax for file-system efficiency.
+            fileToUpload = {
+                uri: localUri,
+                name: fileName.split('/').pop(),
+                type: fileBlob.type || mimeType
+            };
+        }
+    } catch (e) {
+        console.warn('[uploadChatMedia] fetch().blob() failed, falling back to basic URI:', e);
+        fileToUpload = {
+            uri: localUri,
+            name: fileName.split('/').pop(),
+            type: mimeType
+        };
+    }
+
     const formData = new FormData();
-    // @ts-ignore – RN accepts { uri, name, type } here
-    formData.append('file', { uri: localUri, name: `upload.${ext}`, type: mimeType });
+    formData.append('file', fileToUpload, fileName);
 
     await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -63,7 +103,6 @@ export async function uploadChatMedia(
 
         onXhrCreated?.(xhr);
 
-        // ── Real upload progress ──────────────────────────────────────────────
         if (xhr.upload && onProgress) {
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
@@ -81,13 +120,12 @@ export async function uploadChatMedia(
                 reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText}`));
             }
         };
-        xhr.onerror = () => reject(new Error('Network error during upload'));
-        xhr.ontimeout = () => reject(new Error('Upload timed out'));
-        xhr.timeout = 120_000; // 2 min max
+        xhr.onerror = () => reject(new Error('Network error during upload. Please check your connection.'));
+        xhr.ontimeout = () => reject(new Error('Upload timed out. The file might be too large.'));
+        xhr.timeout = 180_000;
         xhr.send(formData);
     });
 
-    // Return the public URL
     const { data: { publicUrl } } = supabase.storage
         .from('chat-media')
         .getPublicUrl(fileName);

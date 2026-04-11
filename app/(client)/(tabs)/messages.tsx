@@ -64,6 +64,7 @@ type Message = {
   ai_generated?: boolean;
   isUploading?: boolean;
   progress?: number;
+  cid?: string;
 };
 
 export default function ClientMessagesScreen() {
@@ -92,17 +93,51 @@ export default function ClientMessagesScreen() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (user && coachUserId) {
-        const channel = supabase.channel(`client-chat-${user.id}`)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
+    if (user) {
+        // Start listening immediately for any messages involving the current user
+        const channel = supabase.channel(`client-realtime-${user.id}`)
+          .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages',
+            filter: `recipient_id=eq.${user.id}` 
+          }, (p) => {
             const nm = p.new as Message;
-            if (nm.sender_id === coachUserId || nm.sender_id === user.id) {
-              setMessages(prev => {
-                if (prev.some(m => m.id === nm.id)) return prev;
-                return [nm, ...prev];
-              });
-              if (nm.sender_id !== user.id) markAsRead(nm.id);
-            }
+            setMessages(prev => {
+              if (prev.some(m => m.id === nm.id)) return prev;
+              return [nm, ...prev];
+            });
+            markAsRead(nm.id);
+          })
+          .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages',
+            filter: `sender_id=eq.${user.id}`
+          }, (p) => {
+            const nm = p.new as Message;
+            setMessages(prev => {
+              // Extract CID if present
+              let newMsgCid: string | undefined;
+              try {
+                const parsed = JSON.parse(nm.content);
+                newMsgCid = parsed.cid;
+              } catch {}
+
+              // 1. ID Check
+              if (prev.some(m => m.id === nm.id)) return prev;
+
+              // 2. CID Check (Deduplication)
+              if (newMsgCid) {
+                const existingIndex = prev.findIndex(m => m.cid === newMsgCid || (m.isUploading && m.content.includes(`"cid":"${newMsgCid}"`)));
+                if (existingIndex !== -1) {
+                  const updated = [...prev];
+                  updated[existingIndex] = nm;
+                  return updated;
+                }
+              }
+              return [nm, ...prev];
+            });
           })
           .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
             setMessages(prev => prev.map(m => m.id === p.new.id ? (p.new as Message) : m));
@@ -110,7 +145,7 @@ export default function ClientMessagesScreen() {
           .subscribe();
         return () => { supabase.removeChannel(channel); };
     }
-  }, [user?.id, coachUserId]);
+  }, [user?.id]);
 
   const loadChatData = async () => {
     try {
@@ -183,27 +218,33 @@ export default function ClientMessagesScreen() {
     }
 
     // 1. Create Optimistic Message
+    const cid = `c-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const tempId = `temp-${Date.now()}`;
+    
+    // Embed CID
+    const contentWithCid = JSON.stringify({ ...parsedContent, cid });
+
     const optimisticMsg: Message = {
       id: tempId,
       sender_id: user?.id || '',
       recipient_id: coachUserId,
-      content: jsonContent,
+      content: contentWithCid,
       created_at: new Date().toISOString(),
       read: false,
       reply_to_id: replyId,
       ai_generated: false,
       isUploading: true,
-      progress: 0
+      progress: 0,
+      cid
     };
 
     // Add to state immediately
     setMessages(prev => [optimisticMsg, ...prev]);
 
-    let finalContent = jsonContent;
+    let finalContent = contentWithCid;
     try {
-      // 2. Upload if local
-      if (parsedContent.isOptimistic && parsedContent.url && (parsedContent.url.startsWith('file://') || parsedContent.url.startsWith('data:'))) {
+      // 2. Upload if local (not a remote URL)
+      if (parsedContent.isOptimistic && parsedContent.url && !parsedContent.url.startsWith('http')) {
         const folder = parsedContent.type === 'video' ? 'videos' : (parsedContent.type === 'document' ? 'documents' : 'images');
         
         const publicUrl = await uploadChatMedia(
@@ -214,7 +255,7 @@ export default function ClientMessagesScreen() {
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, progress: pct } : m));
           }
         );
-        finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false });
+        finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false, cid });
       }
 
       // 3. Insert into Supabase
@@ -328,100 +369,6 @@ export default function ClientMessagesScreen() {
      }
   }, [messages]);
 
-  const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme }: any) => {
-    const [isExpanded, setIsExpanded] = React.useState(false);
-    let displayContent = item.content;
-    let reactions: any[] = [];
-    let isDeleted = false;
-    let deletedBy = '';
-
-    let isMedia = false;
-    try {
-      const p = JSON.parse(item.content);
-      displayContent = p.text || item.content;
-      reactions = p.reactions || [];
-      if (p.type === 'deleted') {
-        isDeleted = true;
-        deletedBy = p.deleted_by;
-      }
-      if (['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion'].includes(p.type)) isMedia = true;
-      if (p.type === 'meal' || p.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
-    } catch {}
-
-    if (isDeleted) {
-      const isDeletedByMe = deletedBy === user?.id;
-      const deleterName = isDeletedByMe ? 'You' : (coachProfile?.full_name || 'Coach');
-      return (
-        <View className="px-5 py-3 rounded-[24px] border border-slate-800 bg-slate-900/40 italic">
-          <Text className="text-slate-500 text-sm">
-            {isDeletedByMe ? 'You deleted this message' : `${deleterName} deleted this message`}
-          </Text>
-        </View>
-      );
-    }
-
-    if (isMedia) return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
-
-    const shouldTruncate = displayContent.length > 300;
-    const truncatedContent = shouldTruncate && !isExpanded ? displayContent.slice(0, 300) + '...' : displayContent;
-
-    return (
-      <View style={{ position: 'relative' }}>
-        <MotiView 
-            from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
-            animate={{ 
-                scale: isHighlighted ? 1.05 : 1,
-                backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
-            }}
-            transition={{ type: 'timing', duration: 250 }}
-            className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-            style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
-        >
-          {repliedMsg && (
-             <TouchableOpacity 
-                activeOpacity={0.8}
-                onPress={onReplyPress}
-                className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
-             >
-                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
-                <Text className="text-white/80 text-xs" numberOfLines={1}>
-                  {(() => {
-                    try { const p = JSON.parse(repliedMsg.content); return p.text || repliedMsg.content; } 
-                    catch { return repliedMsg.content; }
-                  })()}
-                </Text>
-             </TouchableOpacity>
-          )}
-          <Text className="text-[15px] font-medium leading-[22px] text-white">
-            {truncatedContent}
-          </Text>
-          {shouldTruncate && (
-            <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
-              <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
-                {isExpanded ? 'Show Less' : 'Read More'}
-              </Text>
-            </TouchableOpacity>
-          )}
-          <View className="flex-row items-center justify-end gap-1.5 mt-2">
-             <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-             {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
-          </View>
-        </MotiView>
-
-        {reactions.length > 0 && (
-          <View className="flex-row flex-wrap mt-[-8px] ml-2">
-            {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
-              .map(([emoji, count]: any) => (
-                <View key={emoji} className="bg-slate-800 rounded-full px-2 py-0.5 border border-white/5 flex-row items-center mr-1 mb-1">
-                  <Text className="text-[12px]">{emoji}</Text>
-                  {count > 1 && <Text className="text-[10px] text-white ml-1 font-bold">{count}</Text>}
-                </View>
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  };
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender_id === user?.id;
@@ -433,6 +380,12 @@ export default function ClientMessagesScreen() {
             </View>
         );
     };
+
+    let isMedia = false;
+    try {
+      const p = JSON.parse(item.content);
+      if (['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion'].includes(p.type)) isMedia = true;
+    } catch {}
 
     return (
       <Swipeable
@@ -447,17 +400,20 @@ export default function ClientMessagesScreen() {
             onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
         >
-                if (isMedia) return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
-                return (
-                  <MessageBubble 
-                    item={item} 
-                    isMe={isMe} 
-                    repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
-                    isHighlighted={item.id === highlightedMessageId}
-                    onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
-                    theme={theme}
-                  />
-                );
+          {isMedia ? (
+            <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />
+          ) : (
+            <MessageBubble 
+              item={item} 
+              isMe={isMe} 
+              repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
+              isHighlighted={item.id === highlightedMessageId}
+              onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+              theme={theme}
+              user={user}
+              coachName={coachProfile?.full_name}
+            />
+          )}
         </TouchableOpacity>
       </Swipeable>
     );
@@ -517,3 +473,93 @@ export default function ClientMessagesScreen() {
     </View>
   );
 }
+const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, coachName }: any) => {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  let displayContent = item.content;
+  let reactions: any[] = [];
+  let isDeleted = false;
+  let deletedBy = '';
+
+  try {
+    const p = JSON.parse(item.content);
+    displayContent = p.text || item.content;
+    reactions = p.reactions || [];
+    if (p.type === 'deleted') {
+      isDeleted = true;
+      deletedBy = p.deleted_by;
+    }
+    if (p.type === 'meal' || p.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
+  } catch {}
+
+  if (isDeleted) {
+    const isDeletedByMe = deletedBy === user?.id;
+    const deleterName = isDeletedByMe ? 'You' : (coachName || 'Coach');
+    return (
+      <View className="px-5 py-3 rounded-[24px] border border-slate-800 bg-slate-900/40 italic">
+        <Text className="text-slate-500 text-sm">
+          {isDeletedByMe ? 'You deleted this message' : `${deleterName} deleted this message`}
+        </Text>
+      </View>
+    );
+  }
+
+  const shouldTruncate = displayContent.length > 300;
+  const truncatedContent = shouldTruncate && !isExpanded ? displayContent.slice(0, 300) + '...' : displayContent;
+
+  return (
+    <View style={{ position: 'relative' }}>
+      <MotiView 
+          from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
+          animate={{ 
+              scale: isHighlighted ? 1.05 : 1,
+              backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
+          }}
+          transition={{ type: 'timing', duration: 250 }}
+          className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
+          style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
+      >
+        {repliedMsg && (
+           <TouchableOpacity 
+              activeOpacity={0.8}
+              onPress={onReplyPress}
+              className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
+           >
+              <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
+              <Text className="text-white/80 text-xs" numberOfLines={1}>
+                {(() => {
+                  try { const p = JSON.parse(repliedMsg.content); return p.text || repliedMsg.content; } 
+                  catch { return repliedMsg.content; }
+                })()}
+              </Text>
+           </TouchableOpacity>
+        )}
+        <Text className="text-[15px] font-medium leading-[22px] text-white">
+          {truncatedContent}
+        </Text>
+        {shouldTruncate && (
+          <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
+            <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
+              {isExpanded ? 'Show Less' : 'Read More'}
+            </Text>
+          </TouchableOpacity>
+        )}
+        <View className="flex-row items-center justify-end gap-1.5 mt-2">
+           <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+           {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
+        </View>
+      </MotiView>
+
+      {reactions.length > 0 && (
+        <View className="flex-row flex-wrap mt-[-8px] ml-2">
+          {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+            .map(([emoji, count]: any) => (
+              <View key={emoji} className="bg-slate-800 rounded-full px-2 py-0.5 border border-white/5 flex-row items-center mr-1 mb-1">
+                <Text className="text-[12px]">{emoji}</Text>
+                {count > 1 && <Text className="text-[10px] text-white ml-1 font-bold">{count}</Text>}
+              </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
