@@ -3,18 +3,15 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  TextInput, 
   TouchableOpacity, 
   FlatList, 
   KeyboardAvoidingView, 
   Platform, 
   ActivityIndicator, 
   UIManager, 
-  Image, 
   Modal, 
   Pressable, 
   Dimensions, 
-  Linking, 
   Alert, 
   Animated,
   StatusBar
@@ -25,23 +22,13 @@ import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import { 
-  Send, 
   ArrowLeft, 
-  ChevronDown, 
-  ChevronUp, 
   Check, 
   CheckCheck, 
-  X, 
   Calendar, 
-  Video, 
-  ArrowDown, 
-  MoreVertical, 
   Activity,
-  Plus,
   Reply,
-  Dumbbell,
-  Shield,
-  ArrowRight
+  MoreVertical,
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { ChatInputBar } from '@/components/ChatInputBar';
@@ -50,6 +37,7 @@ import SchedulerModal from '@/components/SchedulerModal';
 import { MessageOverlay } from '@/components/MessageOverlay';
 import MealMessageCard from '@/components/MealMessageCard';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
+import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,6 +64,17 @@ type Message = {
   cid?: string;
 };
 
+// Helper to detect if a message content is a media-type or system card
+function isMediaMessage(content: string): boolean {
+  if (!content) return false;
+  try {
+    const p = JSON.parse(content);
+    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log'].includes(p.type);
+  } catch {
+    return false;
+  }
+}
+
 export default function CoachChatScreen() {
   const { id } = useLocalSearchParams(); 
   const router = useRouter();
@@ -97,6 +96,14 @@ export default function CoachChatScreen() {
   
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+  // Buffer for messages that arrive before clientUserId is resolved
+  const pendingBuffer = useRef<Message[]>([]);
+  // Keep a stable ref to clientUserId so real-time callbacks always see latest value
+  const clientUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    clientUserIdRef.current = clientUserId;
+  }, [clientUserId]);
 
   useEffect(() => {
     if (user && id) {
@@ -104,14 +111,12 @@ export default function CoachChatScreen() {
     }
   }, [user?.id, id]);
 
+  // Real-time channel — only depends on user.id and id, NOT clientUserId.
+  // This prevents the channel from being destroyed/recreated when clientUserId resolves.
   useEffect(() => {
     if (!user || !id) return;
 
-    // We start the channel as soon as we have the screen ID and own user ID
-    // We filter by conversation logic inside the callback to ensure we don't miss messages
-    // while clientUserId is still being fetched from the database.
-    const channelId = `chat-realtime-${id}-${user.id}`;
-    console.log('[CoachChat] Initializing channel:', channelId);
+    const channelId = `coach-chat-rt-${id}-${user.id}`;
 
     const channel = supabase.channel(channelId)
       .on('postgres_changes', { 
@@ -121,14 +126,12 @@ export default function CoachChatScreen() {
         filter: `recipient_id=eq.${user.id}` 
       }, (p) => {
         const nm = p.new as Message;
-        // Verify this message belongs to the current open chat
-        // We check against clientUserId if available, otherwise we'll check it later
-        if (clientUserId && nm.sender_id === clientUserId) {
+        const cUid = clientUserIdRef.current;
+        if (cUid && nm.sender_id === cUid) {
           processIncoming(nm);
-        } else if (!clientUserId) {
-          // Fallback: If we don't have the peer ID yet, we buffer or check if it's the only one
-          // Most robust: Just add it if we are sure, or re-run this logic once clientUserId is set.
-          // For now, we'll wait for the profile fetch to finish.
+        } else if (!cUid) {
+          console.log('[CoachChat] Buffering incoming (clientUserId not ready):', nm.id);
+          pendingBuffer.current.push(nm);
         }
       })
       .on('postgres_changes', { 
@@ -138,26 +141,42 @@ export default function CoachChatScreen() {
         filter: `sender_id=eq.${user.id}`
       }, (p) => {
         const nm = p.new as Message;
-        if (clientUserId && nm.recipient_id === clientUserId) {
+        const cUid = clientUserIdRef.current;
+        if (cUid && nm.recipient_id === cUid) {
           processOutgoingEcho(nm);
+        } else if (!cUid) {
+          pendingBuffer.current.push(nm);
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
         const updated = p.new as Message;
-        if (clientUserId && (updated.sender_id === clientUserId || updated.recipient_id === clientUserId)) {
+        const cUid = clientUserIdRef.current;
+        if (cUid && (updated.sender_id === cUid || updated.recipient_id === cUid)) {
           setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[CoachChat] Channel status:', status);
+      });
 
     return () => {
-      console.log('[CoachChat] Removing channel:', channelId);
       supabase.removeChannel(channel);
     };
-  }, [user?.id, id, clientUserId]);
+  }, [user?.id, id]); // ← Stable: no clientUserId dependency
+
+  // Flush buffered messages once clientUserId is known
+  useEffect(() => {
+    if (!clientUserId || pendingBuffer.current.length === 0) return;
+    console.log('[CoachChat] Flushing', pendingBuffer.current.length, 'buffered messages');
+    const toFlush = [...pendingBuffer.current];
+    pendingBuffer.current = [];
+    toFlush.forEach(nm => {
+      if (nm.sender_id === clientUserId) processIncoming(nm);
+      else if (nm.recipient_id === clientUserId) processOutgoingEcho(nm);
+    });
+  }, [clientUserId]);
 
   const processIncoming = (nm: Message) => {
-    console.log('[CoachChat] Processing incoming:', nm.id);
     setMessages(prev => {
       if (prev.some(m => m.id === nm.id)) return prev;
       return [nm, ...prev];
@@ -166,7 +185,6 @@ export default function CoachChatScreen() {
   };
 
   const processOutgoingEcho = (nm: Message) => {
-    console.log('[CoachChat] Processing outgoing echo:', nm.id);
     setMessages(prev => {
       if (prev.some(m => m.id === nm.id)) return prev;
 
@@ -175,7 +193,8 @@ export default function CoachChatScreen() {
       try { echoCid = JSON.parse(nm.content).cid; } catch {}
 
       if (echoCid) {
-        const existingIdx = prev.findIndex(m => m.cid === echoCid || (m.isUploading && m.content.includes(`"cid":"${echoCid}"`)));
+        // Look for the optimistic message by CID
+        const existingIdx = prev.findIndex(m => m.cid === echoCid);
         if (existingIdx !== -1) {
           const updated = [...prev];
           updated[existingIdx] = nm;
@@ -194,6 +213,7 @@ export default function CoachChatScreen() {
       
       setClientProfile(cData);
       setClientUserId(cData.user_id);
+      clientUserIdRef.current = cData.user_id;
 
       const { data: mData, error: mError } = await supabase.from('messages')
         .select('*')
@@ -236,11 +256,9 @@ export default function CoachChatScreen() {
       return;
     }
 
-    // 1. Create Optimistic Message
     const cid = `c-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const tempId = `temp-${Date.now()}`;
     
-    // Embed CID into content
     const contentWithCid = JSON.stringify({ ...parsedContent, cid });
 
     const optimisticMsg: Message = {
@@ -257,12 +275,10 @@ export default function CoachChatScreen() {
       cid
     };
 
-    // Add to state immediately
     setMessages(prev => [optimisticMsg, ...prev]);
 
     let finalContent = contentWithCid;
     try {
-      // 2. Upload if local (not a remote URL)
       if (parsedContent.isOptimistic && parsedContent.url && !parsedContent.url.startsWith('http')) {
         const folder = parsedContent.type === 'video' ? 'videos' : (parsedContent.type === 'document' ? 'documents' : 'images');
         
@@ -270,14 +286,14 @@ export default function CoachChatScreen() {
           parsedContent.url, 
           folder, 
           (pct) => {
-            // Update progress in state
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, progress: pct } : m));
           }
         );
         finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false, cid });
+        // Pre-warm cache so sender sees own media instantly
+        mediaDownloadManager.markRemoteAvailable(publicUrl);
       }
 
-      // 3. Insert into Supabase
       const { data: insertedData, error } = await supabase.from('messages').insert({ 
         sender_id: user?.id, 
         recipient_id: clientUserId, 
@@ -289,14 +305,12 @@ export default function CoachChatScreen() {
 
       if (error) throw error;
 
-      // 4. Replace optimistic message with real one to maintain position/ID
       if (insertedData) {
         setMessages(prev => prev.map(m => m.id === tempId ? insertedData : m));
       }
     } catch (e: any) {
       console.error('[CoachChat] Media upload/send failed:', e);
       Alert.alert('Send Error', 'Failed to send media: ' + (e.message || 'Unknown error'));
-      // Remove optimistic message on failure
       setMessages(prev => prev.filter(m => m.id !== tempId));
     } finally {
       setSending(false);
@@ -322,7 +336,6 @@ export default function CoachChatScreen() {
         return;
       }
 
-      // Optimistic update
       const msgId = activeMessageForMenu.id;
       const deletedContent = JSON.stringify({
         type: 'deleted',
@@ -334,7 +347,6 @@ export default function CoachChatScreen() {
       
       const { error } = await supabase.from('messages').update({ content: deletedContent }).eq('id', msgId);
       if (error) {
-        console.error('[CoachChat] Deletion failed:', error);
         Alert.alert('Error', 'Failed to delete message: ' + error.message);
       }
     }
@@ -373,7 +385,6 @@ export default function CoachChatScreen() {
       .eq('id', msgId);
       
     if (error) {
-      console.error('[CoachChat] Reaction failed:', error);
       Alert.alert('Error', 'Failed to react: ' + error.message);
     }
     setActiveMessageForMenu(null);
@@ -390,6 +401,8 @@ export default function CoachChatScreen() {
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender_id === user?.id;
+    const isMedia = isMediaMessage(item.content);
+
     const renderLeftActions = (progress: any, dragX: any) => {
         const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
         return (
@@ -398,12 +411,6 @@ export default function CoachChatScreen() {
             </View>
         );
     };
-
-    let isMedia = false;
-    try {
-      const p = JSON.parse(item.content);
-      if (['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion'].includes(p.type)) isMedia = true;
-    } catch {}
 
     return (
       <Swipeable
@@ -414,19 +421,43 @@ export default function CoachChatScreen() {
       >
         <TouchableOpacity 
             activeOpacity={0.9} 
-            delayLongPress={800}
+            delayLongPress={400}
             onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
         >
           {isMedia ? (
-            <ChatMediaMessage 
-              content={item.content} 
-              isOwn={isMe} 
-              createdAt={item.created_at} 
-              isRead={item.read} 
-              isUploading={item.isUploading}
-              progress={item.progress}
-            />
+            <View>
+              <ChatMediaMessage 
+                content={item.content} 
+                isOwn={isMe} 
+                createdAt={item.created_at} 
+                isRead={item.read} 
+                isUploading={item.isUploading}
+                progress={item.progress}
+                replyTo={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : undefined}
+                onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+                isHighlighted={item.id === highlightedMessageId}
+              />
+              {/* Reactions on media messages */}
+              {(() => {
+                try {
+                  const p = JSON.parse(item.content);
+                  const reactions = p.reactions || [];
+                  if (reactions.length === 0) return null;
+                  return (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
+                      {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+                        .map(([emoji, count]: any) => (
+                          <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                            <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                            {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
+                          </View>
+                        ))}
+                    </View>
+                  );
+                } catch { return null; }
+              })()}
+            </View>
           ) : (
             <MessageBubble 
               item={item} 
@@ -441,6 +472,30 @@ export default function CoachChatScreen() {
           )}
         </TouchableOpacity>
       </Swipeable>
+    );
+  };
+
+  // For MessageOverlay: render the correct component based on message type
+  const renderOverlayContent = (msg: any, isMe: boolean) => {
+    if (isMediaMessage(msg.content)) {
+      return (
+        <ChatMediaMessage
+          content={msg.content}
+          isOwn={isMe}
+          createdAt={msg.created_at}
+          isRead={msg.read}
+        />
+      );
+    }
+    return (
+      <MessageBubble 
+        item={msg} 
+        isMe={isMe} 
+        theme={theme} 
+        user={user}
+        clientName={clientProfile?.profiles?.full_name}
+        repliedMsg={msg.reply_to_id ? messages.find((m: any) => m.id === msg.reply_to_id) : null}
+      />
     );
   };
 
@@ -490,7 +545,6 @@ export default function CoachChatScreen() {
         }}
         existingSessions={[]} 
         onConfirm={async (sessions) => {
-          // Handle confirm logic here
           console.log('Confirmed sessions:', sessions);
         }}
       />
@@ -509,16 +563,7 @@ export default function CoachChatScreen() {
       <MessageOverlay 
           visible={!!activeMessageForMenu} message={activeMessageForMenu} isMe={activeMessageForMenu?.sender_id === user?.id}
           onClose={() => setActiveMessageForMenu(null)} onReaction={handleReaction} onAction={handleAction} 
-          renderMessageContent={(msg: any, isMe: boolean) => (
-            <MessageBubble 
-              item={msg} 
-              isMe={isMe} 
-              theme={theme} 
-              user={user}
-              clientName={clientProfile?.profiles?.full_name}
-              repliedMsg={msg.reply_to_id ? messages.find((m: any) => m.id === msg.reply_to_id) : null}
-            />
-          )}
+          renderMessageContent={renderOverlayContent}
       />
     </View>
   );
@@ -532,6 +577,7 @@ const OptionItem = ({ icon, title, sub, onPress }: any) => (
 );
 
 const styles = StyleSheet.create({ header: { backgroundColor: '#020617' } });
+
 const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, clientName }: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   let displayContent = item.content;

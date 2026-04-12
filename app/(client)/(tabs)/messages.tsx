@@ -38,6 +38,7 @@ import ChatMediaMessage from '@/components/ChatMediaMessage';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import { MessageOverlay } from '@/components/MessageOverlay';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
+import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -66,6 +67,17 @@ type Message = {
   progress?: number;
   cid?: string;
 };
+
+// Helper to detect if a message content is a media-type or system card
+function isMediaMessage(content: string): boolean {
+  if (!content) return false;
+  try {
+    const p = JSON.parse(content);
+    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log'].includes(p.type);
+  } catch {
+    return false;
+  }
+}    
 
 export default function ClientMessagesScreen() {
   const router = useRouter();
@@ -154,7 +166,8 @@ export default function ClientMessagesScreen() {
       try { echoCid = JSON.parse(nm.content).cid; } catch {}
 
       if (echoCid) {
-        const existingIdx = prev.findIndex(m => m.cid === echoCid || (m.isUploading && m.content.includes(`"cid":"${echoCid}"`)));
+        // Look for the optimistic message by CID
+        const existingIdx = prev.findIndex(m => m.cid === echoCid);
         if (existingIdx !== -1) {
           const updated = [...prev];
           updated[existingIdx] = nm;
@@ -274,6 +287,8 @@ export default function ClientMessagesScreen() {
           }
         );
         finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false, cid });
+        // Pre-warm cache so sender sees own media instantly
+        mediaDownloadManager.markRemoteAvailable(publicUrl);
       }
 
       // 3. Insert into Supabase
@@ -399,11 +414,7 @@ export default function ClientMessagesScreen() {
         );
     };
 
-    let isMedia = false;
-    try {
-      const p = JSON.parse(item.content);
-      if (['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion'].includes(p.type)) isMedia = true;
-    } catch {}
+    const isMedia = isMediaMessage(item.content);
 
     return (
       <Swipeable

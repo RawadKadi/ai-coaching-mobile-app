@@ -375,15 +375,15 @@ export function ChatInputBar({
     }
   }, [activePanel, gifQuery, searchGifs]);
 
-  const handleSendGif = (gif: GifResult) => {
+  const handleSendGif = async (gif: GifResult) => {
     const payload = {
       type: 'gif',
       url: gif.url,
       previewUrl: gif.previewUrl,
       id: gif.id
     };
-    onSendMedia(JSON.stringify(payload));
-    togglePanel(null); // Changed closePanel() to togglePanel(null)
+    await onSendMedia(JSON.stringify(payload));
+    togglePanel(null);
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────

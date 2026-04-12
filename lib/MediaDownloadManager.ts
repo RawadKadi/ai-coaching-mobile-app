@@ -1,12 +1,14 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
+
+type DownloadStatus = 'idle' | 'downloading' | 'finished' | 'error';
 
 type DownloadState = {
     url: string;
     fileUri: string;
-    progress: number;
-    status: 'idle' | 'downloading' | 'finished' | 'error';
+    progress: number; // 0–100
+    status: DownloadStatus;
     localUri: string | null;
-    resumable: FileSystem.DownloadResumable | null;
 };
 
 type Listener = (state: DownloadState) => void;
@@ -18,83 +20,98 @@ class MediaDownloadManager {
     async getOrDownload(url: string): Promise<string | null> {
         if (!url || !url.startsWith('http')) return url || null;
 
-        const filename = url.split('/').pop()?.split('?')[0] || `cache_${Date.now()}`;
-        const fileUri = `${FileSystem.documentDirectory}${filename}`;
+        // Web: file system is not available — use remote URL directly
+        if (Platform.OS === 'web') return url;
 
-        // 1. Check if already finished
-        const fileInfo = await FileSystem.getInfoAsync(fileUri);
-        if (fileInfo.exists) {
-            return fileUri;
+        // 1. Already in memory and finished — return immediately
+        const existing = this.downloads.get(url);
+        if (existing) {
+            if (existing.status === 'finished' && existing.localUri) return existing.localUri;
+            if (existing.status === 'downloading') return null; // Wait for subscription
+            if (existing.status === 'error') return url; // Fallback to remote
         }
 
-        // 2. Check if already downloading
-        if (this.downloads.has(url)) {
-            const state = this.downloads.get(url)!;
-            if (state.status === 'finished') return state.localUri;
-            return null; // Still downloading
+        // 2. Check disk (persistent cache survives app restarts)
+        const filename = this._filename(url);
+        const fileUri = `${FileSystem.documentDirectory}media_cache/${filename}`;
+
+        try {
+            const info = await FileSystem.getInfoAsync(fileUri);
+            if (info.exists) {
+                // Populate memory so future calls are sync
+                this._setState(url, { url, fileUri, progress: 100, status: 'finished', localUri: fileUri });
+                return fileUri;
+            }
+        } catch (e) {
+            console.warn('[MediaManager] getInfoAsync failed:', e);
         }
 
-        // 3. Start new download
-        this.startDownload(url, fileUri);
+        // 3. Not cached — start download
+        this._startDownload(url, fileUri);
         return null;
     }
 
-    private startDownload(url: string, fileUri: string) {
-        const state: DownloadState = {
-            url,
-            fileUri,
-            progress: 0,
-            status: 'downloading',
-            localUri: null,
-            resumable: null
-        };
+    private _filename(url: string): string {
+        // Use a hash of the full URL to prevent any filename collisions
+        let hash = 0;
+        for (let i = 0; i < url.length; i++) {
+            hash = ((hash << 5) - hash) + url.charCodeAt(i);
+            hash |= 0;
+        }
+        const ext = url.split('?')[0].split('.').pop()?.slice(0, 4) || 'bin';
+        return `${Math.abs(hash).toString(36)}.${ext}`;
+    }
 
-        this.downloads.set(url, state);
+    private async _startDownload(url: string, fileUri: string) {
+        if (Platform.OS === 'web') return;
+
+        // Ensure cache directory exists
+        try {
+            await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}media_cache/`, { intermediates: true });
+        } catch {}
+
+        this._setState(url, { url, fileUri, progress: 0, status: 'downloading', localUri: null });
 
         const resumable = FileSystem.createDownloadResumable(
             url,
             fileUri,
             {},
             (downloadProgress) => {
-                const progress = (downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite) * 100;
-                this.updateState(url, { progress: Math.round(progress) });
+                const { totalBytesWritten, totalBytesExpectedToWrite } = downloadProgress;
+                // Guard against unknown content-length (-1)
+                const pct = totalBytesExpectedToWrite > 0
+                    ? Math.min(99, Math.round((totalBytesWritten / totalBytesExpectedToWrite) * 100))
+                    : Math.min(99, Math.round(totalBytesWritten / 10000)); // fallback: KB written
+                const cur = this.downloads.get(url);
+                if (cur) this._setState(url, { ...cur, progress: pct });
             }
         );
 
-        state.resumable = resumable;
-
-        resumable.downloadAsync()
-            .then((result) => {
-                if (result) {
-                    this.updateState(url, { 
-                        status: 'finished', 
-                        localUri: result.uri, 
-                        progress: 100 
-                    });
-                }
-            })
-            .catch((error) => {
-                console.warn('[MediaManager] Download failed:', error);
-                this.updateState(url, { status: 'error' });
-            });
-    }
-
-    private updateState(url: string, update: Partial<DownloadState>) {
-        const state = this.downloads.get(url);
-        if (state) {
-            const newState = { ...state, ...update };
-            this.downloads.set(url, newState);
-            this.notify(url, newState);
+        try {
+            const result = await resumable.downloadAsync();
+            if (result?.uri) {
+                this._setState(url, { url, fileUri: result.uri, progress: 100, status: 'finished', localUri: result.uri });
+            } else {
+                this._setState(url, { url, fileUri, progress: 0, status: 'error', localUri: null });
+            }
+        } catch (error: any) {
+            console.warn('[MediaManager] download failed:', error?.message || error);
+            this._setState(url, { url, fileUri, progress: 0, status: 'error', localUri: null });
         }
     }
 
-    subscribe(url: string, listener: Listener) {
+    private _setState(url: string, state: DownloadState) {
+        this.downloads.set(url, state);
+        this._notify(url, state);
+    }
+
+    subscribe(url: string, listener: Listener): () => void {
         if (!this.listeners.has(url)) {
             this.listeners.set(url, new Set());
         }
         this.listeners.get(url)!.add(listener);
 
-        // Immediate first call if state exists
+        // Fire immediately with current state if we have one
         const state = this.downloads.get(url);
         if (state) listener(state);
 
@@ -103,12 +120,22 @@ class MediaDownloadManager {
         };
     }
 
-    private notify(url: string, state: DownloadState) {
+    private _notify(url: string, state: DownloadState) {
         this.listeners.get(url)?.forEach(listener => listener(state));
     }
 
     getState(url: string): DownloadState | undefined {
         return this.downloads.get(url);
+    }
+
+    /** Pre-warm: tell manager a remote URL is now available (e.g. after upload) */
+    markRemoteAvailable(url: string) {
+        if (!url || !url.startsWith('http')) return;
+        const existing = this.downloads.get(url);
+        if (!existing || existing.status !== 'finished') {
+            // Kick off download so next open is instant
+            this.getOrDownload(url);
+        }
     }
 }
 

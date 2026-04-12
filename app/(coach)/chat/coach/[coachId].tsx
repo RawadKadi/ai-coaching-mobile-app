@@ -14,6 +14,7 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { MessageOverlay } from '@/components/MessageOverlay';
 import MealMessageCard from '@/components/MealMessageCard';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
+import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +40,17 @@ type Message = {
   progress?: number;
   cid?: string;
 };
+
+// Helper to detect if a message content is a media-type or system card
+function isMediaMessage(content: string): boolean {
+  if (!content) return false;
+  try {
+    const p = JSON.parse(content);
+    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log'].includes(p.type);
+  } catch {
+    return false;
+  }
+}
 
 type CoachInfo = {
   user_id: string;
@@ -134,7 +146,8 @@ export default function CoachToCoachChat() {
                 if (prev.some(m => m.id === nm.id)) return prev;
 
                 if (newMsgCid) {
-                  const existingIndex = prev.findIndex(m => m.cid === newMsgCid || (m.isUploading && m.content.includes(`"cid":"${newMsgCid}"`)));
+                  // Look for the optimistic message by CID
+                  const existingIndex = prev.findIndex(m => m.cid === newMsgCid);
                   if (existingIndex !== -1) {
                     const updated = [...prev];
                     updated[existingIndex] = nm;
@@ -256,6 +269,8 @@ export default function CoachToCoachChat() {
           }
         );
         finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false, cid });
+        // Pre-warm cache so sender sees own media instantly
+        mediaDownloadManager.markRemoteAvailable(publicUrl);
       }
 
       // 3. Insert into Supabase
@@ -352,11 +367,7 @@ export default function CoachToCoachChat() {
         );
     };
 
-    let isMedia = false;
-    try {
-      const p = JSON.parse(item.content);
-      if (['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion'].includes(p.type)) isMedia = true;
-    } catch {}
+    const isMedia = isMediaMessage(item.content);
 
     return (
       <Swipeable

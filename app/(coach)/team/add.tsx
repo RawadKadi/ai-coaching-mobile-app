@@ -186,7 +186,7 @@ export default function AddSubCoachScreen() {
             <Mail size={20} color="#94A3B8" />
             <TextInput
               style={{ fontSize: 16 }}
-              className="flex-1 ml-4 text-white font-bold"
+              className=" ml-4 h-20 text-white  font-bold"
               placeholder="coach@performance.ai"
               value={email}
               onChangeText={(text) => {

@@ -1,7 +1,7 @@
 
-import { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Modal, StatusBar, RefreshControl, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Modal, StatusBar, RefreshControl, Image, Animated, Dimensions, PanResponder, StyleSheet } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
@@ -44,11 +44,93 @@ export default function ActivityScreen() {
   const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
+  // Bottom Sheet Animation state
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+  const sheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const panY = useRef(new Animated.Value(0)).current;
+
+  const openSheet = () => {
+    setShowDetailsModal(true);
+    Animated.spring(sheetAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      damping: 20,
+      stiffness: 150
+    }).start();
+  };
+
+  const closeSheet = () => {
+    Animated.timing(sheetAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => {
+      setShowDetailsModal(false);
+      panY.setValue(0);
+    });
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          panY.setValue(gs.dy);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 150 || gs.vy > 0.5) {
+          closeSheet();
+        } else {
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true
+          }).start();
+        }
+      }
+    })
+  ).current;
+
   useEffect(() => {
     if (client) {
       loadActivityData();
     }
   }, [client, selectedDate]);
+
+  // Ensure data is fresh when user navigates back to this tab
+  useFocusEffect(
+    useCallback(() => {
+      if (client) loadActivityData();
+    }, [client, selectedDate])
+  );
+
+  // Real-time listener for sub_challenges updates
+  useEffect(() => {
+    if (!client) return;
+
+    const channelId = `activity-challenges-realtime-${client.id}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sub_challenges'
+        },
+        async (payload) => {
+          // Whenever ANY sub_challenge changes, refresh to be safe
+          // (Metric cards like 'Habit Velocity' also depend on this)
+          loadActivityData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [client]);
 
   const loadActivityData = async () => {
     try {
@@ -120,7 +202,7 @@ export default function ActivityScreen() {
 
   const handleOpenDetails = (challenge: any) => {
     setSelectedChallenge(challenge);
-    setShowDetailsModal(true);
+    openSheet();
   };
 
   const handleToggleChallenge = async (challenge: any) => {
@@ -140,6 +222,12 @@ export default function ActivityScreen() {
       });
 
       if (error) throw error;
+
+      // Update local state for immediate feedback
+      setChallenges(prev => prev.map(c => c.id === challenge.id ? { ...c, completed: newCompleted } : c));
+      
+      // Close sheet if it's open (usually after toggle)
+      if (showDetailsModal) closeSheet();
 
       // Send auto-message to coach if completed
       if (newCompleted) {
@@ -529,18 +617,41 @@ export default function ActivityScreen() {
           </View>
         </ScrollView>
       </View>
-
+      
       {/* Modern Details Overlay */}
-        {showDetailsModal && selectedChallenge && (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, justifyContent: 'flex-end' }}>
+      <Modal visible={showDetailsModal} transparent statusBarTranslucent animationType="none">
+          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
             {/* Backdrop */}
-            <TouchableOpacity 
-              activeOpacity={1} 
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }} 
-              onPress={() => setShowDetailsModal(false)} 
-            />
+            <Animated.View 
+              style={{ 
+                ...StyleSheet.absoluteFillObject, 
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                opacity: sheetAnim.interpolate({
+                  inputRange: [0, SCREEN_HEIGHT],
+                  outputRange: [1, 0]
+                })
+              }} 
+            >
+              <TouchableOpacity activeOpacity={1} style={{ flex: 1 }} onPress={closeSheet} />
+            </Animated.View>
             
-            <View style={{ backgroundColor: '#0f172a', borderTopLeftRadius: 48, borderTopRightRadius: 48, padding: 32, borderTopWidth: 1, borderTopColor: '#1e293b', maxHeight: '85%', paddingBottom: insets.bottom + 32 }}>
+            <Animated.View 
+              {...panResponder.panHandlers}
+              style={{ 
+                backgroundColor: '#0f172a', 
+                borderTopLeftRadius: 48, 
+                borderTopRightRadius: 48, 
+                padding: 32, 
+                borderTopWidth: 1, 
+                borderTopColor: '#1e293b', 
+                maxHeight: '85%', 
+                paddingBottom: insets.bottom + 32,
+                transform: [
+                  { translateY: sheetAnim },
+                  { translateY: panY }
+                ]
+              }}
+            >
               <View style={{ width: 48, height: 6, backgroundColor: '#1e293b', borderRadius: 3, alignSelf: 'center', marginBottom: 32 }} />
               
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
@@ -549,70 +660,84 @@ export default function ActivityScreen() {
                     <Sparkles size={24} color="#3B82F6" />
                   </View>
                   <View>
-                    <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{selectedChallenge.name}</Text>
+                    <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{selectedChallenge?.name}</Text>
                     <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Global Protocol</Text>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => setShowDetailsModal(false)} style={{ width: 40, height: 40, backgroundColor: '#020617', borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b' }}>
-                  <X size={20} color="#94A3B8" />
-                </TouchableOpacity>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
-                  <Badge label={selectedChallenge.focus_type} />
-                  {selectedChallenge.intensity && <Badge label={selectedChallenge.intensity} color="border-orange-500/20 text-orange-500 bg-orange-500/5" />}
-                  <Badge label="Daily Objective" color="border-green-500/20 text-green-500 bg-green-500/5" />
-                </View>
+                {selectedChallenge && (
+                  <>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
+                      <Badge label={selectedChallenge.focus_type} />
+                      {selectedChallenge.intensity && <Badge label={selectedChallenge.intensity} color="border-orange-500/20 text-orange-500 bg-orange-500/5" />}
+                      <Badge label="Daily Objective" color="border-green-500/20 text-green-500 bg-green-500/5" />
+                    </View>
 
-                <Text style={{ color: '#94a3b8', fontSize: 16, lineHeight: 28, fontWeight: '500', marginBottom: 40 }}>
-                  {selectedChallenge.description || 'No detailed instructions provided for this challenge. Ensure you maintain proper form and stay hydrated.'}
-                </Text>
+                    <Text style={{ color: '#94a3b8', fontSize: 16, lineHeight: 28, fontWeight: '500', marginBottom: 40 }}>
+                      {selectedChallenge.description || 'No detailed instructions provided for this challenge. Ensure you maintain proper form and stay hydrated.'}
+                    </Text>
 
-                <TouchableOpacity 
-                  style={{ 
-                    padding: 24, 
-                    borderRadius: 32, 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    flexDirection: 'row', 
-                    gap: 12, 
-                    backgroundColor: selectedChallenge.completed ? '#1e293b' : '#2563eb' 
-                  }}
-                  onPress={() => {
-                    handleToggleChallenge(selectedChallenge);
-                    setShowDetailsModal(false);
-                  }}
-                >
-                  {selectedChallenge.completed ? (
-                    <>
-                      <X size={20} color="#94A3B8" />
-                      <Text style={{ color: '#94a3b8', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Remove Completion</Text>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle size={20} color="white" />
-                      <Text style={{ color: 'white', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Confirm Completion</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={{ 
+                        padding: 24, 
+                        borderRadius: 32, 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        flexDirection: 'row', 
+                        gap: 12, 
+                        backgroundColor: selectedChallenge.completed ? '#1e293b' : '#2563eb' 
+                      }}
+                      onPress={() => {
+                        handleToggleChallenge(selectedChallenge);
+                      }}
+                    >
+                      {selectedChallenge.completed ? (
+                        <>
+                          <X size={20} color="#94A3B8" />
+                          <Text style={{ color: '#94a3b8', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Remove Completion</Text>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle size={20} color="white" />
+                          <Text style={{ color: 'white', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Confirm Completion</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
               </ScrollView>
-            </View>
+            </Animated.View>
           </View>
-        )}
+      </Modal>
     </View>
   );
 }
 
 // Support Components
-const MetricCard = ({ label, value, icon }: any) => (
-  <View style={{ width: '47%', backgroundColor: '#0f172a66', padding: 20, borderRadius: 36, borderWidth: 1, borderColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
+const MetricCard = ({ label, value, icon, active, onPress }: any) => (
+  <TouchableOpacity 
+    activeOpacity={0.7}
+    disabled={!onPress}
+    onPress={onPress}
+    style={{ 
+      width: '47%', 
+      backgroundColor: active ? '#0f172a' : '#0f172a66', 
+      padding: 20, 
+      borderRadius: 36, 
+      borderWidth: 1, 
+      borderColor: active ? '#3b82f633' : '#1e293b', 
+      alignItems: 'center', 
+      justifyContent: 'center' 
+    }}
+  >
     <View style={{ width: 40, height: 40, backgroundColor: '#020617', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b', marginBottom: 12 }}>
       {icon}
     </View>
     <Text style={{ color: 'white', fontSize: 20, fontWeight: '900', letterSpacing: -0.5 }}>{value}</Text>
     <Text style={{ color: '#64748b', fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, marginTop: 4 }}>{label}</Text>
-  </View>
+  </TouchableOpacity>
 );
 
 const SectionHeader = ({ title, count, marginTop = 0 }: any) => (

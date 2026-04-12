@@ -20,6 +20,32 @@ export default function ClientChallengesScreen() {
 
   useEffect(() => { loadChallenges(); }, []);
 
+  // Real-time listener for sub_challenges updates
+  useEffect(() => {
+    if (!user) return;
+
+    const channelId = `dashboard-challenges-realtime-${user.id}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sub_challenges'
+        },
+        async (payload) => {
+          // Refresh list when any challenge state changes
+          loadChallenges();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const loadChallenges = async () => {
     if (!user) return;
     try {

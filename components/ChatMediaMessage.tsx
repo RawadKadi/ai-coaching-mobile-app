@@ -5,18 +5,20 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { Video, ResizeMode, AVPlaybackStatus, VideoFullscreenUpdate } from 'expo-av';
+import { Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/BrandContext';
 import { FileText, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target, Loader2 } from 'lucide-react-native';
 import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
+import MealMessageCard from './MealMessageCard';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type MediaContent = {
-  type: 'image' | 'video' | 'document' | 'gif' | 'challenge_completed' | 'task_completion';
+  type: 'image' | 'video' | 'document' | 'gif' | 'challenge_completed' | 'task_completion' | 'meal' | 'meal_log';
   url?: string;
   previewUrl?: string;
   fileName?: string;
@@ -43,12 +45,18 @@ const useMediaCache = (url?: string, type?: string) => {
 
     useEffect(() => {
         if (!url) return;
-        if (!url.startsWith('http')) {
-            setLocalUri(url);
-            return;
-        }
 
-        // 1. Initial check (sync if possible)
+        // GIFs: expo-image handles animation natively. Bypass download pipeline.
+        if (type === 'gif') { setLocalUri(url); return; }
+
+        // Videos: stream directly from CDN — large files, no local caching needed.
+        // Caching videos was causing corrupt local files and black-screen playback.
+        if (type === 'video') { setLocalUri(url); return; }
+
+        // Non-http: local file (own upload in progress)
+        if (!url.startsWith('http')) { setLocalUri(url); return; }
+
+        // Images: download and cache permanently for instant re-load
         mediaDownloadManager.getOrDownload(url).then(uri => {
             if (uri) {
                 setLocalUri(uri);
@@ -57,7 +65,6 @@ const useMediaCache = (url?: string, type?: string) => {
             }
         });
 
-        // 2. Subscribe to background updates
         const unsubscribe = mediaDownloadManager.subscribe(url, (state) => {
             if (state.status === 'finished' && state.localUri) {
                 setLocalUri(state.localUri);
@@ -68,12 +75,12 @@ const useMediaCache = (url?: string, type?: string) => {
                 setDownloadProgress(state.progress);
             } else if (state.status === 'error') {
                 setIsCaching(false);
-                setLocalUri(url); // Fallback to remote
+                setLocalUri(url); // Fallback to remote on error
             }
         });
 
         return unsubscribe;
-    }, [url]);
+    }, [url, type]);
 
     return { localUri, isCaching, downloadProgress };
 };
@@ -141,13 +148,13 @@ const formatDuration = (millis: number) => {
 function FullscreenVideoModal({ uri, onClose }: { uri: string, onClose: () => void }) {
   const videoRef = useRef<Video>(null);
   const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
-  const [speed, setSpeed] = useState<number>(1.0);
   
   const panY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, state) => Math.abs(state.dy) > 10,
+      // Only intercept CONFIRMED downward swipes — never steal taps from native controls
+      onMoveShouldSetPanResponder: (_, gs) =>
+        gs.dy > 15 && Math.abs(gs.dy) > Math.abs(gs.dx * 2),
       onPanResponderMove: (_, state) => {
         if (state.dy > 0) panY.setValue(state.dy);
       },
@@ -161,17 +168,14 @@ function FullscreenVideoModal({ uri, onClose }: { uri: string, onClose: () => vo
     })
   ).current;
 
-  const togglePlayPause = async () => {
-    if (!videoRef.current || !status?.isLoaded) return;
-    status.isPlaying ? await videoRef.current.pauseAsync() : await videoRef.current.playAsync();
-  };
-
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', transform: [{ translateY: panY }] }]} {...panResponder.panHandlers}>
       <SafeAreaView style={{ flex: 1 }}>
-        <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }}>
+        <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 50, right: 20, zIndex: 20 }}>
           <X size={32} color="#FFFFFF" />
         </TouchableOpacity>
+        {/* No spinner overlay — native AVPlayer shows its own buffering indicator.
+            A React overlay with absoluteFill blocks touch events to native controls. */}
         <Video
           ref={videoRef}
           source={{ uri }}
@@ -180,6 +184,7 @@ function FullscreenVideoModal({ uri, onClose }: { uri: string, onClose: () => vo
           useNativeControls
           shouldPlay
           onPlaybackStatusUpdate={setStatus}
+          onError={(e) => console.warn('[FullscreenVideo] Error:', e)}
         />
       </SafeAreaView>
     </Animated.View>
@@ -212,6 +217,10 @@ function CustomVideoPlayer({
   uri: string, isUploading?: boolean, progress?: number, onCancel?: () => void 
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  // Freeze the URI at the moment the user taps — prevents black screen caused by
+  // localUri updating mid-playback (background download finishing while modal is open).
+  const [frozenUri, setFrozenUri] = useState<string>('');
+
   const { localUri, isCaching, downloadProgress } = useMediaCache(remoteUri, 'video');
   const [inlineStatus, setInlineStatus] = useState<AVPlaybackStatus | null>(null);
   const inlineVideoRef = useRef<Video>(null);
@@ -233,20 +242,56 @@ function CustomVideoPlayer({
     outputRange: ['0deg', '360deg']
   });
 
+  // Use localUri for instant local playback once cached.
+  // Fall back to remoteUri for immediate streaming while download runs.
   const activeUri = localUri || remoteUri;
+  const isReceiving = isCaching && !localUri && downloadProgress > 0 && !isUploading;
   const durationMillis = inlineStatus?.isLoaded ? inlineStatus.durationMillis || 0 : 0;
 
   useEffect(() => {
-    if (inlineStatus?.isLoaded && !inlineStatus.isPlaying) {
-        Animated.spring(playAnim, { toValue: 1, useNativeDriver: true }).start();
-    } else {
+    // Only hide the play button when the video is ACTIVELY PLAYING.
+    // When null/loading/paused/error — always show the play button.
+    if (inlineStatus?.isLoaded && inlineStatus.isPlaying) {
         Animated.spring(playAnim, { toValue: 0, useNativeDriver: true }).start();
+    } else {
+        Animated.spring(playAnim, { toValue: 1, useNativeDriver: true }).start();
     }
   }, [inlineStatus]);
+
+  const openFullscreen = async () => {
+    if (isUploading) return;
+
+    // On native: use presentFullscreenPlayerAsync() — this hands the
+    // ALREADY-BUFFERED inline video directly to the native fullscreen player.
+    // No new HTTP request, no re-buffering, instant playback.
+    if (Platform.OS !== 'web' && inlineVideoRef.current) {
+      try {
+        // Unmute and start playback before entering fullscreen
+        await inlineVideoRef.current.setIsMutedAsync(false);
+        await inlineVideoRef.current.playAsync();
+        await inlineVideoRef.current.presentFullscreenPlayer();
+        return;
+      } catch (e) {
+        console.warn('[VideoPlayer] presentFullscreenPlayerAsync failed, falling back to modal:', e);
+      }
+    }
+
+    // Web fallback: modal with new Video component
+    const uriToPlay = localUri || remoteUri;
+    if (!uriToPlay) return;
+    setFrozenUri(uriToPlay);
+    setIsExpanded(true);
+  };
+
+  const closeFullscreen = () => {
+    setIsExpanded(false);
+    setFrozenUri('');
+  };
 
   return (
     <View style={{ width: '100%', height: 180, borderRadius: 16, overflow: 'hidden', backgroundColor: '#0F172A' }}>
       <View style={StyleSheet.absoluteFill}>
+        {/* Inline video — always mounted so it pre-buffers and can hand off to presentFullscreenPlayerAsync instantly */}
         {activeUri && (
           <Video
             ref={inlineVideoRef}
@@ -257,15 +302,25 @@ function CustomVideoPlayer({
             shouldPlay={false}
             isMuted={true}
             onPlaybackStatusUpdate={setInlineStatus}
+            onFullscreenUpdate={async ({ fullscreenUpdate }) => {
+              if (fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_DISMISS) {
+                // Reset inline player to silent/paused state after native fullscreen closes
+                try {
+                  await inlineVideoRef.current?.setIsMutedAsync(true);
+                  await inlineVideoRef.current?.pauseAsync();
+                  await inlineVideoRef.current?.setPositionAsync(0);
+                } catch {}
+              }
+            }}
           />
         )}
         
         <TouchableOpacity 
           activeOpacity={0.9} 
-          onPress={() => !isUploading && !isCaching && setIsExpanded(true)} 
-          style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: (isCaching || isUploading) ? 'rgba(0,0,0,0.4)' : 'transparent' }]}
+          onPress={openFullscreen} 
+          style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: (isReceiving || isUploading) ? 'rgba(0,0,0,0.4)' : 'transparent' }]}
         >
-          {isCaching && !isUploading && (
+          {isReceiving && !isUploading && (
             <View style={{ alignItems: 'center' }}>
               {downloadProgress > 0 ? (
                 <View style={{ alignItems: 'center' }}>
@@ -280,7 +335,7 @@ function CustomVideoPlayer({
             </View>
           )}
 
-          {!isUploading && !isCaching && (
+          {!isUploading && !isReceiving && (
              <Animated.View style={{ 
                width: 54, height: 54, borderRadius: 27, 
                backgroundColor: 'rgba(0,0,0,0.5)', 
@@ -293,7 +348,7 @@ function CustomVideoPlayer({
           )}
         </TouchableOpacity>
 
-        {durationMillis > 0 && !isUploading && !isCaching && (
+        {durationMillis > 0 && !isUploading && !isReceiving && (
           <View style={{ position: 'absolute', bottom: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8 }}>
             <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{formatDuration(durationMillis)}</Text>
           </View>
@@ -308,7 +363,10 @@ function CustomVideoPlayer({
       </View>
 
       <Modal visible={isExpanded} transparent animationType="fade" statusBarTranslucent>
-        <FullscreenVideoModal uri={activeUri} onClose={() => setIsExpanded(false)} />
+        {/* Only render if frozenUri is set — prevents empty Video mount */}
+        {frozenUri ? (
+          <FullscreenVideoModal uri={frozenUri} onClose={closeFullscreen} />
+        ) : null}
       </Modal>
     </View>
   );
@@ -324,7 +382,7 @@ function CustomImagePlayer({
   const [isExpanded, setIsExpanded] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const { localUri, isCaching, downloadProgress } = useMediaCache(uri, 'image');
+  const { localUri, isCaching, downloadProgress } = useMediaCache(uri, type);
   const cachedUri = localUri || uri;
 
   return (
@@ -334,7 +392,9 @@ function CustomImagePlayer({
           source={{ uri: cachedUri }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          cachePolicy="disk"
+          // GIFs: disable disk cache to prevent stale/wrong GIF from showing.
+          // Images: use disk cache for instant re-load.
+          cachePolicy={type === 'gif' ? 'none' : 'disk'}
           onLoadEnd={() => setImgLoaded(true)}
           onError={() => setImgError(true)}
         />
@@ -470,8 +530,21 @@ export default function ChatMediaMessage({
   
   if (media.type === 'task_completion') return <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}><TaskCompletedCard media={media} /></View>;
   if (media.type === 'challenge_completed') return <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}><ChallengeCompletedCard media={media} /></View>;
+  
+  // Support for meal cards if channeled through here
+  if (media.type === 'meal' || media.type === 'meal_log') {
+    return <MealMessageCard content={content} isOwn={isOwn} />;
+  }
 
-  return null;
+  // Fallback for unknown media or missing URL
+  return (
+    <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: theme.colors.surface, padding: 12, borderWidth: 1, borderColor: theme.colors.border }]}>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
+        [Media: {media.type || 'Unknown'}]
+      </Text>
+      {media.url && <Text style={{ color: theme.colors.primary, fontSize: 11, marginTop: 4 }} numberOfLines={1}>{media.url}</Text>}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
