@@ -17,9 +17,10 @@ type MealMessageContent = {
 type Props = {
   content: MealMessageContent | string;
   isOwn: boolean;
+  onLongPress?: () => void;
 };
 
-export default function MealMessageCard({ content, isOwn }: Props) {
+export default function MealMessageCard({ content, isOwn, onLongPress }: Props) {
   const router = useRouter();
   
   // Parse content if it's a string
@@ -30,10 +31,15 @@ export default function MealMessageCard({ content, isOwn }: Props) {
   };
 
   return (
-    <View style={[
-      styles.container,
-      isOwn ? styles.ownContainer : styles.otherContainer
-    ]}>
+    <TouchableOpacity 
+      activeOpacity={0.9}
+      delayLongPress={400}
+      onLongPress={onLongPress}
+      style={[
+        styles.container,
+        isOwn ? styles.ownContainer : styles.otherContainer
+      ]}
+    >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.iconContainer}>
@@ -68,7 +74,7 @@ export default function MealMessageCard({ content, isOwn }: Props) {
           <ChevronRight size={16} color="#2563EB" />
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

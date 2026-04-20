@@ -18,6 +18,7 @@ export default function CoachProfileScreen() {
   const [uploading, setUploading] = useState(false);
 
   const handleSignOut = async () => {
+    console.log('[Coach Logout] Initiate');
     Alert.alert(
       'Log Out', 
       'Are you sure you want to log out of your account?', 
@@ -28,7 +29,9 @@ export default function CoachProfileScreen() {
           style: 'destructive', 
           onPress: async () => {
             try {
+              console.log('[Coach Logout] Execution started');
               await signOut();
+              console.log('[Coach Logout] signOut successful');
               // The root layout will automatically handle redirection to login 
               // because the session is now null. We add a fallback just in case.
               router.replace('/(auth)/login');
@@ -38,7 +41,8 @@ export default function CoachProfileScreen() {
             }
           }
         }
-      ]
+      ],
+      { cancelable: true }
     );
   };
 
@@ -155,6 +159,7 @@ export default function CoachProfileScreen() {
               {/* Log Out */}
               <TouchableOpacity
                 onPress={handleSignOut}
+                activeOpacity={0.6}
                 className="mt-10 flex-row items-center p-6 bg-red-500/5 rounded-[36px] border border-red-500/10"
               >
                 <View className="w-12 h-12 rounded-2xl bg-red-500/10 items-center justify-center mr-4">

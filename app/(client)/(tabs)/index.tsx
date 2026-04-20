@@ -87,7 +87,7 @@ export default function ClientDashboard() {
           </MotiView>
 
           <ScrollView 
-            className="flex-1 px-6" 
+            className="flex-1 px-3" 
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 140 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" progressViewOffset={insets.top} />}
@@ -130,7 +130,7 @@ export default function ClientDashboard() {
                 >
                     <TouchableOpacity 
                       className="p-8"
-                      onPress={() => router.push('/(client)/activity')}
+                      onPress={() => router.push('/(client)/check-in')}
                     >
                         <View className="flex-row items-center gap-2 mb-3">
                           <Zap size={14} color="white" />

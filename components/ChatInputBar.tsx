@@ -9,6 +9,8 @@ import { Image } from 'expo-image'; // disk-cached, hardware-accelerated
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
+import * as VideoThumbnails from 'expo-video-thumbnails';
+import { Video, ResizeMode } from 'expo-av';
 import { useTheme } from '@/contexts/BrandContext';
 import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
@@ -46,9 +48,10 @@ export function ChatInputBar({
   const [gifLoadingMore, setGifLoadingMore] = useState(false);
   const [gifHasMore, setGifHasMore] = useState(true);
   const [gifOffset, setGifOffset] = useState(0);
-  const [selectedMedia, setSelectedMedia] = useState<{ uri: string, type: string, fileName?: string, mimeType?: string } | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<{ uri: string, type: string, fileName?: string, mimeType?: string, thumbnailUri?: string } | null>(null);
   const [hasClipboardImage, setHasClipboardImage] = useState(false);
   const [deferRender, setDeferRender] = useState(false);
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
 
   const panelHeightAnim = useRef(new Animated.Value(0)).current;
   const currentHeight = useRef(0);
@@ -215,6 +218,16 @@ export function ChatInputBar({
     const msg = text.trim();
     if ((!msg && !selectedMedia) || sending) return;
 
+    // Strategic hold: If thumbnail is still generating, wait for it
+    // so we don't send a video without a preview frame.
+    if (isGeneratingThumbnail && selectedMedia?.type === 'video') {
+      let attempts = 0;
+      while (isGeneratingThumbnail && attempts < 10) {
+        await new Promise(r => setTimeout(r, 200));
+        attempts++;
+      }
+    }
+
     setText('');
     const mediaToSend = selectedMedia;
     setSelectedMedia(null);
@@ -224,6 +237,7 @@ export function ChatInputBar({
       await onSendMedia(JSON.stringify({
         type: mediaToSend.type,
         url: mediaToSend.uri, // Use local URI optimistically
+        thumbnailUrl: mediaToSend.thumbnailUri, // Local thumbnail if available
         fileName: mediaToSend.fileName,
         mimeType: mediaToSend.mimeType,
         isOptimistic: true // Flag to indicate this is not yet on server
@@ -241,9 +255,27 @@ export function ChatInputBar({
 
   // ─── Media helpers ─────────────────────────────────────────────────────────
 
-  const handleMediaSelect = (uri: string, type: string, fileName?: string, mimeType?: string) => {
+  const handleMediaSelect = async (uri: string, type: string, fileName?: string, mimeType?: string) => {
+    // 1. Show the selection immediately so user sees the box
     setSelectedMedia({ uri, type, fileName, mimeType });
     closePanel();
+
+    if (type === 'video') {
+      setIsGeneratingThumbnail(true);
+      try {
+        // Move 1s into the video to avoid initial black frames or transition effects
+        const { uri: thumb } = await VideoThumbnails.getThumbnailAsync(uri, {
+          time: 1000,
+          quality: 0.6,
+        });
+        // 2. Update with the generated thumbnail
+        setSelectedMedia(prev => prev ? { ...prev, thumbnailUri: thumb } : null);
+      } catch (e) {
+        console.warn('[handleMediaSelect] Video thumbnail generation failed:', e);
+      } finally {
+        setIsGeneratingThumbnail(false);
+      }
+    }
   };
 
   const pickFromLibrary = async () => {
@@ -395,14 +427,35 @@ export function ChatInputBar({
       {/* ── Optional Media Preview ───────────────────────────────────────────── */}
       {selectedMedia && (
         <View style={styles.mediaPreviewContainer}>
-          <View style={[styles.mediaPreviewBox, { borderColor: theme.colors.border }]}>
-            {selectedMedia.type === 'image' || selectedMedia.type === 'video' ? (
-              <View>
-                <Image source={{ uri: selectedMedia.uri }} style={styles.mediaPreviewImage} />
-                {selectedMedia.type === 'video' && (
+          <View style={{ position: 'relative' }}>
+            <View style={[styles.mediaPreviewBox, { borderColor: theme.colors.border }]}>
+              {selectedMedia.type === 'image' || selectedMedia.type === 'video' ? (
+              <View style={{ flex: 1, width: '100%', height: '100%' }}>
+                {selectedMedia.type === 'image' ? (
+                  <Image 
+                    source={{ uri: selectedMedia.uri }} 
+                    style={styles.mediaPreviewImage} 
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Video
+                    source={{ uri: selectedMedia.uri }}
+                    style={styles.mediaPreviewImage}
+                    resizeMode={ResizeMode.COVER}
+                    shouldPlay={false}
+                  />
+                )}
+                
+                {isGeneratingThumbnail && selectedMedia.type === 'video' && (
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }]}>
-                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
-                      <Play size={16} color="#FFFFFF" style={{ marginLeft: 2 }} />
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  </View>
+                )}
+
+                {selectedMedia.type === 'video' && !isGeneratingThumbnail && (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center' }]}>
+                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Play size={12} color="#FFFFFF" style={{ marginLeft: 2 }} fill="#FFFFFF" />
                     </View>
                   </View>
                 )}
@@ -413,11 +466,12 @@ export function ChatInputBar({
                 <Text style={{ color: theme.colors.text, fontSize: 10, marginTop: 4 }} numberOfLines={1}>{selectedMedia.fileName}</Text>
               </View>
             )}
-            <TouchableOpacity style={styles.mediaPreviewRemove} onPress={() => setSelectedMedia(null)}>
-              <X size={14} color="#FFF" />
-            </TouchableOpacity>
           </View>
+          <TouchableOpacity style={styles.mediaPreviewRemove} onPress={() => setSelectedMedia(null)}>
+            <X size={14} color="#FFF" />
+          </TouchableOpacity>
         </View>
+      </View>
       )}
 
       {/* ── Reply Preview Bar ──────────────────────────────────────────────── */}
@@ -458,10 +512,38 @@ export function ChatInputBar({
           {(() => {
             try {
               const content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
-              if (content.url && (content.type === 'image' || content.type === 'video' || content.type === 'gif')) {
+              if (content.type === 'image' || content.type === 'video' || content.type === 'gif') {
+                const isVideo = content.type === 'video';
+                // For videos, prefer the thumbnailUrl (a real image); only fall back to content.url for images/gifs
+                const previewUri = isVideo ? (content.thumbnailUrl || null) : (content.url || null);
                 return (
                   <View style={styles.replyThumbBox}>
-                    <Image source={{ uri: content.thumbnailUrl || content.url }} style={styles.replyThumb} />
+                    {previewUri ? (
+                      <Image
+                        source={{ uri: previewUri }}
+                        style={styles.replyThumb}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                      />
+                    ) : isVideo && content.url ? (
+                      // Fallback: Use Video component directly if no thumbnail is available
+                      <Video
+                        source={{ uri: content.url }}
+                        style={styles.replyThumb}
+                        resizeMode={ResizeMode.COVER}
+                        shouldPlay={false}
+                      />
+                    ) : (
+                      // Final fallback for missing media
+                      <View style={[styles.replyThumb, { backgroundColor: '#1E293B' }]} />
+                    )}
+                    {isVideo && (
+                      <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
+                        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center' }}>
+                          <Play size={10} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 1 }} />
+                        </View>
+                      </View>
+                    )}
                   </View>
                 );
               }
@@ -820,14 +902,15 @@ const styles = StyleSheet.create({
   },
   mediaPreviewRemove: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: 'red',
+    top: -6,
+    right: -6,
+    backgroundColor: '#475569',
     width: 20,
     height: 20,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 10,
   },
   inputRow: {
     flexDirection: 'row',
@@ -933,15 +1016,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   replyThumbBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 4,
+    width: 48,
+    height: 48,
+    borderRadius: 6,
     overflow: 'hidden',
     marginLeft: 8,
   },
   replyThumb: {
-    width: '100%',
-    height: '100%',
+    flex: 1,
   },
   replyCloseBtn: {
     marginLeft: 10,

@@ -21,6 +21,7 @@ type MediaContent = {
   type: 'image' | 'video' | 'document' | 'gif' | 'challenge_completed' | 'task_completion' | 'meal' | 'meal_log';
   url?: string;
   previewUrl?: string;
+  thumbnailUrl?: string;
   fileName?: string;
   mimeType?: string;
   // Challenge fields
@@ -96,6 +97,7 @@ interface Props {
   replyTo?: any;
   onPressReply?: (id: string) => void;
   isHighlighted?: boolean;
+  onLongPress?: () => void; // Forwarded from parent chat for reaction menu
 }
 
 // ── Circular download progress ring ──────────────────────────────────────────
@@ -203,7 +205,7 @@ function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'imag
           source={{ uri }}
           style={{ width: '100%', height: '100%' }}
           contentFit="contain"
-          cachePolicy="disk"
+          cachePolicy={uri.startsWith('file:') ? 'none' : 'memory-disk'}
         />
       </SafeAreaView>
     </View>
@@ -212,9 +214,9 @@ function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'imag
 
 // ── Custom Video Player (Inline) ─────────────────────────────────────────────
 function CustomVideoPlayer({ 
-  uri: remoteUri, isUploading, progress, onCancel 
+  uri: remoteUri, thumbnailUrl, isUploading, progress, onCancel 
 }: { 
-  uri: string, isUploading?: boolean, progress?: number, onCancel?: () => void 
+  uri: string, thumbnailUrl?: string, isUploading?: boolean, progress?: number, onCancel?: () => void 
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   // Freeze the URI at the moment the user taps — prevents black screen caused by
@@ -314,6 +316,29 @@ function CustomVideoPlayer({
             }}
           />
         )}
+
+        {/* Thumbnail overlay while uploading or if video not playing yet */}
+        {(isUploading || !inlineStatus?.isLoaded || !inlineStatus.isPlaying) && (
+          thumbnailUrl ? (
+            <Image
+              source={{ uri: thumbnailUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+            />
+          ) : !isUploading && activeUri ? (
+            // Fallback for missing thumbnail: Use the video itself to show first frame
+            <Video
+              source={{ uri: activeUri }}
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay={false}
+              isMuted={true}
+            />
+          ) : (
+            // Uploading placeholder
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1E293B' }]} />
+          )
+        )}
         
         <TouchableOpacity 
           activeOpacity={0.9} 
@@ -374,10 +399,10 @@ function CustomVideoPlayer({
 
 // ── Custom Image Player (Inline) ─────────────────────────────────────────────
 function CustomImagePlayer({
-  uri, previewUrl, type, isOwn, isUploading, progress, onCancel
+  uri, previewUrl, type, isOwn, isUploading, progress, onCancel, onLongPress
 }: {
   uri: string, previewUrl?: string, type: 'image' | 'gif', isOwn: boolean,
-  isUploading?: boolean, progress?: number, onCancel?: () => void
+  isUploading?: boolean, progress?: number, onCancel?: () => void, onLongPress?: () => void
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -387,14 +412,20 @@ function CustomImagePlayer({
 
   return (
     <>
-      <TouchableOpacity activeOpacity={0.9} onPress={() => !isUploading && setIsExpanded(true)} style={StyleSheet.absoluteFill}>
+      <TouchableOpacity 
+        activeOpacity={0.9} 
+        onPress={() => !isUploading && setIsExpanded(true)} 
+        onLongPress={onLongPress}
+        delayLongPress={400}
+        style={StyleSheet.absoluteFill}
+      >
         <Image
           source={{ uri: cachedUri }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           // GIFs: disable disk cache to prevent stale/wrong GIF from showing.
-          // Images: use disk cache for instant re-load.
-          cachePolicy={type === 'gif' ? 'none' : 'disk'}
+          // Images: if it's a local file:// uri, caching to disk again breaks expo-image on iOS.
+          cachePolicy={type === 'gif' || cachedUri.startsWith('file:') ? 'none' : 'memory-disk'}
           onLoadEnd={() => setImgLoaded(true)}
           onError={() => setImgError(true)}
         />
@@ -466,7 +497,7 @@ function TaskCompletedCard({ media }: { media: MediaContent }) {
 
 // ── Main ChatMediaMessage Component ──────────────────────────────────────────
 export default function ChatMediaMessage({ 
-  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted 
+  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress 
 }: Props) {
   const theme = useTheme();
   const highlightAnim = useRef(new Animated.Value(0)).current;
@@ -496,7 +527,7 @@ export default function ChatMediaMessage({
       <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { width: 220, height: replyTo ? 240 : 200, padding: 0, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt }]}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10 }]} pointerEvents="none" />
         {replyTo && <View style={{ padding: 4, backgroundColor: theme.colors.surface }}><ChatReplyContext message={replyTo} onPress={() => replyTo.id && onPressReply?.(replyTo.id)} isMe={isOwn} /></View>}
-        <CustomImagePlayer uri={media.url} previewUrl={media.previewUrl} type={media.type as 'image' | 'gif'} isOwn={isOwn} isUploading={isUploading} progress={progress} onCancel={onCancel} />
+        <CustomImagePlayer uri={media.url} previewUrl={media.previewUrl} type={media.type as 'image' | 'gif'} isOwn={isOwn} isUploading={isUploading} progress={progress} onCancel={onCancel} onLongPress={onLongPress} />
         {createdAt && <View style={styles.timeBadgeContainer}><Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>{isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}</View>}
       </View>
     );
@@ -504,12 +535,23 @@ export default function ChatMediaMessage({
 
   if (media.type === 'video' && media.url) {
     return (
-      <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { width: 250, height: replyTo ? 290 : 250, padding: 0, overflow: 'hidden', backgroundColor: '#000000' }]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onLongPress={onLongPress}
+        delayLongPress={400}
+        style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { width: 250, height: replyTo ? 290 : 250, padding: 0, overflow: 'hidden', backgroundColor: '#000000' }]}
+      >
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10 }]} pointerEvents="none" />
         {replyTo && <View style={{ padding: 4, backgroundColor: theme.colors.surface }}><ChatReplyContext message={replyTo} onPress={() => replyTo.id && onPressReply?.(replyTo.id)} isMe={isOwn} /></View>}
-        <CustomVideoPlayer uri={media.url} isUploading={isUploading} progress={progress} onCancel={onCancel} />
+        <CustomVideoPlayer 
+          uri={media.url} 
+          thumbnailUrl={media.thumbnailUrl}
+          isUploading={isUploading} 
+          progress={progress} 
+          onCancel={onCancel} 
+        />
         {createdAt && <View style={[styles.timeBadgeContainer, { bottom: 8, right: 8 }]}><Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>{isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}</View>}
-      </View>
+      </TouchableOpacity>
     );
   }
 
@@ -528,12 +570,34 @@ export default function ChatMediaMessage({
     );
   }
   
-  if (media.type === 'task_completion') return <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}><TaskCompletedCard media={media} /></View>;
-  if (media.type === 'challenge_completed') return <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}><ChallengeCompletedCard media={media} /></View>;
+  if (media.type === 'task_completion') {
+    return (
+      <TouchableOpacity 
+        activeOpacity={0.9} 
+        delayLongPress={400} 
+        onLongPress={onLongPress} 
+        style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
+      >
+        <TaskCompletedCard media={media} />
+      </TouchableOpacity>
+    );
+  }
+  if (media.type === 'challenge_completed') {
+    return (
+      <TouchableOpacity 
+        activeOpacity={0.9} 
+        delayLongPress={400} 
+        onLongPress={onLongPress} 
+        style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
+      >
+        <ChallengeCompletedCard media={media} />
+      </TouchableOpacity>
+    );
+  }
   
   // Support for meal cards if channeled through here
   if (media.type === 'meal' || media.type === 'meal_log') {
-    return <MealMessageCard content={content} isOwn={isOwn} />;
+    return <MealMessageCard content={content} isOwn={isOwn} onLongPress={onLongPress} />;
   }
 
   // Fallback for unknown media or missing URL

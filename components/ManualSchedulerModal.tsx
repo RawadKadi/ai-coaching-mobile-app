@@ -21,6 +21,7 @@ interface ManualSchedulerModalProps {
     coachId: string;
     onSwitchToAI?: (client: Client) => void;
     initialClient?: Client | null;
+    navigation: any;
 }
 
 interface Client {
@@ -44,7 +45,7 @@ interface TimeSlot {
 type StepType = 'client' | 'days' | 'time' | 'details' | 'confirm';
 type RecurrenceType = 'once' | 'weekly';
 
-import { NavigationContext } from '@react-navigation/native';
+import { NavigationContext, useNavigation } from '@react-navigation/native';
 
 export default function ManualSchedulerModal({
     visible,
@@ -54,8 +55,8 @@ export default function ManualSchedulerModal({
     coachId,
     onSwitchToAI,
     initialClient,
+    navigation,
 }: ManualSchedulerModalProps) {
-    // We already have router passed as a prop if we use it, but here we need to satisfy hooks
     // Let's ensure we use a stable context for the Modal contents
     
     const theme = useTheme();
@@ -281,8 +282,8 @@ export default function ManualSchedulerModal({
     );
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-          <NavigationContext.Provider value={{} as any}>
+        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+          <NavigationContext.Provider value={navigation}>
             <View className="flex-1 bg-[#020617]">
                 <StatusBar barStyle="light-content" />
                 <View className="flex-1">
@@ -362,7 +363,7 @@ export default function ManualSchedulerModal({
                                             >
                                                 <LinearGradient 
                                                     colors={['#4F46E5', '#2563EB']} 
-                                                    className="p-8 rounded-[40px] flex-row items-center justify-between shadow-2xl shadow-blue-500/30"
+                                                    className="p-20 rounded-full flex-row items-center justify-between shadow-2xl shadow-blue-500/30"
                                                 >
                                                     <View className="flex-1 mr-4">
                                                         <Text className="text-white/70 text-[10px] font-black uppercase tracking-[3px] mb-2">Neural Optimization</Text>

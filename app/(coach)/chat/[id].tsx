@@ -100,6 +100,8 @@ export default function CoachChatScreen() {
   const pendingBuffer = useRef<Message[]>([]);
   // Keep a stable ref to clientUserId so real-time callbacks always see latest value
   const clientUserIdRef = useRef<string | null>(null);
+  // Broadcast channel for guaranteed real-time reaction delivery
+  const reactionChannelRef = useRef<any>(null);
 
   useEffect(() => {
     clientUserIdRef.current = clientUserId;
@@ -150,10 +152,13 @@ export default function CoachChatScreen() {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
         const updated = p.new as Message;
-        const cUid = clientUserIdRef.current;
-        if (cUid && (updated.sender_id === cUid || updated.recipient_id === cUid)) {
-          setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
-        }
+        // Use ID-based matching — sender_id/recipient_id may be absent when
+        // REPLICA IDENTITY is not set to FULL on the messages table.
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === updated.id);
+          if (!exists) return prev;
+          return prev.map(m => m.id === updated.id ? { ...m, ...updated } : m);
+        });
       })
       .subscribe((status) => {
         console.log('[CoachChat] Channel status:', status);
@@ -163,6 +168,24 @@ export default function CoachChatScreen() {
       supabase.removeChannel(channel);
     };
   }, [user?.id, id]); // ← Stable: no clientUserId dependency
+
+  // Broadcast channel — shared with client, used for guaranteed reaction delivery.
+  // Keyed by sorted user IDs so both sides join the same channel name.
+  useEffect(() => {
+    if (!user || !id) return;
+    const key = [user.id, id as string].sort().join('-');
+    const ch = supabase
+      .channel(`chat-reactions-${key}`)
+      .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
+        // Handle reactions broadcast from the other side
+        setMessages(prev =>
+          prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
+        );
+      })
+      .subscribe();
+    reactionChannelRef.current = ch;
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id, id]);
 
   // Flush buffered messages once clientUserId is known
   useEffect(() => {
@@ -289,6 +312,17 @@ export default function CoachChatScreen() {
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, progress: pct } : m));
           }
         );
+
+        // Handle thumbnail upload if present (local URI)
+        if (parsedContent.thumbnailUrl && !parsedContent.thumbnailUrl.startsWith('http')) {
+          try {
+            const thumbUrl = await uploadChatMedia(parsedContent.thumbnailUrl, 'thumbnails');
+            parsedContent.thumbnailUrl = thumbUrl;
+          } catch (e) {
+            console.warn('Failed to upload thumbnail:', e);
+          }
+        }
+
         finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false, cid });
         // Pre-warm cache so sender sees own media instantly
         mediaDownloadManager.markRemoteAvailable(publicUrl);
@@ -355,39 +389,64 @@ export default function CoachChatScreen() {
 
   const handleReaction = async (emoji: string) => {
     if (!activeMessageForMenu || !user) return;
-    
+
     const msgId = activeMessageForMenu.id;
+
+    // Always read from the LIVE messages state so reactions build on latest data
+    const currentMsg = messages.find(m => m.id === msgId) || activeMessageForMenu;
     let currentContent: any = {};
     try {
-      currentContent = JSON.parse(activeMessageForMenu.content);
+      currentContent = JSON.parse(currentMsg.content);
     } catch {
-      currentContent = { text: activeMessageForMenu.content, type: 'text' };
+      currentContent = { text: currentMsg.content, type: 'text' };
     }
-    
+
     const reactions = currentContent.reactions || [];
     const existingIndex = reactions.findIndex((r: any) => r.user_id === user.id && r.emoji === emoji);
-    
     let newReactions = [...reactions];
     if (existingIndex > -1) {
       newReactions.splice(existingIndex, 1);
     } else {
       newReactions.push({ emoji, user_id: user.id });
     }
-    
-    const updatedContent = JSON.stringify({ ...currentContent, reactions: newReactions });
-    
-    // Optimistic update
-    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: updatedContent } : m));
-    
+
+    const optimisticContent = JSON.stringify({ ...currentContent, reactions: newReactions });
+
+    // Optimistic update so the sender sees the reaction immediately
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: optimisticContent } : m));
+    setActiveMessageForMenu(null);
+
+    // Broadcast IMMEDIATELY for real-time delivery — don't wait for DB
+    reactionChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'reaction_update',
+      payload: { messageId: msgId, content: optimisticContent },
+    });
+
+    // Persist to DB: try direct update first (coach is recipient for client messages)
     const { error } = await supabase
       .from('messages')
-      .update({ content: updatedContent })
+      .update({ content: optimisticContent })
       .eq('id', msgId);
-      
+
     if (error) {
-      Alert.alert('Error', 'Failed to react: ' + error.message);
+      // Direct update blocked by RLS — fall back to SECURITY DEFINER RPC
+      const { data: savedContent, error: rpcError } = await supabase.rpc('toggle_message_reaction', {
+        p_message_id: msgId,
+        p_emoji: emoji,
+      });
+      if (rpcError) {
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: currentMsg.content } : m));
+        Alert.alert('Error', 'Failed to save reaction: ' + rpcError.message);
+      } else if (savedContent && savedContent !== optimisticContent) {
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: savedContent } : m));
+        reactionChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'reaction_update',
+          payload: { messageId: msgId, content: savedContent },
+        });
+      }
     }
-    setActiveMessageForMenu(null);
   };
 
   const scrollToMessage = useCallback((messageId: string) => {
@@ -427,7 +486,7 @@ export default function CoachChatScreen() {
         >
           {isMedia ? (
             <View>
-              <ChatMediaMessage 
+          <ChatMediaMessage 
                 content={item.content} 
                 isOwn={isMe} 
                 createdAt={item.created_at} 
@@ -437,6 +496,7 @@ export default function CoachChatScreen() {
                 replyTo={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : undefined}
                 onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
                 isHighlighted={item.id === highlightedMessageId}
+                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
               />
               {/* Reactions on media messages */}
               {(() => {
@@ -477,13 +537,15 @@ export default function CoachChatScreen() {
 
   // For MessageOverlay: render the correct component based on message type
   const renderOverlayContent = (msg: any, isMe: boolean) => {
-    if (isMediaMessage(msg.content)) {
+    // Refresh to get latest version from state (reactions)
+    const liveMsg = messages.find(m => m.id === msg?.id) || msg;
+    if (isMediaMessage(liveMsg.content)) {
       return (
         <ChatMediaMessage
-          content={msg.content}
+          content={liveMsg.content}
           isOwn={isMe}
-          createdAt={msg.created_at}
-          isRead={msg.read}
+          createdAt={liveMsg.created_at}
+          isRead={liveMsg.read}
         />
       );
     }
@@ -526,7 +588,7 @@ export default function CoachChatScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View> : (
              <FlatList
-                ref={flatListRef} data={messages} renderItem={renderMessage} keyExtractor={item => item.id}
+                ref={flatListRef} data={messages} extraData={messages} renderItem={renderMessage} keyExtractor={item => item.id}
                 inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
                 initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
                 onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
@@ -561,7 +623,9 @@ export default function CoachChatScreen() {
       </Modal>
 
       <MessageOverlay 
-          visible={!!activeMessageForMenu} message={activeMessageForMenu} isMe={activeMessageForMenu?.sender_id === user?.id}
+          visible={!!activeMessageForMenu} 
+          message={messages.find(m => m.id === activeMessageForMenu?.id) || activeMessageForMenu} 
+          isMe={activeMessageForMenu?.sender_id === user?.id}
           onClose={() => setActiveMessageForMenu(null)} onReaction={handleReaction} onAction={handleAction} 
           renderMessageContent={renderOverlayContent}
       />

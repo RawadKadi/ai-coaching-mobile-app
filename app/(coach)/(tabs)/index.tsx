@@ -16,7 +16,9 @@ import {
   Plus,
   ChevronRight,
   TrendingUp,
-  Award
+  Award,
+  Zap,
+  Smile
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +30,7 @@ export default function CoachDashboard() {
   const { unreadCount } = useUnread();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
   const [stats, setStats] = useState({ 
     totalClients: 0, 
     activeClients: 0, 
@@ -46,13 +49,19 @@ export default function CoachDashboard() {
   const loadDashboardData = async () => {
     if (!coach) return;
     try {
-      const { data } = await supabase.rpc('get_coach_stats');
-      setStats({
-        totalClients: data?.totalClients || 0,
-        activeClients: data?.activeClients || 0,
-        pendingCheckIns: 0, 
-        unreadMessages: unreadCount,
-      });
+      const [statsResult, checkinsResult] = await Promise.all([
+        supabase.rpc('get_coach_stats'),
+        supabase.rpc('get_recent_checkins')
+      ]);
+
+      if (statsResult.data) {
+        setStats({
+          ...statsResult.data,
+          unreadMessages: unreadCount,
+        });
+      }
+
+      setRecentCheckins(checkinsResult.data || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -204,13 +213,52 @@ export default function CoachDashboard() {
             {/* Activity Indicator / Placeholder */}
             <View className="px-6">
               <Text className="text-white text-2xl font-black tracking-tighter mb-8">Current Feed</Text>
-              <View className="p-16 bg-slate-900/20 rounded-[48px] border border-white/5 border-dashed items-center justify-center">
-                 <View className="w-16 h-16 bg-slate-900 rounded-[28px] items-center justify-center border border-white/5 mb-6">
-                    <TrendingUp size={28} color="#1e293b" />
-                 </View>
-                 <Text className="text-slate-700 font-black text-[10px] uppercase tracking-[3px]">Real-time activity</Text>
-                 <Text className="text-slate-800 font-medium text-[10px] mt-2 text-center leading-4">Recent events will surface here as they happen.</Text>
-              </View>
+              
+              {recentCheckins.length === 0 ? (
+                <View className="p-16 bg-slate-900/20 rounded-[48px] border border-white/5 border-dashed items-center justify-center">
+                  <View className="w-16 h-16 bg-slate-900 rounded-[28px] items-center justify-center border border-white/5 mb-6">
+                      <TrendingUp size={28} color="#1e293b" />
+                  </View>
+                  <Text className="text-slate-700 font-black text-[10px] uppercase tracking-[3px]">Real-time activity</Text>
+                  <Text className="text-slate-800 font-medium text-[10px] mt-2 text-center leading-4">Recent events will surface here as they happen.</Text>
+                </View>
+              ) : (
+                <View className="gap-4">
+                  {recentCheckins.map((item) => (
+                    <TouchableOpacity 
+                      key={item.checkin_id}
+                      onPress={() => router.push(`/(coach)/chat/${item.client_id}`)}
+                      className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 flex-row items-center"
+                    >
+                      <BrandedAvatar name={item.client_name} imageUrl={item.client_avatar} size={48} />
+                      <View className="flex-1 ml-4">
+                        <View className="flex-row items-center justify-between">
+                          <Text className="text-white font-bold text-sm tracking-tight">{item.client_name}</Text>
+                          <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
+                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                        <Text className="text-blue-500 font-black text-[10px] uppercase tracking-[2px] mt-1">Daily Check-in Synced</Text>
+                        <View className="flex-row items-center gap-3 mt-3">
+                          <View className="flex-row items-center gap-1">
+                            <TrendingUp size={10} color="#94A3B8" />
+                            <Text className="text-slate-400 text-[10px] font-bold">{item.weight_kg}kg</Text>
+                          </View>
+                          <View className="flex-row items-center gap-1">
+                            <Zap size={10} color="#94A3B8" />
+                            <Text className="text-slate-400 text-[10px] font-bold">Energy {item.energy_level}/10</Text>
+                          </View>
+                          <View className="flex-row items-center gap-1">
+                            <Smile size={10} color="#94A3B8" />
+                            <Text className="text-slate-400 text-[10px] font-bold" numberOfLines={1}>{item.mood}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <ChevronRight size={16} color="#334155" style={{ marginLeft: 8 }} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           </ScrollView>
 

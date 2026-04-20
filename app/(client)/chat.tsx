@@ -81,6 +81,8 @@ export default function ClientMessagesScreen() {
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
   // Keep stable ref to coachId for real-time callbacks
   const coachUserIdRef = useRef<string | null>(null);
+  // Broadcast channel for guaranteed real-time reaction delivery
+  const reactionChannelRef = useRef<any>(null);
 
   useEffect(() => {
     coachUserIdRef.current = coach?.user_id || null;
@@ -111,14 +113,34 @@ export default function ClientMessagesScreen() {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
         const updated = p.new as Message;
-        const cUid = coachUserIdRef.current;
-        if (!cUid || updated.sender_id === cUid || updated.recipient_id === cUid) {
-          setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
-        }
+        // Use ID-based matching — sender_id/recipient_id may be absent when
+        // REPLICA IDENTITY is not set to FULL on the messages table.
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === updated.id);
+          if (!exists) return prev;
+          return prev.map(m => m.id === updated.id ? { ...m, ...updated } : m);
+        });
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
+  }, [user?.id, coach?.user_id]);
+
+  // Broadcast channel — shared with coach for guaranteed reaction delivery.
+  // Keyed identically to the coach side (sorted join of both user IDs).
+  useEffect(() => {
+    if (!user || !coach) return;
+    const key = [user.id, coach.user_id].sort().join('-');
+    const ch = supabase
+      .channel(`chat-reactions-${key}`)
+      .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
+        setMessages(prev =>
+          prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
+        );
+      })
+      .subscribe();
+    reactionChannelRef.current = ch;
+    return () => { supabase.removeChannel(ch); };
   }, [user?.id, coach?.user_id]);
 
   const processIncoming = (nm: Message) => {
@@ -214,6 +236,17 @@ export default function ClientMessagesScreen() {
           folder,
           (pct) => { setMessages(prev => prev.map(m => m.id === tempId ? { ...m, progress: pct } : m)); }
         );
+        
+        // Handle thumbnail upload if present (local URI)
+        if (parsedContent.thumbnailUrl && !parsedContent.thumbnailUrl.startsWith('http')) {
+          try {
+            const thumbUrl = await uploadChatMedia(parsedContent.thumbnailUrl, 'thumbnails');
+            parsedContent.thumbnailUrl = thumbUrl;
+          } catch (e) {
+            console.warn('Failed to upload thumbnail:', e);
+          }
+        }
+
         finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false, cid });
         // Pre-warm cache so sender sees own media instantly
         mediaDownloadManager.markRemoteAvailable(publicUrl);
@@ -242,11 +275,14 @@ export default function ClientMessagesScreen() {
     if (!activeMessageForMenu || !user) return;
 
     const msgId = activeMessageForMenu.id;
+
+    // Always read from the LIVE messages state so reactions build on latest data
+    const currentMsg = messages.find(m => m.id === msgId) || activeMessageForMenu;
     let currentContent: any = {};
     try {
-      currentContent = JSON.parse(activeMessageForMenu.content);
+      currentContent = JSON.parse(currentMsg.content);
     } catch {
-      currentContent = { text: activeMessageForMenu.content, type: 'text' };
+      currentContent = { text: currentMsg.content, type: 'text' };
     }
 
     const reactions = currentContent.reactions || [];
@@ -258,12 +294,45 @@ export default function ClientMessagesScreen() {
       newReactions.push({ emoji, user_id: user.id });
     }
 
-    const updatedContent = JSON.stringify({ ...currentContent, reactions: newReactions });
-    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: updatedContent } : m));
+    const optimisticContent = JSON.stringify({ ...currentContent, reactions: newReactions });
 
-    const { error } = await supabase.from('messages').update({ content: updatedContent }).eq('id', msgId);
-    if (error) Alert.alert('Error', 'Failed to react: ' + error.message);
+    // Optimistic update so the sender sees the reaction immediately
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: optimisticContent } : m));
     setActiveMessageForMenu(null);
+
+    // Broadcast IMMEDIATELY for real-time delivery — don't wait for DB
+    reactionChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'reaction_update',
+      payload: { messageId: msgId, content: optimisticContent },
+    });
+
+    // Persist to DB: try direct update first (works when coach is recipient or client is recipient)
+    const { error } = await supabase
+      .from('messages')
+      .update({ content: optimisticContent })
+      .eq('id', msgId);
+
+    if (error) {
+      // Direct update blocked by RLS — fall back to SECURITY DEFINER RPC
+      const { data: savedContent, error: rpcError } = await supabase.rpc('toggle_message_reaction', {
+        p_message_id: msgId,
+        p_emoji: emoji,
+      });
+      if (rpcError) {
+        // Both failed — revert optimistic update
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: currentMsg.content } : m));
+        Alert.alert('Error', 'Failed to save reaction: ' + rpcError.message);
+      } else if (savedContent && savedContent !== optimisticContent) {
+        // RPC returned canonical content (e.g. toggle removed reaction) — sync
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: savedContent } : m));
+        reactionChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'reaction_update',
+          payload: { messageId: msgId, content: savedContent },
+        });
+      }
+    }
   };
 
   const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward') => {
@@ -318,6 +387,9 @@ export default function ClientMessagesScreen() {
         onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 12 }}
       >
+        {/* TouchableOpacity for long-press. CustomImagePlayer now uses RNGH's
+            TouchableOpacity internally, so both are in the same gesture tree
+            as Swipeable and properly coordinate. */}
         <TouchableOpacity
           activeOpacity={0.9}
           delayLongPress={400}
@@ -336,6 +408,7 @@ export default function ClientMessagesScreen() {
                 replyTo={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : undefined}
                 onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
                 isHighlighted={isHighlighted}
+                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
               />
               {/* Reactions on media */}
               {(() => {
@@ -375,8 +448,10 @@ export default function ClientMessagesScreen() {
   };
 
   const renderOverlayContent = (msg: any, isMe: boolean) => {
-    if (isMediaMessage(msg.content)) {
-      return <ChatMediaMessage content={msg.content} isOwn={isMe} createdAt={msg.created_at} isRead={msg.read} />;
+    // Refresh to get the latest version from messages state (reactions)
+    const liveMsg = messages.find(m => m.id === msg?.id) || msg;
+    if (isMediaMessage(liveMsg.content)) {
+      return <ChatMediaMessage content={liveMsg.content} isOwn={isMe} createdAt={liveMsg.created_at} isRead={liveMsg.read} />;
     }
     return (
       <ClientMessageBubble
@@ -425,6 +500,7 @@ export default function ClientMessagesScreen() {
             <FlatList
                 ref={flatListRef}
                 data={messages}
+                extraData={messages}
                 renderItem={renderMessage}
                 keyExtractor={item => item.id}
                 inverted
@@ -454,7 +530,7 @@ export default function ClientMessagesScreen() {
 
       <MessageOverlay
         visible={!!activeMessageForMenu}
-        message={activeMessageForMenu}
+        message={messages.find(m => m.id === activeMessageForMenu?.id) || activeMessageForMenu}
         isMe={activeMessageForMenu?.sender_id === user?.id}
         onClose={() => setActiveMessageForMenu(null)}
         onReaction={handleReaction}
@@ -478,7 +554,12 @@ const ClientMessageBubble = ({ item, isMe, isHighlighted, repliedMsg, onReplyPre
     displayContent = p.text || item.content;
     reactions = p.reactions || [];
     if (p.type === 'deleted') { isDeleted = true; deletedBy = p.deleted_by; }
+    // Delegate media types to ChatMediaMessage to avoid showing raw JSON
     if (p.type === 'meal' || p.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
+    if (p.type === 'challenge_completed' || p.type === 'task_completion' ||
+        p.type === 'image' || p.type === 'video' || p.type === 'gif' || p.type === 'document') {
+      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+    }
   } catch {}
 
   if (isDeleted) {

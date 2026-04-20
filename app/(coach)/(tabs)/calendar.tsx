@@ -4,7 +4,7 @@ import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search } from 'lucide-react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useNavigation } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
 import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function CalendarScreen() {
   const { profile, coach } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,6 +194,7 @@ export default function CalendarScreen() {
                   onClose={() => { setShowManualScheduler(false); setSelectedClient(null); }} 
                   onConfirm={async () => loadSessions()} 
                   existingSessions={sessions} coachId={coach.id} initialClient={initialClientData}
+                  navigation={navigation}
                   onSwitchToAI={(c) => { setSelectedClient({ id: c.id, name: c.profiles.full_name, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }); setShowManualScheduler(false); setShowAIScheduler(true); }}
               />
           )}

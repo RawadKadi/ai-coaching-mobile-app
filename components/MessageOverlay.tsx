@@ -74,10 +74,8 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="auto">
-      <Pressable 
-        style={StyleSheet.absoluteFill} 
-        onPress={onClose}
-      >
+      {/* Full-screen backdrop — tapping outside the menu closes the overlay */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
         <BlurView 
           intensity={Platform.OS === 'ios' ? 30 : 100} 
           tint="dark" 
@@ -85,7 +83,8 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
         />
       </Pressable>
 
-      <View style={styles.container}>
+      {/* Menu content — stopPropagation prevents taps here from reaching the backdrop */}
+      <View style={styles.container} pointerEvents="box-none">
         <AnimatePresence>
           <MotiView 
             from={{ opacity: 0, scale: 0.9, translateY: 20 }}
@@ -93,6 +92,7 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
             exit={{ opacity: 0, scale: 0.9, translateY: 20 }}
             transition={{ type: 'spring', damping: 20, stiffness: 250 }}
             style={styles.modalContent}
+            pointerEvents="box-none"
           >
             <ScrollView 
               showsVerticalScrollIndicator={false}
