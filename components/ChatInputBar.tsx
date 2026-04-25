@@ -31,13 +31,15 @@ interface Props {
   placeholder?: string;
   replyingTo?: any;
   onCancelReply?: () => void;
+  /** Called when the user starts or stops typing */
+  onTyping?: (isTyping: boolean) => void;
 }
 
 type Panel = 'emoji' | 'attach' | null;
 
 export function ChatInputBar({ 
   onSendText, onSendMedia, sending, placeholder = 'Message…', 
-  replyingTo, onCancelReply 
+  replyingTo, onCancelReply, onTyping 
 }: Props) {
   const theme = useTheme();
   const [text, setText] = useState('');
@@ -52,6 +54,8 @@ export function ChatInputBar({
   const [hasClipboardImage, setHasClipboardImage] = useState(false);
   const [deferRender, setDeferRender] = useState(false);
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isTypingRef = useRef(false);
 
   const panelHeightAnim = useRef(new Animated.Value(0)).current;
   const currentHeight = useRef(0);
@@ -249,6 +253,11 @@ export function ChatInputBar({
     }
 
     if (msg) {
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        onTyping?.(false);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      }
       await onSendText(msg, replyingTo?.id);
     }
   };
@@ -600,7 +609,27 @@ export function ChatInputBar({
             placeholder="Message athlete..."
             placeholderTextColor="#475569"
             value={text}
-            onChangeText={setText}
+            onChangeText={(v) => {
+              setText(v);
+              if (onTyping) {
+                if (!isTypingRef.current && v.trim().length > 0) {
+                  isTypingRef.current = true;
+                  onTyping(true);
+                }
+                
+                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                
+                if (v.trim().length === 0) {
+                  isTypingRef.current = false;
+                  onTyping(false);
+                } else {
+                  typingTimeoutRef.current = setTimeout(() => {
+                    isTypingRef.current = false;
+                    onTyping(false);
+                  }, 3000);
+                }
+              }
+            }}
             onFocus={onInputFocus}
             multiline
             editable={!isDisabled}

@@ -145,38 +145,67 @@ export default function LogMealScreen() {
   if (currentStep === 'camera' && !capturedImage) {
     return (
       <View className="flex-1 bg-black">
-        <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-          <SafeAreaView className="flex-1">
-            <View className="flex-row justify-between items-center px-6 pt-4">
-              <TouchableOpacity onPress={() => router.back()} className="w-12 h-12 bg-black/40 rounded-full items-center justify-center">
-                <X size={24} color="white" />
-              </TouchableOpacity>
-              <View className="px-4 py-1.5 bg-blue-600 rounded-full items-center justify-center border border-white/20">
-                <Text className="text-white font-black text-[10px] uppercase tracking-widest">Neural Scan</Text>
-              </View>
-              <View className="w-12" />
+        <CameraView style={StyleSheet.absoluteFill} facing={facing} ref={cameraRef} />
+        
+        {/* Central Scan Frame Overlay - Mathematically Centered */}
+        <View 
+          pointerEvents="none" 
+          style={StyleSheet.absoluteFill} 
+          className="items-center justify-center"
+        >
+          <View className="w-[80%] aspect-square border-2 border-dashed border-white/40 rounded-[64px]" />
+          <Text className="text-white/60 font-medium mt-8 text-center px-12 text-sm">
+            Position your plate within the frame for optimal analysis
+          </Text>
+        </View>
+
+        {/* UI Controls Overlay - Handled with absolute positioning for maximum reliability */}
+        <SafeAreaView style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          {/* Top Bar Controls */}
+          <View className="flex-row justify-between items-center px-6 mt-4" pointerEvents="box-none">
+            <TouchableOpacity 
+              onPress={() => router.back()} 
+              className="w-12 h-12 bg-black/40 rounded-full items-center justify-center border border-white/10"
+            >
+              <X size={24} color="white" />
+            </TouchableOpacity>
+            
+            <View className="px-4 py-1.5 bg-blue-600 rounded-full items-center justify-center border border-white/20 shadow-xl shadow-blue-500/50">
+              <Text className="text-white font-black text-[10px] uppercase tracking-widest">Neural Scan</Text>
             </View>
             
-            <View className="flex-1 items-center justify-center">
-                <View className="w-[80%] aspect-square border-2 border-dashed border-white/40 rounded-[64px]" />
-                <Text className="text-white/60 font-bold mt-8 text-center px-12">Position your plate within the frame for optimal analysis</Text>
-            </View>
+            <View className="w-12" />
+          </View>
 
-            <View className="flex-row justify-between items-center px-10 pb-12">
-              <TouchableOpacity onPress={pickFromGallery}>
-                <ImageIcon size={32} color="white" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity onPress={takePicture} className="w-20 h-20 rounded-full border-4 border-white items-center justify-center">
-                <View className="w-16 h-16 bg-white rounded-full border-2 border-black" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}>
-                <RefreshCw size={28} color="white" />
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </CameraView>
+          {/* Bottom Bar Controls - Pinned to bottom using absolute position within SafeArea */}
+          <View 
+            className="absolute bottom-12 left-0 right-0 flex-row justify-between items-center px-10"
+            pointerEvents="box-none"
+          >
+            <TouchableOpacity 
+              onPress={pickFromGallery}
+              className="w-12 h-12 bg-black/50 rounded-full items-center justify-center border border-white/10"
+            >
+              <ImageIcon size={26} color="white" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={takePicture} 
+              className="w-24 h-24 rounded-full border-4 border-white/30 items-center justify-center shadow-2xl"
+            >
+              <View className="w-20 h-20 bg-white rounded-full border-4 border-black/10 items-center justify-center">
+                <View className="w-16 h-16 rounded-full border-2 border-black/5" />
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
+              className="w-12 h-12 bg-black/50 rounded-full items-center justify-center border border-white/10"
+            >
+              <RefreshCw size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </View>
     );
   }
@@ -189,24 +218,52 @@ export default function LogMealScreen() {
             animate={{ scale: 1, opacity: 1 }}
             className="items-center px-8"
         >
-            <View className="w-64 h-64 rounded-[48px] overflow-hidden border border-slate-900 shadow-2xl">
-                <Image 
-                    source={{ uri: capturedImage! }} 
-                    className="w-full h-full" 
-                    contentFit="cover"
-                    transition={200}
-                    cachePolicy="disk"
-                />
+            <View className="w-72 h-72 rounded-[48px] overflow-hidden border border-blue-500/30 shadow-2xl bg-black">
+                {capturedImage && (
+                    <Image 
+                        key={capturedImage}
+                        source={{ uri: capturedImage }} 
+                        className="w-full h-full opacity-80" 
+                        contentFit="cover"
+                        transition={400}
+                    />
+                )}
+                
+                {/* Robust Scanning Line Animation */}
                 <MotiView 
-                    from={{ translateY: -256 }}
-                    animate={{ translateY: 256 }}
-                    transition={{ loop: true, duration: 1500 }}
-                    className="absolute w-full h-1 bg-blue-500 shadow-lg shadow-blue-500"
+                    from={{ translateY: 0 }}
+                    animate={{ translateY: 260 }}
+                    transition={{ 
+                        loop: true, 
+                        duration: 1500, 
+                        type: 'timing',
+                        repeatReverse: true 
+                    }}
+                    className="absolute w-full h-[4px] bg-blue-500 shadow-xl shadow-blue-400"
+                    style={{
+                        shadowColor: '#60A5FA',
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 1,
+                        shadowRadius: 15,
+                        zIndex: 10
+                    }}
                 />
+                
+                {/* Scanning Overlay Glow */}
+                <View className="absolute inset-0 bg-blue-500/10" pointerEvents="none" />
             </View>
-            <Text className="text-white text-2xl font-black mt-12 text-center">Identifying Protocols</Text>
-            <Text className="text-slate-500 font-bold mt-2 text-center leading-5 px-6">Neural engine is extracting nutritional data through visual synthesis...</Text>
-            <ActivityIndicator color="#3B82F6" className="mt-12" />
+            
+            <View className="items-center mt-12">
+                <Text className="text-white text-2xl font-black text-center">Identifying Protocols</Text>
+                <Text className="text-slate-500 font-bold mt-2 text-center leading-5 px-10">
+                    Neural engine is extracting nutritional data through visual synthesis...
+                </Text>
+                
+                <View className="mt-12 flex-row items-center bg-blue-500/10 px-6 py-3 rounded-full border border-blue-500/20">
+                    <ActivityIndicator color="#3B82F6" size="small" className="mr-3" />
+                    <Text className="text-blue-500 font-black text-[12px] uppercase tracking-widest">Processing Layer 7</Text>
+                </View>
+            </View>
         </MotiView>
       </View>
     );
@@ -224,31 +281,35 @@ export default function LogMealScreen() {
                 <View className="w-10" />
             </View>
 
-            <ScrollView className="flex-1 px-6">
-                <View className="w-full h-48 rounded-[32px] overflow-hidden mb-6 border border-slate-900">
+            <ScrollView 
+                className="flex-1" 
+                contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+                showsVerticalScrollIndicator={false}
+            >
+                <View className="w-full h-56 rounded-[32px] overflow-hidden mb-6 border border-slate-900 bg-slate-900 shadow-lg">
                     <Image 
+                        key={capturedImage}
                         source={{ uri: capturedImage! }} 
                         className="w-full h-full" 
                         contentFit="cover"
                         transition={200}
-                        cachePolicy="disk"
                     />
                 </View>
 
                 <View className="mb-8">
-                    <Text className="text-white text-2xl font-black">{analysisResult.mealName}</Text>
-                    <Text className="text-slate-500 font-bold mt-1">{analysisResult.description}</Text>
+                    <Text className="text-white text-3xl font-black">{analysisResult.mealName}</Text>
+                    <Text className="text-slate-500 font-bold mt-2 text-lg leading-6">{analysisResult.description}</Text>
                 </View>
 
                 <View className="flex-row items-center gap-3 mb-6">
-                    <View className="w-1 h-4 bg-blue-600 rounded-full" />
-                    <Text className="text-white text-lg font-black">Composition</Text>
-                    <TouchableOpacity onPress={() => setIngredients([...ingredients, { id: Math.random().toString(), meal_id: '', ingredient_name: '', quantity: 0, unit: 'g', ai_detected: false, created_at: '' }])} className="ml-auto bg-slate-900/50 px-3 py-1.5 rounded-xl border border-slate-800">
+                    <View className="w-1.5 h-6 bg-blue-600 rounded-full" />
+                    <Text className="text-white text-xl font-black">Composition</Text>
+                    <TouchableOpacity onPress={() => setIngredients([...ingredients, { id: Math.random().toString(), meal_id: '', ingredient_name: '', quantity: 0, unit: 'g', ai_detected: false, created_at: '' }])} className="ml-auto bg-slate-900/80 px-4 py-2 rounded-2xl border border-slate-800">
                         <Text className="text-blue-500 font-bold text-xs">+ Manual Entry</Text>
                     </TouchableOpacity>
                 </View>
 
-                <View className="space-y-3">
+                <View style={{ gap: 12 }}>
                     {ingredients.map((ing, i) => (
                         <MotiView key={ing.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: i * 50 }}>
                             <View className="flex-row items-center bg-slate-900/40 border border-slate-900 rounded-2xl p-4">

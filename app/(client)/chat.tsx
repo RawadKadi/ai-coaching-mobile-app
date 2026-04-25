@@ -23,7 +23,7 @@ import ChatMediaMessage from '@/components/ChatMediaMessage';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Swipeable, LongPressGestureHandler, State } from 'react-native-gesture-handler';
 import { Reply } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
@@ -33,6 +33,8 @@ import { MotiView } from 'moti';
 import { MessageOverlay } from '@/components/MessageOverlay';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import { TypingIndicator } from '@/components/TypingIndicator';
+import { usePresence } from '@/contexts/PresenceContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -65,6 +67,7 @@ function isMediaMessage(content: string): boolean {
 export default function ClientMessagesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isUserOnline } = usePresence();
   const { user, coach } = useAuth();
   const { refreshUnreadCount } = useUnread();
   const theme = useTheme();
@@ -76,6 +79,7 @@ export default function ClientMessagesScreen() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -137,6 +141,9 @@ export default function ClientMessagesScreen() {
         setMessages(prev =>
           prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
         );
+      })
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        setIsOtherTyping(payload.isTyping);
       })
       .subscribe();
     reactionChannelRef.current = ch;
@@ -200,6 +207,14 @@ export default function ClientMessagesScreen() {
     if (error) Alert.alert('Error', 'Failed to send message');
     setSending(false);
     setReplyingTo(null);
+  };
+
+  const handleTyping = (isTyping: boolean) => {
+    reactionChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { isTyping, userId: user?.id },
+    });
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
@@ -380,6 +395,13 @@ export default function ClientMessagesScreen() {
       );
     };
 
+    const onLongPressStateChange = ({ nativeEvent }: any) => {
+      if (nativeEvent.state === State.ACTIVE) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        setActiveMessageForMenu(item);
+      }
+    };
+
     return (
       <Swipeable
         ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
@@ -387,62 +409,63 @@ export default function ClientMessagesScreen() {
         onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 12 }}
       >
-        {/* TouchableOpacity for long-press. CustomImagePlayer now uses RNGH's
-            TouchableOpacity internally, so both are in the same gesture tree
-            as Swipeable and properly coordinate. */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          delayLongPress={400}
-          onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
-          style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+        {/* LongPressGestureHandler (RNGH) cooperates with Swipeable (also RNGH) in the
+            same gesture tree — hold still = long-press, swipe = swipe. Using RN's
+            TouchableOpacity.onLongPress across the two systems caused conflicts on
+            media messages where nested touchables compete for the responder. */}
+        <LongPressGestureHandler
+          onHandlerStateChange={onLongPressStateChange}
+          minDurationMs={400}
         >
-          {isMedia ? (
-            <View>
-              <ChatMediaMessage
-                content={item.content}
-                isOwn={isMe}
-                createdAt={item.created_at}
-                isRead={item.read}
-                isUploading={item.isUploading}
-                progress={item.progress}
-                replyTo={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : undefined}
-                onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+          <View style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+            {isMedia ? (
+              <View>
+                <ChatMediaMessage
+                  content={item.content}
+                  isOwn={isMe}
+                  createdAt={item.created_at}
+                  isRead={item.read}
+                  isUploading={item.isUploading}
+                  progress={item.progress}
+                  replyTo={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : undefined}
+                  onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+                  isHighlighted={isHighlighted}
+                  onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
+                />
+                {/* Reactions on media */}
+                {(() => {
+                  try {
+                    const p = JSON.parse(item.content);
+                    const reactions = p.reactions || [];
+                    if (reactions.length === 0) return null;
+                    return (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
+                        {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+                          .map(([emoji, count]: any) => (
+                            <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                              <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                              {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
+                            </View>
+                          ))}
+                      </View>
+                    );
+                  } catch { return null; }
+                })()}
+              </View>
+            ) : (
+              <ClientMessageBubble
+                item={item}
+                isMe={isMe}
                 isHighlighted={isHighlighted}
-                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
+                repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
+                onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+                theme={theme}
+                user={user}
+                coachName={coachProfile?.full_name}
               />
-              {/* Reactions on media */}
-              {(() => {
-                try {
-                  const p = JSON.parse(item.content);
-                  const reactions = p.reactions || [];
-                  if (reactions.length === 0) return null;
-                  return (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
-                      {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
-                        .map(([emoji, count]: any) => (
-                          <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
-                            <Text style={{ fontSize: 12 }}>{emoji}</Text>
-                            {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
-                          </View>
-                        ))}
-                    </View>
-                  );
-                } catch { return null; }
-              })()}
-            </View>
-          ) : (
-            <ClientMessageBubble
-              item={item}
-              isMe={isMe}
-              isHighlighted={isHighlighted}
-              repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
-              onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
-              theme={theme}
-              user={user}
-              coachName={coachProfile?.full_name}
-            />
-          )}
-        </TouchableOpacity>
+            )}
+          </View>
+        </LongPressGestureHandler>
       </Swipeable>
     );
   };
@@ -476,15 +499,17 @@ export default function ClientMessagesScreen() {
                     <ArrowLeft size={18} color="white" />
                 </TouchableOpacity>
                 <View className="flex-row items-center gap-3">
-                    <BrandedAvatar name={coachProfile?.full_name} size={42} imageUrl={coachProfile?.avatar_url} />
-                    <View>
-                        <Text className="text-white font-black text-lg tracking-tight">{coachProfile?.full_name || 'Your Coach'}</Text>
-                        <View className="flex-row items-center gap-1.5">
-                            <View className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-                            <Text className="text-slate-500 text-[9px] font-black uppercase tracking-[2px]">Encrypted Message</Text>
-                        </View>
-                    </View>
-                </View>
+               <BrandedAvatar imageUrl={coach?.avatar_url} name={coach?.full_name || 'Coach'} size={40} />
+               <View>
+                 <Text className="text-white font-black text-lg tracking-tight">{coach?.full_name || 'Your Coach'}</Text>
+                 <View className="flex-row items-center gap-1.5">
+                   <View className={`w-2 h-2 rounded-full ${coach?.user_id && isUserOnline(coach.user_id) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
+                   <Text className="text-slate-400 text-[10px] font-medium tracking-widest uppercase">
+                     {coach?.user_id && isUserOnline(coach.user_id) ? 'Online' : 'Offline'}
+                   </Text>
+                 </View>
+               </View>
+             </View>
             </View>
             <TouchableOpacity className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
                 <Shield size={18} color="#64748B" />
@@ -513,6 +538,7 @@ export default function ClientMessagesScreen() {
                 onScrollToIndexFailed={(info) => {
                     flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
                 }}
+                ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
             />
           )}
         </View>
@@ -524,6 +550,7 @@ export default function ClientMessagesScreen() {
               sending={sending} 
               replyingTo={replyingTo} 
               onCancelReply={() => setReplyingTo(null)} 
+              onTyping={handleTyping}
             />
         </View>
       </KeyboardAvoidingView>

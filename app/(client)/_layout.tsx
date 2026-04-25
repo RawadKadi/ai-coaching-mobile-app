@@ -22,22 +22,24 @@ export default function ClientLayout() {
     }
   }, [session, profile, loading, segments]);
 
-  if (loading || !session || profile?.role !== 'client') {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-      </View>
-    );
-  }
-
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="challenges" />
+        <Stack.Screen name="chat" />
+        <Stack.Screen name="check-in" />
+        <Stack.Screen name="log-meal" options={{ presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="onboarding" />
       </Stack>
       
+      {(loading || !session || profile?.role !== 'client') && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      )}
+
       <SessionMonitor router={router} />
-    </>
+    </View>
   );
 }

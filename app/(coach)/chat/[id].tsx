@@ -41,6 +41,8 @@ import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TypingIndicator } from '@/components/TypingIndicator';
+import { usePresence } from '@/contexts/PresenceContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { MotiView } from 'moti';
@@ -82,6 +84,7 @@ export default function CoachChatScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { refreshUnreadCount } = useUnread();
+  const { isUserOnline } = usePresence();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,6 +96,7 @@ export default function CoachChatScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -172,8 +176,8 @@ export default function CoachChatScreen() {
   // Broadcast channel — shared with client, used for guaranteed reaction delivery.
   // Keyed by sorted user IDs so both sides join the same channel name.
   useEffect(() => {
-    if (!user || !id) return;
-    const key = [user.id, id as string].sort().join('-');
+    if (!user || !clientUserId) return;
+    const key = [user.id, clientUserId].sort().join('-');
     const ch = supabase
       .channel(`chat-reactions-${key}`)
       .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
@@ -181,6 +185,9 @@ export default function CoachChatScreen() {
         setMessages(prev =>
           prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
         );
+      })
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        setIsOtherTyping(payload.isTyping);
       })
       .subscribe();
     reactionChannelRef.current = ch;
@@ -266,6 +273,14 @@ export default function CoachChatScreen() {
     if (error) Alert.alert('Error', 'Failed to send');
     setSending(false);
     setReplyingTo(null);
+  };
+
+  const handleTyping = (isTyping: boolean) => {
+    reactionChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { isTyping, userId: user?.id },
+    });
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
@@ -574,7 +589,12 @@ export default function CoachChatScreen() {
                  <BrandedAvatar imageUrl={clientProfile?.profiles?.avatar_url} name={clientProfile?.profiles?.full_name || 'Protocol Hub'} size={40} />
                 <View>
                     <Text className="text-white font-bold text-base">{clientProfile?.profiles?.full_name || 'Protocol Hub'}</Text>
-                    <View className="flex-row items-center gap-1.5"><View className="w-2 h-2 rounded-full bg-emerald-500" /><Text className="text-slate-400 text-[10px] font-medium">Online</Text></View>
+                    <View className="flex-row items-center gap-1.5">
+                      <View className={`w-2 h-2 rounded-full ${clientUserId && isUserOnline(clientUserId) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
+                      <Text className="text-slate-400 text-[10px] font-medium">
+                        {clientUserId && isUserOnline(clientUserId) ? 'Online' : 'Offline'}
+                      </Text>
+                    </View>
                 </View>
              </TouchableOpacity>
           </View>
@@ -592,9 +612,16 @@ export default function CoachChatScreen() {
                 inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
                 initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
                 onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
+                ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
              />
         )}
-        <ChatInputBar onSendText={handleSendText} onSendMedia={handleSendMedia} replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
+        <ChatInputBar 
+          onSendText={handleSendText} 
+          onSendMedia={handleSendMedia} 
+          replyingTo={replyingTo} 
+          onCancelReply={() => setReplyingTo(null)} 
+          onTyping={handleTyping}
+        />
       </KeyboardAvoidingView>
 
       <SchedulerModal 

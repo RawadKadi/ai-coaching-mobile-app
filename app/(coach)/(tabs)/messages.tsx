@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { ChevronRight, MessageCircle, Users, Zap, Search, Bell, X } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePresence } from '@/contexts/PresenceContext';
 
 type ClientPreview = {
   id: string; user_id: string; full_name: string; avatar_url: string | null;
@@ -22,6 +23,7 @@ export default function CoachMessagesScreen() {
   const router = useRouter();
   const { coach, user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { isUserOnline } = usePresence();
   const [activeTab, setActiveTab] = useState<Tab>('clients');
   const [clients, setClients] = useState<ClientPreview[]>([]);
   const [teammates, setTeammates] = useState<CoachPreview[]>([]);
@@ -160,8 +162,7 @@ export default function CoachMessagesScreen() {
   };
 
   const onRefresh = () => { setRefreshing(true); loadClients(); loadTeammates(); };
-
-  const renderCard = (fullName: string, avatarUrl: string | null, lastMsg: string | undefined, lastTime: string | undefined, unread: number | undefined, onPress: () => void, index: number) => (
+  const renderCard = (fullName: string, avatarUrl: string | null, lastMsg: string | undefined, lastTime: string | undefined, unread: number | undefined, onPress: () => void, index: number, userId: string) => (
     <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: index * 50 }} className="mb-4">
       <TouchableOpacity
         className="flex-row items-center p-5 bg-slate-900/40 rounded-[32px] border border-white/5"
@@ -169,7 +170,9 @@ export default function CoachMessagesScreen() {
       >
         <View className="relative mr-4">
           <BrandedAvatar name={fullName} imageUrl={avatarUrl} size={56} />
-          <View className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-950" />
+          <View 
+            className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-950 ${isUserOnline(userId) ? 'bg-emerald-500' : 'bg-slate-600'}`} 
+          />
         </View>
         <View className="flex-1 mr-3">
           <View className="flex-row justify-between items-center mb-1">
@@ -261,10 +264,10 @@ export default function CoachMessagesScreen() {
               renderItem={({ item, index }) => {
                 if ('id' in item) {
                     const c = item as ClientPreview;
-                    return renderCard(c.full_name, c.avatar_url, c.last_message, c.last_message_time, c.unread_count, () => router.push({ pathname: '/(coach)/chat/[id]', params: { id: c.id } }), index);
+                    return renderCard(c.full_name, c.avatar_url, c.last_message, c.last_message_time, c.unread_count, () => router.push({ pathname: '/(coach)/chat/[id]', params: { id: c.id } }), index, c.user_id);
                 } else {
                     const tm = item as CoachPreview;
-                    return renderCard(tm.full_name, tm.avatar_url, tm.last_message, tm.last_message_time, tm.unread_count, () => router.push({ pathname: '/(coach)/chat/coach/[coachId]', params: { coachId: tm.coach_id, userId: tm.user_id, fullName: tm.full_name, avatarUrl: tm.avatar_url ?? '' } }), index);
+                    return renderCard(tm.full_name, tm.avatar_url, tm.last_message, tm.last_message_time, tm.unread_count, () => router.push({ pathname: '/(coach)/chat/coach/[coachId]', params: { coachId: tm.coach_id, userId: tm.user_id, fullName: tm.full_name, avatarUrl: tm.avatar_url ?? '' } }), index, tm.user_id);
                 }
               }}
               keyExtractor={item => 'id' in item ? item.id : item.coach_id}

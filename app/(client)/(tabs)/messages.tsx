@@ -46,6 +46,7 @@ import { useTheme } from '@/contexts/BrandContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePresence } from '@/contexts/PresenceContext';
 import { MotiView, AnimatePresence } from 'moti';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -84,6 +85,7 @@ export default function ClientMessagesScreen() {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const { refreshUnreadCount } = useUnread();
+  const { isUserOnline } = usePresence();
   const theme = useTheme();
   
   const [messages, setMessages] = useState<Message[]>([]);
@@ -470,8 +472,10 @@ export default function ClientMessagesScreen() {
                     <View>
                         <Text className="text-white font-black text-lg tracking-tight">{coachProfile?.full_name || 'Coach Hub'}</Text>
                         <View className="flex-row items-center gap-1.5">
-                            <View className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                            <Text className="text-slate-500 text-[9px] font-black uppercase tracking-[2px]">Encrypted Stream</Text>
+                            <View className={`w-1.5 h-1.5 rounded-full ${coachUserId && isUserOnline(coachUserId) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
+                            <Text className="text-slate-500 text-[9px] font-black uppercase tracking-[2px]">
+                              {coachUserId && isUserOnline(coachUserId) ? 'Online' : 'Offline'}
+                            </Text>
                         </View>
                     </View>
                 </View>

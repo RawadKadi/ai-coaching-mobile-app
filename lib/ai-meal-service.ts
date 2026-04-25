@@ -178,18 +178,24 @@ IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, just pure JSON.`
  */
 const parseAIResponse = (text: string): MealAnalysisResult => {
     try {
-        // Remove markdown code blocks if present
-        let cleanedText = text.trim();
-        if (cleanedText.startsWith('```json')) {
-            cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-        } else if (cleanedText.startsWith('```')) {
-            cleanedText = cleanedText.replace(/```\n?/g, '');
+        // Find the first '{' and last '}' to extract potential JSON
+        const startIndex = text.indexOf('{');
+        const endIndex = text.lastIndexOf('}');
+        
+        if (startIndex === -1 || endIndex === -1) {
+            console.error('No JSON found in response:', text);
+            throw new Error('No valid JSON found in AI response');
         }
 
-        const parsed = JSON.parse(cleanedText);
+        let jsonString = text.substring(startIndex, endIndex + 1);
+        
+        // Basic cleanup of potential control characters or common AI artifacts
+        jsonString = jsonString.replace(/[\u0000-\u001F\u007F-\u009F]/g, ""); 
+
+        const parsed = JSON.parse(jsonString);
 
         // Validate required fields
-        if (!parsed.mealName || !parsed.calories) {
+        if (!parsed.mealName || (!parsed.calories && parsed.calories !== 0)) {
             throw new Error('Invalid AI response: missing required fields');
         }
 

@@ -14,6 +14,7 @@ import { loadNotificationSound, unloadNotificationSound } from '@/lib/notificati
 import SessionMonitor from '@/components/SessionMonitor';
 import TeamInvitationMonitor from '@/components/TeamInvitationMonitor';
 import { UnassignedClientsBanner } from '@/components/UnassignedClientsBanner';
+import { PresenceProvider } from '@/contexts/PresenceContext';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -77,7 +78,9 @@ export default function RootLayout() {
           <BrandProvider>
             <UnreadProvider>
               <NotificationProvider>
-                <RootLayoutNav />
+                <PresenceProvider>
+                  <RootLayoutNav />
+                </PresenceProvider>
               </NotificationProvider>
             </UnreadProvider>
           </BrandProvider>
