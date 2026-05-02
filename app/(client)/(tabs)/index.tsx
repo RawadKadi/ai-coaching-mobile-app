@@ -13,7 +13,8 @@ import {
   Brain, 
   Sparkles,
   ClipboardCheck,
-  Award
+  Award,
+  CheckCircle2
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -36,6 +37,34 @@ export default function ClientDashboard() {
     else if (!authLoading) setLoading(false);
   }, [client, authLoading]);
 
+  // Real-time subscription for check-in updates (like AI analysis completion)
+  useEffect(() => {
+    if (!client) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const channel = supabase.channel('client_dashboard_checkins')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'check_ins',
+          filter: `client_id=eq.${client.id}`
+        },
+        (payload) => {
+          // If the payload date is today, update the todayCheckIn state
+          if (payload.new && payload.new.date === today) {
+            setTodayCheckIn(payload.new as CheckIn);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [client]);
+
   const loadDashboardData = async () => {
     if (!client) return;
     try {
@@ -45,7 +74,40 @@ export default function ClientDashboard() {
         supabase.from('habits').select('*').eq('client_id', client.id).eq('is_active', true),
         supabase.from('habit_logs').select('*').eq('client_id', client.id).eq('date', today),
       ]);
-      setTodayCheckIn(checkInResult.data);
+      
+      let checkIn = checkInResult.data;
+
+      // Auto-recover missing AI analysis for existing check-ins
+      if (checkIn && !checkIn.ai_analysis) {
+        try {
+          const { generateText } = await import('@/lib/google-ai');
+          const prompt = `Act as an elite AI fitness coach. Analyze this daily check-in:
+Weight: ${checkIn.weight_kg ? checkIn.weight_kg + 'kg' : 'Not provided'}
+Sleep: ${checkIn.sleep_hours ? checkIn.sleep_hours + 'hrs' : 'Not provided'}
+Energy (1-10): ${checkIn.energy_level}
+Stress (1-10): ${checkIn.stress_level}
+Hunger (1-10): ${checkIn.hunger_level}
+Mood: ${checkIn.mood}
+Notes: ${checkIn.notes}
+
+Provide exactly 2 short, punchy sentences of encouraging insight or advice based on these metrics. Be direct and premium.`;
+          
+          const analysis = await generateText(prompt);
+          if (analysis) {
+            const { data: updated } = await supabase
+              .from('check_ins')
+              .update({ ai_analysis: analysis.trim() })
+              .eq('id', checkIn.id)
+              .select()
+              .single();
+            if (updated) checkIn = updated;
+          }
+        } catch (e) {
+          console.error("Auto-recovery AI Analysis failed:", e);
+        }
+      }
+
+      setTodayCheckIn(checkIn);
       setHabits(habitsResult.data || []);
       setTodayHabitLogs(habitLogsResult.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
@@ -121,9 +183,10 @@ export default function ClientDashboard() {
                 />
             </View>
 
-            {/* Daily Call to Action */}
-            {!todayCheckIn && (
+            {/* Daily Call to Action / Status */}
+            {!todayCheckIn ? (
                 <MotiView 
+                  key="checkin-cta"
                   from={{ scale: 0.98, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   className="mt-6 overflow-hidden rounded-[40px] bg-blue-600 shadow-2xl shadow-blue-500/30 border border-white/10"
@@ -146,7 +209,50 @@ export default function ClientDashboard() {
                         </View>
                     </TouchableOpacity>
                 </MotiView>
-            )}
+            ) : !todayCheckIn.ai_analysis ? (
+                <MotiView 
+                  key="checkin-done"
+                  from={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', damping: 20 }}
+                  className="mt-6 overflow-hidden rounded-[40px] bg-slate-900 border border-emerald-500/20 shadow-2xl shadow-emerald-500/10 relative"
+                >
+                  <View className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full" />
+                  
+                  <View className="p-8">
+                      <View className="flex-row items-center gap-2 mb-3">
+                        <View className="w-6 h-6 bg-emerald-500/20 rounded-full items-center justify-center border border-emerald-500/30">
+                          <CheckCircle2 size={12} color="#10B981" />
+                        </View>
+                        <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-[3px]">Protocol Synced</Text>
+                      </View>
+                      
+                      <Text className="text-white text-3xl font-black tracking-tight leading-8 mb-2">Metrics Logged</Text>
+                      <Text className="text-slate-400 font-medium text-sm leading-6">Your data is securely stored. The AI and your coach are analyzing your progress.</Text>
+                      
+                      <View className="mt-8 flex-row items-center justify-between">
+                          <MotiView
+                              from={{ opacity: 0, translateX: -10 }}
+                              animate={{ opacity: 1, translateX: 0 }}
+                              transition={{ delay: 400 }}
+                              className="flex-row items-center gap-2 bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20"
+                          >
+                              <ActivityIndicator size="small" color="#10B981" />
+                              <Text className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">AI Processing</Text>
+                          </MotiView>
+                          
+                          <View className="flex-row items-center">
+                            <View className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-900 items-center justify-center z-20">
+                              <Brain size={14} color="#818CF8" />
+                            </View>
+                            <View className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-900 items-center justify-center z-10 -ml-2">
+                              <Zap size={14} color="#F59E0B" />
+                            </View>
+                          </View>
+                      </View>
+                  </View>
+                </MotiView>
+            ) : null}
 
             {/* Coach's Insights */}
             {todayCheckIn?.ai_analysis && (

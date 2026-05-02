@@ -100,83 +100,92 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
               style={{ width: '100%' }}
               bounces={true}
             >
-              {/* Emoji Bar */}
-              <MotiView 
-                from={{ translateY: 10, opacity: 0 }}
-                animate={{ translateY: 0, opacity: 1 }}
-                transition={{ delay: 100 }}
-                style={styles.emojiBar}
-              >
-                {EMOJIS.map((emoji, index) => (
-                  <TouchableOpacity 
-                    key={index} 
-                    onPress={() => handleReaction(emoji)}
-                    style={styles.emojiItem}
+              <Pressable onPress={onClose} style={styles.scrollContentWrapper}>
+                {/* Emoji Bar */}
+                <Pressable onPress={(e) => e.stopPropagation()}>
+                  <MotiView 
+                    from={{ translateY: 10, opacity: 0 }}
+                    animate={{ translateY: 0, opacity: 1 }}
+                    transition={{ delay: 100 }}
+                    style={styles.emojiBar}
                   >
-                    <Text style={styles.emojiText}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </MotiView>
+                    {EMOJIS.map((emoji, index) => (
+                      <TouchableOpacity 
+                        key={index} 
+                        onPress={() => handleReaction(emoji)}
+                        style={styles.emojiItem}
+                      >
+                        <Text style={styles.emojiText}>{emoji}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </MotiView>
+                </Pressable>
 
-              {/* Message Preview */}
-              <View style={[
-                  styles.messagePreviewContainer, 
-                  { alignSelf: isMe ? 'flex-end' : 'flex-start' }
-              ]}>
-                {renderMessageContent(message, isMe)}
-              </View>
+                {/* Message Preview */}
+                <Pressable 
+                  onPress={(e) => e.stopPropagation()}
+                  style={[
+                    styles.messagePreviewContainer, 
+                    { alignSelf: isMe ? 'flex-end' : 'flex-start' }
+                  ]}
+                >
+                  {renderMessageContent(message, isMe)}
+                </Pressable>
 
-              {/* Action Menu */}
-              <MotiView 
-                from={{ translateY: -10, opacity: 0 }}
-                animate={{ translateY: 0, opacity: 1 }}
-                transition={{ delay: 150 }}
-                style={styles.menuContainer}
-              >
-                <MenuOption 
-                    icon={<Reply size={20} color="#F8FAFC" />} 
-                    label="Reply" 
-                    onPress={() => handleAction('reply')} 
-                />
-                <MenuDivider />
-                <MenuOption 
-                    icon={<Forward size={20} color="#F8FAFC" />} 
-                    label="Forward" 
-                    onPress={() => handleAction('forward')} 
-                />
-                <MenuDivider />
-                <MenuOption 
-                    icon={<Copy size={20} color="#F8FAFC" />} 
-                    label="Copy" 
-                    onPress={() => handleAction('copy')} 
-                />
-                <MenuDivider />
-                <MenuOption 
-                    icon={<Star size={20} color="#F8FAFC" />} 
-                    label="Star" 
-                    onPress={() => {}} 
-                />
-                <MenuDivider />
-                <MenuOption 
-                    icon={<Info size={20} color="#F8FAFC" />} 
-                    label="Info" 
-                    onPress={() => {}} 
-                />
-                
-                {isMe && (
-                  <>
+                {/* Action Menu */}
+                <Pressable onPress={(e) => e.stopPropagation()}>
+                  <MotiView 
+                    from={{ translateY: -10, opacity: 0 }}
+                    animate={{ translateY: 0, opacity: 1 }}
+                    transition={{ delay: 150 }}
+                    style={styles.menuContainer}
+                  >
+                    <MenuOption 
+                        icon={<Reply size={20} color="#F8FAFC" />} 
+                        label="Reply" 
+                        onPress={() => handleAction('reply')} 
+                    />
                     <MenuDivider />
                     <MenuOption 
-                      icon={<Trash2 size={20} color="#EF4444" />} 
-                      label="Delete" 
-                      onPress={() => handleAction('delete')}
-                      destructive
+                        icon={<Forward size={20} color="#F8FAFC" />} 
+                        label="Forward" 
+                        onPress={() => handleAction('forward')} 
                     />
-                  </>
-                )}
-              </MotiView>
-              
-              <View style={{ height: 100 }} />
+                    <MenuDivider />
+                    <MenuOption 
+                        icon={<Copy size={20} color="#F8FAFC" />} 
+                        label="Copy" 
+                        onPress={() => handleAction('copy')} 
+                    />
+                    <MenuDivider />
+                    <MenuOption 
+                        icon={<Star size={20} color="#F8FAFC" />} 
+                        label="Star" 
+                        onPress={() => {}} 
+                    />
+                    <MenuDivider />
+                    <MenuOption 
+                        icon={<Info size={20} color="#F8FAFC" />} 
+                        label="Info" 
+                        onPress={() => {}} 
+                    />
+                    
+                    {isMe && (
+                      <>
+                        <MenuDivider />
+                        <MenuOption 
+                          icon={<Trash2 size={20} color="#EF4444" />} 
+                          label="Delete" 
+                          onPress={() => handleAction('delete')}
+                          destructive
+                        />
+                      </>
+                    )}
+                  </MotiView>
+                </Pressable>
+                
+                <View style={{ height: 100 }} />
+              </Pressable>
             </ScrollView>
           </MotiView>
         </AnimatePresence>
@@ -206,9 +215,12 @@ const styles = StyleSheet.create({
     maxHeight: '90%',
   },
   scrollContent: {
-    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 40,
+  },
+  scrollContentWrapper: {
+    alignItems: 'center',
+    width: '100%',
   },
   emojiBar: {
     flexDirection: 'row',

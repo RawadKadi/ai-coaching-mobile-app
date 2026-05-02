@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, StatusBar, Alert, Dimensions, StyleSheet, PanResponder, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -114,9 +115,41 @@ export default function CheckInScreen() {
           hunger_level: hunger,
           mood: mood,
           notes: notes,
-        });
+        }, { onConflict: 'client_id,date' })
+        .select()
+        .single();
 
       if (error) throw error;
+      
+      const checkinData = data;
+
+      // Start AI generation in background (don't await)
+      (async () => {
+        try {
+          const { generateText } = await import('@/lib/google-ai');
+          const prompt = `Act as an elite AI fitness coach. Analyze this daily check-in:
+Weight: ${weight ? weight + 'kg' : 'Not provided'}
+Sleep: ${sleep ? sleep + 'hrs' : 'Not provided'}
+Energy (1-10): ${energy}
+Stress (1-10): ${stress}
+Hunger (1-10): ${hunger}
+Mood: ${mood}
+Notes: ${notes}
+
+Provide exactly 2 short, punchy sentences of encouraging insight or advice based on these metrics. Be direct and premium.`;
+          
+          const analysis = await generateText(prompt);
+          
+          if (analysis && checkinData?.id) {
+            await supabase
+              .from('check_ins')
+              .update({ ai_analysis: analysis.trim() })
+              .eq('id', checkinData.id);
+          }
+        } catch (aiError) {
+          console.error("AI Analysis failed:", aiError);
+        }
+      })();
 
       // Success animation then back
       setCurrentStep('summary');
@@ -143,6 +176,7 @@ export default function CheckInScreen() {
         <Text className="text-blue-500 font-bold text-[10px] mt-1">STEP {['metrics', 'vitals', 'mood', 'summary'].indexOf(currentStep) + 1} OF 4</Text>
       </View>
       <TouchableOpacity 
+        key={`header-check-${currentStep === 'metrics' && !isMetricsValid ? 'disabled' : 'enabled'}`}
         onPress={() => {
           if (currentStep === 'metrics') setCurrentStep('vitals');
           else if (currentStep === 'vitals') setCurrentStep('mood');
@@ -229,6 +263,7 @@ export default function CheckInScreen() {
 
       <View className="flex-1" />
       <TouchableOpacity 
+        key={`continue-btn-${isMetricsValid}`}
         onPress={() => isMetricsValid && setCurrentStep('vitals')}
         disabled={!isMetricsValid}
         className={`${
@@ -427,17 +462,13 @@ export default function CheckInScreen() {
       <View style={{ flex: 1 }} className="bg-slate-950">
         <StatusBar barStyle="light-content" />
         
-        <AnimatePresence>
-          {currentStep !== 'summary' && renderHeader()}
-        </AnimatePresence>
+        {currentStep !== 'summary' && renderHeader()}
 
         <View className="flex-1">
-          <AnimatePresence>
             {currentStep === 'metrics' && renderMetrics()}
             {currentStep === 'vitals' && renderVitals()}
             {currentStep === 'mood' && renderMood()}
             {currentStep === 'summary' && renderSummary()}
-          </AnimatePresence>
         </View>
       </View>
     </TouchableWithoutFeedback>

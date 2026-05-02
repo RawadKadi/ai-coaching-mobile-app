@@ -16,14 +16,14 @@ if (!API_KEY) {
 
 export const genAI = new GoogleGenerativeAI(API_KEY || '');
 
-// Gemini 1.5 Flash model for vision tasks (meal analysis)
 export const visionModel = genAI.getGenerativeModel({
     model: 'gemini-flash-latest',
     generationConfig: {
         temperature: 0.4,  // Lower for more consistent nutritional data
         topK: 32,
         topP: 1,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',
     }
 });
 
@@ -45,15 +45,38 @@ export const isAIAvailable = (): boolean => {
     return !!API_KEY;
 };
 
+import { Platform } from 'react-native';
+
 /**
  * Format file data for Gemini Vision API (React Native compatible)
  */
 export const fileToGenerativePart = async (uri: string, mimeType: string) => {
     try {
-        // Use Expo FileSystem to read the image as base64
-        const base64 = await FileSystem.readAsStringAsync(uri, {
-            encoding: 'base64',
-        });
+        let base64;
+        
+        if (Platform.OS === 'web') {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    if (typeof reader.result === 'string') {
+                        // reader.result is "data:image/jpeg;base64,..."
+                        const base64String = reader.result.split(',')[1];
+                        resolve(base64String);
+                    } else {
+                        reject(new Error('Failed to read file as base64'));
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } else {
+            // Use Expo FileSystem to read the image as base64 natively
+            base64 = await FileSystem.readAsStringAsync(uri, {
+                encoding: 'base64',
+            });
+        }
 
         return {
             inlineData: {

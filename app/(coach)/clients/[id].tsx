@@ -40,7 +40,7 @@ import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { MotiView, AnimatePresence } from 'moti';
 
 export default function ClientDetailsScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, tab } = useLocalSearchParams();
   const router = useRouter();
   const { coach } = useAuth();
   const theme = useTheme();
@@ -52,7 +52,9 @@ export default function ClientDetailsScreen() {
   const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const [challengeFilter, setChallengeFilter] = useState<'active' | 'history'>('active');
+  const [mainTab, setMainTab] = useState<'overview' | 'checkins'>((tab as string) === 'checkins' ? 'checkins' : 'overview');
+  const [checkins, setCheckins] = useState<any[]>([]);
   
   // Conflict Resolution State
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
@@ -96,6 +98,16 @@ export default function ClientDetailsScreen() {
           const pending = sessionsData.filter(s => s.client_id === id && (s.status === 'pending_resolution' || s.status === 'proposed' || (s.invite_sent === true && s.status === 'scheduled' && !s.cancellation_reason) || (s.cancellation_reason?.startsWith('pending_reschedule')) || (s.cancellation_reason === 'reschedule_rejected')));
           setPendingResolutions(pending);
       }
+
+      const { data: checkinsData, error: checkinsError } = await supabase
+        .from('check_ins')
+        .select('*')
+        .eq('client_id', id)
+        .order('date', { ascending: false });
+        
+      if (!checkinsError && checkinsData) {
+        setCheckins(checkinsData);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -125,7 +137,7 @@ export default function ClientDetailsScreen() {
     );
   }
 
-  const filteredChallenges = challenges.filter(c => activeTab === 'active' ? c.status === 'active' : c.status === 'completed');
+  const filteredChallenges = challenges.filter(c => challengeFilter === 'active' ? c.status === 'active' : c.status === 'completed');
 
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
@@ -164,7 +176,25 @@ export default function ClientDetailsScreen() {
                 contentContainerStyle={{ paddingBottom: 120 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
             >
-                {/* Client Information Grid */}
+                {/* Main Tab Navigation */}
+                <View className="px-6 mt-4 flex-row border-b border-white/5">
+                    <TouchableOpacity 
+                        className={`mr-8 pb-4 border-b-2 ${mainTab === 'overview' ? 'border-blue-500' : 'border-transparent'}`}
+                        onPress={() => setMainTab('overview')}
+                    >
+                        <Text className={`text-base font-bold ${mainTab === 'overview' ? 'text-white' : 'text-slate-500'}`}>Overview</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        className={`mr-8 pb-4 border-b-2 ${mainTab === 'checkins' ? 'border-blue-500' : 'border-transparent'}`}
+                        onPress={() => setMainTab('checkins')}
+                    >
+                        <Text className={`text-base font-bold ${mainTab === 'checkins' ? 'text-white' : 'text-slate-500'}`}>Check-ins</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {mainTab === 'overview' ? (
+                  <>
+                    {/* Client Information Grid */}
                 <View className="px-6 py-8">
                     <View className="bg-slate-900/40 rounded-[32px] p-6 border border-white/5">
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-6">Physical Intelligence</Text>
@@ -182,11 +212,11 @@ export default function ClientDetailsScreen() {
                 <View className="px-6">
                     <View className="flex-row justify-between items-center mb-8">
                         <View className="flex-row gap-6">
-                            <TouchableOpacity onPress={() => setActiveTab('active')}>
-                                <Text className={`text-2xl font-black ${activeTab === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
+                            <TouchableOpacity onPress={() => setChallengeFilter('active')}>
+                                <Text className={`text-2xl font-black ${challengeFilter === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setActiveTab('history')}>
-                                <Text className={`text-2xl font-black ${activeTab === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
+                            <TouchableOpacity onPress={() => setChallengeFilter('history')}>
+                                <Text className={`text-2xl font-black ${challengeFilter === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
                             </TouchableOpacity>
                         </View>
                         <View className="flex-row gap-2">
@@ -238,6 +268,57 @@ export default function ClientDetailsScreen() {
                         </View>
                     </View>
                 </View>
+                  </>
+                ) : (
+                  <View className="px-6 py-8">
+                    {checkins.length === 0 ? (
+                        <View className="p-12 items-center justify-center bg-slate-900/20 rounded-[40px] border border-slate-900 border-dashed">
+                             <Target size={32} color="#1E293B" />
+                             <Text className="text-slate-700 font-black text-xs uppercase mt-6">No Check-ins Yet</Text>
+                             <Text className="text-slate-800 text-[10px] mt-2 text-center px-4 leading-4">The client hasn't logged any daily protocols.</Text>
+                        </View>
+                    ) : (
+                        checkins.map((checkin, idx) => (
+                            <MotiView 
+                                key={checkin.id}
+                                from={{ opacity: 0, translateY: 10 }} 
+                                animate={{ opacity: 1, translateY: 0 }} 
+                                transition={{ delay: idx * 50 }}
+                                className="bg-slate-900/40 rounded-[32px] p-6 mb-4 border border-white/5"
+                            >
+                                <View className="flex-row justify-between items-center mb-4">
+                                    <Text className="text-white font-black text-lg">{new Date(checkin.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</Text>
+                                    <View className="bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                                        <Text className="text-emerald-400 text-[10px] font-black uppercase tracking-[2px]">Logged</Text>
+                                    </View>
+                                </View>
+                                
+                                <View className="flex-row flex-wrap gap-y-4 mb-4">
+                                    <View className="w-1/2 flex-row items-center gap-2">
+                                        <Scale size={16} color="#94A3B8" />
+                                        <Text className="text-slate-300 font-bold">{checkin.weight_kg ? `${checkin.weight_kg} kg` : '--'}</Text>
+                                    </View>
+                                    <View className="w-1/2 flex-row items-center gap-2">
+                                        <Clock size={16} color="#94A3B8" />
+                                        <Text className="text-slate-300 font-bold">{checkin.sleep_hours ? `${checkin.sleep_hours} hrs` : '--'}</Text>
+                                    </View>
+                                    <View className="w-1/2 flex-row items-center gap-2">
+                                        <Zap size={16} color="#94A3B8" />
+                                        <Text className="text-slate-300 font-bold">Energy: {checkin.energy_level ? `${checkin.energy_level}/10` : '--'}</Text>
+                                    </View>
+                                </View>
+
+                                {checkin.notes && (
+                                    <View className="mt-2 p-4 bg-slate-950/50 rounded-2xl border border-white/5">
+                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Notes</Text>
+                                        <Text className="text-slate-300 text-sm leading-5">{checkin.notes}</Text>
+                                    </View>
+                                )}
+                            </MotiView>
+                        ))
+                    )}
+                  </View>
+                )}
             </ScrollView>
         </View>
       </SafeAreaView>

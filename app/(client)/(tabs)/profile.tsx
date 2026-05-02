@@ -150,7 +150,11 @@ export default function ProfileScreen() {
             {/* Menu Sections */}
             <View className="pb-12">
                 <SectionLabel label="Account" />
-                <ProfileMenuItem icon={<User size={18} color="#3B82F6" />} label="Personal Information" />
+                <ProfileMenuItem 
+                  icon={<User size={18} color="#3B82F6" />} 
+                  label="Personal Information" 
+                  onPress={() => router.push('/(client)/personal-information')}
+                />
                 <ProfileMenuItem icon={<Shield size={18} color="#3B82F6" />} label="Security" />
                 
                 <SectionLabel label="Preferences" />
@@ -159,6 +163,20 @@ export default function ProfileScreen() {
 
                 <SectionLabel label="Billing" />
                 <ProfileMenuItem icon={<CreditCard size={18} color="#F59E0B" />} label="Payments" />
+
+                <SectionLabel label="Developer" />
+                <ProfileMenuItem 
+                  icon={<Shield size={18} color="#F87171" />} 
+                  label="Reset Today's Check-in" 
+                  onPress={async () => {
+                    const { error } = await supabase.rpc('reset_today_checkin');
+                    if (error) {
+                      Alert.alert('Error', error.message);
+                    } else {
+                      Alert.alert('Success', 'Today\'s check-in has been cleared. You can now re-check in from the dashboard.');
+                    }
+                  }} 
+                />
 
                 {/* Logout */}
                 <TouchableOpacity 

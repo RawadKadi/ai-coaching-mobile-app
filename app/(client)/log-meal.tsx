@@ -71,14 +71,14 @@ export default function LogMealScreen() {
     try {
       const result = await analyzeMealImage(imageUri, 'lebanese');
       setAnalysisResult(result);
-      setIngredients(result.ingredients.map(ing => ({
+      setIngredients((result.ingredients || []).map(ing => ({
         id: Math.random().toString(),
         meal_id: '',
-        ingredient_name: ing.name,
-        quantity: ing.quantity,
-        unit: ing.unit,
+        ingredient_name: ing.name || 'Unknown',
+        quantity: ing.quantity || 0,
+        unit: ing.unit || 'g',
         ai_detected: true,
-        confidence: ing.confidence,
+        confidence: ing.confidence || 0,
         created_at: new Date().toISOString(),
       })));
       if (result.needsMoreInfo) { setCurrentStep('needs_info'); setShowInfoModal(true); } 
@@ -232,12 +232,11 @@ export default function LogMealScreen() {
                 {/* Robust Scanning Line Animation */}
                 <MotiView 
                     from={{ translateY: 0 }}
-                    animate={{ translateY: 260 }}
+                    animate={{ translateY: 280 }}
                     transition={{ 
-                        loop: true, 
-                        duration: 1500, 
                         type: 'timing',
-                        repeatReverse: true 
+                        duration: 1500,
+                        loop: true
                     }}
                     className="absolute w-full h-[4px] bg-blue-500 shadow-xl shadow-blue-400"
                     style={{
@@ -271,8 +270,8 @@ export default function LogMealScreen() {
 
   if (currentStep === 'review' && analysisResult) {
     return (
-      <View className="flex-1 bg-slate-950">
-        <SafeAreaView className="flex-1">
+      <View style={{ flex: 1, backgroundColor: '#020617' }}>
+        <SafeAreaView style={{ flex: 1 }}>
             <View className="flex-row justify-between items-center px-6 py-4">
                 <TouchableOpacity onPress={() => { setCapturedImage(null); setCurrentStep('camera'); }} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center">
                     <ChevronLeft size={20} color="white" />
@@ -281,74 +280,77 @@ export default function LogMealScreen() {
                 <View className="w-10" />
             </View>
 
-            <ScrollView 
-                className="flex-1" 
-                contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-                showsVerticalScrollIndicator={false}
-            >
-                <View className="w-full h-56 rounded-[32px] overflow-hidden mb-6 border border-slate-900 bg-slate-900 shadow-lg">
-                    <Image 
-                        key={capturedImage}
-                        source={{ uri: capturedImage! }} 
-                        className="w-full h-full" 
-                        contentFit="cover"
-                        transition={200}
-                    />
-                </View>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                <ScrollView 
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100, flexGrow: 1 }}
+                    showsVerticalScrollIndicator={true}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View className="w-full h-56 rounded-[32px] overflow-hidden mb-6 border border-slate-900 bg-slate-900 shadow-lg">
+                        <Image 
+                            key={capturedImage}
+                            source={{ uri: capturedImage! }} 
+                            className="w-full h-full" 
+                            contentFit="cover"
+                            transition={200}
+                        />
+                    </View>
 
-                <View className="mb-8">
-                    <Text className="text-white text-3xl font-black">{analysisResult.mealName}</Text>
-                    <Text className="text-slate-500 font-bold mt-2 text-lg leading-6">{analysisResult.description}</Text>
-                </View>
+                    <View className="mb-8">
+                        <Text className="text-white text-3xl font-black">{analysisResult.mealName || 'Unknown Protocol'}</Text>
+                        <Text className="text-slate-500 font-bold mt-2 text-lg leading-6">{analysisResult.description || 'Analysis completed with limited data.'}</Text>
+                    </View>
 
-                <View className="flex-row items-center gap-3 mb-6">
-                    <View className="w-1.5 h-6 bg-blue-600 rounded-full" />
-                    <Text className="text-white text-xl font-black">Composition</Text>
-                    <TouchableOpacity onPress={() => setIngredients([...ingredients, { id: Math.random().toString(), meal_id: '', ingredient_name: '', quantity: 0, unit: 'g', ai_detected: false, created_at: '' }])} className="ml-auto bg-slate-900/80 px-4 py-2 rounded-2xl border border-slate-800">
-                        <Text className="text-blue-500 font-bold text-xs">+ Manual Entry</Text>
-                    </TouchableOpacity>
-                </View>
+                    <View className="flex-row items-center gap-3 mb-6">
+                        <View className="w-1.5 h-6 bg-blue-600 rounded-full" />
+                        <Text className="text-white text-xl font-black">Composition</Text>
+                        <TouchableOpacity onPress={() => setIngredients([...ingredients, { id: Math.random().toString(), meal_id: '', ingredient_name: '', quantity: 0, unit: 'g', ai_detected: false, created_at: '' }])} className="ml-auto bg-slate-900/80 px-4 py-2 rounded-2xl border border-slate-800">
+                            <Text className="text-blue-500 font-bold text-xs">+ Manual Entry</Text>
+                        </TouchableOpacity>
+                    </View>
 
-                <View style={{ gap: 12 }}>
-                    {ingredients.map((ing, i) => (
-                        <MotiView key={ing.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: i * 50 }}>
-                            <View className="flex-row items-center bg-slate-900/40 border border-slate-900 rounded-2xl p-4">
-                                <View className="flex-1">
-                                    <TextInput 
-                                        className="text-white font-bold text-base"
-                                        value={ing.ingredient_name}
-                                        onChangeText={t => setIngredients(prev => prev.map(m => m.id === ing.id ? { ...m, ingredient_name: t } : m))}
-                                        placeholder="Add ingredient..."
-                                        placeholderTextColor="#475569"
-                                    />
-                                    <View className="flex-row items-center mt-1">
-                                        <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">{ing.ai_detected ? 'AI Detected' : 'Manual'}</Text>
+                    <View style={{ gap: 12 }}>
+                        {ingredients.map((ing, i) => (
+                            <MotiView key={ing.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: i * 50 }}>
+                                <View className="flex-row items-center bg-slate-900/40 border border-slate-900 rounded-2xl p-4">
+                                    <View className="flex-1">
+                                        <TextInput 
+                                            className="text-white font-bold text-base"
+                                            value={ing.ingredient_name || ''}
+                                            onChangeText={t => setIngredients(prev => prev.map(m => m.id === ing.id ? { ...m, ingredient_name: t } : m))}
+                                            placeholder="Add ingredient..."
+                                            placeholderTextColor="#475569"
+                                        />
+                                        <View className="flex-row items-center mt-1">
+                                            <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">{ing.ai_detected ? 'AI Detected' : 'Manual'}</Text>
+                                        </View>
+                                    </View>
+                                    <View className="flex-row items-center gap-2">
+                                        <TextInput 
+                                            className="bg-slate-950 px-3 py-2 rounded-xl text-blue-500 font-black w-[100px] text-center"
+                                            value={(ing.quantity ?? 0).toString()}
+                                            onChangeText={t => setIngredients(prev => prev.map(m => m.id === ing.id ? { ...m, quantity: parseFloat(t) || 0 } : m))}
+                                            keyboardType="numeric"
+                                        />
+                                        <TouchableOpacity onPress={() => setIngredients(prev => prev.filter(m => m.id !== ing.id))}>
+                                            <Minus size={20} color="#EF4444" />
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
-                                <View className="flex-row items-center gap-2">
-                                    <TextInput 
-                                        className="bg-slate-950 px-3 py-2 rounded-xl text-blue-500 font-black min-w-[60px] text-center"
-                                        value={ing.quantity.toString()}
-                                        onChangeText={t => setIngredients(prev => prev.map(m => m.id === ing.id ? { ...m, quantity: parseFloat(t) || 0 } : m))}
-                                        keyboardType="numeric"
-                                    />
-                                    <TouchableOpacity onPress={() => setIngredients(prev => prev.filter(m => m.id !== ing.id))}>
-                                        <Minus size={20} color="#EF4444" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </MotiView>
-                    ))}
-                </View>
+                            </MotiView>
+                        ))}
+                    </View>
 
-                <TouchableOpacity 
-                    onPress={() => setCurrentStep('nutrition')}
-                    className="mt-12 mb-8 p-6 bg-blue-600 rounded-[32px] items-center flex-row justify-center shadow-xl shadow-blue-500/20"
-                >
-                    <Zap size={20} color="white" className="mr-3" />
-                    <Text className="text-white font-black text-lg">Synthesize Nutrition</Text>
-                </TouchableOpacity>
-            </ScrollView>
+                    <TouchableOpacity 
+                        onPress={() => setCurrentStep('nutrition')}
+                        className="mt-12 mb-8 p-6 bg-blue-600 rounded-[32px] items-center flex-row justify-center shadow-xl shadow-blue-500/20"
+                    >
+                        <Zap size={20} color="white" className="mr-3" />
+                        <Text className="text-white font-black text-lg">Synthesize Nutrition</Text>
+                    </TouchableOpacity>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
       </View>
     );
@@ -356,8 +358,8 @@ export default function LogMealScreen() {
 
   if (currentStep === 'nutrition' && analysisResult) {
       return (
-          <View className="flex-1 bg-slate-950">
-              <SafeAreaView className="flex-1">
+          <View style={{ flex: 1, backgroundColor: '#020617' }}>
+              <SafeAreaView style={{ flex: 1 }}>
                   <View className="flex-row justify-between items-center px-6 py-4">
                       <TouchableOpacity onPress={() => setCurrentStep('review')} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center">
                           <ChevronLeft size={20} color="white" />
@@ -366,53 +368,61 @@ export default function LogMealScreen() {
                       <View className="w-10" />
                   </View>
 
-                  <ScrollView className="flex-1 px-6">
-                      <View className="w-full aspect-video rounded-[32px] overflow-hidden mb-8 border border-slate-900">
-                          <Image 
-                            source={{ uri: capturedImage! }} 
-                            className="w-full h-full" 
-                            contentFit="cover"
-                            transition={200}
-                            cachePolicy="disk"
-                          />
-                      </View>
-
-                      {/* Power Cards */}
-                      <View className="flex-row flex-wrap gap-4 justify-between mb-10">
-                          <MacroCard label="Calories" value={analysisResult.calories} color="#3B82F6" />
-                          <MacroCard label="Protein" value={`${analysisResult.protein_g}g`} color="#E11D48" />
-                          <MacroCard label="Carbs" value={`${analysisResult.carbs_g}g`} color="#10B981" />
-                          <MacroCard label="Fat" value={`${analysisResult.fat_g}g`} color="#F59E0B" />
-                      </View>
-
-                      <View className="bg-slate-900/30 border border-slate-900 rounded-[32px] p-8 mb-12">
-                          <Text className="text-white font-black mb-6 uppercase tracking-widest text-xs">Micronutrient Breakdown</Text>
-                          <MicroRow label="Fiber" value={`${analysisResult.fiber_g}g`} />
-                          <MicroRow label="Sugar" value={`${analysisResult.sugar_g}g`} />
-                          <MicroRow label="Sodium" value={`${analysisResult.sodium_mg}mg`} />
-                      </View>
-
-                      <TouchableOpacity 
-                        onPress={() => saveMeal(true)}
-                        disabled={saving}
-                        className="p-6 bg-blue-600 rounded-[32px] items-center flex-row justify-center shadow-xl shadow-blue-500/20 mb-3"
+                  <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                      <ScrollView 
+                          key="nutrition-scroll"
+                          style={{ flex: 1 }} 
+                          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100, flexGrow: 1 }}
+                          showsVerticalScrollIndicator={true}
+                          keyboardShouldPersistTaps="handled"
                       >
-                          {saving ? <ActivityIndicator color="white" /> : (
-                              <>
-                                <Send size={20} color="white" className="mr-3" />
-                                <Text className="text-white font-black text-lg">Transmit to Coach</Text>
-                              </>
-                          )}
-                      </TouchableOpacity>
+                          <View className="w-full aspect-video rounded-[32px] overflow-hidden mb-8 border border-slate-900 mt-2">
+                              <Image 
+                                source={{ uri: capturedImage! }} 
+                                className="w-full h-full" 
+                                contentFit="cover"
+                                transition={200}
+                                cachePolicy="disk"
+                              />
+                          </View>
 
-                      <TouchableOpacity 
-                        onPress={() => saveMeal(false)}
-                        disabled={saving}
-                        className="p-6 bg-slate-900 rounded-[32px] items-center mb-12 border border-slate-800"
-                      >
-                          <Text className="text-white font-black text-lg">Save Stealthily</Text>
-                      </TouchableOpacity>
-                  </ScrollView>
+                          {/* Power Cards */}
+                          <View className="flex-row flex-wrap gap-4 justify-between mb-10">
+                              <MacroCard label="Calories" value={analysisResult.calories || 0} color="#3B82F6" />
+                              <MacroCard label="Protein" value={`${analysisResult.protein_g || 0}g`} color="#E11D48" />
+                              <MacroCard label="Carbs" value={`${analysisResult.carbs_g || 0}g`} color="#10B981" />
+                              <MacroCard label="Fat" value={`${analysisResult.fat_g || 0}g`} color="#F59E0B" />
+                          </View>
+
+                          <View className="bg-slate-900/30 border border-slate-900 rounded-[32px] p-8 mb-12">
+                              <Text className="text-white font-black mb-6 uppercase tracking-widest text-xs">Micronutrient Breakdown</Text>
+                              <MicroRow label="Fiber" value={`${analysisResult.fiber_g || 0}g`} />
+                              <MicroRow label="Sugar" value={`${analysisResult.sugar_g || 0}g`} />
+                              <MicroRow label="Sodium" value={`${analysisResult.sodium_mg || 0}mg`} />
+                          </View>
+
+                          <TouchableOpacity 
+                            onPress={() => saveMeal(true)}
+                            disabled={saving}
+                            className="p-6 bg-blue-600 rounded-[32px] items-center flex-row justify-center shadow-xl shadow-blue-500/20 mb-3"
+                          >
+                              {saving ? <ActivityIndicator color="white" /> : (
+                                  <>
+                                    <Send size={20} color="white" className="mr-3" />
+                                    <Text className="text-white font-black text-lg">Transmit to Coach</Text>
+                                  </>
+                              )}
+                          </TouchableOpacity>
+
+                          <TouchableOpacity 
+                            onPress={() => saveMeal(false)}
+                            disabled={saving}
+                            className="p-6 bg-slate-900 rounded-[32px] items-center mb-12 border border-slate-800"
+                          >
+                              <Text className="text-white font-black text-lg">Save Stealthily</Text>
+                          </TouchableOpacity>
+                      </ScrollView>
+                  </KeyboardAvoidingView>
               </SafeAreaView>
           </View>
       );

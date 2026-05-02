@@ -10,9 +10,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ClientWithProfile {
   id: string;
+  status?: string;
   goal?: string;
   experience_level?: string;
   profiles: { full_name: string; avatar_url?: string | null };
+  checkedInToday?: boolean;
 }
 
 export default function ClientsScreen() {
@@ -42,17 +44,33 @@ export default function ClientsScreen() {
       setLoading(true);
       const { data, error } = await supabase.rpc('get_my_clients');
       if (error) throw error;
-      setClients(data?.map((item: any) => ({
+      
+      // Fetch today's checkins to show indicator
+      const today = new Date().toISOString().split('T')[0];
+      const { data: checkinsData } = await supabase
+        .from('check_ins')
+        .select('client_id')
+        .eq('date', today);
+        
+      const checkedInClientIds = new Set(checkinsData?.map(c => c.client_id) || []);
+
+      const mappedClients = data?.map((item: any) => ({
         id: item.client_id,
+        status: item.status?.toLowerCase().trim(),
         goal: item.client_goal,
         experience_level: item.client_experience,
-        profiles: { full_name: item.client_name, avatar_url: item.client_avatar }
-      })) || []);
+        profiles: { full_name: item.client_name, avatar_url: item.client_avatar },
+        checkedInToday: checkedInClientIds.has(item.client_id)
+      })) || [];
+      
+      setClients(mappedClients);
     } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
   };
 
   const onRefresh = () => { setRefreshing(true); loadClients(); };
   const filtered = clients.filter(c => c.profiles?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()));
+  const activeCount = clients.filter(c => c.status === 'active').length;
+  const pendingCount = clients.filter(c => c.status === 'pending').length;
 
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
@@ -64,8 +82,14 @@ export default function ClientsScreen() {
               <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[4px] mb-2">Network</Text>
               <View className="flex-row items-center gap-4">
                 <Text className="text-white text-4xl font-black tracking-tighter">Clients</Text>
-                <View className="bg-blue-600/10 border border-blue-600/20 px-3 py-1 rounded-full">
-                  <Text className="text-blue-500 font-black text-[10px]">{clients.length} Active</Text>
+                <View className="bg-blue-600/10 border border-blue-600/20 px-3 py-1 rounded-full flex-row items-center gap-2">
+                  <Text className="text-blue-500 font-black text-[10px]">{activeCount} Active</Text>
+                  {pendingCount > 0 && (
+                    <>
+                      <View className="w-1 h-1 rounded-full bg-blue-500/30" />
+                      <Text className="text-slate-500 font-black text-[10px]">{pendingCount} Pending</Text>
+                    </>
+                  )}
                 </View>
               </View>
             </View>
@@ -122,13 +146,26 @@ export default function ClientsScreen() {
                         <View className="flex-row items-center gap-5 flex-1">
                           <View className="relative">
                             <BrandedAvatar size={60} name={client.profiles?.full_name} imageUrl={client.profiles?.avatar_url} useBrandColor={true} />
-                            <View className="absolute bottom-0 right-0 w-4.5 h-4.5 bg-emerald-500 rounded-full border-[3px] border-slate-900" />
+                            <View className={`absolute bottom-0 right-0 w-4.5 h-4.5 rounded-full border-[3px] border-slate-900 ${client.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                           </View>
                           <View className="flex-1">
-                            <Text className="text-white font-black text-lg tracking-tight">{client.profiles?.full_name}</Text>
+                            <View className="flex-row items-center gap-2">
+                                <Text className="text-white font-black text-lg tracking-tight">{client.profiles?.full_name}</Text>
+                                {client.status === 'pending' && (
+                                    <View className="bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                                        <Text className="text-amber-500 font-black text-[8px] uppercase">Pending</Text>
+                                    </View>
+                                )}
+                            </View>
                             <Text className="text-slate-600 text-[10px] font-black uppercase tracking-[2px] mt-1" numberOfLines={1}>
                               {client.goal || 'Elite Performance'} • {client.experience_level || 'Pro'}
                             </Text>
+                            {client.checkedInToday && (
+                                <View className="flex-row items-center gap-1 mt-2">
+                                    <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    <Text className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Checked In</Text>
+                                </View>
+                            )}
                           </View>
                         </View>
                         <ChevronRight size={18} color="#334155" />

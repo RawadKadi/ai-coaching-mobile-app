@@ -66,13 +66,13 @@ export const analyzeMealImage = async (
         // Craft dietitian-level prompt
         const prompt = buildDietitianPrompt(cuisinePreference, additionalContext);
 
-        // Generate analysis
-        const result = await callWithRetry(() => visionModel.generateContent([prompt, imagePart]));
-        const response = await result.response;
-        const text = response.text();
-
-        // Parse JSON response
-        const analysisData = parseAIResponse(text);
+        // Generate analysis and parse JSON within the retry wrapper
+        const analysisData = await callWithRetry(async () => {
+            const result = await visionModel.generateContent([prompt, imagePart]);
+            const response = await result.response;
+            const text = response.text();
+            return parseAIResponse(text);
+        });
 
         return analysisData;
     } catch (error: any) {
@@ -289,12 +289,15 @@ const callWithRetry = async <T>(
     try {
         return await fn();
     } catch (error: any) {
-        if (retries > 0 && (
-            error.message?.includes('429') ||
+        const isRetryable = error.message?.includes('429') ||
             error.message?.includes('Resource exhausted') ||
-            error.message?.includes('503')
-        )) {
-            console.warn(`Rate limit hit. Retrying in ${backoff}ms... (${retries} retries left)`);
+            error.message?.includes('503') ||
+            error.message?.includes('JSON') ||
+            error.message?.includes('parse') ||
+            error.message?.includes('Failed to parse');
+            
+        if (retries > 0 && isRetryable) {
+            console.warn(`Retryable error hit (${error.message}). Retrying in ${backoff}ms... (${retries} retries left)`);
             await new Promise(resolve => setTimeout(resolve, backoff));
             return callWithRetry(fn, retries - 1, backoff * 2);
         }

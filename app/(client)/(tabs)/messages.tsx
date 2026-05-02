@@ -567,8 +567,17 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
               <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
               <Text className="text-white/80 text-xs" numberOfLines={1}>
                 {(() => {
-                  try { const p = JSON.parse(repliedMsg.content); return p.text || repliedMsg.content; } 
-                  catch { return repliedMsg.content; }
+                  try { 
+                    const p = JSON.parse(repliedMsg.content); 
+                    if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
+                    if (p.type === 'challenge_completed') return '🏆 Protocol Achieved: ' + (p.taskName || '');
+                    if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
+                    if (p.type === 'image') return '🖼 Photo';
+                    if (p.type === 'video') return '🎥 Video';
+                    if (p.type === 'gif') return '🎞 GIF';
+                    if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                    return p.text || repliedMsg.content; 
+                  } catch { return repliedMsg.content; }
                 })()}
               </Text>
            </TouchableOpacity>

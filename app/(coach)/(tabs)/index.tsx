@@ -41,6 +41,22 @@ export default function CoachDashboard() {
   useEffect(() => {
     if (coach) {
       loadDashboardData();
+      
+      // Subscribe to real-time check-in updates
+      const checkinSubscription = supabase.channel('coach_dashboard_checkins')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'check_ins' },
+          () => {
+            // Reload dashboard data when any check-in changes
+            loadDashboardData();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        checkinSubscription.unsubscribe();
+      };
     } else {
       setLoading(false);
     }
@@ -55,8 +71,13 @@ export default function CoachDashboard() {
       ]);
 
       if (statsResult.data) {
+        // Handle both object and array response (Supabase returns array for RETURNS TABLE)
+        const statsData = Array.isArray(statsResult.data) ? statsResult.data[0] : statsResult.data;
+        
         setStats({
-          ...statsResult.data,
+          totalClients: statsData?.totalClients || 0,
+          activeClients: statsData?.activeClients || 0,
+          pendingCheckIns: statsData?.pendingCheckIns || 0,
           unreadMessages: unreadCount,
         });
       }
@@ -139,8 +160,16 @@ export default function CoachDashboard() {
                         <Text className="text-white text-4xl font-black tracking-tighter">{stats.activeClients}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Now</Text>
                         <View className="w-full h-1.5 bg-slate-800 rounded-full mt-4 overflow-hidden">
-                            <View className="bg-purple-500 h-full rounded-full" style={{ width: '87%' }} />
+                            <View 
+                              className="bg-purple-500 h-full rounded-full" 
+                              style={{ width: `${stats.totalClients > 0 ? (stats.activeClients / stats.totalClients) * 100 : 0}%` }} 
+                            />
                         </View>
+                        {stats.totalClients > stats.activeClients && (
+                            <Text className="text-slate-600 text-[9px] font-bold mt-2">
+                                {stats.totalClients - stats.activeClients} Pending Approval
+                            </Text>
+                        )}
                     </View>
                 </View>
             </View>
@@ -227,7 +256,7 @@ export default function CoachDashboard() {
                   {recentCheckins.map((item) => (
                     <TouchableOpacity 
                       key={item.checkin_id}
-                      onPress={() => router.push(`/(coach)/chat/${item.client_id}`)}
+                      onPress={() => router.push(`/(coach)/clients/${item.client_id}?tab=checkins`)}
                       className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 flex-row items-center"
                     >
                       <BrandedAvatar name={item.client_name} imageUrl={item.client_avatar} size={48} />

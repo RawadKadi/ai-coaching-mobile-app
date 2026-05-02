@@ -39,8 +39,14 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
       mediaType = 'gif';
     } else if (content.type === 'document') {
       snippet = '📄 ' + (content.fileName || 'Document');
+    } else if (content.type === 'task_completion') {
+      snippet = '✅ Task Completed: ' + (content.taskName || '');
+    } else if (content.type === 'challenge_completed') {
+      snippet = '🏆 Protocol Achieved: ' + (content.taskName || '');
+    } else if (content.type === 'meal' || content.type === 'meal_log') {
+      snippet = '🍽️ Meal Log';
     } else {
-      snippet = message.content;
+      snippet = content.text || message.content;
     }
   } catch (e) {
     snippet = message.content;

@@ -8,7 +8,7 @@ export const MotiImage = ({ children, style, className, source }) => <Image sour
 export const MotiSafeAreaView = ({ children, style, className }) => <SafeAreaView style={style} className={className}>{children}</SafeAreaView>;
 export const MotiFlatList = (props) => <FlatList {...props} />;
 export const MotiSectionList = (props) => <SectionList {...props} />;
-export const AnimatePresence = ({ children }) => <>{children}</>;
+export const AnimatePresence = ({ children }) => children || null;
 
 export function useAnimationState() { return { current: 'from', transitionTo: () => { } }; }
 export function useDynamicAnimation() { return { animateTo: () => { }, state: {} }; }

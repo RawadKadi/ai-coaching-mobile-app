@@ -31,6 +31,7 @@ export default function ClientLayout() {
         <Stack.Screen name="check-in" />
         <Stack.Screen name="log-meal" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="onboarding" />
+        <Stack.Screen name="personal-information" />
       </Stack>
       
       {(loading || !session || profile?.role !== 'client') && (
