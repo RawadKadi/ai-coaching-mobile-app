@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, TextInput } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Sparkles, Calendar, ChevronRight, Zap, Target as FocusIcon, Flame, ShieldCheck, Check, Search } from 'lucide-react-native';
 import { generateWeeklyChallenges } from '@/lib/ai-challenge-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { BrandedCalendar } from '@/components/BrandedCalendar';
+import { BrandedDurationPicker } from '@/components/BrandedDurationPicker';
 import { ChallengeFocusType } from '@/types/database';
 
 interface Client {
@@ -31,6 +34,8 @@ export default function AISuggestChallengeScreen() {
   const [focusType, setFocusType] = useState<ChallengeFocusType>('training');
   const [intensity, setIntensity] = useState<'low' | 'medium' | 'high'>('medium');
   const [durationDays, setDurationDays] = useState(7);
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'later'>('now');
+  const [customStartDate, setCustomStartDate] = useState(new Date());
 
   useEffect(() => {
     if (coach) {
@@ -66,7 +71,7 @@ export default function AISuggestChallengeScreen() {
     if (!selectedClient) return;
     try {
       setGenerating(true);
-      const startDate = getNextMonday();
+      const startDate = scheduleMode === 'now' ? new Date() : customStartDate;
       
       const challenges = await generateWeeklyChallenges(
         selectedClient.id, 
@@ -102,7 +107,7 @@ export default function AISuggestChallengeScreen() {
 
   const renderStepIndicator = () => (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, marginTop: 8, paddingHorizontal: 24 }}>
-      {[1, 2, 3].map((s) => (
+      {[1, 2, 3, 4].map((s) => (
         <View key={s} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
           <View 
             style={{
@@ -122,7 +127,7 @@ export default function AISuggestChallengeScreen() {
               <Text style={{ fontWeight: 'bold', fontSize: 12, color: step >= s ? 'white' : '#475569' }}>{s}</Text>
             )}
           </View>
-          {s < 3 && (
+          {s < 4 && (
             <View style={{ flex: 1, height: 2, marginHorizontal: 8, backgroundColor: step > s ? '#2563EB' : '#1E293B' }} />
           )}
         </View>
@@ -144,7 +149,7 @@ export default function AISuggestChallengeScreen() {
             </TouchableOpacity>
             <View>
             <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>AI Help</Text>
-              <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }}>Step {step} of 3</Text>
+              <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }}>Step {step} of 4</Text>
             </View>
           </View>
           <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.2)' }}>
@@ -295,6 +300,55 @@ export default function AISuggestChallengeScreen() {
 
             {step === 3 && (
               <View>
+                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Timeline</Text>
+                <Text style={{ color: '#64748B', marginBottom: 32 }}>How long and when should this challenge run?</Text>
+
+                <View className="mb-10">
+                  <BrandedDurationPicker 
+                    value={durationDays}
+                    onSelect={setDurationDays}
+                    label="Challenge Duration"
+                  />
+                </View>
+
+                <View className="mb-10">
+                  <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, marginLeft: 4 }}>Execution Start</Text>
+                  <View className="flex-row gap-4">
+                    <TouchableOpacity 
+                      onPress={() => setScheduleMode('now')}
+                      activeOpacity={0.8}
+                      className={`flex-1 h-24 rounded-[32px] border items-center justify-center ${scheduleMode === 'now' ? 'bg-blue-600 border-blue-400' : 'bg-slate-900 border-white/5'}`}
+                    >
+                      <Zap size={24} color={scheduleMode === 'now' ? 'white' : '#475569'} />
+                      <Text className={`font-black text-xs uppercase mt-2 tracking-widest ${scheduleMode === 'now' ? 'text-white' : 'text-slate-500'}`}>Launch Now</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => setScheduleMode('later')}
+                      activeOpacity={0.8}
+                      className={`flex-1 h-24 rounded-[32px] border items-center justify-center ${scheduleMode === 'later' ? 'bg-blue-600 border-blue-400' : 'bg-slate-900 border-white/5'}`}
+                    >
+                      <Calendar size={24} color={scheduleMode === 'later' ? 'white' : '#475569'} />
+                      <Text className={`font-black text-xs uppercase mt-2 tracking-widest ${scheduleMode === 'later' ? 'text-white' : 'text-slate-500'}`}>Set Date</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {scheduleMode === 'later' && (
+                  <MotiView 
+                    from={{ opacity: 0, translateY: 10 }}
+                    animate={{ opacity: 1, translateY: 0 }}
+                  >
+                    <BrandedCalendar 
+                      selectedDate={customStartDate}
+                      onSelect={setCustomStartDate}
+                    />
+                  </MotiView>
+                )}
+              </View>
+            )}
+
+            {step === 4 && (
+              <View>
                 <View style={{ padding: 32, borderRadius: 32, backgroundColor: 'rgba(37, 99, 235, 0.05)', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.2)', alignItems: 'center' }}>
                     <View style={{ width: 64, height: 64, backgroundColor: '#2563EB', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
                         <Zap size={32} color="white" />
@@ -313,11 +367,11 @@ export default function AISuggestChallengeScreen() {
                             </View>
                             <View>
                                 <Text style={{ color: '#475569', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }}>Schedule</Text>
-                                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Next Monday Start</Text>
+                                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>{scheduleMode === 'now' ? 'Immediate Start' : 'Custom Launch'}</Text>
                             </View>
                         </View>
                         <Text style={{ color: '#60A5FA', fontWeight: '900', fontSize: 13 }}>
-                            {getNextMonday().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {scheduleMode === 'now' ? 'Today' : customStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </Text>
                     </View>
 
@@ -339,7 +393,7 @@ export default function AISuggestChallengeScreen() {
         <View style={{ paddingHorizontal: 24, paddingVertical: 24, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: '#0F172A' }}>
             <TouchableOpacity 
               onPress={() => {
-                if (step < 3) setStep(step + 1);
+                if (step < 4) setStep(step + 1);
                 else handleGenerate();
               }}
               disabled={(step === 1 && !selectedClient) || generating}
@@ -357,7 +411,7 @@ export default function AISuggestChallengeScreen() {
                     <ActivityIndicator color="white" />
                 ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      {step === 3 ? (
+                      {step === 4 ? (
                         <>
                            <Sparkles size={20} color="white" style={{ marginRight: 10 }} />
                            <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Generate Strategy</Text>
@@ -377,14 +431,4 @@ export default function AISuggestChallengeScreen() {
       </SafeAreaView>
     </View>
   );
-}
-
-function getNextMonday(): Date {
-  const today = new Date();
-  const day = today.getDay();
-  const daysUntilMonday = day === 0 ? 1 : (8 - day) % 7 || 7;
-  const nextMonday = new Date(today);
-  nextMonday.setDate(today.getDate() + daysUntilMonday);
-  nextMonday.setHours(0, 0, 0, 0);
-  return nextMonday;
 }

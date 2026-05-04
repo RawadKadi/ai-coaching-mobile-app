@@ -82,7 +82,7 @@ export default function ChallengeDetailScreen() {
         </TouchableOpacity>
         <View className="flex-1">
            <Text className="text-white text-xl font-bold" numberOfLines={1}>{challenge.name}</Text>
-           <Text className="text-slate-500 text-xs font-medium">Tracking {challenge.client_name.split(' ')[0]}'s progress</Text>
+           <Text className="text-slate-500 text-xs font-medium">Tracking {(challenge.client_name || 'Client').split(' ')[0]}'s progress</Text>
         </View>
         <TouchableOpacity onPress={handleCancel} className="p-2 bg-red-500/10 rounded-full border border-red-500/20">
           <X size={20} color="#EF4444" />
@@ -131,7 +131,7 @@ export default function ChallengeDetailScreen() {
         <View className="mt-10 px-6">
            <Text className="text-white text-lg font-bold mb-6">Daily Breakdown</Text>
            {challenge.sub_challenges?.map((task: any, index: number) => (
-             <TaskCard key={task.id} task={task} index={index} />
+             <TaskCard key={task.id} task={task} index={index} challengeId={id as string} router={router} />
            ))}
         </View>
       </ScrollView>
@@ -139,7 +139,7 @@ export default function ChallengeDetailScreen() {
   );
 }
 
-const TaskCard = ({ task, index }: { task: any, index: number }) => {
+const TaskCard = ({ task, index, challengeId, router }: { task: any, index: number, challengeId: string, router: any }) => {
   const getIcon = (type: string) => {
     switch (type?.toLowerCase()) {
       case 'training': return <Dumbbell size={24} color="#3B82F6" />;
@@ -192,7 +192,10 @@ const TaskCard = ({ task, index }: { task: any, index: number }) => {
                 {new Date(task.assigned_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
               </Text>
            </View>
-           <TouchableOpacity className="flex-row items-center gap-1">
+           <TouchableOpacity 
+             onPress={() => router.push(`/(coach)/challenges/edit/${challengeId}`)}
+             className="flex-row items-center gap-1"
+           >
               <Text className="text-blue-500 text-xs font-bold">Edit Plan</Text>
               <ChevronRight size={14} color="#3B82F6" />
            </TouchableOpacity>

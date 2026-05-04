@@ -49,35 +49,43 @@ export default function AIProtocolSuggestScreen() {
 
   const handleGenerate = async () => {
     if (!clientInfo) return;
-    try {
-      setGenerating(true);
-      
-      const habits = await generateDailyProtocol(
-        clientInfo.id, 
-        clientInfo.full_name, 
-        { focusType, intensity }
-      );
-
-      if (!habits || habits.length === 0) {
-        Alert.alert('AI Busy', 'The AI is thinking. Please try again in a few seconds.');
-        return;
+    
+    router.push({
+      pathname: '/(coach)/clients/ai-protocol-loading',
+      params: {
+        clientId: clientInfo.id,
+        clientName: clientInfo.full_name,
+        focusType,
+        intensity
       }
+    });
+  };
 
-      router.push({
-        pathname: '/(coach)/clients/ai-protocol-review',
-        params: {
-          clientId: clientInfo.id,
-          clientName: clientInfo.full_name,
-          suggestions: JSON.stringify(habits),
-          focusType,
-          intensity
-        }
-      });
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'AI failed to generate tasks');
-    } finally {
-      setGenerating(false);
-    }
+  const getExamples = () => {
+    const examples: Record<string, Record<string, string[]>> = {
+      training: {
+        low: ['10-min active mobility', 'Guided morning stretch', 'Light posture correction'],
+        medium: ['30-min steady cardio', 'Core stability session', 'Compound movement drill'],
+        high: ['1-hour power lifting', 'High-intensity intervals', 'Sport-specific skill work']
+      },
+      nutrition: {
+        low: ['Drink 2L water daily', 'Avoid processed sugar', 'Protein with breakfast'],
+        medium: ['Log all daily meals', 'Hit fiber goal (25g+)', 'Healthy snack prep'],
+        high: ['Strict macro tracking', 'Intermittent fasting window', 'Pre/Post workout fueling']
+      },
+      recovery: {
+        low: ['5-min deep breathing', 'Bed before 11:30 PM', 'Quick evening wind-down'],
+        medium: ['Contrast shower therapy', '15-min restorative yoga', 'Hydration with electrolytes'],
+        high: ['8+ hours quality sleep', 'Full body foam rolling', 'Cold plunge or sauna']
+      },
+      consistency: {
+        low: ['5-min morning routine', 'Daily gratitude entry', 'Check-in on mobile app'],
+        medium: ['Prepare gym bag night before', 'Plan meals for next day', '30-min focused work block'],
+        high: ['Weekly progress review', 'Master habit tracker', 'Daily 1-hour skill practice']
+      }
+    };
+
+    return examples[focusType]?.[intensity] || [];
   };
 
   const renderStepIndicator = () => (
@@ -219,7 +227,7 @@ export default function AIProtocolSuggestScreen() {
 
             {step === 3 && (
               <View>
-                <View style={{ padding: 32, borderRadius: 32, backgroundColor: 'rgba(37, 99, 235, 0.05)', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.2)', alignItems: 'center' }}>
+                <View style={{ padding: 32, borderRadius: 32, backgroundColor: 'rgba(37, 99, 235, 0.05)', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.2)', alignItems: 'center', marginBottom: 24 }}>
                     <View style={{ width: 64, height: 64, backgroundColor: '#2563EB', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
                         <Zap size={32} color="white" />
                     </View>
@@ -227,6 +235,36 @@ export default function AIProtocolSuggestScreen() {
                     <Text style={{ color: '#94A3B8', textAlign: 'center', marginTop: 12, lineHeight: 20, paddingHorizontal: 16, fontSize: 14 }}>
                         The AI will create a set of daily tasks for {clientInfo?.full_name}.
                     </Text>
+                </View>
+
+                {/* Selected Options Summary */}
+                <View style={{ backgroundColor: '#0F172A', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#1E293B', marginBottom: 24 }}>
+                    <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', trackingWidest: 1.5, marginBottom: 16 }}>Configuration</Text>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                        <View style={{ flex: 1, backgroundColor: '#020617', padding: 16, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
+                            <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Focus</Text>
+                            <Text style={{ color: 'white', fontWeight: 'bold', textTransform: 'capitalize' }}>{focusType}</Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: '#020617', padding: 16, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: intensity === 'high' ? '#EF4444' : intensity === 'medium' ? '#F59E0B' : '#10B981' }}>
+                            <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Intensity</Text>
+                            <Text style={{ color: 'white', fontWeight: 'bold', textTransform: 'capitalize' }}>{intensity}</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Preset Examples */}
+                <View style={{ backgroundColor: '#0F172A', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#1E293B' }}>
+                    <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', trackingWidest: 1.5, marginBottom: 16 }}>Possible Tasks</Text>
+                    <View style={{ gap: 12 }}>
+                        {getExamples().map((ex, i) => (
+                            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: 'rgba(37, 99, 235, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3B82F6' }} />
+                                </View>
+                                <Text style={{ color: '#94A3B8', fontSize: 13 }}>{ex}</Text>
+                            </View>
+                        ))}
+                    </View>
                 </View>
               </View>
             )}

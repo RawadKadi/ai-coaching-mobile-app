@@ -86,7 +86,7 @@ export default function CoachChatScreen() {
   const insets = useSafeAreaInsets();
   const { refreshUnreadCount } = useUnread();
   const { suppressToast } = useNotification();
-  const { isUserOnline, onlineUserIds } = usePresence();
+  const { isUserOnline, onlineUserIds, lastSeenMap } = usePresence();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,8 +101,16 @@ export default function CoachChatScreen() {
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [enlargedAvatar, setEnlargedAvatar] = useState<string | null>(null);
   
-  console.log(`[CoachChat] Rendering. clientUserId: ${clientUserId}, isOnline: ${clientUserId ? isUserOnline(clientUserId) : 'N/A'}`);
-  console.log('[CoachChat] Current Online IDs:', Array.from(onlineUserIds));
+  // Debug presence
+  useEffect(() => {
+    if (clientUserId) {
+      console.log(`[CoachChat] Presence Debug for ${clientUserId}:`, {
+        isOnline: isUserOnline(clientUserId),
+        inOnlineSet: onlineUserIds.has(clientUserId.toLowerCase()),
+        lastSeen: lastSeenMap[clientUserId.toLowerCase()]
+      });
+    }
+  }, [clientUserId, onlineUserIds, lastSeenMap]);
   
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -250,6 +258,20 @@ export default function CoachChatScreen() {
       setClientProfile(cData);
       setClientUserId(cData.user_id);
       clientUserIdRef.current = cData.user_id;
+      
+      // Fetch fresh last_seen_at for initial state
+      const { data: pData } = await supabase
+        .from('profiles')
+        .select('last_seen_at')
+        .eq('id', cData.user_id)
+        .single();
+        
+      if (pData?.last_seen_at) {
+        // We don't strictly need to set it here if PresenceContext handles it,
+        // but it helps the UI update immediately.
+        console.log('[CoachChat] Initial last_seen_at:', pData.last_seen_at);
+      }
+
       console.log('[CoachChat] Resolved clientUserId:', cData.user_id);
 
       const { data: mData, error: mError } = await supabase.from('messages')

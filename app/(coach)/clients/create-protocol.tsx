@@ -14,9 +14,14 @@ interface Client {
 }
 
 interface ProtocolTask {
+  id?: string;
   name: string;
   description: string;
   category: 'training' | 'nutrition' | 'recovery' | 'consistency';
+  target_value?: number;
+  unit?: string;
+  frequency?: string;
+  verification_type?: string;
 }
 
 export default function CreateProtocolScreen() {
@@ -29,6 +34,7 @@ export default function CreateProtocolScreen() {
   const [tasks, setTasks] = useState<ProtocolTask[]>([
     { name: '', description: '', category: 'training' }
   ]);
+  const [deletedTaskIds, setDeletedTaskIds] = useState<string[]>([]);
 
   // UI State
   const [clients, setClients] = useState<Client[]>([]);
@@ -36,6 +42,37 @@ export default function CreateProtocolScreen() {
   const [creating, setCreating] = useState(false);
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  const loadExistingTasks = async (cid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('habits')
+        .select('*')
+        .eq('client_id', cid)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setTasks(data.map(h => ({
+          id: h.id,
+          name: h.name,
+          description: h.description || '',
+          category: h.category as any || 'general',
+          target_value: h.target_value,
+          unit: h.unit,
+          frequency: h.frequency,
+          verification_type: h.verification_type
+        })));
+      } else {
+        setTasks([{ name: '', description: '', category: 'training' }]);
+      }
+      setDeletedTaskIds([]);
+    } catch (e) {
+      console.error('Error loading existing tasks:', e);
+    }
+  };
 
   const loadClients = async () => {
     if (!coach) return;
@@ -48,7 +85,10 @@ export default function CreateProtocolScreen() {
       const targetId = Array.isArray(clientId) ? clientId[0] : clientId;
       if (targetId && data) {
         const preSelected = data.find((c: any) => c.id === targetId);
-        if (preSelected) setSelectedClient(preSelected);
+        if (preSelected) {
+          setSelectedClient(preSelected);
+          await loadExistingTasks(preSelected.id);
+        }
       }
     } catch (e) {
       console.error('Error loading clients:', e);
@@ -64,7 +104,10 @@ export default function CreateProtocolScreen() {
   };
 
   const removeTask = (index: number) => {
-    if (tasks.length === 1) return;
+    const taskToRemove = tasks[index];
+    if (taskToRemove.id) {
+      setDeletedTaskIds(prev => [...prev, taskToRemove.id!]);
+    }
     const updated = [...tasks];
     updated.splice(index, 1);
     setTasks(updated);
@@ -80,6 +123,7 @@ export default function CreateProtocolScreen() {
     const newErrors: { [key: string]: string } = {};
     if (!selectedClient) newErrors.client = 'Please select a recipient';
     
+    // Only validate tasks if there are any
     const hasEmptyTask = tasks.some(t => !t.name.trim());
     if (hasEmptyTask) {
         newErrors.tasks = 'All tasks must have a name';
@@ -100,27 +144,39 @@ export default function CreateProtocolScreen() {
     try {
       setCreating(true);
       
-      const habitsToInsert = tasks.map(t => ({
-        client_id: selectedClient!.id,
-        name: t.name.trim(),
-        description: t.description.trim() || null,
-        category: t.category,
-        is_active: true,
-        target_value: 1, // Default for protocols
-        unit: 'completion',
-        frequency: 'daily',
-        verification_type: 'none'
-      }));
+      // 1. Deactivate deleted tasks
+      if (deletedTaskIds.length > 0) {
+        const { error: delError } = await supabase
+          .from('habits')
+          .update({ is_active: false })
+          .in('id', deletedTaskIds);
+        if (delError) throw delError;
+      }
 
-      const { error } = await supabase.from('habits').insert(habitsToInsert);
+      // 2. Upsert remaining tasks
+      if (tasks.length > 0) {
+        const habitsToUpsert = tasks.map(t => ({
+          ...(t.id ? { id: t.id } : {}),
+          client_id: selectedClient!.id,
+          name: t.name.trim(),
+          description: t.description.trim() || null,
+          category: t.category,
+          is_active: true,
+          target_value: t.target_value || 1,
+          unit: t.unit || 'completion',
+          frequency: t.frequency || 'daily',
+          verification_type: t.verification_type || 'none'
+        }));
 
-      if (error) throw error;
+        const { error } = await supabase.from('habits').upsert(habitsToUpsert);
+        if (error) throw error;
+      }
       
-      Alert.alert('Success', 'Daily Tasks successfully assigned!', [
+      Alert.alert('Success', 'Tasks updated successfully!', [
         { text: 'View Client', onPress: () => router.push(`/(coach)/clients/${selectedClient!.id}`) }
       ]);
     } catch (e: any) {
-      Alert.alert('Deployment Failed', e.message);
+      Alert.alert('Save Failed', e.message);
     } finally {
       setCreating(false);
     }
@@ -128,7 +184,7 @@ export default function CreateProtocolScreen() {
 
   if (loading && !selectedClient) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#020617', itemsCenter: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -146,8 +202,8 @@ export default function CreateProtocolScreen() {
             <ArrowLeft size={20} color="#94A3B8" />
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Create Tasks</Text>
-              <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>Daily Habits</Text>
+              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Daily Tasks</Text>
+              <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>Protocol</Text>
           </View>
           <View style={{ width: 48 }} />
         </View>
@@ -199,15 +255,20 @@ export default function CreateProtocolScreen() {
                             style={{ backgroundColor: '#0f172a', marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: '#1e293b', overflow: 'hidden' }}
                         >
                             {clients.map((c) => (
-                            <TouchableOpacity 
-                                key={c.id} 
-                                onPress={() => { setSelectedClient(c); setShowClientPicker(false); setErrors(prev => ({ ...prev, client: '' })); }} 
-                                style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#1e293b' }}
-                            >
-                                <BrandedAvatar size={28} name={c.full_name} imageUrl={c.avatar_url} />
-                                <Text style={{ color: 'white', fontWeight: '500' }}>{c.full_name}</Text>
-                                {selectedClient?.id === c.id && <Check size={16} color="#3B82F6" style={{ marginLeft: 'auto' }} />}
-                            </TouchableOpacity>
+                                <TouchableOpacity 
+                                    key={c.id} 
+                                    onPress={() => { 
+                                        setSelectedClient(c); 
+                                        setShowClientPicker(false); 
+                                        setErrors(prev => ({ ...prev, client: '' })); 
+                                        loadExistingTasks(c.id);
+                                    }} 
+                                    style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#1e293b' }}
+                                >
+                                    <BrandedAvatar size={28} name={c.full_name} imageUrl={c.avatar_url} />
+                                    <Text style={{ color: 'white', fontWeight: '500' }}>{c.full_name}</Text>
+                                    {selectedClient?.id === c.id && <Check size={16} color="#3B82F6" style={{ marginLeft: 'auto' }} />}
+                                </TouchableOpacity>
                             ))}
                         </MotiView>
                     )}
@@ -321,12 +382,12 @@ export default function CreateProtocolScreen() {
                 {creating ? (
                     <>
                         <ActivityIndicator color="white" />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Deploying Protocol...</Text>
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Saving...</Text>
                     </>
                 ) : (
                     <>
                         <ShieldCheck size={22} color="white" />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Assign Tasks</Text>
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Save Tasks</Text>
                     </>
                 )}
               </TouchableOpacity>

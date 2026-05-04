@@ -187,7 +187,7 @@ const ChallengeCard = ({ challenge, index }: { challenge: MotherChallengeWithPro
                 )}
                 <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">In Progress</Text>
               </View>
-              <Text className="text-white text-xl font-bold leading-tight">Manage {challenge.client_name.split(' ')[0]}'s Training Plan</Text>
+              <Text className="text-white text-xl font-bold leading-tight">Manage {(challenge.client_name || 'Client').split(' ')[0]}'s Training Plan</Text>
               <Text className="text-slate-400 text-sm mt-1">{challenge.name}</Text>
             </View>
             <TouchableOpacity className="w-10 h-10 bg-slate-950 rounded-full items-center justify-center border border-slate-800">

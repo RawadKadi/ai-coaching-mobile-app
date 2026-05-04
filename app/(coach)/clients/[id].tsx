@@ -345,14 +345,9 @@ export default function ClientDetailsScreen() {
                                 <Text className={`text-2xl font-black ${challengeFilter === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => setChallengeFilter('history')}>
-                                <Text className={`text-2xl font-black ${challengeFilter === 'history' ? 'text-white' : 'text-slate-700'}`}>Past</Text>
+                                <Text className={`text-2xl font-black ${challengeFilter === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
                             </TouchableOpacity>
                         </View>
-                        {filteredChallenges.length > 0 && (
-                            <TouchableOpacity onPress={() => setIsEditingChallenges(!isEditingChallenges)}>
-                                <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">{isEditingChallenges ? 'Done' : 'Edit'}</Text>
-                            </TouchableOpacity>
-                        )}
                         <View className="flex-row gap-2">
                              <TouchableOpacity onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5 shadow-lg shadow-violet-500/20">
                                 <Sparkles size={18} color="#A78BFA" />
@@ -415,8 +410,8 @@ export default function ClientDetailsScreen() {
                     <View className="flex-row items-center justify-between mb-8 ml-1">
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px]">Daily Tasks</Text>
                         {habits.length > 0 && (
-                            <TouchableOpacity onPress={() => setIsEditingHabits(!isEditingHabits)}>
-                                <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">{isEditingHabits ? 'Done' : 'Edit'}</Text>
+                            <TouchableOpacity onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}>
+                                <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">Edit</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -595,69 +590,77 @@ export default function ClientDetailsScreen() {
          transparent={true}
        >
          <View className="flex-1 bg-black/60 justify-end">
-           <View className="bg-slate-950 rounded-t-[48px] p-8 border-t border-white/10 pb-12">
-             <View className="flex-row justify-between items-center mb-8">
+           <View className="bg-slate-950 rounded-t-[48px] p-8 border-t border-white/10 pb-16">
+             {/* Header */}
+             <View className="flex-row justify-between items-center mb-10">
                <View>
-                 <Text className="text-white text-2xl font-black">Edit Task</Text>
-                 <Text className="text-slate-500 text-xs uppercase tracking-widest font-bold mt-1">Daily Protocol</Text>
+                 <Text className="text-white text-2xl font-black tracking-tight">Edit Task</Text>
+                 <Text className="text-blue-500 text-[10px] uppercase tracking-[2px] font-black mt-1">Daily Protocol</Text>
                </View>
                <TouchableOpacity 
                  onPress={() => setEditHabitModalVisible(false)}
-                 className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5"
+                 className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/10"
                >
-                 <Plus size={20} color="#64748B" style={{ transform: [{ rotate: '45deg' }] }} />
+                 <Plus size={24} color="#94A3B8" style={{ transform: [{ rotate: '45deg' }] }} />
                </TouchableOpacity>
              </View>
 
-             <View className="space-y-6">
-               <View>
-                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Task Name</Text>
+             <View>
+               {/* Task Name */}
+               <View className="mb-8">
+                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[2px] mb-3 ml-1">Task Identity</Text>
                  <TextInput
-                   className="bg-slate-900 border border-white/5 rounded-2xl px-6 py-4 text-white font-bold text-lg"
+                   className="bg-slate-900 border border-white/10 rounded-2xl px-6 py-5 text-white font-bold text-lg"
                    value={editingName}
                    onChangeText={setEditingName}
-                   placeholder="e.g. Drink 3L Water"
-                   placeholderTextColor="#475569"
+                   placeholder="e.g. Hydration Foundation"
+                   placeholderTextColor="#334155"
+                   selectionColor="#3B82F6"
                  />
                </View>
 
-               <View>
-                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Instructions</Text>
+               {/* Instructions */}
+               <View className="mb-8">
+                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[2px] mb-3 ml-1">Daily Instructions</Text>
                  <TextInput
-                   className="bg-slate-900 border border-white/5 rounded-2xl px-6 py-4 text-white font-medium text-base min-h-[100px]"
+                   className="bg-slate-900 border border-white/10 rounded-2xl px-6 py-5 text-white font-medium text-base min-h-[120px]"
                    value={editingDescription}
                    onChangeText={setEditingDescription}
-                   placeholder="Add optional notes for the client..."
-                   placeholderTextColor="#475569"
+                   placeholder="Add specific instructions for the client..."
+                   placeholderTextColor="#334155"
                    multiline
                    textAlignVertical="top"
+                   selectionColor="#3B82F6"
                  />
                </View>
 
-               <View>
-                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Category</Text>
-                 <View className="flex-row flex-wrap gap-2">
+               {/* Category Grid */}
+               <View className="mb-10">
+                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[2px] mb-4 ml-1">Focus Area</Text>
+                 <View className="flex-row flex-wrap gap-3">
                    {['training', 'nutrition', 'recovery', 'consistency'].map((cat) => (
                      <TouchableOpacity
                        key={cat}
                        onPress={() => setEditingCategory(cat)}
-                       className={`px-4 py-2 rounded-xl border ${editingCategory === cat ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-slate-900 border-white/5'}`}
+                       className={`flex-1 min-w-[140px] h-14 rounded-2xl border items-center justify-center ${editingCategory === cat ? 'bg-blue-600/10 border-blue-600/40' : 'bg-slate-900 border-white/5'}`}
                      >
-                       <Text className={`text-[10px] font-black uppercase tracking-widest ${editingCategory === cat ? 'text-emerald-400' : 'text-slate-500'}`}>{cat}</Text>
+                       <Text className={`text-[10px] font-black uppercase tracking-[1px] ${editingCategory === cat ? 'text-blue-400' : 'text-slate-500'}`}>{cat}</Text>
                      </TouchableOpacity>
                    ))}
                  </View>
                </View>
 
+               {/* Submit Button */}
                <TouchableOpacity
                  onPress={handleUpdateHabit}
                  disabled={updating}
-                 className="h-16 bg-blue-600 rounded-3xl items-center justify-center shadow-lg shadow-blue-500/20 mt-4"
+                 activeOpacity={0.8}
+                 className={`h-20 rounded-[28px] items-center justify-center shadow-2xl shadow-blue-500/20 ${updating ? 'bg-slate-900' : 'bg-blue-600'}`}
                >
                  {updating ? (
                    <ActivityIndicator color="white" />
                  ) : (
-                   <Text className="text-white font-black text-lg uppercase tracking-widest">Update Task</Text>
+                   <Text className="text-white font-black text-lg uppercase tracking-[2px]">Update Task</Text>
                  )}
                </TouchableOpacity>
              </View>
@@ -680,6 +683,7 @@ const InfoTile = ({ icon, label, value, fullWidth }: { icon: any, label: string,
 
 const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: any, coachId: string, index: number, isEditing?: boolean, onDelete?: () => void }) => {
     const router = useRouter();
+    const [showMenu, setShowMenu] = useState(false);
     return (
         <Swipeable
             renderRightActions={() => (
@@ -755,9 +759,53 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                             <Trash2 size={20} color="#EF4444" />
                         </TouchableOpacity>
                     ) : (
-                        <TouchableOpacity className="w-16 h-16 bg-slate-950 rounded-[24px] items-center justify-center border border-white/5">
-                            <MoreVertical size={20} color="#64748B" />
+                    <View>
+                        <AnimatePresence>
+                            {showMenu && (
+                                <MotiView
+                                    from={{ opacity: 0, translateY: 10, scale: 0.9 }}
+                                    animate={{ opacity: 1, translateY: 0, scale: 1 }}
+                                    exit={{ opacity: 0, translateY: 10, scale: 0.9 }}
+                                    className="absolute bottom-20 right-0 bg-slate-900 border border-white/10 rounded-2xl p-2 w-40 z-50 shadow-2xl shadow-black/50"
+                                >
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setShowMenu(false);
+                                            router.push(`/(coach)/challenges/edit/${challenge.id}`);
+                                        }}
+                                        className="flex-row items-center gap-3 p-3 rounded-xl hover:bg-white/5 active:bg-white/5"
+                                    >
+                                        <View className="w-8 h-8 rounded-lg bg-blue-600/10 items-center justify-center">
+                                            <Edit2 size={16} color="#3B82F6" />
+                                        </View>
+                                        <Text className="text-white font-bold text-xs">Edit</Text>
+                                    </TouchableOpacity>
+                                    
+                                    <View className="h-[1px] bg-white/5 my-1 mx-2" />
+                                    
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setShowMenu(false);
+                                            onDelete?.();
+                                        }}
+                                        className="flex-row items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/10"
+                                    >
+                                        <View className="w-8 h-8 rounded-lg bg-red-600/10 items-center justify-center">
+                                            <Trash2 size={16} color="#EF4444" />
+                                        </View>
+                                        <Text className="text-red-500 font-bold text-xs">Delete</Text>
+                                    </TouchableOpacity>
+                                </MotiView>
+                            )}
+                        </AnimatePresence>
+                        
+                        <TouchableOpacity 
+                            onPress={() => setShowMenu(!showMenu)}
+                            className={`w-16 h-16 rounded-[24px] items-center justify-center border ${showMenu ? 'bg-slate-800 border-blue-500/50' : 'bg-slate-950 border-white/5'}`}
+                        >
+                            <MoreVertical size={20} color={showMenu ? '#3B82F6' : '#64748B'} />
                         </TouchableOpacity>
+                    </View>
                     )}
                 </View>
             </MotiView>

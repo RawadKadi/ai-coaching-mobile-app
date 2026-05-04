@@ -17,6 +17,8 @@ export default function ReviewChallengesScreen() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
 
+  const [isSuccess, setIsSuccess] = useState(false);
+
   const clientId = params.clientId as string;
   const clientName = params.clientName as string;
   const startDate = params.startDate as string;
@@ -69,7 +71,7 @@ export default function ReviewChallengesScreen() {
       });
 
       if (error) throw error;
-      router.push('/(coach)/challenges');
+      setIsSuccess(true);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to launch plan');
     } finally {
@@ -85,6 +87,47 @@ export default function ReviewChallengesScreen() {
       default: return <Zap size={20} color="#F59E0B" />;
     }
   };
+
+  if (isSuccess) {
+    return (
+      <View className="flex-1 bg-slate-950 items-center justify-center px-6">
+        <MotiView
+          from={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', damping: 15 }}
+          className="w-24 h-24 bg-blue-600 rounded-full items-center justify-center mb-8 shadow-2xl shadow-blue-500/50"
+        >
+          <Check size={48} color="white" strokeWidth={4} />
+        </MotiView>
+        
+        <MotiView
+          from={{ opacity: 0, translateY: 20 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ delay: 200 }}
+          className="items-center"
+        >
+          <Text className="text-white text-4xl font-black tracking-tighter mb-4 text-center">Protocol Launched!</Text>
+          <Text className="text-slate-400 text-lg text-center leading-6 px-4">
+            {(clientName || '').split(' ')[0]} can now see their new daily tasks.
+          </Text>
+        </MotiView>
+
+        <MotiView
+          from={{ opacity: 0, translateY: 40 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ delay: 400 }}
+          className="w-full mt-16"
+        >
+          <TouchableOpacity 
+            onPress={() => router.replace('/(coach)/(tabs)')}
+            className="w-full h-16 bg-blue-600 rounded-3xl items-center justify-center shadow-xl shadow-blue-500/20"
+          >
+            <Text className="text-white text-xl font-bold">Done</Text>
+          </TouchableOpacity>
+        </MotiView>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-slate-950">
