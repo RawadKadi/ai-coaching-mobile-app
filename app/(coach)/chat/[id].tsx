@@ -20,6 +20,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
+import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
 import { 
   ArrowLeft, 
@@ -84,7 +85,8 @@ export default function CoachChatScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { refreshUnreadCount } = useUnread();
-  const { isUserOnline } = usePresence();
+  const { suppressToast } = useNotification();
+  const { isUserOnline, onlineUserIds } = usePresence();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,6 +99,10 @@ export default function CoachChatScreen() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [enlargedAvatar, setEnlargedAvatar] = useState<string | null>(null);
+  
+  console.log(`[CoachChat] Rendering. clientUserId: ${clientUserId}, isOnline: ${clientUserId ? isUserOnline(clientUserId) : 'N/A'}`);
+  console.log('[CoachChat] Current Online IDs:', Array.from(onlineUserIds));
   
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -244,6 +250,7 @@ export default function CoachChatScreen() {
       setClientProfile(cData);
       setClientUserId(cData.user_id);
       clientUserIdRef.current = cData.user_id;
+      console.log('[CoachChat] Resolved clientUserId:', cData.user_id);
 
       const { data: mData, error: mError } = await supabase.from('messages')
         .select('*')
@@ -279,8 +286,16 @@ export default function CoachChatScreen() {
     useCallback(() => {
       if (user && id) {
         markMessagesAsRead();
+        if (clientUserId) {
+          suppressToast(clientUserId);
+        } else {
+          suppressToast(true);
+        }
       }
-    }, [user?.id, id, messages])
+      return () => {
+        suppressToast(false);
+      };
+    }, [user?.id, id, messages, clientUserId])
   );
 
   const handleSendText = async (text: string, replyId?: string) => {
@@ -603,18 +618,30 @@ export default function CoachChatScreen() {
              <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 items-center justify-center rounded-full bg-white/5">
                 <ArrowLeft size={20} color="#94A3B8" />
              </TouchableOpacity>
-             <TouchableOpacity className="flex-row items-center gap-3">
-                 <BrandedAvatar imageUrl={clientProfile?.profiles?.avatar_url} name={clientProfile?.profiles?.full_name || 'Protocol Hub'} size={40} />
-                <View>
-                    <Text className="text-white font-bold text-base">{clientProfile?.profiles?.full_name || 'Protocol Hub'}</Text>
-                    <View className="flex-row items-center gap-1.5">
-                      <View className={`w-2 h-2 rounded-full ${clientUserId && isUserOnline(clientUserId) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
-                      <Text className="text-slate-400 text-[10px] font-medium">
-                        {clientUserId && isUserOnline(clientUserId) ? 'Online' : 'Offline'}
-                      </Text>
+             <View className="flex-row items-center gap-3">
+                 <TouchableOpacity 
+                    onPress={() => setEnlargedAvatar(clientProfile?.profiles?.avatar_url || 'default')}
+                    activeOpacity={0.7}
+                 >
+                    <BrandedAvatar imageUrl={clientProfile?.profiles?.avatar_url} name={clientProfile?.profiles?.full_name || 'Protocol Hub'} size={40} />
+                 </TouchableOpacity>
+                 
+                 <TouchableOpacity 
+                    onPress={() => router.push(`/(coach)/clients/${id}`)}
+                    className="justify-center"
+                    activeOpacity={0.7}
+                 >
+                    <View>
+                        <Text className="text-white font-bold text-base">{clientProfile?.profiles?.full_name || 'Protocol Hub'}</Text>
+                        <View className="flex-row items-center gap-1.5">
+                          <View className={`w-2 h-2 rounded-full ${clientUserId && isUserOnline(clientUserId) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
+                          <Text className="text-slate-400 text-[10px] font-medium">
+                            {clientUserId && isUserOnline(clientUserId) ? 'Online' : 'Offline'}
+                          </Text>
+                        </View>
                     </View>
-                </View>
-             </TouchableOpacity>
+                 </TouchableOpacity>
+             </View>
           </View>
           <View className="flex-row items-center gap-2">
             <TouchableOpacity onPress={() => setSchedulerVisible(true)} className="w-10 h-10 items-center justify-center rounded-full bg-white/5"><Calendar size={20} color="#F8FAFC" /></TouchableOpacity>
@@ -674,6 +701,31 @@ export default function CoachChatScreen() {
           onClose={() => setActiveMessageForMenu(null)} onReaction={handleReaction} onAction={handleAction} 
           renderMessageContent={renderOverlayContent}
       />
+
+      {/* Enlarged Avatar Modal */}
+      <Modal 
+        visible={!!enlargedAvatar} 
+        transparent 
+        animationType="fade"
+        onRequestClose={() => setEnlargedAvatar(null)}
+      >
+        <Pressable 
+          className="flex-1 bg-black/90 justify-center items-center" 
+          onPress={() => setEnlargedAvatar(null)}
+        >
+          <MotiView
+            from={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'timing', duration: 300 }}
+          >
+            <BrandedAvatar 
+              imageUrl={enlargedAvatar === 'default' ? null : enlargedAvatar} 
+              name={clientProfile?.profiles?.full_name || 'Athlete'} 
+              size={SCREEN_WIDTH * 0.8} 
+            />
+          </MotiView>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

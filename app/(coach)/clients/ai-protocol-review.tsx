@@ -133,7 +133,7 @@ export default function AIProtocolReviewScreen() {
                         </View>
                         <View style={{ backgroundColor: '#1E293B', px: 3, py: 1, borderRadius: 99, paddingHorizontal: 8, paddingVertical: 4 }}>
                           <Text style={{ color: '#64748B', fontSize: 9, fontWeight: '900', textTransform: 'uppercase' }}>
-                            {habit.verification_type === 'none' ? 'checkbox' : habit.verification_type}
+                            {habit.verification_type === 'none' ? 'checkbox' : (habit.verification_type === 'camera' ? 'photo' : habit.verification_type)}
                           </Text>
                         </View>
                       </View>

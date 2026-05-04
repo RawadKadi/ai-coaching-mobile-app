@@ -16,10 +16,10 @@ export default function AISelectionScreen() {
             icon: <Zap size={28} color="white" fill="white" />,
             color: '#3B82F6',
             route: `/(coach)/challenges/suggest?clientId=${clientId}`,
-            description: 'AI strategist creates a tailored transformation block with specific daily targets.'
+            description: 'AI Coach creates a tailored transformation block with specific daily targets.'
         },
         {
-            title: 'AI Daily Protocol',
+            title: 'AI Daily Tasks',
             subtitle: 'Generate ongoing habit requirements',
             icon: <ClipboardList size={28} color="white" />,
             color: '#10B981',
@@ -41,7 +41,7 @@ export default function AISelectionScreen() {
                         <ArrowLeft size={20} color="#94A3B8" />
                     </TouchableOpacity>
                     <View style={{ flex: 1, alignItems: 'center', marginRight: 44 }}>
-                        <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>AI Strategist</Text>
+                        <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>AI Help</Text>
                     </View>
                 </View>
 
@@ -55,20 +55,20 @@ export default function AISelectionScreen() {
                             paddingVertical: 32,
                             paddingHorizontal: 24,
                             borderRadius: 40, 
-                            backgroundColor: 'rgba(59, 130, 246, 0.05)', 
+                            backgroundColor: 'rgba(167, 139, 250, 0.05)', 
                             borderWidth: 1, 
-                            borderColor: 'rgba(59, 130, 246, 0.1)', 
+                            borderColor: 'rgba(167, 139, 250, 0.1)', 
                             alignItems: 'center', 
                             overflow: 'hidden' 
                         }}
                     >
                         <View style={{ position: 'absolute', top: 0, right: 0, padding: 16, opacity: 0.05 }}>
-                            <Sparkles size={120} color="#3B82F6" />
+                            <Sparkles size={120} color="#A78BFA" />
                         </View>
-                        <View style={{ width: 64, height: 64, backgroundColor: '#3B82F6', borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, marginBottom: 20 }}>
+                        <View style={{ width: 64, height: 64, backgroundColor: '#A78BFA', borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: '#A78BFA', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, marginBottom: 20 }}>
                             <Sparkles size={32} color="white" />
                         </View>
-                        <Text style={{ color: 'white', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: -1 }}>AI Engine</Text>
+                        <Text style={{ color: 'white', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: -1 }}>AI Help</Text>
                         <Text style={{ color: '#94A3B8', textAlign: 'center', marginTop: 8, fontSize: 16, fontWeight: '600' }}>
                             What should the AI build?
                         </Text>

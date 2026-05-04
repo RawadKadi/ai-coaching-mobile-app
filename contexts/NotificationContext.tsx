@@ -21,15 +21,15 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [activeToast, setActiveToast] = useState<ToastNotification | null>(null);
   const { user } = useAuth();
-  const suppressedRef = useRef(false);
+  const suppressedRef = useRef<boolean | string>(false);
 
   const dismissToast = () => {
     setActiveToast(null);
   };
 
-  const suppressToast = (suppressed: boolean) => {
+  const suppressToast = (suppressed: boolean | string) => {
     suppressedRef.current = suppressed;
-    if (suppressed) setActiveToast(null);
+    if (suppressed === true) setActiveToast(null);
   };
 
   useEffect(() => {
@@ -48,8 +48,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         async (payload) => {
           const newMessage = payload.new as any;
 
-          // Don't show notification if suppressed (e.g. user is on messages page)
-          if (suppressedRef.current) {
+          // Don't show notification if suppressed
+          if (suppressedRef.current === true) {
+            return;
+          }
+          
+          // Don't show if this specific sender is suppressed
+          if (typeof suppressedRef.current === 'string' && newMessage.sender_id === suppressedRef.current) {
             return;
           }
 

@@ -38,18 +38,23 @@ export default function AISuggestChallengeScreen() {
     }
   }, [coach]);
 
+  useEffect(() => {
+    if (clientId && clients.length > 0) {
+      const targetId = Array.isArray(clientId) ? clientId[0] : clientId;
+      const preSelected = clients.find((c: Client) => c.id === targetId);
+      if (preSelected) {
+        setSelectedClient(preSelected);
+        setStep(2); // Skip step 1 if client is already known
+      }
+    }
+  }, [clientId, clients]);
+
   const loadClients = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase.rpc('get_coach_clients', { p_coach_id: coach?.id });
       if (error) throw error;
       setClients(data || []);
-      
-      const targetId = Array.isArray(clientId) ? clientId[0] : clientId;
-      if (targetId && data) {
-        const preSelected = data.find((c: Client) => c.id === targetId);
-        if (preSelected) setSelectedClient(preSelected);
-      }
     } catch (error) {
       console.error('Load error:', error);
     } finally {
@@ -138,7 +143,7 @@ export default function AISuggestChallengeScreen() {
               <ArrowLeft size={18} color="#94A3B8" />
             </TouchableOpacity>
             <View>
-              <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>AI Strategist</Text>
+            <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>AI Help</Text>
               <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }}>Step {step} of 3</Text>
             </View>
           </View>
@@ -157,12 +162,12 @@ export default function AISuggestChallengeScreen() {
             {step === 1 && (
               <View>
                 <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Select Target</Text>
-                <Text style={{ color: '#64748B', marginBottom: 24 }}>Choose the client for this Intelligence Session.</Text>
+                <Text style={{ color: '#64748B', marginBottom: 24 }}>Choose the client for this AI Setup.</Text>
                 
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A', paddingHorizontal: 16, height: 56, borderRadius: 16, borderWidth: 1, borderColor: '#1E293B', marginBottom: 24 }}>
                   <Search size={20} color="#475569" />
                   <TextInput
-                    placeholder="Search intelligence targets..."
+                    placeholder="Search clients..."
                     placeholderTextColor="#475569"
                     style={{ flex: 1, marginLeft: 12, color: 'white', fontWeight: '500' }}
                     value={searchQuery}
@@ -221,7 +226,7 @@ export default function AISuggestChallengeScreen() {
 
             {step === 2 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Protocol Context</Text>
+                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Daily Context</Text>
                 <Text style={{ color: '#64748B', marginBottom: 24 }}>Define the primary focus for the AI engine.</Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>

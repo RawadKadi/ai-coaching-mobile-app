@@ -66,6 +66,7 @@ export default function ClientDetailsScreen() {
   const [currentConflict, setCurrentConflict] = useState<any>(null);
   // Habit Editing State
   const [isEditingHabits, setIsEditingHabits] = useState(false);
+  const [isEditingChallenges, setIsEditingChallenges] = useState(false);
   const [editHabitModalVisible, setEditHabitModalVisible] = useState(false);
   const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -141,6 +142,30 @@ export default function ClientDetailsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleDeleteChallenge = async (challengeId: string) => {
+    Alert.alert(
+      'Remove Challenge',
+      'Are you sure? This will delete the challenge and all progress.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('mother_challenges').delete().eq('id', challengeId);
+              if (error) throw error;
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setChallenges(prev => prev.filter(c => c.id !== challengeId));
+            } catch (e: any) {
+              Alert.alert('Error', e.message);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleDeleteHabit = async (habitId: string) => {
@@ -323,6 +348,11 @@ export default function ClientDetailsScreen() {
                                 <Text className={`text-2xl font-black ${challengeFilter === 'history' ? 'text-white' : 'text-slate-700'}`}>Past</Text>
                             </TouchableOpacity>
                         </View>
+                        {filteredChallenges.length > 0 && (
+                            <TouchableOpacity onPress={() => setIsEditingChallenges(!isEditingChallenges)}>
+                                <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">{isEditingChallenges ? 'Done' : 'Edit'}</Text>
+                            </TouchableOpacity>
+                        )}
                         <View className="flex-row gap-2">
                              <TouchableOpacity onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5 shadow-lg shadow-violet-500/20">
                                 <Sparkles size={18} color="#A78BFA" />
@@ -342,7 +372,14 @@ export default function ClientDetailsScreen() {
                         </View>
                     ) : (
                         filteredChallenges.map((challenge, idx) => (
-                            <ChallengeCard key={challenge.id} challenge={challenge} coachId={id as string} index={idx} />
+                            <ChallengeCard 
+                                key={challenge.id} 
+                                challenge={challenge} 
+                                coachId={id as string} 
+                                index={idx} 
+                                isEditing={isEditingChallenges}
+                                onDelete={() => handleDeleteChallenge(challenge.id)}
+                            />
                         ))
                     )}
 
@@ -376,7 +413,7 @@ export default function ClientDetailsScreen() {
                 ) : mainTab === 'daily_tasks' ? (
                   <View className="px-6 py-8">
                     <View className="flex-row items-center justify-between mb-8 ml-1">
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px]">Daily Requirements</Text>
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px]">Daily Tasks</Text>
                         {habits.length > 0 && (
                             <TouchableOpacity onPress={() => setIsEditingHabits(!isEditingHabits)}>
                                 <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">{isEditingHabits ? 'Done' : 'Edit'}</Text>
@@ -641,63 +678,89 @@ const InfoTile = ({ icon, label, value, fullWidth }: { icon: any, label: string,
     </View>
 );
 
-const ChallengeCard = ({ challenge, index }: { challenge: any, coachId: string, index: number }) => {
+const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: any, coachId: string, index: number, isEditing?: boolean, onDelete?: () => void }) => {
     const router = useRouter();
     return (
-        <MotiView 
-            from={{ opacity: 0, scale: 0.95 }} 
-            animate={{ opacity: 1, scale: 1 }} 
-            transition={{ delay: index * 100 }}
-            className="bg-slate-900 border border-white/5 rounded-[40px] p-8 mb-6 overflow-hidden"
+        <Swipeable
+            renderRightActions={() => (
+                <View className="flex-row mb-6 pl-4 h-[280px]">
+                    <TouchableOpacity 
+                        onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+                        className="w-16 h-full bg-slate-800 rounded-3xl items-center justify-center border border-white/5 mr-2"
+                    >
+                        <Edit2 size={20} color="white" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        onPress={onDelete}
+                        className="w-16 h-full bg-red-500 rounded-3xl items-center justify-center shadow-lg shadow-red-500/20"
+                    >
+                        <Trash2 size={20} color="white" />
+                    </TouchableOpacity>
+                </View>
+            )}
+            enabled={isEditing}
         >
-            <View className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl -mr-16 -mt-16" />
-            
-            <View className="flex-row justify-between items-start mb-10">
-                <View className="flex-row items-center gap-3">
-                    <BrandedAvatar name={challenge.name} size={32} />
-                    <View>
-                        <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Client</Text>
-                        <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual Protocol'}</Text>
+            <MotiView 
+                from={{ opacity: 0, scale: 0.95 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                transition={{ delay: index * 100 }}
+                className="bg-slate-900 border border-white/5 rounded-[40px] p-8 mb-6 overflow-hidden"
+            >
+                <View className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl -mr-16 -mt-16" />
+                
+                <View className="flex-row justify-between items-start mb-10">
+                    <View className="flex-row items-center gap-3">
+                        <BrandedAvatar name={challenge.name} size={32} />
+                        <View>
+                            <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Client</Text>
+                            <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>
+                        </View>
+                    </View>
+                    <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-blue-600/20">
+                        <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
                     </View>
                 </View>
-                <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-blue-600/20">
-                    <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
+
+                <Text className="text-white text-2xl font-black mb-4 tracking-tight">{challenge.name}</Text>
+                
+                <View className="flex-row items-center gap-4 mb-10">
+                    <View className="flex-row items-center gap-2">
+                        <CalendarIcon size={14} color="#64748B" />
+                        <Text className="text-slate-400 text-[11px] font-bold">
+                            {new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </Text>
+                    </View>
+                    <View className="w-1 h-1 rounded-full bg-slate-800" />
+                    <Text className="text-slate-400 text-[11px] font-bold">7 Days</Text>
                 </View>
-            </View>
 
-            <Text className="text-white text-2xl font-black mb-4 tracking-tight">{challenge.name}</Text>
-            
-            <View className="flex-row items-center gap-4 mb-10">
-                <View className="flex-row items-center gap-2">
-                    <CalendarIcon size={14} color="#64748B" />
-                    <Text className="text-slate-400 text-[11px] font-bold">
-                        {new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </Text>
+                <View className="flex-row justify-between items-end mb-3">
+                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Progress</Text>
+                    <Text className="text-white text-xl font-black tracking-tight">{challenge.completion_rate}%</Text>
                 </View>
-                <View className="w-1 h-1 rounded-full bg-slate-800" />
-                <Text className="text-slate-400 text-[11px] font-bold">7 Days</Text>
-            </View>
 
-            <View className="flex-row justify-between items-end mb-3">
-                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Progress</Text>
-                <Text className="text-white text-xl font-black tracking-tight">{challenge.completion_rate}%</Text>
-            </View>
+                <View className="w-full h-2 bg-slate-950 rounded-full overflow-hidden mb-10">
+                    <View className="h-full bg-blue-600 rounded-full" style={{ width: `${challenge.completion_rate}%` }} />
+                </View>
 
-            <View className="w-full h-2 bg-slate-950 rounded-full overflow-hidden mb-10">
-                <View className="h-full bg-blue-600 rounded-full" style={{ width: `${challenge.completion_rate}%` }} />
-            </View>
-
-            <View className="flex-row gap-3">
-                <TouchableOpacity 
-                    onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-                    className="flex-1 h-16 bg-blue-600 rounded-[24px] items-center justify-center shadow-2xl shadow-blue-500/20"
-                >
-                    <Text className="text-white font-black text-base">Manage Plan</Text>
-                </TouchableOpacity>
-                <TouchableOpacity className="w-16 h-16 bg-slate-950 rounded-[24px] items-center justify-center border border-white/5">
-                    <MoreVertical size={20} color="#64748B" />
-                </TouchableOpacity>
-            </View>
-        </MotiView>
+                <View className="flex-row gap-3">
+                    <TouchableOpacity 
+                        onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+                        className="flex-1 h-16 bg-blue-600 rounded-[24px] items-center justify-center shadow-2xl shadow-blue-500/20"
+                    >
+                        <Text className="text-white font-black text-base">Manage Plan</Text>
+                    </TouchableOpacity>
+                    {isEditing ? (
+                         <TouchableOpacity onPress={onDelete} className="w-16 h-16 bg-red-500/10 rounded-[24px] items-center justify-center border border-red-500/20">
+                            <Trash2 size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity className="w-16 h-16 bg-slate-950 rounded-[24px] items-center justify-center border border-white/5">
+                            <MoreVertical size={20} color="#64748B" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </MotiView>
+        </Swipeable>
     );
 };

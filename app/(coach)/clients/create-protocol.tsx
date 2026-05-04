@@ -116,7 +116,7 @@ export default function CreateProtocolScreen() {
 
       if (error) throw error;
       
-      Alert.alert('Success', 'Daily Protocol successfully assigned!', [
+      Alert.alert('Success', 'Daily Tasks successfully assigned!', [
         { text: 'View Client', onPress: () => router.push(`/(coach)/clients/${selectedClient!.id}`) }
       ]);
     } catch (e: any) {
@@ -146,7 +146,7 @@ export default function CreateProtocolScreen() {
             <ArrowLeft size={20} color="#94A3B8" />
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Create Protocol</Text>
+              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Create Tasks</Text>
               <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>Daily Habits</Text>
           </View>
           <View style={{ width: 48 }} />
@@ -242,7 +242,7 @@ export default function CreateProtocolScreen() {
                                 <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' }}>
                                     <Text style={{ color: 'white', fontSize: 10, fontWeight: '900' }}>{i + 1}</Text>
                                 </View>
-                                <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Protocol Task</Text>
+                                <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Daily Task</Text>
                             </View>
                             {tasks.length > 1 && (
                                 <TouchableOpacity onPress={() => removeTask(i)} style={{ padding: 8 }}>
@@ -326,7 +326,7 @@ export default function CreateProtocolScreen() {
                 ) : (
                     <>
                         <ShieldCheck size={22} color="white" />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Deploy Protocol</Text>
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Assign Tasks</Text>
                     </>
                 )}
               </TouchableOpacity>

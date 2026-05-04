@@ -19,7 +19,7 @@ export default function CreateSelectionScreen() {
             description: 'Best for transformation phases, bootcamps, or focused performance blocks.'
         },
         {
-            title: 'Daily Protocol',
+            title: 'Daily Tasks',
             subtitle: 'Ongoing daily habits for clients',
             icon: <ClipboardList size={28} color="white" />,
             color: '#10B981',

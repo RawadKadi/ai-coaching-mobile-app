@@ -33,8 +33,9 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
 
     const syncPresence = () => {
       const state = channel.presenceState();
-      const onlineIds = new Set<string>(Object.keys(state));
+      const onlineIds = new Set<string>(Object.keys(state).map(k => k.toLowerCase()));
       setOnlineUserIds(onlineIds);
+      console.log('[Presence] Online IDs updated:', Array.from(onlineIds));
     };
 
     channel
@@ -104,7 +105,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
   // isUserOnline remains highly reactive because it consumes the state
   const isUserOnline = (userId: string) => {
     if (!userId) return false;
-    return onlineUserIds.has(userId);
+    return onlineUserIds.has(userId.toLowerCase());
   };
 
   return (

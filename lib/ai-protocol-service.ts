@@ -5,7 +5,7 @@ export interface SuggestedHabit {
   name: string;
   description: string;
   category: 'training' | 'nutrition' | 'recovery' | 'consistency';
-  verification_type: 'none' | 'photo' | 'number';
+  verification_type: 'none' | 'camera';
 }
 
 /**
@@ -22,8 +22,8 @@ export async function generateDailyProtocol(
   try {
     // 1. Fetch client context for better personalization
     const { data: client, error: clientError } = await supabase
-      .from('client_profiles')
-      .select('goal, experience_level, injuries, fitness_level, focus_areas')
+      .from('clients')
+      .select('goal, experience_level, dietary_restrictions, medical_conditions')
       .eq('id', clientId)
       .single();
 
@@ -32,37 +32,31 @@ export async function generateDailyProtocol(
     const context = client ? `
       Goal: ${client.goal}
       Level: ${client.experience_level}
-      Injuries: ${client.injuries || 'None'}
-      Focus: ${client.focus_areas?.join(', ') || 'General fitness'}
+      Restrictions: ${client.dietary_restrictions?.join(', ') || 'None'}
+      Conditions: ${client.medical_conditions?.join(', ') || 'None'}
     ` : 'General fitness client';
 
     // 2. Construct the prompt
     const prompt = `
-      You are an elite fitness coach strategist. Generate a list of 4-6 high-impact daily habits (protocols) for a client.
-      
-      Client Name: ${clientName}
-      Current Context: ${context}
-      Primary Focus: ${options.focusType}
-      Intensity Level: ${options.intensity}
+      As an elite fitness coach, generate 3-4 daily habits for:
+      Name: ${clientName}
+      Context: ${context}
+      Focus: ${options.focusType} (${options.intensity} intensity)
 
-      Return exactly this JSON structure:
+      Return ONLY a JSON array:
       [
         {
           "name": "Habit Name",
-          "description": "Short description",
+          "description": "Instructions",
           "category": "training",
           "verification_type": "none"
         }
       ]
 
       Allowed Categories: training, nutrition, recovery, consistency
-      Allowed Verification: none, photo, number
+      Verification Types: none (checkbox), camera (photo verification)
 
-      Rules:
-      - Use simple, direct language.
-      - Make the habits realistic for a ${options.intensity} intensity level.
-      - "none" is for a simple checkbox task. "photo" requires a picture. "number" requires a value.
-      - IMPORTANT: Return ONLY the JSON array. No markdown code blocks.
+      IMPORTANT: Return ONLY the JSON array. No text before or after.
     `;
 
     // 3. Call Gemini
@@ -95,6 +89,21 @@ export async function generateDailyProtocol(
     } catch (parseError) {
       console.error('JSON Parse Error. Raw text:', text);
       console.error('Cleaned text attempted to parse:', cleanedText);
+      
+      // Attempt to fix common truncation by adding closing brackets if needed
+      if (cleanedText.startsWith('[') && !cleanedText.endsWith(']')) {
+        try {
+          // Find the last complete object
+          const lastComma = cleanedText.lastIndexOf('},');
+          if (lastComma !== -1) {
+            const fixedText = cleanedText.substring(0, lastComma + 1) + ']';
+            return JSON.parse(fixedText);
+          }
+        } catch (e) {
+          // Fallback to error if fix fails
+        }
+      }
+      
       throw new Error('The AI response was not in the expected format. Please try again.');
     }
   } catch (error) {

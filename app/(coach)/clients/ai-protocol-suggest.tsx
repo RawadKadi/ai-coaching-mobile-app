@@ -12,7 +12,7 @@ export default function AIProtocolSuggestScreen() {
   const { coach } = useAuth();
 
   // Navigation State
-  const [step, setStep] = useState(1); // 1: Context, 2: Intensity, 3: Review/Generate
+  const [step, setStep] = useState(1); // 1: Focus, 2: Difficulty, 3: Review/Generate
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -59,7 +59,7 @@ export default function AIProtocolSuggestScreen() {
       );
 
       if (!habits || habits.length === 0) {
-        Alert.alert('AI Engine Busy', 'The AI engine is currently optimizing. Please try generating again in a few seconds.');
+        Alert.alert('AI Busy', 'The AI is thinking. Please try again in a few seconds.');
         return;
       }
 
@@ -74,7 +74,7 @@ export default function AIProtocolSuggestScreen() {
         }
       });
     } catch (error: any) {
-      Alert.alert('Generation Error', error.message || 'AI generation failed');
+      Alert.alert('Error', error.message || 'AI failed to generate tasks');
     } finally {
       setGenerating(false);
     }
@@ -131,7 +131,7 @@ export default function AIProtocolSuggestScreen() {
               <ArrowLeft size={18} color="#94A3B8" />
             </TouchableOpacity>
             <View>
-              <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>Protocol Generator</Text>
+              <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>AI Task Generator</Text>
               <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }}>Step {step} of 3</Text>
             </View>
           </View>
@@ -146,8 +146,8 @@ export default function AIProtocolSuggestScreen() {
         >
             {step === 1 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Protocol Focus</Text>
-                <Text style={{ color: '#64748B', marginBottom: 24 }}>What areas should the AI prioritize for {clientInfo?.full_name}?</Text>
+                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Main Focus</Text>
+                <Text style={{ color: '#64748B', marginBottom: 24 }}>What should the AI focus on for {clientInfo?.full_name}?</Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                     {(['training', 'nutrition', 'recovery', 'consistency'] as const).map((f) => {
@@ -179,17 +179,17 @@ export default function AIProtocolSuggestScreen() {
 
             {step === 2 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Commitment Level</Text>
-                <Text style={{ color: '#64748B', marginBottom: 24 }}>Select the daily intensity baseline.</Text>
+                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>How hard?</Text>
+                <Text style={{ color: '#64748B', marginBottom: 24 }}>Select the daily difficulty level.</Text>
                 
                 <View style={{ gap: 16 }}>
                     {(['low', 'medium', 'high'] as const).map((int) => {
                         const isActive = intensity === int;
                         let color = '#475569';
                         let desc = '';
-                        if (int === 'low') { color = '#10B981'; desc = 'Focus on core essentials and building momentum.'; }
-                        if (int === 'medium') { color = '#F59E0B'; desc = 'A balanced set of habits for steady progress.'; }
-                        if (int === 'high') { color = '#EF4444'; desc = 'Aggressive protocol for rapid transformation.'; }
+                        if (int === 'low') { color = '#10B981'; desc = 'Focus on core basics and getting started.'; }
+                        if (int === 'medium') { color = '#F59E0B'; desc = 'A balanced set of tasks for steady progress.'; }
+                        if (int === 'high') { color = '#EF4444'; desc = 'Challenging tasks for fast results.'; }
                         
                         return (
                             <TouchableOpacity
@@ -206,7 +206,7 @@ export default function AIProtocolSuggestScreen() {
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                                     <Flame size={20} color={color} style={{ marginRight: 10 }} />
                                     <Text style={{ fontWeight: '900', textTransform: 'uppercase', fontSize: 16, color: isActive ? 'white' : '#64748B' }}>
-                                        {int} Intensity
+                                        {int} Level
                                     </Text>
                                 </View>
                                 <Text style={{ color: '#475569', fontSize: 14 }}>{desc}</Text>
@@ -223,9 +223,9 @@ export default function AIProtocolSuggestScreen() {
                     <View style={{ width: 64, height: 64, backgroundColor: '#2563EB', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
                         <Zap size={32} color="white" />
                     </View>
-                    <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>Protocol Strategy Ready</Text>
+                    <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>Ready to build</Text>
                     <Text style={{ color: '#94A3B8', textAlign: 'center', marginTop: 12, lineHeight: 20, paddingHorizontal: 16, fontSize: 14 }}>
-                        The AI will generate a set of daily habits focused on {focusType} at a {intensity} intensity level for {clientInfo?.full_name}.
+                        The AI will create a set of daily tasks for {clientInfo?.full_name}.
                     </Text>
                 </View>
               </View>
@@ -257,12 +257,12 @@ export default function AIProtocolSuggestScreen() {
                       {step === 3 ? (
                         <>
                            <Sparkles size={20} color="white" style={{ marginRight: 10 }} />
-                           <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Generate Habits</Text>
+                           <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Generate Tasks</Text>
                         </>
                       ) : (
                         <>
                            <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: 'white', marginRight: 8 }}>
-                             Continue
+                             Next
                            </Text>
                            <ChevronRight size={18} color="white" />
                         </>
