@@ -196,6 +196,7 @@ export interface Habit {
     frequency: string;
     verification_type?: string;
     is_active: boolean;
+    category?: string;
     created_at: string;
 }
 

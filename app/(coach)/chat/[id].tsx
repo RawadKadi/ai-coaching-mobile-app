@@ -16,7 +16,7 @@ import {
   Animated,
   StatusBar
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
@@ -264,6 +264,24 @@ export default function CoachChatScreen() {
     await supabase.from('messages').update({ read: true }).eq('id', mid);
     refreshUnreadCount();
   };
+
+  const markMessagesAsRead = async (msgs?: Message[]) => {
+    const list = msgs || messages;
+    if (!list.length || !user?.id) return;
+    const unreadIds = list.filter(m => !m.read && m.recipient_id === user.id).map(m => m.id);
+    if (unreadIds.length > 0) {
+      await supabase.from('messages').update({ read: true }).in('id', unreadIds);
+      refreshUnreadCount();
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user && id) {
+        markMessagesAsRead();
+      }
+    }, [user?.id, id, messages])
+  );
 
   const handleSendText = async (text: string, replyId?: string) => {
     if (!profile || !clientUserId) return;

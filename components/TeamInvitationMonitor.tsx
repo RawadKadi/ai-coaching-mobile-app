@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { AppState, AppStateStatus } from 'react-native';
 
 /**
  * Monitors for team invitations and redirects sub-coaches to welcome screen
@@ -12,13 +13,21 @@ import { supabase } from '@/lib/supabase';
 export default function TeamInvitationMonitor({ router }: { router: ReturnType<typeof useRouter> }) {
   const { coach } = useAuth();
   const [hasChecked, setHasChecked] = useState(false);
-  const [invitationFound, setInvitationFound] = useState(false); // NEW: Track if we found an invitation
+  const [invitationFound, setInvitationFound] = useState(false);
   const checkTimeoutRef = useRef<any>(null);
+  const appState = useRef(AppState.currentState);
+  const isMounted = useRef(true);
 
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   // Check if coach has unacknowledged team membership
   const checkForPendingInvitation = async () => {
-    if (!coach?.id) {
+    if (!coach?.id || !isMounted.current) {
       return;
     }
 
@@ -27,6 +36,10 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
       return;
     }
 
+    // Don't poll if app is in background
+    if (AppState.currentState !== 'active') {
+      return;
+    }
 
     try {
       // 1. First check by ID (already linked)
@@ -40,17 +53,23 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
         .maybeSingle();
 
       if (idError) {
-        console.error('[TeamInvitationMonitor] ❌ Error checking by ID:', idError);
+        // Network errors are common and shouldn't trigger a red box in dev
+        if (idError.message === 'TypeError: Network request failed' || idError.message?.includes('Network request failed')) {
+          console.warn('[TeamInvitationMonitor] Network request failed (offline?). Will retry.');
+        } else {
+          console.error('[TeamInvitationMonitor] ❌ Error checking by ID:', idError);
+        }
       }
 
-      if (idData) {
+      if (idData && isMounted.current) {
         handleFoundInvitation(idData);
         return;
       }
 
       // 2. FALLBACK: Check by Email (not yet linked)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) return;
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user;
+      if (!user?.email || !isMounted.current) return;
 
       const { data: emailData, error: emailError } = await supabase
         .from('coach_hierarchy')
@@ -63,11 +82,14 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
         .maybeSingle();
 
       if (emailError) {
-        console.error('[TeamInvitationMonitor] ❌ Error checking by email:', emailError);
+        if (emailError.message === 'TypeError: Network request failed' || emailError.message?.includes('Network request failed')) {
+          // Ignore network errors for polling
+        } else {
+          console.error('[TeamInvitationMonitor] ❌ Error checking by email:', emailError);
+        }
       }
 
-      if (emailData && emailData.invite_token) {
-        
+      if (emailData && emailData.invite_token && isMounted.current) {
         const { data: acceptData, error: acceptError } = await supabase.rpc('accept_subcoach_invite', {
           p_invite_token: emailData.invite_token,
           p_child_coach_id: coach.id
@@ -75,26 +97,33 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
 
         if (acceptError) {
           console.error('[TeamInvitationMonitor] ❌ Auto-link RPC failed:', acceptError);
-        } else {
+        } else if (isMounted.current) {
           handleFoundInvitation({
             id: emailData.id,
             parent_coach_name: emailData.parent_coach_name || acceptData.parent_coach_name
           });
         }
-      } else {
+      } else if (isMounted.current) {
         setHasChecked(true);
       }
-    } catch (err) {
-      console.error('[TeamInvitationMonitor] Unexpected error:', err);
+    } catch (err: any) {
+      if (err?.message?.includes('Network request failed')) {
+        console.warn('[TeamInvitationMonitor] Caught network error in check.');
+      } else {
+        console.error('[TeamInvitationMonitor] Unexpected error:', err);
+      }
     }
   };
 
   const handleFoundInvitation = (data: any) => {
+    if (!isMounted.current) return;
+    
     setHasChecked(true);
     setInvitationFound(true); // STOP all further checks!
     
     // Navigate to welcome screen safely
     requestAnimationFrame(() => {
+      if (!isMounted.current) return;
       try {
         router.push({
           pathname: '/(coach)/team-welcome',
@@ -120,7 +149,6 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
       return;
     }
 
-
     if (checkTimeoutRef.current) {
       clearTimeout(checkTimeoutRef.current);
     }
@@ -142,9 +170,19 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
       return;
     }
 
-    
     let pollInterval: any = null;
     
+    // Handle AppState changes to pause/resume polling
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App has come to the foreground!
+        checkForPendingInvitation();
+      }
+      appState.current = nextAppState;
+    };
+
+    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
     const subscription = supabase
       .channel(`team-invitation-${coach.id}`)
       .on(
@@ -156,19 +194,18 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
           filter: `child_coach_id=eq.${coach.id}`,
         },
         (payload) => {
-          if (invitationFound) return; // Don't handle if already found
-          
+          if (invitationFound || !isMounted.current) return;
           
           const newRecord = payload.new as any;
           setInvitationFound(true); // STOP polling!
           
-          // Stop polling immediately
           if (pollInterval) {
             clearInterval(pollInterval);
             pollInterval = null;
           }
           
           requestAnimationFrame(() => {
+            if (!isMounted.current) return;
             try {
               router.push({
                 pathname: '/(coach)/team-welcome',
@@ -184,14 +221,11 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
         }
       )
       .subscribe((status, err) => {
-        
         if (status === 'SUBSCRIBED') {
-          
-          // Start periodic polling as backup (every 5 seconds)
+          // Start periodic polling as backup (every 10 seconds - reduced from 5)
           if (pollInterval) clearInterval(pollInterval);
           pollInterval = setInterval(() => {
-            if (invitationFound) {
-              // STOP polling if we found an invitation!
+            if (invitationFound || !isMounted.current) {
               if (pollInterval) {
                 clearInterval(pollInterval);
                 pollInterval = null;
@@ -199,13 +233,12 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
               return;
             }
             checkForPendingInvitation();
-          }, 5000); // Increased to 5 seconds (less spammy)
+          }, 10000); 
           
         } else if (status === 'CHANNEL_ERROR') {
-          if (!invitationFound) {
-            setTimeout(() => checkForPendingInvitation(), 1000);
+          if (!invitationFound && isMounted.current) {
+            setTimeout(() => checkForPendingInvitation(), 2000);
           }
-          
         } else if (status === 'CLOSED') {
           if (pollInterval) clearInterval(pollInterval);
         }
@@ -213,9 +246,10 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);
+      appStateSubscription.remove();
       subscription.unsubscribe();
     };
-  }, [coach?.id, invitationFound]); // Re-run if invitationFound changes
+  }, [coach?.id, invitationFound]);
 
   return null;
 }

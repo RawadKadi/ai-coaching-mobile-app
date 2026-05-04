@@ -28,6 +28,8 @@ export default function CoachLayout() {
         <Stack.Screen name="team-welcome" options={{ presentation: 'modal' }} />
         <Stack.Screen name="challenges" />
         <Stack.Screen name="clients/[id]" />
+        <Stack.Screen name="clients/create-selection" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="clients/create-protocol" />
       </Stack>
       
       {/* Absolute Loading Overlay to prevent UI flash, without unmounting the Stack */}

@@ -559,12 +559,15 @@ export default function ActivityScreen() {
                 {habits.map((habit, idx) => {
                   const log = habitLogs.find(l => l.habit_id === habit.id);
                   const isCompleted = log?.completed || false;
-                  return (
-                    <ActivityCard 
-                      key={habit.id}
-                      title={habit.name}
-                      sub={habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle'}
-                      completed={isCompleted}
+                    return (
+                      <ActivityCard 
+                        key={habit.id}
+                        title={habit.name}
+                        sub={
+                          (habit.category ? `${habit.category.toUpperCase()} • ` : '') + 
+                          (habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle')
+                        }
+                        completed={isCompleted}
                       icon={<CheckCircle size={20} color={isCompleted ? '#3B82F6' : '#94A3B8'} />}
                       onToggle={() => toggleHabit(habit)}
                       delay={idx * 50}

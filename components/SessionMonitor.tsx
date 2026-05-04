@@ -110,8 +110,12 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
             }
           }
         }
-      } catch (error) {
-        console.error('Session monitor error:', error);
+      } catch (error: any) {
+        if (error?.message?.includes('Network request failed')) {
+          console.warn('[SessionMonitor] Network request failed in poller.');
+        } else {
+          console.error('Session monitor error:', error);
+        }
       }
     };
 
@@ -184,8 +188,12 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
               handleSessionUpdate(session);
            }
         }
-      } catch (e) {
-        console.error('Error checking active session:', e);
+      } catch (e: any) {
+        if (e?.message?.includes('Network request failed')) {
+          // Ignore network errors for fast polling
+        } else {
+          console.error('Error checking active session:', e);
+        }
       }
     };
 

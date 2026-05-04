@@ -54,18 +54,38 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
+    const updateLastSeen = async () => {
+      if (!user || AppState.currentState !== 'active') return;
+      try {
+        await supabase
+          .from('profiles')
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq('id', user.id);
+      } catch (e: any) {
+        if (e?.message?.includes('Network request failed')) {
+          console.warn('[Presence] Network request failed in heartbeat.');
+        } else {
+          console.error('[Presence] Error updating last_seen_at:', e);
+        }
+      }
+    };
+
+    // Initial update
+    updateLastSeen();
+
+    // Heartbeat every 2 minutes while active
+    const heartbeatInterval = setInterval(updateLastSeen, 1000 * 60 * 2);
+
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       console.log('[Presence] AppState changed to:', nextAppState);
       if (nextAppState === 'active') {
-        // When coming back to active, re-track. If socket closed, real-time will re-subscribe automatically.
+        updateLastSeen();
         if (channel.state === 'joined') {
           await channel.track({ online_at: new Date().toISOString() });
         } else {
           channel.subscribe();
         }
       } else {
-        // Going to background - opt-out of untrack if we want to rely on server-side timeout,
-        // but for "only when app is opened", untrack is correct.
         await channel.untrack();
       }
     };
@@ -74,6 +94,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       console.log('[Presence] Cleaning up channel');
+      clearInterval(heartbeatInterval);
       subscription.remove();
       supabase.removeChannel(channel);
       channelRef.current = null;

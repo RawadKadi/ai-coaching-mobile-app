@@ -22,6 +22,30 @@ import {
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePresence } from '@/contexts/PresenceContext';
+import SchedulerModal from '@/components/SchedulerModal';
+import { AnimatePresence } from 'moti';
+import { X, Search } from 'lucide-react-native';
+import { Modal, TextInput } from 'react-native';
+
+const formatActivityDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  const checkDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  if (checkDate.getTime() === today.getTime()) {
+    return `Today, ${timeStr}`;
+  } else if (checkDate.getTime() === yesterday.getTime()) {
+    return `Yesterday, ${timeStr}`;
+  } else {
+    return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
+  }
+};
 
 export default function CoachDashboard() {
   const router = useRouter();
@@ -31,12 +55,33 @@ export default function CoachDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
+  const { onlineUserIds } = usePresence();
+  const [clientUserIds, setClientUserIds] = useState<string[]>([]);
   const [stats, setStats] = useState({ 
     totalClients: 0, 
     activeClients: 0, 
     pendingCheckIns: 0, 
-    unreadMessages: 0 
+    unreadMessages: 0,
+    activeChallenges: 0,
+    todaysSessions: 0
   });
+
+  // AI Scheduler State
+  const [showClientPicker, setShowClientPicker] = useState(false);
+  const [clients, setClients] = useState<any[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
+  const [selectedClientForAI, setSelectedClientForAI] = useState<any>(null);
+  const [showAIScheduler, setShowAIScheduler] = useState(false);
+  const [allSessions, setAllSessions] = useState<any[]>([]);
+  const [clientSearch, setClientSearch] = useState('');
+
+  // Calculate real-time active count based on Presence (excluding the coach themselves)
+  const realTimeActiveCount = clientUserIds
+    .filter(id => id !== profile?.id)
+    .filter(id => onlineUserIds.has(id)).length;
+    
+  // Use the higher of the two (DB last_seen or Realtime Presence) for immediate responsiveness
+  const displayActiveCount = Math.max(stats.activeClients, realTimeActiveCount);
 
   useEffect(() => {
     if (coach) {
@@ -65,9 +110,10 @@ export default function CoachDashboard() {
   const loadDashboardData = async () => {
     if (!coach) return;
     try {
-      const [statsResult, checkinsResult] = await Promise.all([
+      const [statsResult, checkinsResult, clientsResult] = await Promise.all([
         supabase.rpc('get_coach_stats'),
-        supabase.rpc('get_recent_checkins')
+        supabase.rpc('get_recent_checkins'),
+        supabase.rpc('get_my_clients')
       ]);
 
       if (statsResult.data) {
@@ -79,7 +125,18 @@ export default function CoachDashboard() {
           activeClients: statsData?.activeClients || 0,
           pendingCheckIns: statsData?.pendingCheckIns || 0,
           unreadMessages: unreadCount,
+          activeChallenges: statsData?.activeChallenges || 0,
+          todaysSessions: statsData?.todaysSessions || 0,
         });
+      }
+
+      if (clientsResult.data) {
+        const ids = clientsResult.data
+          .filter((c: any) => c.status === 'active')
+          .map((c: any) => c.user_id || c.client_user_id)
+          .filter(Boolean);
+        
+        setClientUserIds(ids);
       }
 
       setRecentCheckins(checkinsResult.data || []);
@@ -89,6 +146,37 @@ export default function CoachDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleOpenAIScheduler = async () => {
+    setLoadingClients(true);
+    setShowClientPicker(true);
+    try {
+      const [clientsResult, sessionsResult] = await Promise.all([
+        supabase.rpc('get_my_clients'),
+        supabase.from('sessions').select('*, client:clients(profiles(full_name, avatar_url))').eq('coach_id', coach?.id)
+      ]);
+      
+      if (clientsResult.data) {
+        setClients(clientsResult.data.map((c: any) => ({
+          id: c.client_id,
+          name: c.client_name,
+          avatar: c.client_avatar,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone // Default to current or fetch from profile if available
+        })));
+      }
+      setAllSessions(sessionsResult.data || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
+  const startAIScheduler = (client: any) => {
+    setSelectedClientForAI(client);
+    setShowClientPicker(false);
+    setShowAIScheduler(true);
   };
 
   if (loading && !refreshing) {
@@ -157,12 +245,12 @@ export default function CoachDashboard() {
                         <View className="w-12 h-12 bg-purple-600/10 rounded-2xl items-center justify-center mb-6 border border-purple-600/20">
                             <Award size={24} color="#A855F7" />
                         </View>
-                        <Text className="text-white text-4xl font-black tracking-tighter">{stats.activeClients}</Text>
+                        <Text className="text-white text-4xl font-black tracking-tighter">{displayActiveCount}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Now</Text>
                         <View className="w-full h-1.5 bg-slate-800 rounded-full mt-4 overflow-hidden">
                             <View 
                               className="bg-purple-500 h-full rounded-full" 
-                              style={{ width: `${stats.totalClients > 0 ? (stats.activeClients / stats.totalClients) * 100 : 0}%` }} 
+                              style={{ width: `${stats.totalClients > 0 ? (displayActiveCount / stats.totalClients) * 100 : 0}%` }} 
                             />
                         </View>
                         {stats.totalClients > stats.activeClients && (
@@ -171,6 +259,38 @@ export default function CoachDashboard() {
                             </Text>
                         )}
                     </View>
+                </View>
+
+                {/* New Strategic Stats Row */}
+                <View className="flex-row gap-4 mt-4">
+                    <TouchableOpacity 
+                      onPress={() => router.push('/(coach)/(tabs)/calendar')}
+                      className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl"
+                    >
+                        <View className="w-12 h-12 bg-orange-600/10 rounded-2xl items-center justify-center mb-6 border border-orange-600/20">
+                            <Zap size={24} color="#F59E0B" />
+                        </View>
+                        <Text className="text-white text-4xl font-black tracking-tighter">{stats.todaysSessions}</Text>
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Today's Sessions</Text>
+                        <View className="flex-row items-center gap-1.5 mt-4">
+                            <Text className="text-orange-500 font-bold text-[10px]">{stats.todaysSessions === 0 ? 'Clear Schedule' : 'Live Focus'}</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      onPress={() => router.push('/(coach)/challenges')}
+                      className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl"
+                    >
+                        <View className="w-12 h-12 bg-emerald-600/10 rounded-2xl items-center justify-center mb-6 border border-emerald-600/20">
+                            <Trophy size={24} color="#10B981" />
+                        </View>
+                        <Text className="text-white text-4xl font-black tracking-tighter">{stats.activeChallenges}</Text>
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Challenges</Text>
+                        <View className="flex-row items-center gap-1.5 mt-4">
+                            <TrendingUp size={12} color="#10B981" />
+                            <Text className="text-emerald-500 font-bold text-[10px]">High Engagement</Text>
+                        </View>
+                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -221,9 +341,10 @@ export default function CoachDashboard() {
                   onPress={() => router.push('/(coach)/challenges')}
                 />
                 <ActionCard 
-                  icon={<Dumbbell size={28} color="#A855F7" />} 
-                  title="Workout Library" 
-                  desc="Protocols & routines" 
+                  icon={<Zap size={28} color="#A855F7" />} 
+                  title="AI Scheduler" 
+                  desc="Smart session planning" 
+                  onPress={handleOpenAIScheduler}
                 />
                 <ActionCard 
                   icon={<UserPlus size={28} color="#3B82F6" />} 
@@ -264,7 +385,7 @@ export default function CoachDashboard() {
                         <View className="flex-row items-center justify-between">
                           <Text className="text-white font-bold text-sm tracking-tight">{item.client_name}</Text>
                           <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
-                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatActivityDate(item.created_at)}
                           </Text>
                         </View>
                         <Text className="text-blue-500 font-black text-[10px] uppercase tracking-[2px] mt-1">Daily Check-in Synced</Text>
@@ -300,6 +421,95 @@ export default function CoachDashboard() {
               <Plus size={36} color="white" strokeWidth={3} />
             </TouchableOpacity>
           </View>
+
+          {/* Client Picker Modal */}
+          <Modal visible={showClientPicker} animationType="slide" presentationStyle="pageSheet">
+            <View className="flex-1 bg-slate-950">
+              <View className="px-6 pt-6 pb-4 flex-row justify-between items-center border-b border-slate-900">
+                <View>
+                  <Text className="text-white text-xl font-bold">Select Athlete</Text>
+                  <Text className="text-slate-500 text-xs uppercase tracking-widest font-bold">Launch AI Scheduler</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowClientPicker(false)} className="p-2 bg-slate-900 rounded-full">
+                  <X size={20} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              <View className="px-6 py-4">
+                <View className="bg-slate-900/50 border border-slate-800 rounded-2xl px-4 py-3 flex-row items-center">
+                  <Search size={18} color="#475569" />
+                  <TextInput 
+                    className="flex-1 ml-3 text-white font-bold"
+                    placeholder="Search roster..."
+                    placeholderTextColor="#475569"
+                    value={clientSearch}
+                    onChangeText={setClientSearch}
+                  />
+                </View>
+              </View>
+
+              {loadingClients ? (
+                <View className="flex-1 justify-center items-center">
+                  <ActivityIndicator color="#3B82F6" />
+                </View>
+              ) : (
+                <ScrollView className="flex-1 px-6 pt-4">
+                  {clients
+                    .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                    .map((client) => (
+                    <TouchableOpacity 
+                      key={client.id}
+                      onPress={() => startAIScheduler(client)}
+                      className="bg-slate-900/40 p-5 rounded-[28px] border border-white/5 mb-4 flex-row items-center"
+                    >
+                      <BrandedAvatar name={client.name} imageUrl={client.avatar} size={48} />
+                      <View className="ml-4 flex-1">
+                        <Text className="text-white font-bold text-lg">{client.name}</Text>
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-0.5">Active Client</Text>
+                      </View>
+                      <View className="w-10 h-10 bg-blue-600/10 rounded-full items-center justify-center border border-blue-500/20">
+                        <ChevronRight size={18} color="#3B82F6" />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </Modal>
+
+          {/* AI Scheduler Modal */}
+          {selectedClientForAI && (
+            <SchedulerModal 
+              visible={showAIScheduler}
+              onClose={() => { setShowAIScheduler(false); setSelectedClientForAI(null); }}
+              onConfirm={async (sessions) => {
+                // Handle session confirmation (similar to calendar.tsx)
+                try {
+                  const { error } = await supabase.from('sessions').insert(
+                    sessions.map(s => ({
+                      coach_id: coach?.id,
+                      client_id: selectedClientForAI.id,
+                      scheduled_at: s.scheduled_at,
+                      duration_minutes: s.duration_minutes,
+                      session_type: s.session_type,
+                      status: 'scheduled'
+                    }))
+                  );
+                  if (error) throw error;
+                  loadDashboardData();
+                } catch (e) {
+                  console.error(e);
+                  throw e;
+                }
+              } }
+              clientContext={{
+                name: selectedClientForAI.name,
+                timezone: selectedClientForAI.timezone
+              }}
+              targetClientId={selectedClientForAI.id}
+              existingSessions={allSessions}
+            />
+          )}
       </View>
     </View>
   );

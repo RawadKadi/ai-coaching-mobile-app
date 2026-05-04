@@ -21,6 +21,7 @@ import {
 import { Image } from 'expo-image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
+import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
 import { 
   Send, 
@@ -44,7 +45,7 @@ import * as Haptics from 'expo-haptics';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useTheme } from '@/contexts/BrandContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
 import { MotiView, AnimatePresence } from 'moti';
@@ -85,6 +86,7 @@ export default function ClientMessagesScreen() {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const { refreshUnreadCount } = useUnread();
+  const { suppressToast } = useNotification();
   const { isUserOnline } = usePresence();
   const theme = useTheme();
   
@@ -228,6 +230,28 @@ export default function ClientMessagesScreen() {
     await supabase.from('messages').update({ read: true }).eq('id', mid);
     refreshUnreadCount();
   };
+
+  const markMessagesAsRead = async (msgs?: Message[]) => {
+    const list = msgs || messages;
+    if (!list.length || !user?.id) return;
+    const unreadIds = list.filter(m => !m.read && m.recipient_id === user.id).map(m => m.id);
+    if (unreadIds.length > 0) {
+      await supabase.from('messages').update({ read: true }).in('id', unreadIds);
+      refreshUnreadCount();
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        markMessagesAsRead();
+        suppressToast(true);
+      }
+      return () => {
+        suppressToast(false);
+      };
+    }, [user?.id, messages])
+  );
 
   const handleSendText = async (text: string, replyId?: string) => {
     if (!user || !coachUserId || !text.trim()) return;

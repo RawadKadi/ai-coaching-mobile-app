@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Alert,
   SafeAreaView,
   RefreshControl,
+  LayoutAnimation,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,8 +30,11 @@ import {
   ChevronRight,
   MoreVertical,
   Zap,
-  Clock
+  Clock,
+  Trash2,
+  Edit2
 } from 'lucide-react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useTheme } from '@/contexts/BrandContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import SchedulerModal from '@/components/SchedulerModal';
@@ -53,12 +57,23 @@ export default function ClientDetailsScreen() {
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
   const [challengeFilter, setChallengeFilter] = useState<'active' | 'history'>('active');
-  const [mainTab, setMainTab] = useState<'overview' | 'checkins'>((tab as string) === 'checkins' ? 'checkins' : 'overview');
+  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins'>((tab as string) === 'checkins' ? 'checkins' : 'overview');
   const [checkins, setCheckins] = useState<any[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
   
   // Conflict Resolution State
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
   const [currentConflict, setCurrentConflict] = useState<any>(null);
+  // Habit Editing State
+  const [isEditingHabits, setIsEditingHabits] = useState(false);
+  const [editHabitModalVisible, setEditHabitModalVisible] = useState(false);
+  const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [editingDescription, setEditingDescription] = useState('');
+  const [editingCategory, setEditingCategory] = useState<any>('general');
+  const [updating, setUpdating] = useState(false);
+
+  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
 
   useEffect(() => {
     if (coach && id) {
@@ -108,11 +123,93 @@ export default function ClientDetailsScreen() {
       if (!checkinsError && checkinsData) {
         setCheckins(checkinsData);
       }
+
+      // Load Habits for Daily Tasks tab
+      const { data: habitsData, error: habitsError } = await supabase
+        .from('habits')
+        .select('*')
+        .eq('client_id', id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true });
+
+      if (!habitsError && habitsData) {
+        setHabits(habitsData);
+      }
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const handleDeleteHabit = async (habitId: string) => {
+    Alert.alert(
+      'Delete Task',
+      'Are you sure? This will stop tracking this requirement for the client.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('habits').update({ is_active: false }).eq('id', habitId);
+              if (error) throw error;
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setHabits(prev => prev.filter(h => h.id !== habitId));
+            } catch (e: any) {
+              Alert.alert('Error', e.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleEditHabit = (habit: Habit) => {
+    setSelectedHabit(habit);
+    setEditingName(habit.name);
+    setEditingDescription(habit.description || '');
+    setEditingCategory(habit.category || 'general');
+    setEditHabitModalVisible(true);
+    // Close swipeable
+    swipeableRefs.current[habit.id]?.close();
+  };
+
+  const handleUpdateHabit = async () => {
+    if (!selectedHabit) return;
+    if (!editingName.trim()) {
+        Alert.alert('Required', 'Please provide a name for the task.');
+        return;
+    }
+
+    try {
+      setUpdating(true);
+      const { error } = await supabase
+        .from('habits')
+        .update({
+          name: editingName.trim(),
+          description: editingDescription.trim() || null,
+          category: editingCategory
+        })
+        .eq('id', selectedHabit.id);
+
+      if (error) throw error;
+      
+      setHabits(prev => prev.map(h => h.id === selectedHabit.id ? { 
+        ...h, 
+        name: editingName.trim(), 
+        description: editingDescription.trim() || null,
+        category: editingCategory
+      } : h));
+      
+      setEditHabitModalVisible(false);
+      setSelectedHabit(null);
+    } catch (e: any) {
+      Alert.alert('Update Failed', e.message);
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -182,13 +279,19 @@ export default function ClientDetailsScreen() {
                         className={`mr-8 pb-4 border-b-2 ${mainTab === 'overview' ? 'border-blue-500' : 'border-transparent'}`}
                         onPress={() => setMainTab('overview')}
                     >
-                        <Text className={`text-base font-bold ${mainTab === 'overview' ? 'text-white' : 'text-slate-500'}`}>Overview</Text>
+                        <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'overview' ? 'text-white' : 'text-slate-500'}`}>Overview</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
-                        className={`mr-8 pb-4 border-b-2 ${mainTab === 'checkins' ? 'border-blue-500' : 'border-transparent'}`}
+                        className={`mr-8 pb-4 border-b-2 ${mainTab === 'daily_tasks' ? 'border-emerald-500' : 'border-transparent'}`}
+                        onPress={() => setMainTab('daily_tasks')}
+                    >
+                        <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'daily_tasks' ? 'text-white' : 'text-slate-500'}`}>Daily Tasks</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        className={`pb-4 border-b-2 ${mainTab === 'checkins' ? 'border-blue-500' : 'border-transparent'}`}
                         onPress={() => setMainTab('checkins')}
                     >
-                        <Text className={`text-base font-bold ${mainTab === 'checkins' ? 'text-white' : 'text-slate-500'}`}>Check-ins</Text>
+                        <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'checkins' ? 'text-white' : 'text-slate-500'}`}>Check-ins</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -197,7 +300,7 @@ export default function ClientDetailsScreen() {
                     {/* Client Information Grid */}
                 <View className="px-6 py-8">
                     <View className="bg-slate-900/40 rounded-[32px] p-6 border border-white/5">
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-6">Physical Intelligence</Text>
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-6">Stats</Text>
                         <View className="flex-row flex-wrap gap-y-6">
                             <InfoTile icon={<Target size={14} color="#64748B" />} label="Goal" value={client.goal || 'Not set'} fullWidth />
                             <InfoTile icon={<Award size={14} color="#64748B" />} label="Experience" value={client.experience_level || 'Not set'} />
@@ -210,20 +313,21 @@ export default function ClientDetailsScreen() {
 
                 {/* Challenges Section */}
                 <View className="px-6">
+                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-6 ml-1">Challenges</Text>
                     <View className="flex-row justify-between items-center mb-8">
                         <View className="flex-row gap-6">
                             <TouchableOpacity onPress={() => setChallengeFilter('active')}>
                                 <Text className={`text-2xl font-black ${challengeFilter === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => setChallengeFilter('history')}>
-                                <Text className={`text-2xl font-black ${challengeFilter === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
+                                <Text className={`text-2xl font-black ${challengeFilter === 'history' ? 'text-white' : 'text-slate-700'}`}>Past</Text>
                             </TouchableOpacity>
                         </View>
                         <View className="flex-row gap-2">
-                             <TouchableOpacity onPress={() => router.push(`/(coach)/challenges/suggest?clientId=${id}`)} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5 shadow-lg shadow-violet-500/20">
+                             <TouchableOpacity onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5 shadow-lg shadow-violet-500/20">
                                 <Sparkles size={18} color="#A78BFA" />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => router.push(`/(coach)/challenges/create?clientId=${id}`)} className="h-10 px-4 bg-blue-600 rounded-full flex-row items-center gap-2 shadow-lg shadow-blue-500/20">
+                            <TouchableOpacity onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)} className="h-10 px-4 bg-blue-600 rounded-full flex-row items-center gap-2 shadow-lg shadow-blue-500/20">
                                 <Plus size={16} color="white" />
                                 <Text className="text-white font-black text-xs uppercase">Create</Text>
                             </TouchableOpacity>
@@ -253,13 +357,13 @@ export default function ClientDetailsScreen() {
                         </Text>
                         <View className="flex-row gap-4 w-full">
                             <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/challenges/create?clientId=${id}`)}
+                                onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)}
                                 className="flex-1 h-14 bg-slate-950 rounded-full items-center justify-center border border-white/10"
                             >
                                 <Text className="text-white font-bold text-xs uppercase">Manual Setup</Text>
                             </TouchableOpacity>
                             <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/challenges/suggest?clientId=${id}`)}
+                                onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)}
                                 className="flex-1 h-14 bg-orange-200 rounded-full items-center justify-center"
                                 style={{ backgroundColor: '#FFD7B5' }}
                             >
@@ -269,6 +373,89 @@ export default function ClientDetailsScreen() {
                     </View>
                 </View>
                   </>
+                ) : mainTab === 'daily_tasks' ? (
+                  <View className="px-6 py-8">
+                    <View className="flex-row items-center justify-between mb-8 ml-1">
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px]">Daily Requirements</Text>
+                        {habits.length > 0 && (
+                            <TouchableOpacity onPress={() => setIsEditingHabits(!isEditingHabits)}>
+                                <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">{isEditingHabits ? 'Done' : 'Edit'}</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    {habits.length === 0 ? (
+                        <View className="p-12 items-center justify-center bg-slate-900/20 rounded-[40px] border border-slate-900 border-dashed">
+                             <Zap size={32} color="#1E293B" />
+                             <Text className="text-slate-700 font-black text-xs uppercase mt-6">No Daily Tasks</Text>
+                             <Text className="text-slate-800 text-[10px] mt-2 text-center px-4 leading-4">No daily habits have been assigned to this client yet.</Text>
+                             <TouchableOpacity 
+                                onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
+                                className="mt-8 px-6 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex-row items-center gap-2"
+                             >
+                                <Plus size={16} color="#10B981" />
+                                <Text className="text-emerald-500 font-black text-[10px] uppercase tracking-widest">Assign Protocol</Text>
+                             </TouchableOpacity>
+                        </View>
+                    ) : (
+                        habits.map((habit, idx) => (
+                            <Swipeable
+                                key={habit.id}
+                                ref={ref => swipeableRefs.current[habit.id] = ref}
+                                renderRightActions={() => (
+                                    <View className="flex-row mb-4 pl-4">
+                                        <TouchableOpacity 
+                                            onPress={() => handleEditHabit(habit)}
+                                            className="w-16 h-full bg-slate-800 rounded-3xl items-center justify-center border border-white/5 mr-2"
+                                        >
+                                            <Edit2 size={20} color="white" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            onPress={() => handleDeleteHabit(habit.id)}
+                                            className="w-16 h-full bg-red-500 rounded-3xl items-center justify-center shadow-lg shadow-red-500/20"
+                                        >
+                                            <Trash2 size={20} color="white" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            >
+                                <MotiView 
+                                    from={{ opacity: 0, translateX: -10 }} 
+                                    animate={{ opacity: 1, translateX: 0 }} 
+                                    transition={{ delay: idx * 50 }}
+                                    className="bg-slate-900/40 rounded-[32px] p-6 mb-4 border border-white/5 flex-row items-center gap-4"
+                                >
+                                    <View className="w-12 h-12 rounded-2xl bg-emerald-500/10 items-center justify-center border border-emerald-500/20">
+                                        <Target size={20} color="#10B981" />
+                                    </View>
+                                    <View className="flex-1">
+                                        <Text className="text-white font-black text-base">{habit.name}</Text>
+                                        <Text className="text-slate-500 text-xs font-medium mt-1" numberOfLines={1}>{habit.description || 'No instructions provided'}</Text>
+                                    </View>
+                                    <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-white/5">
+                                        <Text className="text-slate-400 text-[8px] font-black uppercase tracking-widest">{habit.category || 'General'}</Text>
+                                    </View>
+                                    {isEditingHabits && (
+                                        <TouchableOpacity onPress={() => handleEditHabit(habit)} className="p-2">
+                                            <ChevronRight size={16} color="#475569" />
+                                        </TouchableOpacity>
+                                    )}
+                                </MotiView>
+                            </Swipeable>
+                        ))
+                    )}
+
+                    {habits.length > 0 && (
+                        <TouchableOpacity 
+                            onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
+                            className="mt-4 p-8 bg-slate-900/40 rounded-[40px] border border-white/5 items-center border-dashed"
+                        >
+                            <View className="w-12 h-12 bg-slate-950 rounded-full items-center justify-center border border-white/10 mb-4">
+                                <Plus size={20} color="#64748B" />
+                            </View>
+                            <Text className="text-white font-black text-sm uppercase tracking-widest">Add or Edit Tasks</Text>
+                        </TouchableOpacity>
+                    )}
+                  </View>
                 ) : (
                   <View className="px-6 py-8">
                     {checkins.length === 0 ? (
@@ -363,6 +550,83 @@ export default function ClientDetailsScreen() {
             onResolve={async () => { await loadClientData(); setConflictModalVisible(false); setCurrentConflict(null); }}
         />
        )}
+
+       {/* Edit Habit Modal */}
+       <Modal
+         visible={editHabitModalVisible}
+         animationType="slide"
+         transparent={true}
+       >
+         <View className="flex-1 bg-black/60 justify-end">
+           <View className="bg-slate-950 rounded-t-[48px] p-8 border-t border-white/10 pb-12">
+             <View className="flex-row justify-between items-center mb-8">
+               <View>
+                 <Text className="text-white text-2xl font-black">Edit Task</Text>
+                 <Text className="text-slate-500 text-xs uppercase tracking-widest font-bold mt-1">Daily Protocol</Text>
+               </View>
+               <TouchableOpacity 
+                 onPress={() => setEditHabitModalVisible(false)}
+                 className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5"
+               >
+                 <Plus size={20} color="#64748B" style={{ transform: [{ rotate: '45deg' }] }} />
+               </TouchableOpacity>
+             </View>
+
+             <View className="space-y-6">
+               <View>
+                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Task Name</Text>
+                 <TextInput
+                   className="bg-slate-900 border border-white/5 rounded-2xl px-6 py-4 text-white font-bold text-lg"
+                   value={editingName}
+                   onChangeText={setEditingName}
+                   placeholder="e.g. Drink 3L Water"
+                   placeholderTextColor="#475569"
+                 />
+               </View>
+
+               <View>
+                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Instructions</Text>
+                 <TextInput
+                   className="bg-slate-900 border border-white/5 rounded-2xl px-6 py-4 text-white font-medium text-base min-h-[100px]"
+                   value={editingDescription}
+                   onChangeText={setEditingDescription}
+                   placeholder="Add optional notes for the client..."
+                   placeholderTextColor="#475569"
+                   multiline
+                   textAlignVertical="top"
+                 />
+               </View>
+
+               <View>
+                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Category</Text>
+                 <View className="flex-row flex-wrap gap-2">
+                   {['training', 'nutrition', 'recovery', 'consistency'].map((cat) => (
+                     <TouchableOpacity
+                       key={cat}
+                       onPress={() => setEditingCategory(cat)}
+                       className={`px-4 py-2 rounded-xl border ${editingCategory === cat ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-slate-900 border-white/5'}`}
+                     >
+                       <Text className={`text-[10px] font-black uppercase tracking-widest ${editingCategory === cat ? 'text-emerald-400' : 'text-slate-500'}`}>{cat}</Text>
+                     </TouchableOpacity>
+                   ))}
+                 </View>
+               </View>
+
+               <TouchableOpacity
+                 onPress={handleUpdateHabit}
+                 disabled={updating}
+                 className="h-16 bg-blue-600 rounded-3xl items-center justify-center shadow-lg shadow-blue-500/20 mt-4"
+               >
+                 {updating ? (
+                   <ActivityIndicator color="white" />
+                 ) : (
+                   <Text className="text-white font-black text-lg uppercase tracking-widest">Update Task</Text>
+                 )}
+               </TouchableOpacity>
+             </View>
+           </View>
+         </View>
+       </Modal>
     </View>
   );
 }

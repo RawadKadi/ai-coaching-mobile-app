@@ -68,8 +68,19 @@ export default function ClientTabLayout() {
         options={{
           title: 'Direct',
           tabBarIcon: ({ color }) => <MessageCircle size={22} color={color} />,
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: '#3B82F6', fontSize: 10, fontWeight: '900' },
+          tabBarBadge: unreadCount > 0 ? String(unreadCount) : undefined,
+          tabBarBadgeStyle: { 
+            backgroundColor: '#3B82F6', 
+            color: 'white',
+            fontSize: 10, 
+            fontWeight: '900',
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            textAlign: 'center',
+            lineHeight: 18,
+            padding: 0
+          },
           tabBarStyle: { display: 'none' }
         }}
       />

@@ -17,14 +17,16 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     if (!user?.id) return;
 
     try {
+      // Use a simpler select without 'head' to ensure count is reliably returned
       const { count, error } = await supabase
         .from('messages')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact' })
         .eq('recipient_id', user.id)
         .eq('read', false);
 
       if (error) throw error;
       setUnreadCount(count || 0);
+      console.log(`[UnreadContext] Refreshed count for ${user.id}: ${count}`);
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
@@ -35,28 +37,16 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     refreshUnreadCount();
   }, [user?.id]);
 
-  // Subscribe to new messages
+  // Subscribe to changes in messages
   useEffect(() => {
     if (!user?.id) return;
 
     const channel = supabase
-      .channel(`unread-${user.id}`)
+      .channel(`unread-count-${user.id}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `recipient_id=eq.${user.id}`,
-        },
-        () => {
-          refreshUnreadCount();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
+          event: '*', // Listen to INSERT, UPDATE, and DELETE
           schema: 'public',
           table: 'messages',
           filter: `recipient_id=eq.${user.id}`,
