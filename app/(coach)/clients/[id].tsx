@@ -60,6 +60,7 @@ export default function ClientDetailsScreen() {
   const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins'>((tab as string) === 'checkins' ? 'checkins' : 'overview');
   const [checkins, setCheckins] = useState<any[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [streak, setStreak] = useState(0);
   
   // Conflict Resolution State
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
@@ -136,6 +137,10 @@ export default function ClientDetailsScreen() {
       if (!habitsError && habitsData) {
         setHabits(habitsData);
       }
+
+      // Load Streak
+      const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: id });
+      setStreak(streakData || 0);
     } catch (error) {
       console.error(error);
     } finally {
@@ -329,6 +334,7 @@ export default function ClientDetailsScreen() {
                         <View className="flex-row flex-wrap gap-y-6">
                             <InfoTile icon={<Target size={14} color="#64748B" />} label="Goal" value={client.goal || 'Not set'} fullWidth />
                             <InfoTile icon={<Award size={14} color="#64748B" />} label="Experience" value={client.experience_level || 'Not set'} />
+                            <InfoTile icon={<TrendingUp size={14} color="#3B82F6" />} label="Streak" value={`${streak} Days`} />
                             <InfoTile icon={<Scale size={14} color="#64748B" />} label="Weight" value={client.latest_weight ? `${client.latest_weight} kg` : 'Not set'} />
                             <InfoTile icon={<User size={14} color="#64748B" />} label="Height" value={client.height_cm ? `${client.height_cm} cm` : 'Not set'} />
                             <InfoTile icon={<Clock size={14} color="#64748B" />} label="Age" value={client.date_of_birth ? `${Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 3600 * 24 * 365.25))}` : 'Not set'} />

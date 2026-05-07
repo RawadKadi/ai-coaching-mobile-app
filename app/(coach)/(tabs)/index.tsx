@@ -60,6 +60,7 @@ export default function CoachDashboard() {
   const [stats, setStats] = useState({ 
     totalClients: 0, 
     activeClients: 0, 
+    compliantToday: 0,
     pendingCheckIns: 0, 
     unreadMessages: 0,
     activeChallenges: 0,
@@ -123,6 +124,7 @@ export default function CoachDashboard() {
         setStats({
           totalClients: statsData?.totalClients || 0,
           activeClients: statsData?.activeClients || 0,
+          compliantToday: statsData?.compliantToday || 0,
           pendingCheckIns: statsData?.pendingCheckIns || 0,
           unreadMessages: unreadCount,
           activeChallenges: statsData?.activeChallenges || 0,
@@ -245,13 +247,11 @@ export default function CoachDashboard() {
                         <View className="w-12 h-12 bg-purple-600/10 rounded-2xl items-center justify-center mb-6 border border-purple-600/20">
                             <Award size={24} color="#A855F7" />
                         </View>
-                        <Text className="text-white text-4xl font-black tracking-tighter">{displayActiveCount}</Text>
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Now</Text>
-                        <View className="w-full h-1.5 bg-slate-800 rounded-full mt-4 overflow-hidden">
-                            <View 
-                              className="bg-purple-500 h-full rounded-full" 
-                              style={{ width: `${stats.totalClients > 0 ? (displayActiveCount / stats.totalClients) * 100 : 0}%` }} 
-                            />
+                        <Text className="text-white text-4xl font-black tracking-tighter">{stats.activeClients}</Text>
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Clients</Text>
+                        <View className="flex-row items-center gap-1.5 mt-4">
+                            <TrendingUp size={12} color="#34D399" />
+                            <Text className="text-emerald-500 font-bold text-[10px]">{stats.compliantToday}/{stats.activeClients} Compliant today</Text>
                         </View>
                         {stats.totalClients > stats.activeClients && (
                             <Text className="text-slate-600 text-[9px] font-bold mt-2">

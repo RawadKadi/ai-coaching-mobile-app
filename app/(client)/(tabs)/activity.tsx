@@ -43,6 +43,7 @@ export default function ActivityScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [streak, setStreak] = useState(0);
 
   // Bottom Sheet Animation state
   const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -194,6 +195,10 @@ export default function ActivityScreen() {
       }
 
       setChallenges(subsData || []);
+
+      // Get Streak
+      const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: client?.id });
+      setStreak(streakData || 0);
 
       // Initialize last reported status
       logs.forEach(log => {
@@ -522,9 +527,9 @@ export default function ActivityScreen() {
               icon={<Utensils size={18} color="#F59E0B" />} 
             />
             <MetricCard 
-              label="Active Time" 
-              value={`${totalWorkoutMinutes}m`} 
-              icon={<Clock size={18} color="#10B981" />} 
+              label="Streak" 
+              value={`${streak}`} 
+              icon={<Award size={18} color="#10B981" />} 
             />
             <MetricCard 
               label="Habit Velocity" 
