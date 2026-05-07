@@ -1,14 +1,22 @@
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import SessionMonitor from '@/components/SessionMonitor';
 import TeamInvitationMonitor from '@/components/TeamInvitationMonitor';
 import { UnassignedClientsBanner } from '@/components/UnassignedClientsBanner';
+import { NewAssignmentCelebration } from '@/components/NewAssignmentCelebration';
 
 export default function CoachLayout() {
   const router = useRouter();
-  const { session, profile, loading } = useAuth();
+  const { session, profile, coach, loading } = useAuth();
+  
+  const [celebration, setCelebration] = useState<{ visible: boolean; isFirst: boolean; name: string }>({
+    visible: false,
+    isFirst: false,
+    name: ''
+  });
 
   useEffect(() => {
     if (!loading) {
@@ -19,6 +27,39 @@ export default function CoachLayout() {
       }
     }
   }, [session, profile, loading]);
+
+  useEffect(() => {
+    if (coach?.id) {
+      const sub = supabase.channel(`coach_assignments_${coach.id}`)
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'coach_client_links', 
+          filter: `coach_id=eq.${coach.id}` 
+        }, async (payload) => {
+          try {
+            // Fetch client name and total count to determine if it's the first
+            const [clientRes, countRes] = await Promise.all([
+              supabase.from('profiles').select('full_name').eq('id', payload.new.client_id).single(),
+              supabase.from('coach_client_links').select('*', { count: 'exact', head: true }).eq('coach_id', coach.id)
+            ]);
+
+            setCelebration({
+              visible: true,
+              isFirst: (countRes.count || 0) <= 1,
+              name: clientRes.data?.full_name || 'New Athlete'
+            });
+          } catch (error) {
+            console.error('[CoachLayout] Error triggering celebration:', error);
+          }
+        })
+        .subscribe();
+
+      return () => {
+        sub.unsubscribe();
+      };
+    }
+  }, [coach?.id]);
 
   // Add a simple guard to ensure we have context even while redirecting
   return (
@@ -42,8 +83,13 @@ export default function CoachLayout() {
       <SessionMonitor router={router} />
       <TeamInvitationMonitor router={router} />
       <UnassignedClientsBanner router={router} />
+      
+      <NewAssignmentCelebration 
+        visible={celebration.visible}
+        isFirstClient={celebration.isFirst}
+        clientName={celebration.name}
+        onClose={() => setCelebration(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }
-
-import { StyleSheet } from 'react-native';

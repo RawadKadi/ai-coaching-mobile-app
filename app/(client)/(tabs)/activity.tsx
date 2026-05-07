@@ -105,25 +105,37 @@ export default function ActivityScreen() {
     }, [client, selectedDate])
   );
 
-  // Real-time listener for sub_challenges updates
+  // Real-time listener for all activity data updates
   useEffect(() => {
     if (!client) return;
 
-    const channelId = `activity-challenges-realtime-${client.id}`;
+    const channelId = `activity-realtime-${client.id}`;
     const channel = supabase
       .channel(channelId)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sub_challenges'
-        },
-        async (payload) => {
-          // Whenever ANY sub_challenge changes, refresh to be safe
-          // (Metric cards like 'Habit Velocity' also depend on this)
-          loadActivityData();
-        }
+        { event: '*', schema: 'public', table: 'sub_challenges' },
+        () => loadActivityData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meals', filter: `client_id=eq.${client.id}` },
+        () => loadActivityData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'workouts', filter: `client_id=eq.${client.id}` },
+        () => loadActivityData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'habit_logs', filter: `client_id=eq.${client.id}` },
+        () => loadActivityData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'habits', filter: `client_id=eq.${client.id}` },
+        () => loadActivityData()
       )
       .subscribe();
 

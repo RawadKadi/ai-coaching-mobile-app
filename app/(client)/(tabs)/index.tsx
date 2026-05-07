@@ -37,12 +37,12 @@ export default function ClientDashboard() {
     else if (!authLoading) setLoading(false);
   }, [client, authLoading]);
 
-  // Real-time subscription for check-in updates (like AI analysis completion)
+  // Real-time subscription for dashboard updates (check-ins, habits, logs)
   useEffect(() => {
     if (!client) return;
     
     const today = new Date().toISOString().split('T')[0];
-    const channel = supabase.channel('client_dashboard_checkins')
+    const channel = supabase.channel('client_dashboard_realtime')
       .on(
         'postgres_changes',
         {
@@ -57,6 +57,26 @@ export default function ClientDashboard() {
             setTodayCheckIn(payload.new as CheckIn);
           }
         }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'habit_logs',
+          filter: `client_id=eq.${client.id}`
+        },
+        () => loadDashboardData()
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'habits',
+          filter: `client_id=eq.${client.id}`
+        },
+        () => loadDashboardData()
       )
       .subscribe();
 

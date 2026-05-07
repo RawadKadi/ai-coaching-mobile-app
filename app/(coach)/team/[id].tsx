@@ -20,7 +20,12 @@ import {
   Shield,
   Trash2,
   Zap,
-  Plus
+  Plus,
+  MoreVertical,
+  CheckCircle2,
+  Circle,
+  Check,
+  X
 } from 'lucide-react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +33,7 @@ import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { BrandedHeader } from '@/components/BrandedHeader';
 import { AssignClientsModal } from '@/components/AssignClientsModal';
+import { ReassignToCoachModal } from '@/components/ReassignToCoachModal';
 import { TerminationSuccessModal } from '@/components/TerminationSuccessModal';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,8 +65,17 @@ export default function SubCoachDetailsScreen() {
   const [subCoach, setSubCoach] = useState<SubCoachDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [unassignedClients, setUnassignedClients] = useState<any[]>([]);
+
+  // Selection Mode State
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+  
+  // Dropdown Menu State
+  const [showCoachMenu, setShowCoachMenu] = useState(false);
+  const [activeClientMenuId, setActiveClientMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -113,10 +128,28 @@ export default function SubCoachDetailsScreen() {
     }
   };
 
+  const toggleSelectionMode = () => {
+    if (selectionMode) {
+      setSelectedClientIds(new Set());
+    }
+    setSelectionMode(!selectionMode);
+  };
+
+  const toggleClient = (clientId: string) => {
+    const newSelection = new Set(selectedClientIds);
+    if (newSelection.has(clientId)) {
+      newSelection.delete(clientId);
+    } else {
+      newSelection.add(clientId);
+    }
+    setSelectedClientIds(newSelection);
+  };
+
   const handleTerminate = () => {
+    setShowCoachMenu(false);
     Alert.alert(
-      'Terminate Sub-Coach?',
-      'This action will remove the sub-coach from your team. They will lose access to your brand and all assigned clients will be unassigned. This action cannot be undone.',
+      'Terminate Coach?',
+      'Are you sure you want to terminate? This action would permanently remove this coach from your team until invited again.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -184,12 +217,50 @@ export default function SubCoachDetailsScreen() {
             </View>
         </View>
         
-        <TouchableOpacity 
-          onPress={handleTerminate}
-          className="w-10 h-10 bg-red-500/10 rounded-xl items-center justify-center border border-red-500/20"
-        >
-          <Trash2 size={18} color="#F87171" />
-        </TouchableOpacity>
+        <View className="flex-row items-center gap-2">
+          <TouchableOpacity 
+            onPress={toggleSelectionMode}
+            className={`w-10 h-10 rounded-xl items-center justify-center border ${selectionMode ? 'bg-blue-500/20 border-blue-500/40' : 'bg-slate-900 border-white/5'}`}
+          >
+            <CheckCircle2 size={18} color={selectionMode ? '#3B82F6' : '#94A3B8'} />
+          </TouchableOpacity>
+
+          <View>
+            <TouchableOpacity 
+              onPress={() => setShowCoachMenu(!showCoachMenu)}
+              className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5"
+            >
+              <MoreVertical size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <AnimatePresence>
+              {showCoachMenu && (
+                <MotiView
+                  from={{ opacity: 0, scale: 0.9, translateY: -10 }}
+                  animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, translateY: -10 }}
+                  style={{ position: 'absolute', top: 48, right: 0, zIndex: 100 }}
+                  className="w-48 bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+                >
+                  <TouchableOpacity 
+                    onPress={handleTerminate}
+                    className="flex-row items-center gap-3 p-4 border-b border-white/5"
+                  >
+                    <Trash2 size={16} color="#F87171" />
+                    <Text className="text-red-400 font-bold text-xs uppercase tracking-widest">Terminate Coach</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => setShowCoachMenu(false)}
+                    className="flex-row items-center gap-3 p-4"
+                  >
+                    <X size={16} color="#94A3B8" />
+                    <Text className="text-slate-400 font-bold text-xs uppercase tracking-widest">Cancel</Text>
+                  </TouchableOpacity>
+                </MotiView>
+              )}
+            </AnimatePresence>
+          </View>
+        </View>
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -275,43 +346,132 @@ export default function SubCoachDetailsScreen() {
                     <Text className="text-slate-400 font-bold mt-4">No active assignments</Text>
                 </View>
             ) : (
-                subCoach?.clients.map((client, index) => (
-                    <MotiView
-                        key={client.id}
-                        from={{ opacity: 0, translateX: -20 }}
-                        animate={{ opacity: 1, translateX: 0 }}
-                        transition={{ delay: 400 + (index * 50) }}
-                        className="mb-4"
-                    >
-                        <TouchableOpacity
-                            onPress={() => router.push(`/(coach)/clients/${client.id}`)}
-                            className="p-5 rounded-[32px] bg-slate-900/40 border border-white/5 flex-row items-center gap-4"
+                subCoach?.clients.map((client, index) => {
+                    const isSelected = selectedClientIds.has(client.id);
+                    const isMenuOpen = activeClientMenuId === client.id;
+
+                    return (
+                        <MotiView
+                            key={client.id}
+                            from={{ opacity: 0, translateX: -20 }}
+                            animate={{ opacity: 1, translateX: 0 }}
+                            transition={{ delay: 400 + (index * 50) }}
+                            className="mb-4"
                         >
-                            <BrandedAvatar 
-                                name={client.full_name}
-                                size={48}
-                                imageUrl={client.avatar_url}
-                                useBrandColor={true}
-                            />
-                            <View className="flex-1">
-                                <Text className="text-white font-black text-base tracking-tight mb-0.5">{client.full_name}</Text>
-                                <Text className="text-slate-500 text-xs font-medium mb-2">{client.email}</Text>
-                                <View className="flex-row items-center gap-2">
-                                    <View className="w-1 h-1 rounded-full bg-slate-800" />
-                                    <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">
-                                        Assigned {new Date(client.added_at).toLocaleDateString()}
-                                    </Text>
+                            <TouchableOpacity
+                                onLongPress={() => {
+                                    if (!selectionMode) {
+                                        setSelectionMode(true);
+                                    }
+                                    toggleClient(client.id);
+                                }}
+                                onPress={() => {
+                                    if (selectionMode) {
+                                        toggleClient(client.id);
+                                    } else {
+                                        router.push(`/(coach)/clients/${client.id}`);
+                                    }
+                                }}
+                                style={{ borderWidth: isSelected ? 2 : 1 }}
+                                className={`p-5 rounded-[32px] flex-row items-center gap-4 ${isSelected ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-slate-900/40'}`}
+                            >
+                                {selectionMode && (
+                                    <MotiView 
+                                        from={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className={`w-6 h-6 rounded-lg border-2 items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-700 bg-slate-950'}`}
+                                    >
+                                        {isSelected && <Check size={14} color="white" strokeWidth={3} />}
+                                    </MotiView>
+                                )}
+
+                                <BrandedAvatar 
+                                    name={client.full_name}
+                                    size={48}
+                                    imageUrl={client.avatar_url}
+                                    useBrandColor={true}
+                                />
+                                <View className="flex-1">
+                                    <Text className="text-white font-black text-base tracking-tight mb-0.5">{client.full_name}</Text>
+                                    <Text className="text-slate-500 text-xs font-medium mb-2">{client.email}</Text>
+                                    <View className="flex-row items-center gap-2">
+                                        <View className="w-1 h-1 rounded-full bg-slate-800" />
+                                        <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">
+                                            Assigned {new Date(client.added_at).toLocaleDateString()}
+                                        </Text>
+                                    </View>
                                 </View>
-                            </View>
-                            <ChevronRight size={18} color="#334155" />
-                        </TouchableOpacity>
-                    </MotiView>
-                ))
+                                
+                                <View>
+                                    <TouchableOpacity 
+                                        onPress={() => setActiveClientMenuId(isMenuOpen ? null : client.id)}
+                                        className="w-10 h-10 items-center justify-center"
+                                    >
+                                        <MoreVertical size={18} color="#334155" />
+                                    </TouchableOpacity>
+
+                                    <AnimatePresence>
+                                        {isMenuOpen && (
+                                            <MotiView
+                                                from={{ opacity: 0, scale: 0.9, translateX: 20 }}
+                                                animate={{ opacity: 1, scale: 1, translateX: 0 }}
+                                                exit={{ opacity: 0, scale: 0.9, translateX: 20 }}
+                                                style={{ position: 'absolute', top: -10, right: 44, zIndex: 100 }}
+                                                className="w-40 bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+                                            >
+                                                <TouchableOpacity 
+                                                    onPress={() => {
+                                                        setActiveClientMenuId(null);
+                                                        setSelectedClientIds(new Set([client.id]));
+                                                        setShowReassignModal(true);
+                                                    }}
+                                                    className="flex-row items-center gap-3 p-4 border-b border-white/5"
+                                                >
+                                                    <Zap size={14} color="#3B82F6" />
+                                                    <Text className="text-white font-bold text-[10px] uppercase tracking-widest">Reassign</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity 
+                                                    onPress={() => {
+                                                        setActiveClientMenuId(null);
+                                                        router.push(`/(coach)/clients/${client.id}`);
+                                                    }}
+                                                    className="flex-row items-center gap-3 p-4"
+                                                >
+                                                    <ChevronRight size={14} color="#94A3B8" />
+                                                    <Text className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Details</Text>
+                                                </TouchableOpacity>
+                                            </MotiView>
+                                        )}
+                                    </AnimatePresence>
+                                </View>
+                            </TouchableOpacity>
+                        </MotiView>
+                    );
+                })
             )}
         </View>
 
         <View className="h-20" />
       </ScrollView>
+
+      <AnimatePresence>
+        {selectionMode && selectedClientIds.size > 0 && (
+          <MotiView
+            from={{ opacity: 0, scale: 0.5, translateY: 50 }}
+            animate={{ opacity: 1, scale: 1, translateY: 0 }}
+            exit={{ opacity: 0, scale: 0.5, translateY: 50 }}
+            style={{ position: 'absolute', bottom: insets.bottom + 24, right: 24, zIndex: 100 }}
+          >
+            <TouchableOpacity
+              onPress={() => setShowReassignModal(true)}
+              className="h-16 px-8 bg-blue-600 rounded-full flex-row items-center gap-3 shadow-2xl shadow-blue-500/50 border border-white/20"
+            >
+              <Zap size={20} color="white" strokeWidth={2.5} />
+              <Text className="text-white font-black text-lg tracking-tight">Reassign {selectedClientIds.size}</Text>
+            </TouchableOpacity>
+          </MotiView>
+        )}
+      </AnimatePresence>
 
       {/* Modals */}
       {coach?.id && subCoach && (
@@ -321,7 +481,32 @@ export default function SubCoachDetailsScreen() {
           subCoachName={subCoach.full_name}
           mainCoachId={coach.id}
           onClose={() => setShowAssignModal(false)}
-          onSuccess={() => loadSubCoachDetails()}
+          onSuccess={() => {
+            loadSubCoachDetails();
+            setSelectionMode(false);
+            setSelectedClientIds(new Set());
+          }}
+        />
+      )}
+
+      {coach?.id && (
+        <ReassignToCoachModal
+          visible={showReassignModal}
+          clients={subCoach?.clients.filter(c => selectedClientIds.has(c.id)) || []}
+          mainCoachId={coach.id}
+          onClose={() => {
+            setShowReassignModal(false);
+            if (selectionMode) {
+                setSelectionMode(false);
+                setSelectedClientIds(new Set());
+            }
+          }}
+          onSuccess={() => {
+            setShowReassignModal(false);
+            setSelectionMode(false);
+            setSelectedClientIds(new Set());
+            loadSubCoachDetails();
+          }}
         />
       )}
 

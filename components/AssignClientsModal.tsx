@@ -106,6 +106,34 @@ export function AssignClientsModal({
       const result = data as { success: boolean; reassigned_count: number; new_assigned_count: number; total_count: number };
 
       if (result.success) {
+        // Send automated message
+        try {
+          const { data: coachData } = await supabase
+            .from('sub_coaches')
+            .select('user_id')
+            .eq('id', subCoachId)
+            .single();
+
+          if (coachData?.user_id) {
+            const selectedClientNames = clients
+              .filter(c => selectedClients.has(c.client_id))
+              .map(c => c.client_name)
+              .join(', ');
+
+            const messageContent = selectedClients.size === 1 
+              ? `I've assigned ${selectedClientNames} to your roster. Let's get them started!`
+              : `I've assigned ${selectedClients.size} new clients to your roster: ${selectedClientNames}. Let's get to work!`;
+
+            await supabase.from('messages').insert({
+              sender_id: mainCoachId,
+              recipient_id: coachData.user_id,
+              content: messageContent
+            });
+          }
+        } catch (msgError) {
+          console.error('[AssignClientsModal] Error sending automated message:', msgError);
+        }
+
         Alert.alert('Success', `✅ Assigned ${result.total_count} client(s)`);
         onSuccess();
         onClose();
