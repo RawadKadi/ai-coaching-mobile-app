@@ -141,7 +141,6 @@ export default function CoachProfileScreen() {
               {canManageBrand && (
                 <>
                   <SectionLabel label="Management" />
-                  <ProfileMenuItem icon={<Palette size={20} color="#94A3B8" />} label="Brand Identity" onPress={() => router.push('/(coach)/settings/branding')} />
                   <ProfileMenuItem icon={<CreditCard size={20} color="#94A3B8" />} label="Subscription Plan" />
                 </>
               )}
@@ -153,7 +152,6 @@ export default function CoachProfileScreen() {
               )}
 
               <SectionLabel label="Security & Privacy" />
-              <ProfileMenuItem icon={<Shield size={20} color="#94A3B8" />} label="Preferences" />
               <ProfileMenuItem icon={<Bell size={20} color="#94A3B8" />} label="Notifications" />
 
               {/* Log Out */}

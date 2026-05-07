@@ -187,8 +187,8 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
             {!todayCheckIn ? (
                 <MotiView 
                   key="checkin-cta"
-                  from={{ scale: 0.98, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
+                  from={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   className="mt-6 overflow-hidden rounded-[40px] bg-blue-600 shadow-2xl shadow-blue-500/30 border border-white/10"
                 >
                     <TouchableOpacity 
@@ -212,19 +212,18 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
             ) : !todayCheckIn.ai_analysis ? (
                 <MotiView 
                   key="checkin-done"
-                  from={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', damping: 20 }}
-                  className="mt-6 overflow-hidden rounded-[40px] bg-slate-900 border border-emerald-500/20 shadow-2xl shadow-emerald-500/10 relative"
+                  from={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mt-6 overflow-hidden rounded-[40px] bg-slate-900 border border-blue-500/20 shadow-2xl shadow-blue-500/10 relative"
                 >
-                  <View className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full" />
+                  <View className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full" />
                   
                   <View className="p-8">
                       <View className="flex-row items-center gap-2 mb-3">
-                        <View className="w-6 h-6 bg-emerald-500/20 rounded-full items-center justify-center border border-emerald-500/30">
-                          <CheckCircle2 size={12} color="#10B981" />
+                        <View className="w-6 h-6 bg-blue-500/20 rounded-full items-center justify-center border border-blue-500/30">
+                          <CheckCircle2 size={12} color="#3B82F6" />
                         </View>
-                        <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-[3px]">Protocol Synced</Text>
+                        <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Protocol Synced</Text>
                       </View>
                       
                       <Text className="text-white text-3xl font-black tracking-tight leading-8 mb-2">Metrics Logged</Text>
@@ -232,13 +231,13 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
                       
                       <View className="mt-8 flex-row items-center justify-between">
                           <MotiView
-                              from={{ opacity: 0, translateX: -10 }}
-                              animate={{ opacity: 1, translateX: 0 }}
+                              from={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
                               transition={{ delay: 400 }}
-                              className="flex-row items-center gap-2 bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20"
+                              className="flex-row items-center gap-2 bg-blue-500/10 px-4 py-2 rounded-full border border-blue-500/20"
                           >
-                              <ActivityIndicator size="small" color="#10B981" />
-                              <Text className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">AI Processing</Text>
+                              <ActivityIndicator size="small" color="#3B82F6" />
+                              <Text className="text-blue-400 font-black text-[10px] uppercase tracking-widest">AI Processing</Text>
                           </MotiView>
                           
                           <View className="flex-row items-center">

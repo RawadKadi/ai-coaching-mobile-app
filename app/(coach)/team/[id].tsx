@@ -19,7 +19,8 @@ import {
   ArrowLeft,
   Shield,
   Trash2,
-  Zap
+  Zap,
+  Plus
 } from 'lucide-react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
@@ -201,7 +202,7 @@ export default function SubCoachDetailsScreen() {
                 <Shield size={120} color="#3B82F6" />
             </View>
             
-            <View className="w-24 h-24 rounded-[36px] bg-slate-950 items-center justify-center border-4 border-blue-600 shadow-2xl shadow-blue-500/50 mb-6">
+            <View className="w-24 h-24 rounded-full bg-slate-950 items-center justify-center border-4 border-blue-600 shadow-2xl shadow-blue-500/50 mb-6">
                 <BrandedAvatar 
                     name={subCoach?.full_name || ''}
                     size={84}

@@ -214,8 +214,8 @@ export default function LogMealScreen() {
     return (
       <View className="flex-1 bg-slate-950 items-center justify-center">
         <MotiView 
-            from={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
+            from={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             className="items-center px-8"
         >
             <View className="w-72 h-72 rounded-[48px] overflow-hidden border border-blue-500/30 shadow-2xl bg-black">

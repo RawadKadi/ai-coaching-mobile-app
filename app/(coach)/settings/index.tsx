@@ -55,24 +55,6 @@ export default function SettingsScreen() {
             desc="Tune your AI persona"
             onPress={() => router.push('/(coach)/(tabs)/ai-brain')}
           />
-
-          <SectionLabel label="Security" />
-          <SettingsItem
-            icon={<Shield size={20} color="#10B981" />}
-            iconBg="#10B98120"
-            label="Clearance Protocols"
-            desc="Password & access control"
-          />
-          <SettingsItem
-            icon={<Bell size={20} color="#EC4899" />}
-            iconBg="#EC489920"
-            label="Alert Channels"
-            desc="Configure notifications"
-          />
-
-          <View className="mt-16 items-center">
-            <Text className="text-slate-800 text-[10px] font-black uppercase tracking-[4px]">V3.0.Neural-Sync</Text>
-          </View>
         </ScrollView>
       </SafeAreaView>
     </View>

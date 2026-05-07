@@ -56,7 +56,7 @@ export default function CoachTabLayout() {
         <Tabs.Screen
           name="clients"
           options={{
-            title: 'Clients',
+            title: 'Management',
             tabBarIcon: ({ size, color }) => <Users size={22} color={color} />,
           }}
         />

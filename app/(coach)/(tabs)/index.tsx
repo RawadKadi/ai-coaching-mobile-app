@@ -412,15 +412,7 @@ export default function CoachDashboard() {
             </View>
           </ScrollView>
 
-          {/* Precision Floating Action Button */}
-          <View className="absolute bottom-10 right-6">
-            <TouchableOpacity 
-              className="w-20 h-20 bg-blue-600 rounded-[32px] items-center justify-center shadow-2xl shadow-blue-500/50 border-2 border-white/10"
-              onPress={() => {/* Open Strategic Action Modal */}}
-            >
-              <Plus size={36} color="white" strokeWidth={3} />
-            </TouchableOpacity>
-          </View>
+        
 
           {/* Client Picker Modal */}
           <Modal visible={showClientPicker} animationType="slide" presentationStyle="pageSheet">

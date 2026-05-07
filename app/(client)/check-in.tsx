@@ -103,7 +103,7 @@ export default function CheckInScreen() {
     setSaveLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('check_ins')
         .upsert({
           client_id: client.id,
@@ -196,9 +196,8 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
 
   const renderMetrics = () => (
     <MotiView
-      from={{ opacity: 0, translateX: 50 }}
-      animate={{ opacity: 1, translateX: 0 }}
-      exit={{ opacity: 0, translateX: -50 }}
+      from={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       className="flex-1 px-8"
     >
       <View className="mb-10">
@@ -278,9 +277,8 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
 
   const renderVitals = () => (
     <MotiView
-      from={{ opacity: 0, translateX: 50 }}
-      animate={{ opacity: 1, translateX: 0 }}
-      exit={{ opacity: 0, translateX: -50 }}
+      from={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       className="flex-1 px-8"
     >
       <View className="mb-10">
@@ -294,24 +292,24 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
           value={energy} 
           min={1} max={10} 
           onChange={setEnergy} 
-          icon={<Zap size={18} color="#F59E0B" />}
-          color="#F59E0B"
+          icon={<Zap size={18} color="#3B82F6" />}
+          color="#3B82F6"
         />
         <ElasticSlider 
           label="Stress Level" 
           value={stress} 
           min={1} max={10} 
           onChange={setStress} 
-          icon={<Heart size={18} color="#EF4444" />}
-          color="#EF4444"
+          icon={<Heart size={18} color="#6366F1" />}
+          color="#6366F1"
         />
         <ElasticSlider 
           label="Hunger Level" 
           value={hunger} 
           min={1} max={10} 
           onChange={setHunger} 
-          icon={<Target size={18} color="#10B981" />}
-          color="#10B981"
+          icon={<Target size={18} color="#0EA5E9" />}
+          color="#0EA5E9"
         />
       </View>
 
@@ -336,9 +334,8 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
 
   const renderMood = () => (
     <MotiView
-      from={{ opacity: 0, translateX: 50 }}
-      animate={{ opacity: 1, translateX: 0 }}
-      exit={{ opacity: 0, translateX: -50 }}
+      from={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       className="flex-1 px-8"
     >
       <View className="mb-10">
@@ -400,17 +397,17 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
 
   const renderSummary = () => (
     <MotiView
-      from={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
+      from={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       className="flex-1 px-8 items-center justify-center"
     >
       <MotiView
-        from={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: 'spring', delay: 200 }}
-        className="w-32 h-32 bg-emerald-500/10 rounded-[48px] items-center justify-center border-4 border-emerald-500/20 mb-8"
+        from={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 200 }}
+        className="w-32 h-32 bg-blue-500/10 rounded-[48px] items-center justify-center border-4 border-blue-500/20 mb-8"
       >
-        <CheckCircle2 size={64} color="#10B981" strokeWidth={2.5} />
+        <CheckCircle2 size={64} color="#3B82F6" strokeWidth={2.5} />
       </MotiView>
       <Text className="text-white text-4xl font-black tracking-tighter text-center">Protocol Synced</Text>
       <Text className="text-slate-500 font-medium text-lg mt-4 text-center px-10">Your coach has been notified. Keep smashing it!</Text>
@@ -491,15 +488,21 @@ const ElasticSlider = ({ label, value, min, max, onChange, icon, color }: any) =
   
   // Shared values for high-performance UI thread animations
   const translationX = useSharedValue(0);
-  const startX = useRef(0);
+  const startX = useSharedValue(0);
   const isPressed = useSharedValue(false);
   
   // Update translationX when value prop changes (initial or external change)
+  const isFirstRender = useRef(true);
   useEffect(() => {
     if (containerWidth > 0 && !isPressed.value) {
       const initialPos = ((value - min) / (max - min)) * containerWidth;
-      translationX.value = withSpring(initialPos, { damping: 20 });
-      startX.current = initialPos;
+      if (isFirstRender.current) {
+        translationX.value = initialPos;
+        isFirstRender.current = false;
+      } else {
+        translationX.value = withSpring(initialPos, { damping: 20 });
+      }
+      startX.value = initialPos;
     }
   }, [containerWidth, value]);
 
@@ -507,9 +510,10 @@ const ElasticSlider = ({ label, value, min, max, onChange, icon, color }: any) =
   const gesture = Gesture.Pan()
     .onBegin(() => {
       isPressed.value = true;
+      startX.value = translationX.value;
     })
     .onUpdate((event) => {
-      let newX = startX.current + event.translationX;
+      let newX = startX.value + event.translationX;
       
       // Elastic stretch logic
       if (newX < 0) {
@@ -536,12 +540,12 @@ const ElasticSlider = ({ label, value, min, max, onChange, icon, color }: any) =
       // Snap back to boundaries if stretched
       if (translationX.value < 0) {
         translationX.value = withSpring(0);
-        startX.current = 0;
+        startX.value = 0;
       } else if (translationX.value > containerWidth) {
         translationX.value = withSpring(containerWidth);
-        startX.current = containerWidth;
+        startX.value = containerWidth;
       } else {
-        startX.current = translationX.value;
+        startX.value = translationX.value;
       }
       
       runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Medium);
@@ -581,7 +585,7 @@ const ElasticSlider = ({ label, value, min, max, onChange, icon, color }: any) =
           style={{ height: 44, justifyContent: 'center' }}
         >
           {/* Background Track */}
-          <View className="h-4 bg-slate-900 rounded-full border border-white/5 overflow-hidden">
+          <View className="h-3 bg-slate-900 rounded-full border border-white/5 overflow-hidden">
             <Animated.View 
               style={[{ height: '100%', backgroundColor: color }, animatedProgressStyle]} 
             />
@@ -592,8 +596,8 @@ const ElasticSlider = ({ label, value, min, max, onChange, icon, color }: any) =
             style={[
               { 
                 position: 'absolute',
-                width: 32,
-                height: 32,
+                width: 22,
+                height: 22,
                 backgroundColor: 'white',
                 borderRadius: 16,
                 borderWidth: 4,
