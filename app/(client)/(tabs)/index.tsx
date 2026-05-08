@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { 
   Calendar, 
@@ -32,10 +32,13 @@ export default function ClientDashboard() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [todayHabitLogs, setTodayHabitLogs] = useState<HabitLog[]>([]);
 
-  useEffect(() => {
-    if (client) loadDashboardData();
-    else if (!authLoading) setLoading(false);
-  }, [client, authLoading]);
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (client) loadDashboardData();
+      else if (!authLoading) setLoading(false);
+    }, [client, authLoading])
+  );
 
   // Real-time subscription for dashboard updates (check-ins, habits, logs)
   useEffect(() => {
@@ -97,34 +100,10 @@ export default function ClientDashboard() {
       
       let checkIn = checkInResult.data;
 
-      // Auto-recover missing AI analysis for existing check-ins
+      // Auto-recover AI analysis if it's still missing (though it should be handled in check-in flow)
       if (checkIn && !checkIn.ai_analysis) {
-        try {
-          const { generateText } = await import('@/lib/google-ai');
-          const prompt = `Act as an elite AI fitness coach. Analyze this daily check-in:
-Weight: ${checkIn.weight_kg ? checkIn.weight_kg + 'kg' : 'Not provided'}
-Sleep: ${checkIn.sleep_hours ? checkIn.sleep_hours + 'hrs' : 'Not provided'}
-Energy (1-10): ${checkIn.energy_level}
-Stress (1-10): ${checkIn.stress_level}
-Hunger (1-10): ${checkIn.hunger_level}
-Mood: ${checkIn.mood}
-Notes: ${checkIn.notes}
-
-Provide exactly 2 short, punchy sentences of encouraging insight or advice based on these metrics. Be direct and premium.`;
-          
-          const analysis = await generateText(prompt);
-          if (analysis) {
-            const { data: updated } = await supabase
-              .from('check_ins')
-              .update({ ai_analysis: analysis.trim() })
-              .eq('id', checkIn.id)
-              .select()
-              .single();
-            if (updated) checkIn = updated;
-          }
-        } catch (e) {
-          console.error("Auto-recovery AI Analysis failed:", e);
-        }
+        // We don't block the UI here, just let it load then check again if needed
+        // The real-time subscription will catch the update from the check-in screen anyway
       }
 
       setTodayCheckIn(checkIn);

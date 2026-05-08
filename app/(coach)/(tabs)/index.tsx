@@ -18,12 +18,15 @@ import {
   TrendingUp,
   Award,
   Zap,
-  Smile
+  Smile,
+  Activity
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
 import SchedulerModal from '@/components/SchedulerModal';
+import { AnalyticsSparkline } from '@/components/AnalyticsSparkline';
+import { AnalyticsDetailedModal } from '@/components/AnalyticsDetailedModal';
 import { AnimatePresence } from 'moti';
 import { X, Search } from 'lucide-react-native';
 import { Modal, TextInput } from 'react-native';
@@ -75,6 +78,9 @@ export default function CoachDashboard() {
   const [showAIScheduler, setShowAIScheduler] = useState(false);
   const [allSessions, setAllSessions] = useState<any[]>([]);
   const [clientSearch, setClientSearch] = useState('');
+  const [analyticsData, setAnalyticsData] = useState<any[]>([]);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(true);
 
   // Calculate real-time active count based on Presence (excluding the coach themselves)
   const realTimeActiveCount = clientUserIds
@@ -142,11 +148,19 @@ export default function CoachDashboard() {
       }
 
       setRecentCheckins(checkinsResult.data || []);
+
+      // Fetch analytics trend data
+      setLoadingAnalytics(true);
+      const analyticsResult = await supabase.rpc('get_coach_analytics_trend');
+      if (analyticsResult.data) {
+        setAnalyticsData(analyticsResult.data);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingAnalytics(false);
     }
   };
 
@@ -243,22 +257,31 @@ export default function CoachDashboard() {
                         </View>
                     </View>
 
-                    <View className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl">
+                    <TouchableOpacity 
+                        onPress={() => setShowAnalyticsModal(true)}
+                        className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl overflow-hidden"
+                    >
                         <View className="w-12 h-12 bg-purple-600/10 rounded-2xl items-center justify-center mb-6 border border-purple-600/20">
-                            <Award size={24} color="#A855F7" />
+                            <Activity size={24} color="#A855F7" />
                         </View>
-                        <Text className="text-white text-4xl font-black tracking-tighter">{stats.activeClients}</Text>
+                        
+                        <Text className="text-white text-4xl font-black tracking-tighter">{displayActiveCount}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Clients</Text>
+
+                        <View className="h-12 mt-2 opacity-40">
+                          <AnalyticsSparkline 
+                            data={analyticsData} 
+                            heroNumber={displayActiveCount} 
+                            label="Active Clients"
+                            loading={loadingAnalytics}
+                          />
+                        </View>
+
                         <View className="flex-row items-center gap-1.5 mt-4">
                             <TrendingUp size={12} color="#34D399" />
                             <Text className="text-emerald-500 font-bold text-[10px]">{stats.compliantToday}/{stats.activeClients} Compliant today</Text>
                         </View>
-                        {stats.totalClients > stats.activeClients && (
-                            <Text className="text-slate-600 text-[9px] font-bold mt-2">
-                                {stats.totalClients - stats.activeClients} Pending Approval
-                            </Text>
-                        )}
-                    </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* New Strategic Stats Row */}
@@ -502,6 +525,13 @@ export default function CoachDashboard() {
               existingSessions={allSessions}
             />
           )}
+
+          <AnalyticsDetailedModal 
+            visible={showAnalyticsModal}
+            onClose={() => setShowAnalyticsModal(false)}
+            data={analyticsData}
+            currentActive={displayActiveCount}
+          />
       </View>
     </View>
   );

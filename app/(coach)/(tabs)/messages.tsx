@@ -77,7 +77,8 @@ export default function CoachMessagesScreen() {
         .select('sender_id')
         .in('sender_id', clientUserIds)
         .eq('recipient_id', user?.id)
-        .eq('read', false);
+        .eq('read', false)
+        .eq('ai_generated', false);
 
       // Build lookup maps in JS (no more per-client round-trips)
       const lastMsgMap: Record<string, any> = {};
@@ -95,7 +96,16 @@ export default function CoachMessagesScreen() {
         if (!client?.profiles) return null;
         const lastMsg = lastMsgMap[client.user_id];
         let preview = lastMsg?.content || 'No messages yet';
-        try { const p = JSON.parse(preview); preview = p?.text || (p?.type === 'meal_log' ? '🍽️ Meal Log' : p?.type === 'session_invite' ? '🎥 Session Invite' : 'Message'); } catch {}
+        try { 
+          const p = JSON.parse(preview); 
+          if (p?.type === 'task_completion') {
+            preview = `✅ Task: ${p.taskName || 'Completed'}`;
+          } else if (p?.type === 'challenge_completed') {
+            preview = `🏆 Protocol: ${p.taskName || 'Achieved'}`;
+          } else {
+            preview = p?.text || (p?.type === 'meal_log' ? '🍽️ Meal Log' : p?.type === 'session_invite' ? '🎥 Session Invite' : 'Message'); 
+          }
+        } catch {}
         return { id: client.id, user_id: client.user_id, full_name: client.profiles.full_name, avatar_url: client.profiles.avatar_url, last_message: preview, last_message_time: lastMsg?.created_at, unread_count: unreadMap[client.user_id] || 0 };
       }).filter(Boolean) as ClientPreview[];
 
@@ -127,7 +137,8 @@ export default function CoachMessagesScreen() {
         .select('sender_id')
         .in('sender_id', teamUserIds)
         .eq('recipient_id', user?.id)
-        .eq('read', false);
+        .eq('read', false)
+        .eq('ai_generated', false);
 
       // Build lookup maps in JS
       const lastMsgMap: Record<string, any> = {};

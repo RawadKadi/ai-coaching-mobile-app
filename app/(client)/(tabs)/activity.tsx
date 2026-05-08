@@ -44,6 +44,7 @@ export default function ActivityScreen() {
   const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [streak, setStreak] = useState(0);
+  const [showCelebration, setShowCelebration] = useState(false);
 
   // Bottom Sheet Animation state
   const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -212,6 +213,11 @@ export default function ActivityScreen() {
     }
   };
 
+  const refreshStreak = async () => {
+    const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: client?.id });
+    if (streakData !== undefined) setStreak(streakData);
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     loadActivityData();
@@ -241,10 +247,25 @@ export default function ActivityScreen() {
       if (error) throw error;
 
       // Update local state for immediate feedback
-      setChallenges(prev => prev.map(c => c.id === challenge.id ? { ...c, completed: newCompleted } : c));
+      const updatedChallenges = challenges.map(c => c.id === challenge.id ? { ...c, completed: newCompleted } : c);
+      setChallenges(updatedChallenges);
       
       // Close sheet if it's open (usually after toggle)
       if (showDetailsModal) closeSheet();
+
+      // Check for total daily completion
+      if (newCompleted) {
+        const allHabitsDone = habits.length > 0 && habits.every(h => habitLogs.find(l => l.habit_id === h.id)?.completed);
+        const otherChallengesDone = updatedChallenges.filter(c => c.id !== challenge.id).every(c => c.completed);
+        
+        if (allHabitsDone && otherChallengesDone) {
+          setShowCelebration(true);
+          setStreak(prev => prev + 1); // Optimistic streak update
+        }
+        refreshStreak();
+      } else {
+        refreshStreak();
+      }
 
       // Send auto-message to coach if completed
       if (newCompleted) {
@@ -332,7 +353,8 @@ export default function ActivityScreen() {
           recipient_id: coachData.user_id,
           content: messageContent,
           read: false,
-          ai_generated: false,
+          ai_generated: true,
+          message_type: 'system',
         })
         .select()
         .single();
@@ -381,18 +403,36 @@ export default function ActivityScreen() {
         const today = new Date().toISOString().split('T')[0];
         const { data, error } = await supabase
           .from('habit_logs')
-          .insert({
+          .upsert({
             client_id: client?.id,
             habit_id: habit.id,
             date: today,
             completed: true,
             image_url: publicUrl,
+          }, { 
+            onConflict: 'habit_id,date' 
           })
           .select()
           .single();
 
         if (error) throw error;
-        setHabitLogs([...habitLogs, data]);
+        
+        // Update local state: replace existing log for this habit/date if it exists, otherwise add new
+        const updatedLogs = habitLogs.find(l => l.habit_id === habit.id && l.date === today)
+          ? habitLogs.map(l => (l.habit_id === habit.id && l.date === today) ? data : l)
+          : [...habitLogs, data];
+          
+        setHabitLogs(updatedLogs);
+
+        // Check for total daily completion
+        const allHabitsDone = habits.every(h => updatedLogs.find(l => l.habit_id === h.id)?.completed);
+        const allChallengesDone = challenges.every(c => c.completed);
+        
+        if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
+          setShowCelebration(true);
+          setStreak(prev => prev + 1); // Optimistic streak update
+        }
+        refreshStreak();
 
         sendCompletionMessage(habit.name, true, publicUrl, habit.description);
       }
@@ -407,10 +447,20 @@ export default function ActivityScreen() {
       if (habit.verification_type === 'camera') {
         const existingLog = habitLogs.find((log) => log.habit_id === habit.id);
         if (existingLog && existingLog.completed) {
-           // Allow undo
+          // Delete the log entry for camera tasks to allow fresh resubmission
+          const { error: deleteError } = await supabase
+            .from('habit_logs')
+            .delete()
+            .eq('id', existingLog.id);
+            
+          if (deleteError) throw deleteError;
+          
+          setHabitLogs(prev => prev.filter(l => l.id !== existingLog.id));
+          sendCompletionMessage(habit.name, false, undefined, habit.description);
+          return;
         } else {
-           await handleCameraVerification(habit);
-           return;
+          await handleCameraVerification(habit);
+          return;
         }
       }
 
@@ -434,7 +484,21 @@ export default function ActivityScreen() {
           .single();
 
         if (error) throw error;
-        setHabitLogs(habitLogs.map((log) => (log.id === existingLog.id ? data : log)));
+        
+        const updatedLogs = habitLogs.map((log) => (log.id === existingLog.id ? data : log));
+        setHabitLogs(updatedLogs);
+
+        // Check for total daily completion
+        if (newCompleted) {
+          const allHabitsDone = habits.every(h => updatedLogs.find(l => l.habit_id === h.id)?.completed);
+          const allChallengesDone = challenges.every(c => c.completed);
+          
+          if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
+            setShowCelebration(true);
+            setStreak(prev => prev + 1); // Optimistic streak update
+          }
+        }
+        refreshStreak();
       } else {
         const { data, error } = await supabase
           .from('habit_logs')
@@ -448,7 +512,19 @@ export default function ActivityScreen() {
           .single();
 
         if (error) throw error;
-        setHabitLogs([...habitLogs, data]);
+        
+        const updatedLogs = [...habitLogs, data];
+        setHabitLogs(updatedLogs);
+
+        // Check for total daily completion
+        const allHabitsDone = habits.every(h => updatedLogs.find(l => l.habit_id === h.id)?.completed);
+        const allChallengesDone = challenges.every(c => c.completed);
+        
+        if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
+          setShowCelebration(true);
+          setStreak(prev => prev + 1); // Optimistic streak update
+        }
+        refreshStreak();
       }
 
       // Schedule message check
@@ -457,7 +533,6 @@ export default function ActivityScreen() {
         
         if (newCompleted !== lastStatus) {
           sendCompletionMessage(habit.name, newCompleted, undefined, habit.description);
-          lastReportedStatus.current[habit.id] = newCompleted;
         }
         
         delete timeoutRefs.current[habit.id];
@@ -638,6 +713,56 @@ export default function ActivityScreen() {
         </ScrollView>
       </View>
       
+      {/* Celebration Modal */}
+      <Modal
+        visible={showCelebration}
+        transparent
+        animationType="fade"
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Animated.View 
+            style={{ 
+              backgroundColor: '#0f172a', 
+              borderRadius: 40, 
+              padding: 40, 
+              width: '100%', 
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: 'rgba(16, 185, 129, 0.2)',
+              shadowColor: '#10B981',
+              shadowOffset: { width: 0, height: 20 },
+              shadowOpacity: 0.2,
+              shadowRadius: 40,
+              elevation: 10
+            }}
+          >
+            <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(16, 185, 129, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+              <CheckCircle size={60} color="#10B981" />
+            </View>
+            
+            <Text style={{ color: 'white', fontSize: 28, fontWeight: '900', textAlign: 'center', marginBottom: 12 }}>Protocol Fulfilled</Text>
+            <Text style={{ color: '#94a3b8', fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 32 }}>
+              Congratulations! You've successfully completed all your objectives for today.
+            </Text>
+            
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, paddingVertical: 20, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 32 }}>
+              <Text style={{ color: '#64748b', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Current Streak</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Zap size={20} color="#F59E0B" fill="#F59E0B" />
+                <Text style={{ color: 'white', fontSize: 36, fontWeight: '900' }}>{streak} Days</Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity 
+              onPress={() => setShowCelebration(false)}
+              style={{ backgroundColor: '#3b82f6', width: '100%', paddingVertical: 18, borderRadius: 20, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>Keep it up</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
+
       {/* Modern Details Overlay */}
       <Modal visible={showDetailsModal} transparent statusBarTranslucent animationType="none">
           <View style={{ flex: 1, justifyContent: 'flex-end' }}>

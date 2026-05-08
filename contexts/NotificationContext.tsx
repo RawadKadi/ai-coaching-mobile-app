@@ -52,6 +52,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           if (suppressedRef.current === true) {
             return;
           }
+
+          // Skip automated system messages
+          if (newMessage.ai_generated === true || newMessage.message_type === 'system') {
+            return;
+          }
           
           // Don't show if this specific sender is suppressed
           if (typeof suppressedRef.current === 'string' && newMessage.sender_id === suppressedRef.current) {

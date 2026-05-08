@@ -37,6 +37,7 @@ export default function CheckInScreen() {
   const [currentStep, setCurrentStep] = useState<Step>('metrics');
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [lastWeight, setLastWeight] = useState<string | null>(null);
 
@@ -123,11 +124,14 @@ export default function CheckInScreen() {
       
       const checkinData = data;
 
-      // Start AI generation in background (don't await)
-      (async () => {
-        try {
-          const { generateText } = await import('@/lib/google-ai');
-          const prompt = `Act as an elite AI fitness coach. Analyze this daily check-in:
+      // Move to summary immediately to show success
+      setCurrentStep('summary');
+      setAiGenerating(true);
+
+      // AI generation - we await this now to make it "instant" for the dashboard
+      try {
+        const { generateText } = await import('@/lib/google-ai');
+        const prompt = `Act as an elite AI fitness coach. Analyze this daily check-in:
 Weight: ${weight ? weight + 'kg' : 'Not provided'}
 Sleep: ${sleep ? sleep + 'hrs' : 'Not provided'}
 Energy (1-10): ${energy}
@@ -136,26 +140,25 @@ Hunger (1-10): ${hunger}
 Mood: ${mood}
 Notes: ${notes}
 
-Provide exactly 2 short, punchy sentences of encouraging insight or advice based on these metrics. Be direct and premium.`;
-          
-          const analysis = await generateText(prompt);
-          
-          if (analysis && checkinData?.id) {
-            await supabase
-              .from('check_ins')
-              .update({ ai_analysis: analysis.trim() })
-              .eq('id', checkinData.id);
-          }
-        } catch (aiError) {
-          console.error("AI Analysis failed:", aiError);
+Provide exactly 2 short, punchy sentences of encouraging insight or advice based on these metrics. Be direct and premium. Use simple coaching language.`;
+        
+        const analysis = await generateText(prompt);
+        
+        if (analysis && checkinData?.id) {
+          await supabase
+            .from('check_ins')
+            .update({ ai_analysis: analysis.trim() })
+            .eq('id', checkinData.id);
         }
-      })();
-
-      // Success animation then back
-      setCurrentStep('summary');
-      setTimeout(() => {
-        router.back();
-      }, 2500);
+      } catch (aiError) {
+        console.error("AI Analysis failed:", aiError);
+      } finally {
+        setAiGenerating(false);
+        // Short delay for the user to see the "Synced" state before returning
+        setTimeout(() => {
+          router.back();
+        }, 1500);
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save check-in');
     } finally {
@@ -300,16 +303,16 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
           value={stress} 
           min={1} max={10} 
           onChange={setStress} 
-          icon={<Heart size={18} color="#6366F1" />}
-          color="#6366F1"
+          icon={<Heart size={18} color="#3B82F6" />}
+          color="#3B82F6"
         />
         <ElasticSlider 
           label="Hunger Level" 
           value={hunger} 
           min={1} max={10} 
           onChange={setHunger} 
-          icon={<Target size={18} color="#0EA5E9" />}
-          color="#0EA5E9"
+          icon={<Target size={18} color="#3B82F6" />}
+          color="#3B82F6"
         />
       </View>
 
@@ -415,11 +418,13 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
       <MotiView
         from={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1000 }}
-        className="mt-12 flex-row items-center gap-2"
+        transition={{ delay: 500 }}
+        className="mt-12 flex-row items-center gap-3 px-6 py-3 bg-slate-900 rounded-full border border-white/5"
       >
-        <ActivityIndicator size="small" color="#334155" />
-        <Text className="text-slate-700 font-black text-[10px] uppercase tracking-[3px]">Returning to base</Text>
+        <ActivityIndicator size="small" color={aiGenerating ? "#3B82F6" : "#334155"} />
+        <Text className="text-slate-400 font-black text-[10px] uppercase tracking-[3px]">
+          {aiGenerating ? "Generating Insights..." : "Returning to base"}
+        </Text>
       </MotiView>
     </MotiView>
   );
@@ -508,8 +513,9 @@ const ElasticSlider = ({ label, value, min, max, onChange, icon, color }: any) =
 
   // High-performance gesture handler
   const gesture = Gesture.Pan()
-    .onBegin(() => {
+    .onBegin((event) => {
       isPressed.value = true;
+      // Ensure startX is synchronized with current translationX to prevent jumps
       startX.value = translationX.value;
     })
     .onUpdate((event) => {

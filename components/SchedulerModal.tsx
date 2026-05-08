@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert, Platform, SafeAreaView } from 'react-native';
+import { View, Text, Modal, TextInput, Pressable, ActivityIndicator, ScrollView, Alert, Platform, SafeAreaView } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat, Sparkles, ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
@@ -213,18 +213,18 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 <View className="px-6 pt-6 pb-4 flex-row justify-between items-center border-b border-slate-900 bg-slate-950/80">
                     <View className="flex-row items-center gap-3">
                         {step !== 'input' && (
-                           <TouchableOpacity onPress={() => setStep(step === 'review' ? 'form' : 'input')}>
+                           <Pressable onPress={() => setStep(step === 'review' ? 'form' : 'input')}>
                                <ChevronLeft size={24} color="#94A3B8" />
-                           </TouchableOpacity>
+                           </Pressable>
                         )}
                         <View>
                             <Text className="text-white text-xl font-bold">AI Scheduler</Text>
                             <Text className="text-slate-500 text-xs">Setup sessions with {clientContext?.name || 'Athlete'}</Text>
                         </View>
                     </View>
-                    <TouchableOpacity onPress={() => { resetForm(); onClose(); }} className="p-2 bg-slate-900 rounded-full">
+                    <Pressable onPress={() => { resetForm(); onClose(); }} className="p-2 bg-slate-900 rounded-full">
                         <X size={20} color="#94A3B8" />
-                    </TouchableOpacity>
+                    </Pressable>
                 </View>
 
                 {step === 'input' ? (
@@ -232,43 +232,54 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                       key="input"
                       from={{ opacity: 0, translateX: -20 }}
                       animate={{ opacity: 1, translateX: 0 }}
-                      className="flex-1 px-6 pt-8"
+                      className="flex-1"
                     >
-                        <Text className="text-slate-400 text-sm font-medium mb-6 leading-relaxed">
-                            Describe the training plan for {(clientContext?.name || 'the athlete').split(' ')[0]}.
-                        </Text>
-                        
-                        <View className="bg-slate-900/50 rounded-3xl border border-slate-800 p-6 min-h-[200px]">
-                            <TextInput
-                                className="text-white text-lg leading-6"
-                                multiline
-                                placeholder="e.g., 'Weekly sessions every Monday at 2pm'"
-                                placeholderTextColor="#475569"
-                                value={input}
-                                onChangeText={setInput}
-                                textAlignVertical="top"
-                            />
-                            <View className="flex-row justify-between items-center mt-auto pt-4">
-                                <TouchableOpacity className="w-12 h-12 rounded-full bg-slate-950 items-center justify-center border border-slate-800">
-                                    <Mic size={24} color="#3B82F6" />
-                                </TouchableOpacity>
-                                
-                                <TouchableOpacity 
-                                    className={`flex-row items-center gap-2 py-3 px-6 rounded-2xl ${input.trim() ? 'bg-blue-600' : 'bg-slate-800'}`}
-                                    onPress={handleAnalyze}
-                                    disabled={!input.trim() || loading}
-                                >
-                                    {loading ? (
-                                        <ActivityIndicator color="white" />
-                                    ) : (
-                                        <>
-                                            <Sparkles size={18} color="white" />
-                                            <Text className="text-white font-bold">Draft Plan</Text>
-                                        </>
-                                    )}
-                                </TouchableOpacity>
+                        <ScrollView className="flex-1 px-6 pt-8" showsVerticalScrollIndicator={false}>
+                            <View className="p-8 rounded-[40px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden mb-8">
+                                <View className="absolute top-0 right-0 p-4 opacity-10">
+                                    <Sparkles size={120} color="#3B82F6" />
+                                </View>
+                                <View className="w-20 h-20 bg-blue-600 rounded-[32px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
+                                    <Sparkles size={32} color="white" fill="white" />
+                                </View>
+                                <Text className="text-white text-2xl font-black text-center tracking-tighter">AI Scheduling</Text>
+                                <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
+                                    Describe your plan for {(clientContext?.name || 'the athlete').split(' ')[0]}. Our AI handles times, dates, and conflict checks.
+                                </Text>
                             </View>
-                        </View>
+                            
+                            <View className="bg-slate-900/50 rounded-[40px] border border-slate-800 p-8 min-h-[220px] mb-20">
+                                <TextInput
+                                    className="text-white text-lg leading-7 font-medium"
+                                    multiline
+                                    placeholder="e.g., 'Weekly sessions every Monday at 2pm'"
+                                    placeholderTextColor="#1e293b"
+                                    value={input}
+                                    onChangeText={setInput}
+                                    textAlignVertical="top"
+                                />
+                                <View className="flex-row justify-between items-center mt-8 pt-6 border-t border-white/5">
+                                    <Pressable className="w-14 h-14 rounded-full bg-slate-950 items-center justify-center border border-slate-800">
+                                        <Mic size={24} color="#3B82F6" />
+                                    </Pressable>
+                                    
+                                    <Pressable 
+                                        className={`flex-row items-center gap-3 py-4 px-8 rounded-[24px] ${input.trim() ? 'bg-blue-600 shadow-xl shadow-blue-500/40' : 'bg-slate-800'}`}
+                                        onPress={handleAnalyze}
+                                        disabled={!input.trim() || loading}
+                                    >
+                                        {loading ? (
+                                            <ActivityIndicator color="white" />
+                                        ) : (
+                                            <>
+                                                <Sparkles size={20} color="white" />
+                                                <Text className="text-white font-black text-base uppercase tracking-widest">Draft Plan</Text>
+                                            </>
+                                        )}
+                                    </Pressable>
+                                </View>
+                            </View>
+                        </ScrollView>
                     </MotiView>
                 ) : step === 'form' ? (
                     <MotiView 
@@ -277,7 +288,15 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         animate={{ opacity: 1, translateX: 0 }}
                         className="flex-1 px-6 pt-8"
                     >
-                         <Text className="text-white text-lg font-bold mb-2">More details needed</Text>
+                         <View className="mb-8 flex-row items-center gap-4">
+                            <View className="w-12 h-12 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20">
+                                <Info size={24} color="#F59E0B" />
+                            </View>
+                            <View>
+                                <Text className="text-white text-xl font-black tracking-tight">Details Needed</Text>
+                                <Text className="text-slate-500 text-xs font-medium">Please refine the schedule details below.</Text>
+                            </View>
+                         </View>
                          <View className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
                              <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Selected Days</Text>
                              <View className="flex-row flex-wrap gap-2 mb-6">
@@ -295,9 +314,9 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 value={formTime}
                                 onChangeText={setFormTime}
                              />
-                             <TouchableOpacity className="bg-blue-600 py-4 rounded-2xl items-center" onPress={handleAnalyze}>
+                             <Pressable className="bg-blue-600 py-4 rounded-2xl items-center" onPress={handleAnalyze}>
                                 <Text className="text-white font-bold text-lg">Validate Plan</Text>
-                             </TouchableOpacity>
+                             </Pressable>
                          </View>
                     </MotiView>
                 ) : (
@@ -307,7 +326,15 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         animate={{ opacity: 1, translateX: 0 }}
                         className="flex-1 px-6 pt-8"
                     >
-                        <Text className="text-white text-lg font-bold mb-2">Review Schedule</Text>
+                        <View className="mb-8 flex-row items-center gap-4">
+                            <View className="w-12 h-12 bg-emerald-500/10 rounded-2xl items-center justify-center border border-emerald-500/20">
+                                <Check size={24} color="#10B981" />
+                            </View>
+                            <View>
+                                <Text className="text-white text-xl font-black tracking-tight">Review Schedule</Text>
+                                <Text className="text-slate-500 text-xs font-medium">Verify the sessions before sending invites.</Text>
+                            </View>
+                        </View>
                         <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
                             {proposedSessions.map((session, index) => {
                                 const conflict = checkConflict(session);
@@ -323,28 +350,28 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                     <Text className="text-slate-400 text-sm mt-0.5 capitalize">{session.day_of_week}, {' '}{new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                                                 </View>
                                             </View>
-                                            <TouchableOpacity onPress={() => setProposedSessions(prev => prev.filter((_, i) => i !== index))}>
+                                            <Pressable onPress={() => setProposedSessions(prev => prev.filter((_, i) => i !== index))}>
                                                 <X size={18} color="#475569" />
-                                            </TouchableOpacity>
+                                            </Pressable>
                                         </View>
                                         {conflict && (
-                                            <TouchableOpacity 
+                                            <Pressable 
                                                 className="mt-4 bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex-row items-center gap-3"
                                                 onPress={() => handleConflictDetected(session, conflict)}
                                             >
                                                 <AlertTriangle size={16} color="#F59E0B" />
                                                 <Text className="text-amber-400 text-xs font-bold flex-1">{conflict.message}</Text>
                                                 <Text className="text-amber-500 text-xs font-bold underline">Review</Text>
-                                            </TouchableOpacity>
+                                            </Pressable>
                                         )}
                                     </View>
                                 );
                             })}
                         </ScrollView>
                         <View className="pt-6 pb-8 border-t border-slate-900 bg-slate-950">
-                             <TouchableOpacity className="bg-blue-600 py-4 rounded-2xl items-center" onPress={handleFinalConfirm}>
+                             <Pressable className="bg-blue-600 py-4 rounded-2xl items-center" onPress={handleFinalConfirm}>
                                 <Text className="text-white font-bold text-lg">Send Session Invites</Text>
-                             </TouchableOpacity>
+                             </Pressable>
                         </View>
                     </MotiView>
                 )}

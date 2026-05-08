@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, StatusBar } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search } from 'lucide-react-native';
-import { useFocusEffect, useRouter, useNavigation } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
 import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function CalendarScreen() {
   const { profile, coach } = useAuth();
   const router = useRouter();
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +91,7 @@ export default function CalendarScreen() {
                       const isS = item.toDateString() === selectedDate.toDateString();
                       const has = getSessionsForDate(item).length > 0;
                       return (
-                          <TouchableOpacity 
+                          <Pressable 
                               key={item.toISOString()}
                               onPress={() => setSelectedDate(item)}
                               style={{ width: '14.28%' }}
@@ -106,7 +105,7 @@ export default function CalendarScreen() {
                                       <View className={`absolute -bottom-1 w-1 h-1 rounded-full ${isS ? 'bg-white' : 'bg-blue-600'}`} />
                                   )}
                               </View>
-                          </TouchableOpacity>
+                          </Pressable>
                       );
                   })}
               </View>
@@ -134,7 +133,7 @@ export default function CalendarScreen() {
                   ) : (
                       getSessionsForDate(selectedDate).map((session, idx) => (
                           <MotiView key={session.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: idx * 50 }} className="mb-4">
-                                <TouchableOpacity 
+                                <Pressable 
                                     className="bg-slate-900/40 border border-white/5 rounded-[36px] p-6 flex-row items-center"
                                     onPress={() => router.push({ pathname: '/(coach)/chat/[id]', params: { id: session.client_id } })}
                                 >
@@ -172,20 +171,20 @@ export default function CalendarScreen() {
                                             <Video size={14} color="#22D3EE" />
                                         </View>
                                     </View>
-                                </TouchableOpacity>
+                                </Pressable>
                           </MotiView>
                       ))
                   )}
               </View>
           </ScrollView>
 
-          <TouchableOpacity 
+          <Pressable 
               onPress={() => setShowManualScheduler(true)}
               style={{ bottom: insets.bottom + 90 }}
               className="absolute right-6 w-16 h-16 bg-blue-600 rounded-full items-center justify-center shadow-2xl shadow-blue-500/50 border-2 border-white/10 z-50"
           >
               <Plus size={32} color="white" />
-          </TouchableOpacity>
+          </Pressable>
 
 
           {coach && (
@@ -194,7 +193,6 @@ export default function CalendarScreen() {
                   onClose={() => { setShowManualScheduler(false); setSelectedClient(null); }} 
                   onConfirm={async () => loadSessions()} 
                   existingSessions={sessions} coachId={coach.id} initialClient={initialClientData}
-                  navigation={navigation}
                   onSwitchToAI={(c) => { setSelectedClient({ id: c.id, name: c.profiles.full_name, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }); setShowManualScheduler(false); setShowAIScheduler(true); }}
               />
           )}

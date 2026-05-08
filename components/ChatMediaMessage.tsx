@@ -36,6 +36,7 @@ type MediaContent = {
   clientName?: string;
   description?: string;
   timestamp?: string;
+  imageUrl?: string; // For task completions with photo verification
 };
 
 // ── Media Caching Hook ──────────────────────────────────────────────────────
@@ -194,21 +195,57 @@ function FullscreenVideoModal({ uri, onClose }: { uri: string, onClose: () => vo
 }
 
 // ── Fullscreen Image Modal ──────────────────────────────────────────────────
-function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'image' | 'gif', onClose: () => void }) {
+function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'image' | 'gif' | 'task_completion', onClose: () => void }) {
+  const panY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10 && Math.abs(gs.dy) > Math.abs(gs.dx * 2),
+      onPanResponderMove: (_, state) => {
+        if (state.dy > 0) panY.setValue(state.dy);
+      },
+      onPanResponderRelease: (_, state) => {
+        if (state.dy > 100 || state.vy > 1) {
+          Animated.timing(panY, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: true }).start(onClose);
+        } else {
+          Animated.spring(panY, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+        }
+      }
+    })
+  ).current;
+
+  const handlePress = () => {
+    Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(onClose);
+  };
+
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000' }]}>
+    <Animated.View 
+      style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity, transform: [{ translateY: panY }] }]} 
+      {...panResponder.panHandlers}
+    >
       <SafeAreaView style={{ flex: 1 }}>
-        <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }}>
-          <X size={32} color="#FFFFFF" />
+        <TouchableOpacity 
+          onPress={onClose} 
+          style={{ position: 'absolute', top: 50, right: 20, zIndex: 100, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 22 }}
+        >
+          <X size={28} color="#FFFFFF" />
         </TouchableOpacity>
-        <Image
-          source={{ uri }}
-          style={{ width: '100%', height: '100%' }}
-          contentFit="contain"
-          cachePolicy={uri.startsWith('file:') ? 'none' : 'memory-disk'}
-        />
+        
+        <TouchableOpacity 
+          activeOpacity={1} 
+          onPress={handlePress}
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+        >
+          <Image
+            source={{ uri }}
+            style={{ width: '100%', height: '100%' }}
+            contentFit="contain"
+            cachePolicy={uri.startsWith('file:') ? 'none' : 'memory-disk'}
+          />
+        </TouchableOpacity>
       </SafeAreaView>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -450,7 +487,7 @@ function CustomImagePlayer({
 }
 
 // ── Challenge Card Components ────────────────────────────────────────────────
-function ChallengeCompletedCard({ media }: { media: MediaContent }) {
+function ChallengeCompletedCard({ media, onPressImage }: { media: MediaContent, onPressImage?: () => void }) {
   const theme = useTheme();
   const intensityColor = (intensity?: string) => {
     switch(intensity?.toLowerCase()) {
@@ -463,34 +500,64 @@ function ChallengeCompletedCard({ media }: { media: MediaContent }) {
 
   return (
     <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: 'rgba(16, 185, 129, 0.2)' }]}>
-      <View style={styles.challengeHeader}>
-        <View style={styles.challengeIconBox}><Trophy size={18} color="#10B981" /></View>
-        <Text style={[styles.challengeTitle, { fontFamily: theme.typography.fontFamily }]}>Protocol Achieved</Text>
-      </View>
-      <View style={styles.challengeBody}>
-        <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Daily Mission'}</Text>
-        <View style={styles.challengeDetailsRow}>
-           <View style={styles.challengeDetailItem}><Target size={12} color="#94A3B8" /><Text style={styles.challengeDetailText}>{media.focusType || 'Training'}</Text></View>
-           <View style={[styles.challengeDetailItem, { marginLeft: 12 }]}><Zap size={12} color={intensityColor(media.intensity)} /><Text style={[styles.challengeDetailText, { color: intensityColor(media.intensity) }]}>{media.intensity || 'Normal'}</Text></View>
+      {media.imageUrl && (
+        <TouchableOpacity 
+          activeOpacity={0.9} 
+          onPress={onPressImage}
+          style={styles.cardImageContainer}
+        >
+          <Image 
+            source={{ uri: media.imageUrl }} 
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+        </TouchableOpacity>
+      )}
+      <View style={{ padding: 16 }}>
+        <View style={styles.challengeHeader}>
+          <View style={styles.challengeIconBox}><Trophy size={18} color="#10B981" /></View>
+          <Text style={[styles.challengeTitle, { fontFamily: theme.typography.fontFamily }]}>Protocol Achieved</Text>
         </View>
+        <View style={styles.challengeBody}>
+          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Daily Mission'}</Text>
+          <View style={styles.challengeDetailsRow}>
+             <View style={styles.challengeDetailItem}><Target size={12} color="#94A3B8" /><Text style={styles.challengeDetailText}>{media.focusType || 'Training'}</Text></View>
+             <View style={[styles.challengeDetailItem, { marginLeft: 12 }]}><Zap size={12} color={intensityColor(media.intensity)} /><Text style={[styles.challengeDetailText, { color: intensityColor(media.intensity) }]}>{media.intensity || 'Normal'}</Text></View>
+          </View>
+        </View>
+        <View style={styles.challengeFooter}><Text style={styles.challengeFooterText}>Completed at {media.completedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
       </View>
-      <View style={styles.challengeFooter}><Text style={styles.challengeFooterText}>Completed at {media.completedAt || new Date().toLocaleTimeString()}</Text></View>
     </View>
   );
 }
 
-function TaskCompletedCard({ media }: { media: MediaContent }) {
+function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPressImage?: () => void }) {
   const theme = useTheme();
   return (
     <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: 'rgba(59, 130, 246, 0.2)' }]}>
-      <View style={styles.challengeHeader}>
-        <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}><Check size={18} color="#3B82F6" /></View>
-        <Text style={[styles.challengeTitle, { color: '#3B82F6', fontFamily: theme.typography.fontFamily }]}>Task Completed</Text>
+      {media.imageUrl && (
+        <TouchableOpacity 
+          activeOpacity={0.9} 
+          onPress={onPressImage}
+          style={styles.cardImageContainer}
+        >
+          <Image 
+            source={{ uri: media.imageUrl }} 
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+        </TouchableOpacity>
+      )}
+      <View style={{ padding: 16 }}>
+        <View style={styles.challengeHeader}>
+          <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}><Check size={18} color="#3B82F6" /></View>
+          <Text style={[styles.challengeTitle, { color: '#3B82F6', fontFamily: theme.typography.fontFamily }]}>Task Completed</Text>
+        </View>
+        <View style={styles.challengeBody}>
+          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Protocol Task'}</Text>
+        </View>
+        <View style={styles.challengeFooter}><Text style={styles.challengeFooterText}>Completed at {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
       </View>
-      <View style={styles.challengeBody}>
-        <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Protocol Task'}</Text>
-      </View>
-      <View style={styles.challengeFooter}><Text style={styles.challengeFooterText}>Completed at {media.timestamp ? new Date(media.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</Text></View>
     </View>
   );
 }
@@ -571,27 +638,53 @@ export default function ChatMediaMessage({
   }
   
   if (media.type === 'task_completion') {
+    const [isExpanded, setIsExpanded] = useState(false);
     return (
-      <TouchableOpacity 
-        activeOpacity={0.9} 
-        delayLongPress={400} 
-        onLongPress={onLongPress} 
-        style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
-      >
-        <TaskCompletedCard media={media} />
-      </TouchableOpacity>
+      <>
+        <TouchableOpacity 
+          activeOpacity={0.9} 
+          delayLongPress={400} 
+          onLongPress={onLongPress} 
+          style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
+        >
+          <TaskCompletedCard media={media} onPressImage={() => media.imageUrl && setIsExpanded(true)} />
+        </TouchableOpacity>
+
+        {media.imageUrl && (
+          <Modal visible={isExpanded} transparent animationType="fade" statusBarTranslucent>
+            <FullscreenImageModal 
+              uri={media.imageUrl} 
+              type="task_completion" 
+              onClose={() => setIsExpanded(false)} 
+            />
+          </Modal>
+        )}
+      </>
     );
   }
   if (media.type === 'challenge_completed') {
+    const [isExpanded, setIsExpanded] = useState(false);
     return (
-      <TouchableOpacity 
-        activeOpacity={0.9} 
-        delayLongPress={400} 
-        onLongPress={onLongPress} 
-        style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
-      >
-        <ChallengeCompletedCard media={media} />
-      </TouchableOpacity>
+      <>
+        <TouchableOpacity 
+          activeOpacity={0.9} 
+          delayLongPress={400} 
+          onLongPress={onLongPress} 
+          style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
+        >
+          <ChallengeCompletedCard media={media} onPressImage={() => media.imageUrl && setIsExpanded(true)} />
+        </TouchableOpacity>
+
+        {media.imageUrl && (
+          <Modal visible={isExpanded} transparent animationType="fade" statusBarTranslucent>
+            <FullscreenImageModal 
+              uri={media.imageUrl} 
+              type="task_completion" 
+              onClose={() => setIsExpanded(false)} 
+            />
+          </Modal>
+        )}
+      </>
     );
   }
   
@@ -620,7 +713,7 @@ const styles = StyleSheet.create({
   docHint: { fontSize: 11, marginTop: 2 },
   timeBadgeContainer: { position: 'absolute', bottom: 6, right: 6, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 12 },
   timeBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '500' },
-  challengeCard: { width: 260, borderRadius: 24, borderWidth: 1, overflow: 'hidden', padding: 16, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
+  challengeCard: { width: 260, borderRadius: 24, borderWidth: 1, overflow: 'hidden', backgroundColor: '#0F172A', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
   challengeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   challengeIconBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(16, 185, 129, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   challengeTitle: { color: '#10B981', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },
@@ -631,4 +724,5 @@ const styles = StyleSheet.create({
   challengeDetailText: { color: '#94A3B8', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   challengeFooter: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 },
   challengeFooterText: { color: '#475569', fontSize: 10, fontWeight: '600' },
+  cardImageContainer: { width: '100%', height: 180, overflow: 'hidden', backgroundColor: '#1E293B' },
 });

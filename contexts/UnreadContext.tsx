@@ -22,7 +22,8 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
         .from('messages')
         .select('id', { count: 'exact' })
         .eq('recipient_id', user.id)
-        .eq('read', false);
+        .eq('read', false)
+        .eq('ai_generated', false);
 
       if (error) throw error;
       setUnreadCount(count || 0);

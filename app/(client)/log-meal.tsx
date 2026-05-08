@@ -15,7 +15,7 @@ type Step = 'camera' | 'analyzing' | 'needs_info' | 'review' | 'nutrition';
 
 export default function LogMealScreen() {
   const router = useRouter();
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<any>(null);
   
@@ -88,41 +88,59 @@ export default function LogMealScreen() {
 
   const saveMeal = async (shareWithCoach: boolean = false) => {
     if (!analysisResult || !client || !capturedImage) return;
+    console.log('Starting saveMeal...', { shareWithCoach, hasClient: !!client, hasAnalysis: !!analysisResult });
     setSaving(true);
     try {
       const fileExt = 'jpg';
       const fileName = `${client.id}/${Date.now()}.${fileExt}`;
+      console.log('[saveMeal] Fetching image from URI:', capturedImage);
       const response = await fetch(capturedImage);
+      if (!response.ok) throw new Error('Failed to fetch captured image');
+      
       const arrayBuffer = await response.arrayBuffer();
-      const { error: uploadError } = await supabase.storage.from('meal-photos').upload(fileName, arrayBuffer, { contentType: 'image/jpeg' });
-      if (uploadError) throw uploadError;
+      console.log('[saveMeal] Uploading to storage...', fileName);
+      const { error: uploadError } = await supabase.storage.from('meal-photos').upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) {
+        console.error('[saveMeal] Upload error:', uploadError);
+        throw uploadError;
+      }
 
+      console.log('[saveMeal] Upload successful, getting public URL');
       const { data: { publicUrl } } = supabase.storage.from('meal-photos').getPublicUrl(fileName);
       const now = new Date();
-      const { data: mealData, error: mealError } = await supabase.from('meals').insert({
-          client_id: client.id,
-          meal_date: now.toISOString().split('T')[0],
-          meal_time: now.toTimeString().split(' ')[0],
-          meal_type: 'lunch', 
-          meal_name: analysisResult.mealName,
-          description: analysisResult.description,
-          photo_url: publicUrl,
-          calories: analysisResult.calories,
-          protein_g: analysisResult.protein_g,
-          carbs_g: analysisResult.carbs_g,
-          fat_g: analysisResult.fat_g,
-          ai_analyzed: true,
-          shared_with_coach: shareWithCoach,
-      }).select().single();
-      if (mealError) throw mealError;
+      console.log('[saveMeal] Calling RPC create_meal_entry');
+      // Use RPC to insert the meal - more robust than direct table insert with RLS
+      const { data: mealDataArr, error: mealError } = await supabase.rpc('create_meal_entry', {
+          p_client_id: client.id,
+          p_meal_date: now.toISOString().split('T')[0],
+          p_meal_time: now.toTimeString().split(' ')[0],
+          p_meal_type: 'lunch', 
+          p_meal_name: analysisResult.mealName,
+          p_description: analysisResult.description,
+          p_calories: analysisResult.calories,
+          p_protein_g: analysisResult.protein_g,
+          p_carbs_g: analysisResult.carbs_g,
+          p_fat_g: analysisResult.fat_g,
+          p_photo_url: publicUrl,
+          p_ai_analyzed: true,
+          p_shared_with_coach: shareWithCoach,
+      });
 
-      if (shareWithCoach) {
+      if (mealError) {
+        console.error('[saveMeal] RPC Error:', mealError);
+        throw new Error(`Database error: ${mealError.message}`);
+      }
+      
+      console.log('[saveMeal] RPC Success:', mealDataArr);
+      const mealData = mealDataArr && (mealDataArr as any[]).length > 0 ? mealDataArr[0] : null;
+
+      if (shareWithCoach && mealData) {
           const { data: coachLink } = await supabase.from('coach_client_links').select('coach_id').eq('client_id', client.id).eq('status', 'active').single();
           if (coachLink) {
               const { data: coach } = await supabase.from('coaches').select('user_id').eq('id', coachLink.coach_id).single();
               if (coach) {
                   await supabase.from('messages').insert({
-                      sender_id: client.user_id,
+                      sender_id: user?.id, // Use auth.uid()
                       recipient_id: coach.user_id,
                       content: JSON.stringify({
                           type: 'meal_log',
@@ -138,8 +156,14 @@ export default function LogMealScreen() {
               }
           }
       }
+      console.log('Meal saved successfully, navigating back');
       router.back();
-    } catch (e) { Alert.alert('Error saving'); } finally { setSaving(false); }
+    } catch (e: any) { 
+      console.error('[saveMeal] Error caught:', e);
+      Alert.alert('Save Failed', e.message || 'Check your internet and try again.'); 
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   if (currentStep === 'camera' && !capturedImage) {
