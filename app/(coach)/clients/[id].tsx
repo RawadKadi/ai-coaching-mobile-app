@@ -32,7 +32,8 @@ import {
   Zap,
   Clock,
   Trash2,
-  Edit2
+  Edit2,
+  TrendingUp
 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useTheme } from '@/contexts/BrandContext';
