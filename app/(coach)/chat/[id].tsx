@@ -100,6 +100,7 @@ export default function CoachChatScreen() {
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [enlargedAvatar, setEnlargedAvatar] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
   
   // Debug presence
   useEffect(() => {
@@ -196,6 +197,12 @@ export default function CoachChatScreen() {
       .channel(`chat-reactions-${key}`)
       .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
         // Handle reactions broadcast from the other side
+        setMessages(prev =>
+          prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
+        );
+      })
+      .on('broadcast', { event: 'message_edit' }, ({ payload }) => {
+        // Handle message edits broadcast from the other side
         setMessages(prev =>
           prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
         );
@@ -422,10 +429,21 @@ export default function CoachChatScreen() {
     }
   };
 
-  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward') => {
+  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => {
     if (!activeMessageForMenu) return;
     
-    if (action === 'reply') {
+    if (action === 'edit') {
+      // Only allow editing own messages
+      if (activeMessageForMenu.sender_id !== user?.id) return;
+      let currentText = activeMessageForMenu.content;
+      try {
+        const p = JSON.parse(activeMessageForMenu.content);
+        if (p.text) currentText = p.text;
+      } catch {}
+      setEditingMessage({ id: activeMessageForMenu.id, text: currentText });
+      setActiveMessageForMenu(null);
+      return;
+    } else if (action === 'reply') {
       setReplyingTo(activeMessageForMenu);
     } else if (action === 'copy') {
       let textToCopy = activeMessageForMenu.content;
@@ -516,6 +534,36 @@ export default function CoachChatScreen() {
           payload: { messageId: msgId, content: savedContent },
         });
       }
+    }
+  };
+
+  const handleConfirmEdit = async (newText: string, messageId: string) => {
+    // Build updated content preserving existing fields (reactions, etc.)
+    const currentMsg = messages.find(m => m.id === messageId);
+    let currentContent: any = {};
+    try {
+      currentContent = JSON.parse(currentMsg?.content || '{}');
+    } catch {
+      currentContent = {};
+    }
+    const updatedContent = JSON.stringify({ ...currentContent, text: newText, type: currentContent.type || 'text', is_edited: true });
+
+    // Optimistic update
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: updatedContent } : m));
+    setEditingMessage(null);
+
+    const { error } = await supabase.from('messages').update({ content: updatedContent }).eq('id', messageId);
+    if (error) {
+      Alert.alert('Error', 'Failed to edit message: ' + error.message);
+      // Revert optimistic
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: currentMsg?.content || m.content } : m));
+    } else {
+      // Broadcast edit to the other side
+      reactionChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'message_edit',
+        payload: { messageId, content: updatedContent },
+      });
     }
   };
 
@@ -688,6 +736,9 @@ export default function CoachChatScreen() {
           replyingTo={replyingTo} 
           onCancelReply={() => setReplyingTo(null)} 
           onTyping={handleTyping}
+          editingMessage={editingMessage}
+          onConfirmEdit={handleConfirmEdit}
+          onCancelEdit={() => setEditingMessage(null)}
         />
       </KeyboardAvoidingView>
 
@@ -767,11 +818,13 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
   let reactions: any[] = [];
   let isDeleted = false;
   let deletedBy = '';
+  let isEdited = false;
 
   try {
     const p = JSON.parse(item.content);
     displayContent = p.text || item.content;
     reactions = p.reactions || [];
+    isEdited = !!p.is_edited;
     if (p.type === 'deleted') {
       isDeleted = true;
       deletedBy = p.deleted_by;
@@ -841,6 +894,9 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
           </TouchableOpacity>
         )}
         <View className="flex-row items-center justify-end gap-1.5 mt-2">
+           {isEdited && (
+             <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>
+           )}
            <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
            {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
         </View>

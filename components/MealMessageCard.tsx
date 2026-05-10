@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Utensils, ChevronRight } from 'lucide-react-native';
+import { Utensils, ChevronRight, Zap } from 'lucide-react-native';
+import { formatCompactNumber } from '@/lib/format-utils';
 
 type MealMessageContent = {
   type: 'meal_log';
@@ -40,38 +41,45 @@ export default function MealMessageCard({ content, isOwn, onLongPress }: Props) 
         isOwn ? styles.ownContainer : styles.otherContainer
       ]}
     >
+      {/* Header Signal */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.iconContainer}>
-            <Utensils size={16} color="#2563EB" />
+          <View style={styles.iconWrapper}>
+            <Utensils size={14} color="#3B82F6" />
           </View>
-          <Text style={styles.headerTitle}>One of my meals today</Text>
+          <Text style={styles.headerTitle}>Meal Log</Text>
         </View>
       </View>
 
       <View style={styles.content}>
         {data.imageUrl && (
-          <Image 
-            source={{ uri: data.imageUrl }} 
-            style={styles.image} 
-            contentFit="cover"
-            transition={200}
-            cachePolicy="disk"
-          />
+          <View style={styles.imageContainer}>
+            <Image 
+              source={{ uri: data.imageUrl }} 
+              style={styles.image} 
+              contentFit="cover"
+              transition={200}
+              cachePolicy="disk"
+            />
+            {/* Overlay Gradient Placeholder (simulated with absolute view if needed, but keeping it clean) */}
+          </View>
         )}
         
         <View style={styles.details}>
-          <Text style={styles.mealName}>{data.mealName}</Text>
-          <View style={styles.macrosContainer}>
-            <Text style={styles.macroText}>{data.calories} kcal</Text>
-            <Text style={styles.macroDivider}>•</Text>
-            <Text style={styles.macroText}>{data.protein}g protein</Text>
+          <Text style={styles.mealName} numberOfLines={2}>{data.mealName || 'Unknown Protocol'}</Text>
+          <View style={styles.macrosRow}>
+            <View style={styles.macroItem}>
+                <Zap size={10} color="#3B82F6" fill="#3B82F6" />
+                <Text style={styles.macroValue}>{formatCompactNumber(data.calories || 0)} <Text style={styles.macroLabel}>kcal</Text></Text>
+            </View>
+            <View style={styles.dot} />
+            <Text style={styles.macroValue}>{formatCompactNumber(data.protein || 0)}g <Text style={styles.macroLabel}>protein</Text></Text>
           </View>
         </View>
 
-        <TouchableOpacity onPress={handlePress} style={styles.button}>
-          <Text style={styles.buttonText}>View Meal Details</Text>
-          <ChevronRight size={16} color="#2563EB" />
+        <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={styles.footerButton}>
+          <Text style={styles.footerText}>View Full Analysis</Text>
+          <ChevronRight size={14} color="#3B82F6" strokeWidth={3} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -81,83 +89,122 @@ export default function MealMessageCard({ content, isOwn, onLongPress }: Props) 
 const styles = StyleSheet.create({
   container: {
     width: 280,
-    borderRadius: 16,
+    borderRadius: 32,
     borderWidth: 1,
     overflow: 'hidden',
     marginVertical: 4,
-    backgroundColor: '#EFF6FF', // blue-50
-    borderColor: '#BFDBFE', // blue-200
+    backgroundColor: '#0f172a', // slate-900
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   ownContainer: {
     alignSelf: 'flex-end',
+    borderBottomRightRadius: 8,
   },
   otherContainer: {
     alignSelf: 'flex-start',
+    borderBottomLeftRadius: 8,
   },
   header: {
-    padding: 12,
-    backgroundColor: '#DBEAFE', // blue-100
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderBottomWidth: 1,
-    borderBottomColor: '#BFDBFE', // blue-200
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  iconContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 4,
+  iconWrapper: {
+    width: 24,
+    height: 24,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   headerTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E40AF', // blue-800
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#3B82F6',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   content: {
     padding: 0,
   },
+  imageContainer: {
+    width: '100%',
+    height: 160,
+    backgroundColor: '#020617',
+    padding: 8,
+  },
   image: {
     width: '100%',
-    height: 150,
-    backgroundColor: '#E5E7EB',
+    height: '100%',
+    borderRadius: 24,
   },
   details: {
-    padding: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   mealName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E3A8A', // blue-900
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
-  macrosContainer: {
+  macrosRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
   },
-  macroText: {
+  macroItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  macroValue: {
     fontSize: 14,
-    color: '#3B82F6', // blue-500
-    fontWeight: '500',
+    color: '#FFFFFF',
+    fontWeight: '900',
   },
-  macroDivider: {
-    color: '#93C5FD', // blue-300
+  macroLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
   },
-  button: {
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  footerButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderTopWidth: 1,
-    borderTopColor: '#BFDBFE', // blue-200
-    backgroundColor: '#FFFFFF',
-    gap: 4,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    gap: 6,
   },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2563EB', // blue-600
+  footerText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });

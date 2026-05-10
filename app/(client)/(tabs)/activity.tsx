@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
+import FeedbackModal from '@/components/FeedbackModal';
 import { 
   Utensils, 
   Dumbbell, 
@@ -26,6 +27,17 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { formatCompactNumber } from '@/lib/format-utils';
+
+/** Returns today's date as YYYY-MM-DD in the device's local timezone, not UTC. */
+function getLocalDateString(): string {
+  const d = new Date();
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-');
+}
 
 export default function ActivityScreen() {
   const router = useRouter();
@@ -40,11 +52,16 @@ export default function ActivityScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>([]);
   const [challenges, setChallenges] = useState<any[]>([]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [streak, setStreak] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [showStreakLost, setShowStreakLost] = useState(false);
+  const [showChallengeSuccessModal, setShowChallengeSuccessModal] = useState(false);
+  const [completedChallengeName, setCompletedChallengeName] = useState('');
+  const [allChallengesFinished, setAllChallengesFinished] = useState(false);
+  const streakLostShownThisSession = useRef(false);
 
   // Bottom Sheet Animation state
   const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -198,8 +215,24 @@ export default function ActivityScreen() {
       setChallenges(subsData || []);
 
       // Get Streak
-      const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: client?.id });
-      setStreak(streakData || 0);
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: client?.id, p_timezone: userTimezone });
+      const newStreak = streakData || 0;
+      setStreak(newStreak);
+
+      // Show streak-lost modal once per session if streak dropped to 0 but client has past history
+      if (newStreak === 0 && !streakLostShownThisSession.current) {
+        const { data: pastLogs } = await supabase
+          .from('habit_logs')
+          .select('id')
+          .eq('client_id', client?.id)
+          .lt('date', getLocalDateString())
+          .limit(1);
+        if (pastLogs && pastLogs.length > 0) {
+          setShowStreakLost(true);
+          streakLostShownThisSession.current = true;
+        }
+      }
 
       // Initialize last reported status
       logs.forEach(log => {
@@ -214,7 +247,8 @@ export default function ActivityScreen() {
   };
 
   const refreshStreak = async () => {
-    const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: client?.id });
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: client?.id, p_timezone: userTimezone });
     if (streakData !== undefined) setStreak(streakData);
   };
 
@@ -257,10 +291,16 @@ export default function ActivityScreen() {
       if (newCompleted) {
         const allHabitsDone = habits.length > 0 && habits.every(h => habitLogs.find(l => l.habit_id === h.id)?.completed);
         const otherChallengesDone = updatedChallenges.filter(c => c.id !== challenge.id).every(c => c.completed);
+        const allChallengesNowDone = updatedChallenges.every(c => c.completed);
         
         if (allHabitsDone && otherChallengesDone) {
           setShowCelebration(true);
           setStreak(prev => prev + 1); // Optimistic streak update
+        } else {
+          // If not all done, just show the challenge success modal
+          setCompletedChallengeName(challenge.name);
+          setAllChallengesFinished(allChallengesNowDone);
+          setShowChallengeSuccessModal(true);
         }
         refreshStreak();
       } else {
@@ -400,7 +440,7 @@ export default function ActivityScreen() {
           .from('habit-verifications')
           .getPublicUrl(filePath);
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateString();
         const { data, error } = await supabase
           .from('habit_logs')
           .upsert({
@@ -464,7 +504,7 @@ export default function ActivityScreen() {
         }
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       const existingLog = habitLogs.find((log) => log.habit_id === habit.id);
 
       if (timeoutRefs.current[habit.id]) {
@@ -598,12 +638,12 @@ export default function ActivityScreen() {
           <View style={{ paddingHorizontal: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16, marginBottom: 40 }}>
             <MetricCard 
               label="KCAL Burnt" 
-              value={totalCalories.toString()} 
+              value={formatCompactNumber(totalCalories)} 
               icon={<Utensils size={18} color="#F59E0B" />} 
             />
             <MetricCard 
               label="Streak" 
-              value={`${streak}`} 
+              value={formatCompactNumber(streak)} 
               icon={<Award size={18} color="#10B981" />} 
             />
             <MetricCard 
@@ -679,7 +719,7 @@ export default function ActivityScreen() {
                   <ActivityCard 
                     key={meal.id}
                     title={meal.name}
-                    sub={`${meal.meal_type.toUpperCase()} • ${meal.calories} kcal`}
+                    sub={`${meal.meal_type.toUpperCase()} • ${formatCompactNumber(meal.calories || 0)} kcal`}
                     completed={true}
                     icon={<Utensils size={20} color="#F59E0B" />}
                     readOnly
@@ -713,55 +753,53 @@ export default function ActivityScreen() {
         </ScrollView>
       </View>
       
-      {/* Celebration Modal */}
-      <Modal
+      {/* All tasks done — Protocol Fulfilled */}
+      <FeedbackModal
         visible={showCelebration}
-        transparent
-        animationType="fade"
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <Animated.View 
-            style={{ 
-              backgroundColor: '#0f172a', 
-              borderRadius: 40, 
-              padding: 40, 
-              width: '100%', 
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: 'rgba(16, 185, 129, 0.2)',
-              shadowColor: '#10B981',
-              shadowOffset: { width: 0, height: 20 },
-              shadowOpacity: 0.2,
-              shadowRadius: 40,
-              elevation: 10
-            }}
-          >
-            <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(16, 185, 129, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
-              <CheckCircle size={60} color="#10B981" />
-            </View>
-            
-            <Text style={{ color: 'white', fontSize: 28, fontWeight: '900', textAlign: 'center', marginBottom: 12 }}>Protocol Fulfilled</Text>
-            <Text style={{ color: '#94a3b8', fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 32 }}>
-              Congratulations! You've successfully completed all your objectives for today.
-            </Text>
-            
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, paddingVertical: 20, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 32 }}>
-              <Text style={{ color: '#64748b', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Current Streak</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Zap size={20} color="#F59E0B" fill="#F59E0B" />
-                <Text style={{ color: 'white', fontSize: 36, fontWeight: '900' }}>{streak} Days</Text>
-              </View>
-            </View>
-            
-            <TouchableOpacity 
-              onPress={() => setShowCelebration(false)}
-              style={{ backgroundColor: '#3b82f6', width: '100%', paddingVertical: 18, borderRadius: 20, alignItems: 'center' }}
-            >
-              <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>Keep it up</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </Modal>
+        onClose={() => setShowCelebration(false)}
+        variant="success"
+        icon={<CheckCircle size={60} color="#10B981" />}
+        title="All Done"
+        body="You finished everything for today. Keep showing up like this."
+        statLabel="Current Streak"
+        statIcon={<Zap size={22} color="#F59E0B" fill="#F59E0B" />}
+        stat={`${formatCompactNumber(streak)} Days`}
+        ctaLabel="Keep it up"
+        ctaBg="#3B82F6"
+        ctaTextColor="#ffffff"
+      />
+
+      {/* Streak lost */}
+      <FeedbackModal
+        visible={showStreakLost}
+        onClose={() => setShowStreakLost(false)}
+        variant="warning"
+        icon={<Zap size={52} color="#F59E0B" />}
+        title="Streak Reset"
+        body={`You missed yesterday's tasks and lost your streak.\nNo worries — every great run starts with day one.`}
+        statLabel="Current Streak"
+        statIcon={<Zap size={22} color="#F59E0B" />}
+        stat="0 Days"
+        ctaLabel="Start fresh today"
+      />
+      
+      {/* Individual Challenge Secured */}
+      <FeedbackModal
+        visible={showChallengeSuccessModal}
+        onClose={() => setShowChallengeSuccessModal(false)}
+        variant="success"
+        icon={<Target size={52} color="#10B981" />}
+        title="Objective Secured"
+        body={allChallengesFinished 
+          ? `All challenges secured. Stay ready for ${(() => {
+              const d = new Date();
+              d.setDate(d.getDate() + 1);
+              return d.toLocaleDateString('en-US', { weekday: 'long' });
+            })()} — keep that energy up.` 
+          : `"${completedChallengeName}" has been successfully synchronized.`
+        }
+        ctaLabel="Continue Mission"
+      />
 
       {/* Modern Details Overlay */}
       <Modal visible={showDetailsModal} transparent statusBarTranslucent animationType="none">
@@ -861,29 +899,32 @@ export default function ActivityScreen() {
 }
 
 // Support Components
-const MetricCard = ({ label, value, icon, active, onPress }: any) => (
-  <TouchableOpacity 
-    activeOpacity={0.7}
-    disabled={!onPress}
-    onPress={onPress}
-    style={{ 
-      width: '47%', 
-      backgroundColor: active ? '#0f172a' : '#0f172a66', 
-      padding: 20, 
-      borderRadius: 36, 
-      borderWidth: 1, 
-      borderColor: active ? '#3b82f633' : '#1e293b', 
-      alignItems: 'center', 
-      justifyContent: 'center' 
-    }}
-  >
-    <View style={{ width: 40, height: 40, backgroundColor: '#020617', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b', marginBottom: 12 }}>
-      {icon}
-    </View>
-    <Text style={{ color: 'white', fontSize: 20, fontWeight: '900', letterSpacing: -0.5 }}>{value}</Text>
-    <Text style={{ color: '#64748b', fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, marginTop: 4 }}>{label}</Text>
-  </TouchableOpacity>
-);
+const MetricCard = ({ label, value, icon, active, onPress }: any) => {
+  const displayValue = typeof value === 'number' ? formatCompactNumber(value) : value;
+  return (
+    <TouchableOpacity 
+      activeOpacity={0.7}
+      disabled={!onPress}
+      onPress={onPress}
+      style={{ 
+        width: '47%', 
+        backgroundColor: active ? '#0f172a' : '#0f172a66', 
+        padding: 20, 
+        borderRadius: 36, 
+        borderWidth: 1, 
+        borderColor: active ? '#3b82f633' : '#1e293b', 
+        alignItems: 'center', 
+        justifyContent: 'center' 
+      }}
+    >
+      <View style={{ width: 40, height: 40, backgroundColor: '#020617', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b', marginBottom: 12 }}>
+        {icon}
+      </View>
+      <Text style={{ color: 'white', fontSize: 20, fontWeight: '900', letterSpacing: -0.5 }}>{displayValue}</Text>
+      <Text style={{ color: '#64748b', fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, marginTop: 4 }}>{label}</Text>
+    </TouchableOpacity>
+  );
+};
 
 const SectionHeader = ({ title, count, marginTop = 0 }: any) => (
   <View style={{ marginTop, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingHorizontal: 4 }}>

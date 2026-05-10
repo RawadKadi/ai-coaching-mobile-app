@@ -4,12 +4,15 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { MotiView, AnimatePresence } from 'moti';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { X, ChevronLeft, AlertTriangle, Check, Plus, Minus, Send, RefreshCw, Image as ImageIcon, Camera, Zap, Activity } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { analyzeMealImage, reanalyzeMealWithContext, recalculateNutrition, MealAnalysisResult, reanalyzeMealWithFeedback } from '@/lib/ai-meal-service';
 import { MealIngredient } from '@/types/database';
 import * as ImagePicker from 'expo-image-picker';
+import FeedbackModal from '@/components/FeedbackModal';
+import { formatCompactNumber } from '@/lib/format-utils';
 
 type Step = 'camera' | 'analyzing' | 'needs_info' | 'review' | 'nutrition';
 
@@ -34,6 +37,7 @@ export default function LogMealScreen() {
   const [mealName, setMealName] = useState('');
   const [cookingMethod, setCookingMethod] = useState('');
   const [hasOil, setHasOil] = useState(false);
+  const [showMealSuccess, setShowMealSuccess] = useState(false);
 
   useEffect(() => { if (!permission) requestPermission(); }, []);
 
@@ -109,12 +113,20 @@ export default function LogMealScreen() {
       const { data: { publicUrl } } = supabase.storage.from('meal-photos').getPublicUrl(fileName);
       const now = new Date();
       console.log('[saveMeal] Calling RPC create_meal_entry');
+      
+      // Determine meal type based on time of day
+      const hour = now.getHours();
+      let mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' = 'snack';
+      if (hour >= 5 && hour < 11) mealType = 'breakfast';
+      else if (hour >= 11 && hour < 16) mealType = 'lunch';
+      else if (hour >= 16 && hour < 22) mealType = 'dinner';
+      
       // Use RPC to insert the meal - more robust than direct table insert with RLS
       const { data: mealDataArr, error: mealError } = await supabase.rpc('create_meal_entry', {
           p_client_id: client.id,
           p_meal_date: now.toISOString().split('T')[0],
           p_meal_time: now.toTimeString().split(' ')[0],
-          p_meal_type: 'lunch', 
+          p_meal_type: mealType,
           p_meal_name: analysisResult.mealName,
           p_description: analysisResult.description,
           p_calories: analysisResult.calories,
@@ -128,19 +140,51 @@ export default function LogMealScreen() {
 
       if (mealError) {
         console.error('[saveMeal] RPC Error:', mealError);
+        // Special handling for the meal_type error to be more user-friendly if needed
+        if (mealError.message?.includes('meal_type')) {
+          throw new Error('Database type mismatch. Please ensure meal_type enum exists.');
+        }
         throw new Error(`Database error: ${mealError.message}`);
       }
       
       console.log('[saveMeal] RPC Success:', mealDataArr);
       const mealData = mealDataArr && (mealDataArr as any[]).length > 0 ? mealDataArr[0] : null;
 
-      if (shareWithCoach && mealData) {
+      if (!mealData) {
+        throw new Error('Meal created but no data returned.');
+      }
+
+      // Save ingredients if they exist
+      if (ingredients.length > 0) {
+        console.log('[saveMeal] Saving ingredients...', ingredients.length);
+        const ingredientsToSave = ingredients.map(ing => ({
+          meal_id: mealData.id,
+          ingredient_name: ing.ingredient_name,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          ai_detected: ing.ai_detected,
+          confidence: ing.confidence
+        }));
+
+        const { error: ingError } = await supabase
+          .from('meal_ingredients')
+          .insert(ingredientsToSave);
+
+        if (ingError) {
+          console.error('[saveMeal] Error saving ingredients:', ingError);
+          // We don't throw here to avoid failing the whole process if only ingredients fail
+        } else {
+          console.log('[saveMeal] Ingredients saved successfully');
+        }
+      }
+
+      if (shareWithCoach) {
           const { data: coachLink } = await supabase.from('coach_client_links').select('coach_id').eq('client_id', client.id).eq('status', 'active').single();
           if (coachLink) {
               const { data: coach } = await supabase.from('coaches').select('user_id').eq('id', coachLink.coach_id).single();
               if (coach) {
                   await supabase.from('messages').insert({
-                      sender_id: user?.id, // Use auth.uid()
+                      sender_id: user?.id,
                       recipient_id: coach.user_id,
                       content: JSON.stringify({
                           type: 'meal_log',
@@ -156,8 +200,8 @@ export default function LogMealScreen() {
               }
           }
       }
-      console.log('Meal saved successfully, navigating back');
-      router.back();
+      console.log('Meal saved successfully, showing feedback');
+      setShowMealSuccess(true);
     } catch (e: any) { 
       console.error('[saveMeal] Error caught:', e);
       Alert.alert('Save Failed', e.message || 'Check your internet and try again.'); 
@@ -242,39 +286,7 @@ export default function LogMealScreen() {
             animate={{ opacity: 1 }}
             className="items-center px-8"
         >
-            <View className="w-72 h-72 rounded-[48px] overflow-hidden border border-blue-500/30 shadow-2xl bg-black">
-                {capturedImage && (
-                    <Image 
-                        key={capturedImage}
-                        source={{ uri: capturedImage }} 
-                        className="w-full h-full opacity-80" 
-                        contentFit="cover"
-                        transition={400}
-                    />
-                )}
-                
-                {/* Robust Scanning Line Animation */}
-                <MotiView 
-                    from={{ translateY: 0 }}
-                    animate={{ translateY: 280 }}
-                    transition={{ 
-                        type: 'timing',
-                        duration: 1500,
-                        loop: true
-                    }}
-                    className="absolute w-full h-[4px] bg-blue-500 shadow-xl shadow-blue-400"
-                    style={{
-                        shadowColor: '#60A5FA',
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 1,
-                        shadowRadius: 15,
-                        zIndex: 10
-                    }}
-                />
-                
-                {/* Scanning Overlay Glow */}
-                <View className="absolute inset-0 bg-blue-500/10" pointerEvents="none" />
-            </View>
+            <ScanPreview imageUri={capturedImage} />
             
             <View className="items-center mt-12">
                 <Text className="text-white text-2xl font-black text-center">Identifying Protocols</Text>
@@ -315,7 +327,7 @@ export default function LogMealScreen() {
                         <Image 
                             key={capturedImage}
                             source={{ uri: capturedImage! }} 
-                            className="w-full h-full" 
+                            style={{ width: '100%', height: '100%' }}
                             contentFit="cover"
                             transition={200}
                         />
@@ -403,7 +415,7 @@ export default function LogMealScreen() {
                           <View className="w-full aspect-video rounded-[32px] overflow-hidden mb-8 border border-slate-900 mt-2">
                               <Image 
                                 source={{ uri: capturedImage! }} 
-                                className="w-full h-full" 
+                                style={{ width: '100%', height: '100%' }}
                                 contentFit="cover"
                                 transition={200}
                                 cachePolicy="disk"
@@ -448,6 +460,22 @@ export default function LogMealScreen() {
                       </ScrollView>
                   </KeyboardAvoidingView>
               </SafeAreaView>
+
+              <FeedbackModal
+                visible={showMealSuccess}
+                onClose={() => {
+                  setShowMealSuccess(false);
+                  router.back();
+                }}
+                variant="success"
+                icon={<Check size={60} color="#10B981" />}
+                title="Meal Logged"
+                body={`${analysisResult?.mealName} has been synchronized with your daily protocol.`}
+                statLabel="Estimated Calories"
+                statIcon={<Zap size={22} color="#F59E0B" fill="#F59E0B" />}
+                stat={`${formatCompactNumber(analysisResult?.calories || 0)} KCAL`}
+                ctaLabel="Continue"
+              />
           </View>
       );
   }
@@ -455,15 +483,75 @@ export default function LogMealScreen() {
   return null;
 }
 
-const MacroCard = ({ label, value, color }: any) => (
-    <View className="w-[47%] bg-slate-900/50 p-6 rounded-[28px] border border-slate-900 items-start">
-        <View style={{ backgroundColor: color + '15' }} className="w-8 h-8 rounded-xl items-center justify-center mb-4">
-            <Activity size={16} color={color} />
-        </View>
-        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">{label}</Text>
-        <Text className="text-white text-2xl font-black">{value}</Text>
+/** Scan preview with Reanimated-powered scan line — works reliably on native iOS */
+function ScanPreview({ imageUri }: { imageUri: string | null }) {
+  const scanY = useSharedValue(0);
+
+  useEffect(() => {
+    scanY.value = withRepeat(
+      withTiming(268, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+      -1,   // infinite loops
+      true   // reverse each time
+    );
+  }, []);
+
+  const scanLineStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: scanY.value }],
+  }));
+
+  return (
+    <View className="w-72 h-72 rounded-[48px] overflow-hidden border border-blue-500/30 shadow-2xl bg-black">
+      {imageUri && (
+        <Image
+          key={imageUri}
+          source={{ uri: imageUri }}
+          style={{ width: '100%', height: '100%', opacity: 0.8 }}
+          contentFit="cover"
+          transition={400}
+        />
+      )}
+
+      {/* Reanimated scan line */}
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: 4,
+            backgroundColor: '#3B82F6',
+            shadowColor: '#60A5FA',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 1,
+            shadowRadius: 15,
+            zIndex: 10,
+          },
+          scanLineStyle,
+        ]}
+      />
+
+      {/* Scanning Overlay Glow */}
+      <View
+        className="absolute inset-0 bg-blue-500/10"
+        pointerEvents="none"
+      />
     </View>
-);
+  );
+}
+
+const MacroCard = ({ label, value, color }: any) => {
+    const displayValue = typeof value === 'number' ? formatCompactNumber(value) : value;
+    return (
+        <View className="w-[47%] bg-slate-900/50 p-6 rounded-[28px] border border-slate-900 items-start">
+            <View style={{ backgroundColor: color + '15' }} className="w-8 h-8 rounded-xl items-center justify-center mb-4">
+                <Activity size={16} color={color} />
+            </View>
+            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">{label}</Text>
+            <Text className="text-white text-2xl font-black">{displayValue}</Text>
+        </View>
+    );
+};
 
 const MicroRow = ({ label, value }: any) => (
     <View className="flex-row justify-between py-3 border-b border-slate-800/50">

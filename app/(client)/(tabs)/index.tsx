@@ -19,6 +19,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { CheckIn, Habit, HabitLog } from '@/types/database';
+import { formatCompactNumber } from '@/lib/format-utils';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -302,19 +303,22 @@ export default function ClientDashboard() {
   );
 }
 
-const MetricCard = ({ label, value, icon, active, onPress }: any) => (
-    <TouchableOpacity 
-        onPress={onPress}
-        disabled={!onPress}
-        className={`w-[47%] p-6 rounded-[36px] border-2 transition-all shadow-lg ${active ? 'bg-slate-900/50 border-white/10' : 'bg-slate-900/20 border-white/5 border-dashed'}`}
-    >
-        <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/5 mb-6 shadow-sm">
-            {icon}
-        </View>
-        <Text className="text-white text-xl font-black tracking-tight">{value}</Text>
-        <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest mt-1.5">{label}</Text>
-    </TouchableOpacity>
-);
+const MetricCard = ({ label, value, icon, active, onPress }: any) => {
+    const displayValue = typeof value === 'number' ? formatCompactNumber(value) : value;
+    return (
+        <TouchableOpacity 
+            onPress={onPress}
+            disabled={!onPress}
+            className={`w-[47%] p-6 rounded-[36px] border-2 transition-all shadow-lg ${active ? 'bg-slate-900/50 border-white/10' : 'bg-slate-900/20 border-white/5 border-dashed'}`}
+        >
+            <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/5 mb-6 shadow-sm">
+                {icon}
+            </View>
+            <Text className="text-white text-xl font-black tracking-tight">{displayValue}</Text>
+            <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest mt-1.5">{label}</Text>
+        </TouchableOpacity>
+    );
+};
 
 const ActionCard = ({ label, sub, icon, onPress }: any) => (
     <TouchableOpacity 

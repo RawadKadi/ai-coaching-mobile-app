@@ -21,8 +21,24 @@ import {
   Forward,
   Info,
   Star,
+  Pencil,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+
+/** Returns true if the message was sent within the last 15 minutes */
+function isWithin15Minutes(createdAt: string): boolean {
+  try {
+    const sent = new Date(createdAt).getTime();
+    const now = Date.now();
+    const diff = now - sent;
+    const result = diff <= 15 * 60 * 1000;
+    console.log('[MessageOverlay] isWithin15Minutes Check:', { createdAt, diffSeconds: diff / 1000, result });
+    return result;
+  } catch (e) {
+    console.log('[MessageOverlay] Error parsing date:', createdAt, e);
+    return false;
+  }
+}
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -32,7 +48,7 @@ interface MessageOverlayProps {
   isMe: boolean;
   onClose: () => void;
   onReaction: (emoji: string) => void;
-  onAction: (action: 'reply' | 'copy' | 'delete' | 'forward') => void;
+  onAction: (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => void;
   renderMessageContent: (item: any, isMe: boolean) => React.ReactNode;
 }
 
@@ -60,9 +76,21 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
 
   if (!visible || !message) return null;
 
-  const handleAction = (action: 'reply' | 'copy' | 'delete' | 'forward') => {
+  const canEdit = isMe && isWithin15Minutes(message?.created_at);
+
+  const handleAction = (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => {
+    console.log('[MessageOverlay] handleAction internal triggered:', action);
+    console.log('[MessageOverlay] onAction prop type:', typeof onAction);
+    console.log('[MessageOverlay] onAction body:', onAction?.toString?.().substring(0, 200));
+    
+    try {
+      onAction(action);
+      console.log('[MessageOverlay] onAction returned successfully');
+    } catch (e: any) {
+      console.error('[MessageOverlay] ERROR calling onAction:', e?.message, e);
+    }
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onAction(action);
     onClose();
   };
 
@@ -170,6 +198,17 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                         onPress={() => {}} 
                     />
                     
+                    {canEdit && (
+                      <>
+                        <MenuDivider />
+                        <MenuOption 
+                          icon={<Pencil size={20} color="#60A5FA" />} 
+                          label="Edit" 
+                          onPress={() => handleAction('edit')}
+                        />
+                      </>
+                    )}
+
                     {isMe && (
                       <>
                         <MenuDivider />
@@ -195,10 +234,19 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
 };
 
 const MenuOption = ({ icon, label, onPress, destructive }: any) => (
-  <TouchableOpacity onPress={onPress} style={styles.menuOption}>
+  <Pressable 
+    onPress={() => {
+      console.log('[MessageOverlay] MenuOption pressed:', label);
+      onPress();
+    }} 
+    style={({ pressed }) => [
+      styles.menuOption,
+      pressed && { opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.05)' }
+    ]}
+  >
     <Text style={[styles.menuLabel, destructive && { color: '#EF4444' }]}>{label}</Text>
     {icon}
-  </TouchableOpacity>
+  </Pressable>
 );
 
 const MenuDivider = () => <View style={styles.divider} />;

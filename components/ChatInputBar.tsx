@@ -12,7 +12,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { Video, ResizeMode } from 'expo-av';
 import { useTheme } from '@/contexts/BrandContext';
-import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play } from 'lucide-react-native';
+import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -27,6 +27,12 @@ interface Props {
   onSendText: (text: string, replyId?: string) => Promise<void>;
   /** Called when user sends a media message — receives JSON string content */
   onSendMedia: (jsonContent: string, replyId?: string) => Promise<void>;
+  /** Called when the user confirms an edit. Receives new text + message id. */
+  onConfirmEdit?: (newText: string, messageId: string) => Promise<void>;
+  /** The message currently being edited, or null/undefined if not in edit mode */
+  editingMessage?: { id: string; text: string } | null;
+  /** Called to cancel edit mode */
+  onCancelEdit?: () => void;
   sending?: boolean;
   placeholder?: string;
   replyingTo?: any;
@@ -39,8 +45,16 @@ type Panel = 'emoji' | 'attach' | null;
 
 export function ChatInputBar({ 
   onSendText, onSendMedia, sending, placeholder = 'Message…', 
-  replyingTo, onCancelReply, onTyping 
+  replyingTo, onCancelReply, onTyping,
+  editingMessage, onConfirmEdit, onCancelEdit,
 }: Props) {
+  // LOGGING: Track props
+  React.useEffect(() => {
+    if (editingMessage) {
+      console.log('[ChatInputBar] Received editingMessage:', editingMessage.id);
+    }
+  }, [editingMessage?.id]);
+
   const theme = useTheme();
   const [text, setText] = useState('');
   const [activePanel, setActivePanel] = useState<Panel>(null);
@@ -81,6 +95,16 @@ export function ChatInputBar({
       }).start();
     }
   }, [replyingTo]);
+
+  // Pre-fill text when entering edit mode
+  React.useEffect(() => {
+    if (editingMessage) {
+      setText(editingMessage.text);
+      // Focus input with a slightly longer delay to ensure the overlay has fully closed
+      // and the keyboard is ready to receive focus.
+      setTimeout(() => inputRef.current?.focus(), 250);
+    }
+  }, [editingMessage?.id]);
 
   React.useEffect(() => {
     const id = panelHeightAnim.addListener(({ value }) => {
@@ -219,6 +243,16 @@ export function ChatInputBar({
   // ─── Send text & media ─────────────────────────────────────────────────────
 
   const handleSend = async () => {
+    if (editingMessage) {
+      // Edit mode: confirm the edit
+      const msg = text.trim();
+      if (!msg) return;
+      await onConfirmEdit?.(msg, editingMessage.id);
+      setText('');
+      onCancelEdit?.();
+      return;
+    }
+
     const msg = text.trim();
     if ((!msg && !selectedMedia) || sending) return;
 
@@ -571,8 +605,24 @@ export function ChatInputBar({
           </TouchableOpacity>
         </Animated.View>
       )}
-
-
+      {/* ── Edit Mode Banner ────────────────────────────────────────────────── */}
+      {editingMessage && (
+        <View style={styles.editBanner}>
+          <View style={styles.editBannerSidebar} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.editBannerLabel}>Editing message</Text>
+            <Text style={styles.editBannerSnippet} numberOfLines={1}>
+              {editingMessage.text}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => { setText(''); onCancelEdit?.(); }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <X size={16} color="rgba(255,255,255,0.4)" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Input row ──────────────────────────────────────────────────────── */}
       <View style={[
@@ -581,19 +631,29 @@ export function ChatInputBar({
         Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 0 : 24 } : { paddingBottom: 12 },
       ]}>
 
-        {/* Action Trigger (Plus) */}
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={() => togglePanel('attach')}
-          activeOpacity={0.7}
-          disabled={isDisabled}
-        >
-          <Plus
-            size={24}
-            color={activePanel === 'attach' ? '#3B82F6' : '#64748B'}
-            strokeWidth={2.5}
-          />
-        </TouchableOpacity>
+        {/* Left: Cancel Edit (X) in edit mode, Plus otherwise */}
+        {editingMessage ? (
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => { setText(''); onCancelEdit?.(); }}
+            activeOpacity={0.7}
+          >
+            <X size={24} color="#F97316" strokeWidth={2.5} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => togglePanel('attach')}
+            activeOpacity={0.7}
+            disabled={isDisabled}
+          >
+            <Plus
+              size={24}
+              color={activePanel === 'attach' ? '#3B82F6' : '#64748B'}
+              strokeWidth={2.5}
+            />
+          </TouchableOpacity>
+        )}
 
         {/* Styled Focus Input */}
         <View style={[
@@ -609,7 +669,7 @@ export function ChatInputBar({
                 fontFamily: theme.typography.fontFamily,
               },
             ]}
-            placeholder="Message athlete..."
+            placeholder={placeholder}
             placeholderTextColor="#475569"
             value={text}
             onChangeText={(v) => {
@@ -653,19 +713,21 @@ export function ChatInputBar({
           </TouchableOpacity>
         </View>
 
-        {/* Strategic Send Action */}
+        {/* Send / Confirm Edit Button */}
         <TouchableOpacity
           style={[
             styles.sendBtn,
-            { backgroundColor: '#3B82F6' },
-            ((!text.trim() && !selectedMedia) || isDisabled) && { opacity: 0.5 },
+            { backgroundColor: editingMessage ? '#1E293B' : '#3B82F6' },
+            ((!text.trim() && !selectedMedia && !editingMessage) || isDisabled) && { opacity: 0.5 },
           ]}
           onPress={handleSend}
-          disabled={(!text.trim() && !selectedMedia) || isDisabled}
+          disabled={((!text.trim() && !selectedMedia && !editingMessage) || isDisabled)}
           activeOpacity={0.8}
         >
           {sending ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : editingMessage ? (
+            <Check size={20} color="#34D399" strokeWidth={2.5} />
           ) : (
             <Send size={20} color="#FFFFFF" fill="#FFFFFF" />
           )}
@@ -1133,5 +1195,34 @@ const styles = StyleSheet.create({
   emptyMsg: {
     fontSize: 14,
     marginTop: 16,
+  },
+  // Edit Mode Banner
+  editBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#0F172A',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(249,115,22,0.2)',
+  },
+  editBannerSidebar: {
+    width: 3,
+    height: 32,
+    borderRadius: 2,
+    backgroundColor: '#F97316',
+    marginRight: 12,
+  },
+  editBannerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F97316',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  editBannerSnippet: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.45)',
   },
 });

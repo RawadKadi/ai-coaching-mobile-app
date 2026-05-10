@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { X, Check, TrendingUp, Calendar, ChevronLeft, Zap, Info, Clock, AlertCircle } from 'lucide-react-native';
+import FeedbackModal from '@/components/FeedbackModal';
 
 interface ProgressEntry {
   id: string;
@@ -33,6 +34,7 @@ export default function ChallengeProgressScreen() {
   const [progress, setProgress] = useState<ProgressEntry[]>([]);
   const [todayProgress, setTodayProgress] = useState<ProgressEntry | null>(null);
   const [notes, setNotes] = useState('');
+  const [showChallengeSuccess, setShowChallengeSuccess] = useState(false);
 
   useEffect(() => { loadChallengeAndProgress(); }, [id]);
 
@@ -69,7 +71,7 @@ export default function ChallengeProgressScreen() {
       });
       if (error) throw error;
       loadChallengeAndProgress();
-      if (completed) Alert.alert('Objective Secured', 'Neural link synchronized.');
+      if (completed) setShowChallengeSuccess(true);
     } catch (e) { Alert.alert('Error saving'); } finally { setSubmitting(false); }
   };
 
@@ -218,6 +220,22 @@ export default function ChallengeProgressScreen() {
                 </View>
             </ScrollView>
         </SafeAreaView>
+
+        <FeedbackModal
+          visible={showChallengeSuccess}
+          onClose={() => {
+            setShowChallengeSuccess(false);
+            router.back();
+          }}
+          variant="success"
+          icon={<Zap size={60} color="#10B981" />}
+          title="Objective Secured"
+          body={`Your progress for "${challenge?.name}" has been synchronized.`}
+          statLabel="Mission Progress"
+          statIcon={<TrendingUp size={22} color="#10B981" />}
+          stat={`${progressPercent}%`}
+          ctaLabel="Continue Mission"
+        />
     </View>
   );
 }

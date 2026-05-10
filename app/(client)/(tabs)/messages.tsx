@@ -98,9 +98,12 @@ export default function ClientMessagesScreen() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+  const reactionChannelRef = useRef<any>(null);
 
   useEffect(() => {
     if (user) {
@@ -150,6 +153,23 @@ export default function ClientMessagesScreen() {
       console.log('[ClientChat] Removing channel:', channelId);
       supabase.removeChannel(channel);
     };
+  }, [user?.id, coachUserId]);
+
+  // Broadcast channel for reactions & edits
+  useEffect(() => {
+    if (!user || !coachUserId) return;
+    const key = [user.id, coachUserId].sort().join('-');
+    const ch = supabase
+      .channel(`chat-reactions-${key}`)
+      .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
+        setMessages(prev => prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m));
+      })
+      .on('broadcast', { event: 'message_edit' }, ({ payload }) => {
+        setMessages(prev => prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m));
+      })
+      .subscribe();
+    reactionChannelRef.current = ch;
+    return () => { supabase.removeChannel(ch); };
   }, [user?.id, coachUserId]);
 
   const processIncoming = (nm: Message) => {
@@ -344,10 +364,20 @@ export default function ClientMessagesScreen() {
     }
   };
 
-  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward') => {
+  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => {
     if (!activeMessageForMenu) return;
     
-    if (action === 'reply') {
+    if (action === 'edit') {
+      if (activeMessageForMenu.sender_id !== user?.id) return;
+      let currentText = activeMessageForMenu.content;
+      try {
+        const p = JSON.parse(activeMessageForMenu.content);
+        if (p.text) currentText = p.text;
+      } catch {}
+      setEditingMessage({ id: activeMessageForMenu.id, text: currentText });
+      setActiveMessageForMenu(null);
+      return;
+    } else if (action === 'reply') {
       setReplyingTo(activeMessageForMenu);
     } else if (action === 'copy') {
       let textToCopy = activeMessageForMenu.content;
@@ -379,6 +409,33 @@ export default function ClientMessagesScreen() {
       }
     }
     setActiveMessageForMenu(null);
+  };
+
+  const handleConfirmEdit = async (newText: string, messageId: string) => {
+    const currentMsg = messages.find(m => m.id === messageId);
+    let currentContent: any = {};
+    try {
+      currentContent = JSON.parse(currentMsg?.content || '{}');
+    } catch {
+      currentContent = {};
+    }
+    const updatedContent = JSON.stringify({ ...currentContent, text: newText, type: currentContent.type || 'text', is_edited: true });
+
+    // Optimistic update
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: updatedContent } : m));
+    setEditingMessage(null);
+
+    const { error } = await supabase.from('messages').update({ content: updatedContent }).eq('id', messageId);
+    if (error) {
+      Alert.alert('Error', 'Failed to edit message: ' + error.message);
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: currentMsg?.content || m.content } : m));
+    } else {
+      reactionChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'message_edit',
+        payload: { messageId, content: updatedContent },
+      });
+    }
   };
 
   const handleReaction = async (emoji: string) => {
@@ -519,7 +576,15 @@ export default function ClientMessagesScreen() {
                 onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
              />
         )}
-        <ChatInputBar onSendText={handleSendText} onSendMedia={handleSendMedia} replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
+        <ChatInputBar 
+          onSendText={handleSendText} 
+          onSendMedia={handleSendMedia} 
+          replyingTo={replyingTo} 
+          onCancelReply={() => setReplyingTo(null)}
+          editingMessage={editingMessage}
+          onConfirmEdit={handleConfirmEdit}
+          onCancelEdit={() => setEditingMessage(null)}
+        />
       </KeyboardAvoidingView>
 
       <MessageOverlay 
@@ -543,11 +608,13 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
   let reactions: any[] = [];
   let isDeleted = false;
   let deletedBy = '';
+  let isEdited = false;
 
   try {
     const p = JSON.parse(item.content);
     displayContent = p.text || item.content;
     reactions = p.reactions || [];
+    isEdited = !!p.is_edited;
     if (p.type === 'deleted') {
       isDeleted = true;
       deletedBy = p.deleted_by;
@@ -617,6 +684,7 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
           </TouchableOpacity>
         )}
         <View className="flex-row items-center justify-end gap-1.5 mt-2">
+           {isEdited && <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>}
            <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
            {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
         </View>

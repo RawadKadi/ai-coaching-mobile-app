@@ -23,10 +23,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/BrandContext';
+import FeedbackModal from '@/components/FeedbackModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type Step = 'metrics' | 'vitals' | 'mood' | 'summary';
+type Step = 'metrics' | 'vitals' | 'mood';
 
 export default function CheckInScreen() {
   const router = useRouter();
@@ -40,6 +41,7 @@ export default function CheckInScreen() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [lastWeight, setLastWeight] = useState<string | null>(null);
+  const [showAcknowledgment, setShowAcknowledgment] = useState(false);
 
   // Form State
   const [weight, setWeight] = useState('');
@@ -154,10 +156,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
         console.error("AI Analysis failed:", aiError);
       } finally {
         setAiGenerating(false);
-        // Short delay for the user to see the "Synced" state before returning
-        setTimeout(() => {
-          router.back();
-        }, 1500);
+        setShowAcknowledgment(true);
       }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save check-in');
@@ -398,36 +397,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
     </MotiView>
   );
 
-  const renderSummary = () => (
-    <MotiView
-      from={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex-1 px-8 items-center justify-center"
-    >
-      <MotiView
-        from={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 200 }}
-        className="w-32 h-32 bg-blue-500/10 rounded-[48px] items-center justify-center border-4 border-blue-500/20 mb-8"
-      >
-        <CheckCircle2 size={64} color="#3B82F6" strokeWidth={2.5} />
-      </MotiView>
-      <Text className="text-white text-4xl font-black tracking-tighter text-center">Protocol Synced</Text>
-      <Text className="text-slate-500 font-medium text-lg mt-4 text-center px-10">Your coach has been notified. Keep smashing it!</Text>
-      
-      <MotiView
-        from={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 500 }}
-        className="mt-12 flex-row items-center gap-3 px-6 py-3 bg-slate-900 rounded-full border border-white/5"
-      >
-        <ActivityIndicator size="small" color={aiGenerating ? "#3B82F6" : "#334155"} />
-        <Text className="text-slate-400 font-black text-[10px] uppercase tracking-[3px]">
-          {aiGenerating ? "Generating Insights..." : "Returning to base"}
-        </Text>
-      </MotiView>
-    </MotiView>
-  );
+
 
   if (loading) {
     return (
@@ -437,7 +407,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
     );
   }
 
-  if (alreadyCheckedIn && currentStep !== 'summary') {
+  if (alreadyCheckedIn) {
     return (
       <View className="flex-1 bg-slate-950">
         <StatusBar barStyle="light-content" />
@@ -470,8 +440,20 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
             {currentStep === 'metrics' && renderMetrics()}
             {currentStep === 'vitals' && renderVitals()}
             {currentStep === 'mood' && renderMood()}
-            {currentStep === 'summary' && renderSummary()}
         </View>
+
+        <FeedbackModal
+          visible={showAcknowledgment}
+          onClose={() => {
+            setShowAcknowledgment(false);
+            router.back();
+          }}
+          variant="info"
+          icon={<Sparkles size={60} color="#3B82F6" />}
+          title="Protocol Synced"
+          body="Your daily metrics have been securely transmitted. Your coach has been notified."
+          ctaLabel="Return to Base"
+        />
       </View>
     </TouchableWithoutFeedback>
   );

@@ -586,7 +586,11 @@ export default function ChatMediaMessage({
   });
 
   let media: MediaContent | null = null;
-  try { media = JSON.parse(content); } catch { return null; }
+  let isEdited = false;
+  try { 
+    media = JSON.parse(content); 
+    isEdited = !!media?.is_edited;
+  } catch { return null; }
   if (!media) return null;
 
   if ((media.type === 'image' || media.type === 'gif') && media.url) {
@@ -595,7 +599,13 @@ export default function ChatMediaMessage({
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10 }]} pointerEvents="none" />
         {replyTo && <View style={{ padding: 4, backgroundColor: theme.colors.surface }}><ChatReplyContext message={replyTo} onPress={() => replyTo.id && onPressReply?.(replyTo.id)} isMe={isOwn} /></View>}
         <CustomImagePlayer uri={media.url} previewUrl={media.previewUrl} type={media.type as 'image' | 'gif'} isOwn={isOwn} isUploading={isUploading} progress={progress} onCancel={onCancel} onLongPress={onLongPress} />
-        {createdAt && <View style={styles.timeBadgeContainer}><Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>{isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}</View>}
+        {createdAt && (
+          <View style={styles.timeBadgeContainer}>
+            {isEdited && <Text style={[styles.timeBadgeText, { opacity: 0.6, fontStyle: 'italic', marginRight: 4 }]}>Edited</Text>}
+            <Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+            {isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}
+          </View>
+        )}
       </View>
     );
   }
@@ -617,7 +627,13 @@ export default function ChatMediaMessage({
           progress={progress} 
           onCancel={onCancel} 
         />
-        {createdAt && <View style={[styles.timeBadgeContainer, { bottom: 8, right: 8 }]}><Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>{isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}</View>}
+        {createdAt && (
+          <View style={[styles.timeBadgeContainer, { bottom: 8, right: 8 }]}>
+            {isEdited && <Text style={[styles.timeBadgeText, { opacity: 0.6, fontStyle: 'italic', marginRight: 4 }]}>Edited</Text>}
+            <Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+            {isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}
+          </View>
+        )}
       </TouchableOpacity>
     );
   }
@@ -632,6 +648,13 @@ export default function ChatMediaMessage({
             <Text style={[styles.docHint, { color: isOwn ? 'rgba(255,255,255,0.7)' : theme.colors.textSecondary }]}>{isUploading ? `Uploading… ${progress}%` : 'Tap to open'}</Text>
           </View>
           {!isUploading && <Download size={20} color={isOwn ? '#FFFFFF' : theme.colors.textSecondary} />}
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8 }}>
+          {isEdited && <Text style={{ fontSize: 9, color: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.3)', fontStyle: 'italic', marginRight: 4 }}>Edited</Text>}
+          <Text style={{ fontSize: 9, color: isOwn ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)', fontWeight: 'bold' }}>
+            {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          {isOwn && (isRead ? <CheckCheck size={11} color="#34D399" style={{ marginLeft: 4 }} /> : <Check size={11} color={isOwn ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)'} style={{ marginLeft: 4 }} />)}
         </View>
       </TouchableOpacity>
     );

@@ -33,7 +33,8 @@ import {
   Clock,
   Trash2,
   Edit2,
-  TrendingUp
+  TrendingUp,
+  Mail
 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useTheme } from '@/contexts/BrandContext';
@@ -58,7 +59,9 @@ export default function ClientDetailsScreen() {
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
   const [challengeFilter, setChallengeFilter] = useState<'active' | 'history'>('active');
-  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins'>((tab as string) === 'checkins' ? 'checkins' : 'overview');
+  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins'>(
+    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : 'overview'
+  );
   const [checkins, setCheckins] = useState<any[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [streak, setStreak] = useState(0);
@@ -140,7 +143,8 @@ export default function ClientDetailsScreen() {
       }
 
       // Load Streak
-      const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: id });
+      const viewerTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: id, p_timezone: viewerTimezone });
       setStreak(streakData || 0);
     } catch (error) {
       console.error(error);
@@ -278,7 +282,12 @@ export default function ClientDetailsScreen() {
                         <ArrowLeft size={20} color="white" />
                     </TouchableOpacity>
                     <BrandedAvatar name={client.profiles?.full_name} size={40} imageUrl={client.profiles?.avatar_url} />
-                    <Text className="text-white text-xl font-black">{client.profiles?.full_name}</Text>
+                    <View>
+                        <Text className="text-white text-xl font-black">{client.profiles?.full_name}</Text>
+                        {client.profiles?.email && (
+                            <Text className="text-slate-500 text-xs font-medium">{client.profiles?.email}</Text>
+                        )}
+                    </View>
                 </View>
                 <TouchableOpacity onPress={() => setSchedulerVisible(true)} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
                     <CalendarIcon size={20} color="#3B82F6" />
@@ -334,6 +343,7 @@ export default function ClientDetailsScreen() {
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-6">Stats</Text>
                         <View className="flex-row flex-wrap gap-y-6">
                             <InfoTile icon={<Target size={14} color="#64748B" />} label="Goal" value={client.goal || 'Not set'} fullWidth />
+                            <InfoTile icon={<Mail size={14} color="#64748B" />} label="Email" value={client.profiles?.email || 'Not set'} fullWidth selectable />
                             <InfoTile icon={<Award size={14} color="#64748B" />} label="Experience" value={client.experience_level || 'Not set'} />
                             <InfoTile icon={<TrendingUp size={14} color="#3B82F6" />} label="Streak" value={`${streak} Days`} />
                             <InfoTile icon={<Scale size={14} color="#64748B" />} label="Weight" value={client.latest_weight ? `${client.latest_weight} kg` : 'Not set'} />
@@ -678,13 +688,13 @@ export default function ClientDetailsScreen() {
   );
 }
 
-const InfoTile = ({ icon, label, value, fullWidth }: { icon: any, label: string, value: string, fullWidth?: boolean }) => (
+const InfoTile = ({ icon, label, value, fullWidth, selectable }: { icon: any, label: string, value: string, fullWidth?: boolean, selectable?: boolean }) => (
     <View style={{ width: fullWidth ? '100%' : '50%' }}>
         <View className="flex-row items-center gap-2 mb-1">
             {icon}
             <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">{label}</Text>
         </View>
-        <Text className="text-white font-bold text-base">{value}</Text>
+        <Text className="text-white font-bold text-base" selectable={selectable}>{value}</Text>
     </View>
 );
 

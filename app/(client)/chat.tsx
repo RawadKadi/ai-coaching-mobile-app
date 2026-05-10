@@ -69,6 +69,14 @@ export default function ClientMessagesScreen() {
   const insets = useSafeAreaInsets();
   const { isUserOnline } = usePresence();
   const { user, coach } = useAuth();
+  
+  useEffect(() => {
+    if (user) {
+      console.log('[ClientChat] Component mounted. User ID:', user.id);
+      console.log('[ClientChat] Coach ID:', coach?.user_id || 'Not loaded');
+    }
+  }, [user?.id, coach?.user_id]);
+
   const { refreshUnreadCount } = useUnread();
   const theme = useTheme();
   
@@ -80,6 +88,16 @@ export default function ClientMessagesScreen() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
+  
+  // LOGGING: Track editing state changes
+  useEffect(() => {
+    if (editingMessage) {
+      console.log('[ClientChat] editingMessage updated:', editingMessage.id);
+    } else {
+      console.log('[ClientChat] editingMessage is null');
+    }
+  }, [editingMessage]);
 
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -138,6 +156,11 @@ export default function ClientMessagesScreen() {
     const ch = supabase
       .channel(`chat-reactions-${key}`)
       .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
+        setMessages(prev =>
+          prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
+        );
+      })
+      .on('broadcast', { event: 'message_edit' }, ({ payload }) => {
         setMessages(prev =>
           prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
         );
@@ -350,10 +373,36 @@ export default function ClientMessagesScreen() {
     }
   };
 
-  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward') => {
-    if (!activeMessageForMenu) return;
+  const handleAction = useCallback(async (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => {
+    console.log('[ClientChat] handleAction triggered:', action);
+    if (!activeMessageForMenu) {
+      console.log('[ClientChat] No active message for menu');
+      return;
+    }
 
-    if (action === 'reply') {
+    if (action === 'edit') {
+      console.log('[ClientChat] Editing message:', activeMessageForMenu.id);
+      console.log('[ClientChat] Sender ID:', activeMessageForMenu.sender_id, 'My ID:', user?.id);
+      
+      // Only allow editing own messages
+      if (activeMessageForMenu.sender_id !== user?.id) {
+        console.log('[ClientChat] Sender ID mismatch, edit blocked');
+        return;
+      }
+      
+      let currentText = activeMessageForMenu.content;
+      try {
+        const p = JSON.parse(activeMessageForMenu.content);
+        if (p.text) currentText = p.text;
+      } catch (e) {
+        console.log('[ClientChat] Content is not JSON, using raw content');
+      }
+      
+      console.log('[ClientChat] Setting editingMessage state');
+      setEditingMessage({ id: activeMessageForMenu.id, text: currentText });
+      setActiveMessageForMenu(null);
+      return;
+    } else if (action === 'reply') {
       setReplyingTo(activeMessageForMenu);
     } else if (action === 'copy') {
       let textToCopy = activeMessageForMenu.content;
@@ -370,6 +419,35 @@ export default function ClientMessagesScreen() {
       await supabase.from('messages').update({ content: deletedContent }).eq('id', msgId);
     }
     setActiveMessageForMenu(null);
+  }, [activeMessageForMenu, user?.id]);
+
+  const handleConfirmEdit = async (newText: string, messageId: string) => {
+    // Build updated content preserving existing fields (reactions, etc.)
+    const currentMsg = messages.find(m => m.id === messageId);
+    let currentContent: any = {};
+    try {
+      currentContent = JSON.parse(currentMsg?.content || '{}');
+    } catch {
+      currentContent = {};
+    }
+    const updatedContent = JSON.stringify({ ...currentContent, text: newText, type: currentContent.type || 'text', is_edited: true });
+
+    // Optimistic update
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: updatedContent } : m));
+    setEditingMessage(null);
+
+    const { error } = await supabase.from('messages').update({ content: updatedContent }).eq('id', messageId);
+    if (error) {
+      Alert.alert('Error', 'Failed to edit message: ' + error.message);
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: currentMsg?.content || m.content } : m));
+    } else {
+      // Broadcast edit to the other side
+      reactionChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'message_edit',
+        payload: { messageId, content: updatedContent },
+      });
+    }
   };
 
   const scrollToMessage = useCallback((messageId: string) => {
@@ -397,6 +475,7 @@ export default function ClientMessagesScreen() {
 
     const onLongPressStateChange = ({ nativeEvent }: any) => {
       if (nativeEvent.state === State.ACTIVE) {
+        console.log('[ClientChat] Long press detected on message:', item.id);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         setActiveMessageForMenu(item);
       }
@@ -551,19 +630,43 @@ export default function ClientMessagesScreen() {
               replyingTo={replyingTo} 
               onCancelReply={() => setReplyingTo(null)} 
               onTyping={handleTyping}
+              editingMessage={editingMessage}
+              onConfirmEdit={handleConfirmEdit}
+              onCancelEdit={() => {
+                console.log('[ClientChat] Edit cancelled');
+                setEditingMessage(null);
+              }}
             />
         </View>
       </KeyboardAvoidingView>
 
-      <MessageOverlay
-        visible={!!activeMessageForMenu}
-        message={messages.find(m => m.id === activeMessageForMenu?.id) || activeMessageForMenu}
-        isMe={activeMessageForMenu?.sender_id === user?.id}
-        onClose={() => setActiveMessageForMenu(null)}
-        onReaction={handleReaction}
-        onAction={handleAction}
-        renderMessageContent={renderOverlayContent}
-      />
+      {activeMessageForMenu && (
+        <MessageOverlay
+          visible={!!activeMessageForMenu}
+          message={messages.find(m => m.id === activeMessageForMenu?.id) || activeMessageForMenu}
+          isMe={activeMessageForMenu?.sender_id === user?.id}
+          onClose={() => {
+            console.log('[ClientChat] Overlay onClose called');
+            setActiveMessageForMenu(null);
+          }}
+          onReaction={handleReaction}
+          onAction={(act) => {
+            console.log('[ClientChat] Overlay onAction prop called with:', act);
+            setTimeout(() => handleAction(act), 0);
+          }}
+          renderMessageContent={(msg: any, isMe: boolean) => (
+            <View style={{ transform: [{ scale: 1.05 }] }}>
+              <ClientMessageBubble 
+                item={msg} 
+                isMe={isMe} 
+                theme={theme} 
+                user={user}
+                coachName={coach?.name}
+              />
+            </View>
+          )}
+        />
+      )}
     </View>
   );
 }
@@ -575,11 +678,13 @@ const ClientMessageBubble = ({ item, isMe, isHighlighted, repliedMsg, onReplyPre
   let reactions: any[] = [];
   let isDeleted = false;
   let deletedBy = '';
+  let isEdited = false;
 
   try {
     const p = JSON.parse(item.content);
     displayContent = p.text || item.content;
     reactions = p.reactions || [];
+    isEdited = !!p.is_edited;
     if (p.type === 'deleted') { isDeleted = true; deletedBy = p.deleted_by; }
     // Delegate media types to ChatMediaMessage to avoid showing raw JSON
     if (p.type === 'meal' || p.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
@@ -658,6 +763,9 @@ const ClientMessageBubble = ({ item, isMe, isHighlighted, repliedMsg, onReplyPre
           </TouchableOpacity>
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
+          {isEdited && (
+            <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>
+          )}
           <Text style={{ fontSize: 9, fontWeight: 'bold', color: 'rgba(255,255,255,0.4)' }}>
             {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>

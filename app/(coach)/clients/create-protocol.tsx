@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
@@ -42,6 +42,8 @@ export default function CreateProtocolScreen() {
   const [creating, setCreating] = useState(false);
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadExistingTasks = async (cid: string) => {
     try {
@@ -172,9 +174,12 @@ export default function CreateProtocolScreen() {
         if (error) throw error;
       }
       
-      Alert.alert('Success', 'Tasks updated successfully!', [
-        { text: 'View Client', onPress: () => router.push(`/(coach)/clients/${selectedClient!.id}`) }
-      ]);
+      // Show toast then navigate back to daily tasks tab
+      setToastVisible(true);
+      toastTimer.current = setTimeout(() => {
+        setToastVisible(false);
+        router.replace(`/(coach)/clients/${selectedClient!.id}?tab=daily_tasks`);
+      }, 2000);
     } catch (e: any) {
       Alert.alert('Save Failed', e.message);
     } finally {
@@ -394,6 +399,38 @@ export default function CreateProtocolScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Toast notification */}
+      {toastVisible && (
+        <MotiView
+          from={{ opacity: 0, translateY: 16 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          style={{
+            position: 'absolute',
+            bottom: 110,
+            left: 24,
+            right: 24,
+            backgroundColor: '#10B981',
+            borderRadius: 20,
+            paddingVertical: 16,
+            paddingHorizontal: 20,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            shadowColor: '#10B981',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.35,
+            shadowRadius: 16,
+            elevation: 10,
+            zIndex: 100,
+          }}
+        >
+          <ShieldCheck size={20} color="white" />
+          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15, flex: 1 }}>
+            Daily tasks updated for {selectedClient?.full_name}
+          </Text>
+        </MotiView>
+      )}
     </View>
   );
 }
