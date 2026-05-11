@@ -195,69 +195,56 @@ export const extractSchedulingIntent = async (input: string): Promise<IntentExtr
     try {
         const prompt = `
 Extract scheduling intent from this coach input. 
-Handle typos (e.g., "Wednsday" -> "wednesday"), abbreviations (e.g., "wed" -> "wednesday"), and multiple dates (e.g., "Tue, wed, and fri" -> [tuesday, wednesday, friday]).
+Handle typos (e.g., "Wednsday" -> "wednesday"), abbreviations (e.g., "wed" -> "wednesday").
 IMPORTANT: Resolve all dates to their standard lowercase names (monday, tuesday, wednesday, thursday, friday, saturday, sunday, today, tomorrow).
 
 Input: "${input}"
 
-Return in this exact format (do NOT include markdown, notes, or additional text):
-sessions: date1@HH:mm, date2@null, null@14:00
-recurrence: once | weekly | null
-missing: field1, field2
-
-Logic:
-1. If a date is mentioned without a time, use "date@null".
-2. If a time is mentioned without a date (e.g., "at 1pm", "all days at 1pm"), use "null@HH:mm". This acts as a catch-all.
-3. If multiple dates are mentioned with different times (e.g., "Mon at 1 and Tue at 4"), list each: "monday@13:00, tuesday@16:00".
-4. "missing" should list fields the user DID NOT specify: "time", "dates", and/or "recurrence".
+Return ONLY a valid JSON object matching this schema. Do not include markdown formatting or backticks.
+{
+    "sessions": [
+        {
+            "date": "string or null", // e.g. "friday", "today", or null if not mentioned
+            "time": "string or null" // e.g. "10:30 PM", "14:00", or null if not mentioned
+        }
+    ],
+    "recurrence": "once" | "weekly" | null,
+    "missing_info": ["time", "dates", "recurrence"] // List fields that were not specified
+}
 `;
 
         const result = await callWithRetry(() => visionModel.generateContent(prompt));
         let text = (await result.response).text().trim();
 
         // Clean markdown if present
-        if (text.startsWith('```')) {
+        if (text.startsWith('```json')) {
+            text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        } else if (text.startsWith('```')) {
             text = text.replace(/```[a-z]*\n?/g, '').replace(/```\n?/g, '').trim();
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(text);
+        } catch (e) {
+            console.error('Failed to parse JSON from AI intent:', text);
+            throw new Error('Invalid JSON format from AI');
         }
 
         const response: IntentExtractionResponse = {
             sessions: [],
-            recurrence: null,
-            missing_info: []
+            recurrence: parsed.recurrence === 'weekly' || parsed.recurrence === 'once' ? parsed.recurrence : null,
+            missing_info: Array.isArray(parsed.missing_info) ? parsed.missing_info : []
         };
 
-        const lines = text.split('\n');
-        for (const line of lines) {
-            const separatorIndex = line.indexOf(':');
-            if (separatorIndex === -1) continue;
-
-            const key = line.substring(0, separatorIndex).trim().toLowerCase();
-            const value = line.substring(separatorIndex + 1).trim();
-
-            if (!value || value.toLowerCase() === 'null' || value.toLowerCase() === 'none' || value === '?') continue;
-
-            if (key === 'sessions') {
-                const parts = value.split(',').map(s => s.trim());
-                for (const part of parts) {
-                    const [dateStr, timeStr] = part.split('@').map(s => s.trim().toLowerCase());
-
-                    const sessionDate = (dateStr && dateStr !== 'null') ? dateStr : null;
-                    const sessionTime = (timeStr && timeStr !== 'null' && timeStr.match(/^\d{1,2}:\d{2}$/)) ? timeStr : null;
-
-                    if (sessionDate || sessionTime) {
-                        response.sessions.push({
-                            date: sessionDate,
-                            time: sessionTime
-                        });
-                    }
+        if (Array.isArray(parsed.sessions)) {
+            for (const s of parsed.sessions) {
+                if (s.date || s.time) {
+                    response.sessions.push({
+                        date: typeof s.date === 'string' && s.date.toLowerCase() !== 'null' ? s.date.toLowerCase() : null,
+                        time: typeof s.time === 'string' && s.time.toLowerCase() !== 'null' ? s.time : null
+                    });
                 }
-            } else if (key === 'recurrence') {
-                const rec = value.toLowerCase();
-                if (rec === 'once' || rec === 'weekly') {
-                    response.recurrence = rec as any;
-                }
-            } else if (key === 'missing') {
-                response.missing_info = value.split(',').map(s => s.trim().toLowerCase()).filter(s => s && s !== 'null');
             }
         }
 

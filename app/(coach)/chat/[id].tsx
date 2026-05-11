@@ -32,6 +32,7 @@ import {
   MoreVertical,
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { safeBack } from '@/lib/navigation-utils';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
 import SchedulerModal from '@/components/SchedulerModal';
@@ -98,6 +99,7 @@ export default function CoachChatScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
+  const [pressedMessageId, setPressedMessageId] = useState<string | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [enlargedAvatar, setEnlargedAvatar] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
@@ -596,21 +598,7 @@ export default function CoachChatScreen() {
         onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
       >
-        <Pressable 
-            delayLongPress={350}
-            unstable_pressDelay={0}
-            onLongPress={() => { 
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
-                setActiveMessageForMenu(item); 
-            }}
-            style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
-        >
-          {({ pressed }) => (
-            <MotiView
-               animate={{ scale: pressed ? 0.9 : 1 }}
-               transition={{ type: 'timing', duration: 100 }}
-               style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
-            >
+          <View style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
               {isMedia ? (
                 <View>
                   <ChatMediaMessage 
@@ -618,48 +606,50 @@ export default function CoachChatScreen() {
                     isOwn={isMe} 
                     createdAt={item.created_at} 
                     isRead={item.read} 
-                    isUploading={item.isUploading}
-                    progress={item.progress}
-                    replyTo={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : undefined}
-                    onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
-                    isHighlighted={item.id === highlightedMessageId}
-                    onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
-                  />
-                  {/* Reactions on media messages */}
-                  {(() => {
-                    try {
-                      const p = JSON.parse(item.content);
-                      const reactions = p.reactions || [];
-                      if (reactions.length === 0) return null;
-                      return (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
-                          {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
-                            .map(([emoji, count]: any) => (
-                              <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
-                                <Text style={{ fontSize: 12 }}>{emoji}</Text>
-                                {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
-                              </View>
-                            ))}
-                        </View>
-                      );
-                    } catch { return null; }
-                  })()}
-                </View>
-              ) : (
-                <MessageBubble 
-                  item={item} 
-                  isMe={isMe} 
-                  repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
-                  isHighlighted={item.id === highlightedMessageId}
-                  onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
-                  theme={theme}
-                  user={user}
-                  clientName={clientProfile?.profiles?.full_name}
+                  isUploading={item.isUploading}
+                  progress={item.progress}
+                  onLongPress={() => { 
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                      setActiveMessageForMenu(item); 
+                  }}
                 />
-              )}
-            </MotiView>
-          )}
-        </Pressable>
+                {/* Reactions on media messages */}
+                {(() => {
+                  try {
+                    const p = JSON.parse(item.content);
+                    const reactions = p.reactions || [];
+                    if (reactions.length === 0) return null;
+                    return (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
+                        {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+                          .map(([emoji, count]: any) => (
+                            <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                              <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                              {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
+                            </View>
+                          ))}
+                      </View>
+                    );
+                  } catch { return null; }
+                })()}
+              </View>
+            ) : (
+              <MessageBubble 
+                item={item} 
+                isMe={isMe} 
+                repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
+                isHighlighted={item.id === highlightedMessageId}
+                onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+                theme={theme}
+                user={user}
+                clientName={clientProfile?.full_name}
+                onLongPress={() => { 
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                    setActiveMessageForMenu(item); 
+                }}
+              />
+            )}
+          </View>
       </Swipeable>
     );
   };
@@ -696,7 +686,7 @@ export default function CoachChatScreen() {
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]} className="border-b border-white/5 bg-[#020617]/80">
         <View className="flex-row items-center justify-between px-4 pb-4">
           <View className="flex-row items-center gap-3">
-             <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 items-center justify-center rounded-full bg-white/5">
+             <TouchableOpacity onPress={() => safeBack()} className="w-10 h-10 items-center justify-center rounded-full bg-white/5">
                 <ArrowLeft size={20} color="#94A3B8" />
              </TouchableOpacity>
              <View className="flex-row items-center gap-3">
@@ -739,6 +729,7 @@ export default function CoachChatScreen() {
                 initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
                 onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
                 ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
+                delaysContentTouches={false} keyboardShouldPersistTaps="handled"
              />
         )}
         <ChatInputBar 
@@ -759,7 +750,8 @@ export default function CoachChatScreen() {
         targetClientId={id as string}
         clientContext={{ 
           name: clientProfile?.profiles?.full_name || 'Athlete', 
-          timezone: 'UTC' 
+          timezone: 'UTC',
+          avatar_url: clientProfile?.profiles?.avatar_url
         }}
         existingSessions={[]} 
         onConfirm={async (sessions) => {
@@ -823,8 +815,9 @@ const OptionItem = ({ icon, title, sub, onPress }: any) => (
 
 const styles = StyleSheet.create({ header: { backgroundColor: '#020617' } });
 
-const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, clientName }: any) => {
+const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, clientName, onLongPress }: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isPressed, setIsPressed] = React.useState(false);
   let displayContent = item.content;
   let reactions: any[] = [];
   let isDeleted = false;
@@ -860,16 +853,23 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
 
   return (
     <View style={{ position: 'relative' }}>
-      <MotiView 
-          from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
-          animate={{ 
-              scale: isHighlighted ? 1.05 : 1,
-              backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
-          }}
-          transition={{ type: 'timing', duration: 250 }}
-          className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-          style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
+      <Pressable
+          delayLongPress={100}
+          unstable_pressDelay={0}
+          onPressIn={() => setIsPressed(true)}
+          onPressOut={() => setIsPressed(false)}
+          onLongPress={onLongPress}
       >
+        <MotiView 
+            from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
+            animate={{ 
+                scale: isPressed ? 0.9 : (isHighlighted ? 1.05 : 1),
+                backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
+            }}
+            transition={{ type: 'timing', duration: 100 }}
+            className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
+            style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
+        >
         {repliedMsg && (
            <TouchableOpacity 
               activeOpacity={0.8}
@@ -912,6 +912,7 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
            {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
         </View>
       </MotiView>
+      </Pressable>
 
       {reactions.length > 0 && (
         <View className="flex-row flex-wrap mt-[-8px] ml-2">

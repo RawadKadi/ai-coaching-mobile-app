@@ -565,7 +565,7 @@ export default function ClientDetailsScreen() {
           visible={schedulerVisible}
           onClose={() => setSchedulerVisible(false)}
           onConfirm={async (s) => { /* handle s */ await loadClientData(); }}
-          clientContext={{ name: client.profiles?.full_name || 'Client', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }}
+          clientContext={{ name: client.profiles?.full_name || 'Client', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, avatar_url: client.profiles?.avatar_url }}
           existingSessions={allCoachSessions}
           targetClientId={id as string}
         />

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Linking, Modal, SafeAreaView, Animated, PanResponder, Dimensions
+  Linking, Modal, SafeAreaView, Animated, PanResponder, Dimensions, Pressable
 } from 'react-native';
 import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
@@ -11,6 +11,7 @@ import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/BrandContext';
 import { FileText, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target, Loader2 } from 'lucide-react-native';
+import { MotiView } from 'moti';
 import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import MealMessageCard from './MealMessageCard';
@@ -99,6 +100,7 @@ interface Props {
   onPressReply?: (id: string) => void;
   isHighlighted?: boolean;
   onLongPress?: () => void; // Forwarded from parent chat for reaction menu
+  isPressed?: boolean;
 }
 
 // ── Circular download progress ring ──────────────────────────────────────────
@@ -442,9 +444,7 @@ function CustomImagePlayer({
   isUploading?: boolean, progress?: number, onCancel?: () => void, onLongPress?: () => void
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const [imgError, setImgError] = useState(false);
-  const { localUri, isCaching, downloadProgress } = useMediaCache(uri, type);
+  const { localUri } = useMediaCache(uri, type);
   const cachedUri = localUri || uri;
 
   return (
@@ -463,8 +463,6 @@ function CustomImagePlayer({
           // GIFs: disable disk cache to prevent stale/wrong GIF from showing.
           // Images: if it's a local file:// uri, caching to disk again breaks expo-image on iOS.
           cachePolicy={type === 'gif' || cachedUri.startsWith('file:') ? 'none' : 'memory-disk'}
-          onLoadEnd={() => setImgLoaded(true)}
-          onError={() => setImgError(true)}
         />
 
         {isUploading && (
@@ -563,11 +561,14 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
 }
 
 // ── Main ChatMediaMessage Component ──────────────────────────────────────────
-export default function ChatMediaMessage({ 
+const ChatMediaMessage: React.FC<Props> = ({ 
   content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress 
-}: Props) {
+}) => {
   const theme = useTheme();
   const highlightAnim = useRef(new Animated.Value(0)).current;
+  const [isTaskExpanded, setIsTaskExpanded] = useState(false);
+  const [isChallengeExpanded, setIsChallengeExpanded] = useState(false);
+  const [isLocalPressed, setIsLocalPressed] = useState(false);
 
   useEffect(() => {
     if (isHighlighted) {
@@ -593,8 +594,10 @@ export default function ChatMediaMessage({
   } catch { return null; }
   if (!media) return null;
 
+  let messageBody = null;
+
   if ((media.type === 'image' || media.type === 'gif') && media.url) {
-    return (
+    messageBody = (
       <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { width: 220, height: replyTo ? 240 : 200, padding: 0, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt }]}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10 }]} pointerEvents="none" />
         {replyTo && <View style={{ padding: 4, backgroundColor: theme.colors.surface }}><ChatReplyContext message={replyTo} onPress={() => replyTo.id && onPressReply?.(replyTo.id)} isMe={isOwn} /></View>}
@@ -608,10 +611,8 @@ export default function ChatMediaMessage({
         )}
       </View>
     );
-  }
-
-  if (media.type === 'video' && media.url) {
-    return (
+  } else if (media.type === 'video' && media.url) {
+    messageBody = (
       <TouchableOpacity
         activeOpacity={1}
         onLongPress={onLongPress}
@@ -636,10 +637,8 @@ export default function ChatMediaMessage({
         )}
       </TouchableOpacity>
     );
-  }
-
-  if (media.type === 'document') {
-    return (
+  } else if (media.type === 'document') {
+    messageBody = (
       <TouchableOpacity style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface, borderColor: theme.colors.border }]} onPress={() => !isUploading && media?.url && Linking.openURL(media.url)}>
         <View style={styles.docContainer}>
           <FileText size={28} color={isOwn ? '#FFFFFF' : theme.colors.primary} />
@@ -658,11 +657,8 @@ export default function ChatMediaMessage({
         </View>
       </TouchableOpacity>
     );
-  }
-  
-  if (media.type === 'task_completion') {
-    const [isExpanded, setIsExpanded] = useState(false);
-    return (
+  } else if (media.type === 'task_completion') {
+    messageBody = (
       <>
         <TouchableOpacity 
           activeOpacity={0.9} 
@@ -670,24 +666,22 @@ export default function ChatMediaMessage({
           onLongPress={onLongPress} 
           style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
         >
-          <TaskCompletedCard media={media} onPressImage={() => media.imageUrl && setIsExpanded(true)} />
+          <TaskCompletedCard media={media} onPressImage={() => media.imageUrl && setIsTaskExpanded(true)} />
         </TouchableOpacity>
 
         {media.imageUrl && (
-          <Modal visible={isExpanded} transparent animationType="fade" statusBarTranslucent>
+          <Modal visible={isTaskExpanded} transparent animationType="fade" statusBarTranslucent>
             <FullscreenImageModal 
               uri={media.imageUrl} 
               type="task_completion" 
-              onClose={() => setIsExpanded(false)} 
+              onClose={() => setIsTaskExpanded(false)} 
             />
           </Modal>
         )}
       </>
     );
-  }
-  if (media.type === 'challenge_completed') {
-    const [isExpanded, setIsExpanded] = useState(false);
-    return (
+  } else if (media.type === 'challenge_completed') {
+    messageBody = (
       <>
         <TouchableOpacity 
           activeOpacity={0.9} 
@@ -695,35 +689,48 @@ export default function ChatMediaMessage({
           onLongPress={onLongPress} 
           style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
         >
-          <ChallengeCompletedCard media={media} onPressImage={() => media.imageUrl && setIsExpanded(true)} />
+          <ChallengeCompletedCard media={media} onPressImage={() => media.imageUrl && setIsChallengeExpanded(true)} />
         </TouchableOpacity>
 
         {media.imageUrl && (
-          <Modal visible={isExpanded} transparent animationType="fade" statusBarTranslucent>
+          <Modal visible={isChallengeExpanded} transparent animationType="fade" statusBarTranslucent>
             <FullscreenImageModal 
               uri={media.imageUrl} 
               type="task_completion" 
-              onClose={() => setIsExpanded(false)} 
+              onClose={() => setIsChallengeExpanded(false)} 
             />
           </Modal>
         )}
       </>
     );
-  }
-  
-  // Support for meal cards if channeled through here
-  if (media.type === 'meal' || media.type === 'meal_log') {
-    return <MealMessageCard content={content} isOwn={isOwn} onLongPress={onLongPress} />;
+  } else if (media.type === 'meal' || media.type === 'meal_log') {
+    messageBody = <MealMessageCard content={content} isOwn={isOwn} onLongPress={onLongPress} />;
+  } else {
+    messageBody = (
+      <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: theme.colors.surface, padding: 12, borderWidth: 1, borderColor: theme.colors.border }]}>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
+          [Media: {media.type || 'Unknown'}]
+        </Text>
+        {media.url && <Text style={{ color: theme.colors.primary, fontSize: 11, marginTop: 4 }} numberOfLines={1}>{media.url}</Text>}
+      </View>
+    );
   }
 
-  // Fallback for unknown media or missing URL
   return (
-    <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: theme.colors.surface, padding: 12, borderWidth: 1, borderColor: theme.colors.border }]}>
-      <Text style={{ color: theme.colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
-        [Media: {media.type || 'Unknown'}]
-      </Text>
-      {media.url && <Text style={{ color: theme.colors.primary, fontSize: 11, marginTop: 4 }} numberOfLines={1}>{media.url}</Text>}
-    </View>
+    <Pressable
+      delayLongPress={100}
+      unstable_pressDelay={0}
+      onPressIn={() => setIsLocalPressed(true)}
+      onPressOut={() => setIsLocalPressed(false)}
+      onLongPress={onLongPress}
+    >
+      <MotiView 
+        animate={{ scale: isLocalPressed ? 0.9 : 1 }}
+        transition={{ type: 'timing', duration: 100 }}
+      >
+        {messageBody}
+      </MotiView>
+    </Pressable>
   );
 }
 
@@ -749,3 +756,5 @@ const styles = StyleSheet.create({
   challengeFooterText: { color: '#475569', fontSize: 10, fontWeight: '600' },
   cardImageContainer: { width: '100%', height: 180, overflow: 'hidden', backgroundColor: '#1E293B' },
 });
+
+export default ChatMediaMessage;

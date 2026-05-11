@@ -519,7 +519,8 @@ export default function CoachDashboard() {
               } }
               clientContext={{
                 name: selectedClientForAI.name,
-                timezone: selectedClientForAI.timezone
+                timezone: selectedClientForAI.timezone,
+                avatar_url: selectedClientForAI.avatar
               }}
               targetClientId={selectedClientForAI.id}
               existingSessions={allSessions}

@@ -193,7 +193,7 @@ export default function CalendarScreen() {
                   onClose={() => { setShowManualScheduler(false); setSelectedClient(null); }} 
                   onConfirm={async () => loadSessions()} 
                   existingSessions={sessions} coachId={coach.id} initialClient={initialClientData}
-                  onSwitchToAI={(c) => { setSelectedClient({ id: c.id, name: c.profiles.full_name, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }); setShowManualScheduler(false); setShowAIScheduler(true); }}
+                  onSwitchToAI={(c) => { setSelectedClient({ id: c.id, name: c.profiles.full_name, avatar_url: c.profiles.avatar_url, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }); setShowManualScheduler(false); setShowAIScheduler(true); }}
               />
           )}
           {selectedClient && (

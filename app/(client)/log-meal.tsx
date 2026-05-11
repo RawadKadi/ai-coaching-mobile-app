@@ -13,6 +13,7 @@ import { MealIngredient } from '@/types/database';
 import * as ImagePicker from 'expo-image-picker';
 import FeedbackModal from '@/components/FeedbackModal';
 import { formatCompactNumber } from '@/lib/format-utils';
+import { safeBack } from '@/lib/navigation-utils';
 
 type Step = 'camera' | 'analyzing' | 'needs_info' | 'review' | 'nutrition';
 
@@ -237,7 +238,7 @@ export default function LogMealScreen() {
           {/* Top Bar Controls */}
           <View className="flex-row justify-between items-center px-6 mt-4" pointerEvents="box-none">
             <TouchableOpacity 
-              onPress={() => router.back()} 
+              onPress={() => safeBack()} 
               className="w-12 h-12 bg-black/40 rounded-full items-center justify-center border border-white/10"
             >
               <X size={24} color="white" />
@@ -558,7 +559,7 @@ export default function LogMealScreen() {
                 visible={showMealSuccess}
                 onClose={() => {
                   setShowMealSuccess(false);
-                  router.back();
+                  safeBack();
                 }}
                 variant="success"
                 icon={<Check size={60} color="#10B981" />}

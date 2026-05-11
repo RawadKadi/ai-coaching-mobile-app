@@ -12,6 +12,7 @@ import { ChatInputBar } from '@/components/ChatInputBar';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { MessageOverlay } from '@/components/MessageOverlay';
+import { safeBack } from '@/lib/navigation-utils';
 import MealMessageCard from '@/components/MealMessageCard';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
@@ -85,6 +86,7 @@ export default function CoachToCoachChat() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [pressedMessageId, setPressedMessageId] = useState<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -403,21 +405,9 @@ export default function CoachToCoachChat() {
         onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
       >
-        <Pressable 
-            delayLongPress={350}
-            unstable_pressDelay={0}
-            onLongPress={() => { 
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
-                setActiveMessageForMenu(item); 
-            }}
-            style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
-        >
-          {({ pressed }) => (
-            <MotiView
-               animate={{ scale: pressed ? 0.9 : 1 }}
-               transition={{ type: 'timing', duration: 100 }}
-               style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
-            >
+          <View
+             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+          >
               {isMedia ? (
                 <ChatMediaMessage 
                   content={item.content} 
@@ -426,6 +416,10 @@ export default function CoachToCoachChat() {
                   isRead={item.read} 
                   isUploading={item.isUploading}
                   progress={item.progress}
+                  onLongPress={() => { 
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                      setActiveMessageForMenu(item); 
+                  }}
                 />
               ) : (
                 <MessageBubble 
@@ -437,11 +431,13 @@ export default function CoachToCoachChat() {
                   theme={theme}
                   user={user}
                   otherCoachName={coachInfo?.full_name}
+                  onLongPress={() => { 
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                      setActiveMessageForMenu(item); 
+                  }}
                 />
               )}
-            </MotiView>
-          )}
-        </Pressable>
+          </View>
       </Swipeable>
     );
   };
@@ -452,7 +448,7 @@ export default function CoachToCoachChat() {
       <View style={{ paddingTop: insets.top, backgroundColor: '#020617' }} className="border-b border-white/5">
         <View className="flex-row items-center justify-between px-6 py-4">
             <View className="flex-row items-center gap-4">
-                <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
+                <TouchableOpacity onPress={() => safeBack()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
                     <ArrowLeft size={18} color="white" />
                 </TouchableOpacity>
                 <View className="flex-row items-center gap-3">
@@ -480,6 +476,7 @@ export default function CoachToCoachChat() {
                 initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
                 onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
                 ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
+                delaysContentTouches={false} keyboardShouldPersistTaps="handled"
              />
         )}
         <ChatInputBar 
@@ -508,8 +505,10 @@ export default function CoachToCoachChat() {
     </View>
   );
 }
-const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, otherCoachName }: any) => {
+
+const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, otherCoachName, onLongPress }: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isPressed, setIsPressed] = React.useState(false);
   let displayContent = item.content, reactions: any[] = [], isDeleted = false, deletedBy = '';
   try {
     const p = JSON.parse(item.content);
@@ -533,13 +532,20 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
 
   return (
     <View style={{ position: 'relative' }}>
-      <MotiView 
-          from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
+      <Pressable
+          delayLongPress={100}
+          unstable_pressDelay={0}
+          onPressIn={() => setIsPressed(true)}
+          onPressOut={() => setIsPressed(false)}
+          onLongPress={onLongPress}
+      >
+        <MotiView 
+            from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
           animate={{ 
-              scale: isHighlighted ? 1.05 : 1,
+              scale: isPressed ? 0.9 : (isHighlighted ? 1.05 : 1),
               backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
           }}
-          transition={{ type: 'timing', duration: 250 }}
+          transition={{ type: 'timing', duration: 100 }}
           className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
           style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
       >
@@ -582,6 +588,7 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
            {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
         </View>
       </MotiView>
+      </Pressable>
       {reactions.length > 0 && (
         <View className="flex-row flex-wrap mt-[-8px] ml-2">
           {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))

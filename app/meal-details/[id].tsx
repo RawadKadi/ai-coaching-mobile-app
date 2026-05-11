@@ -7,6 +7,7 @@ import { ArrowLeft, Clock, Flame, Utensils, Zap, ChevronLeft, Target, Info } fro
 import { MotiView } from 'moti';
 import { formatCompactNumber } from '@/lib/format-utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { safeBack } from '@/lib/navigation-utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -86,7 +87,7 @@ export default function MealDetailsScreen() {
       <View style={[styles.container, styles.centerContent]}>
         <Info size={48} color="#64748b" />
         <Text style={styles.errorText}>Analysis not found</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.errorButton}>
+        <TouchableOpacity onPress={() => safeBack()} style={styles.errorButton}>
           <Text style={styles.errorButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -114,7 +115,7 @@ export default function MealDetailsScreen() {
       {/* Floating Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
         <TouchableOpacity 
-          onPress={() => router.back()} 
+          onPress={() => safeBack()} 
           style={styles.backButton}
           activeOpacity={0.7}
         >
