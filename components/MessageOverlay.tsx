@@ -240,12 +240,16 @@ const MenuOption = ({ icon, label, onPress, destructive }: any) => (
       onPress();
     }} 
     style={({ pressed }) => [
-      styles.menuOption,
-      pressed && { opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.05)' }
+      { width: '100%' },
+      pressed && { backgroundColor: 'rgba(255, 255, 255, 0.08)' }
     ]}
   >
-    <Text style={[styles.menuLabel, destructive && { color: '#EF4444' }]}>{label}</Text>
-    {icon}
+    <View style={styles.menuOptionInternal}>
+      <Text numberOfLines={1} style={[styles.menuLabel, destructive && { color: '#FF453A' }]}>{label}</Text>
+      <View style={styles.menuIconWrapper}>
+        {icon}
+      </View>
+    </View>
   </Pressable>
 );
 
@@ -314,17 +318,27 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  menuOption: {
+  menuOptionInternal: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 20,
+    width: '100%',
   },
   menuLabel: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '500',
     color: '#F8FAFC',
+    letterSpacing: -0.2,
+    flex: 1,
+  },
+  menuIconWrapper: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.8,
   },
   divider: {
     height: 1,
