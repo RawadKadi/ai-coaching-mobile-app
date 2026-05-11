@@ -8,7 +8,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Eas
 import { X, ChevronLeft, AlertTriangle, Check, Plus, Minus, Send, RefreshCw, Image as ImageIcon, Camera, Zap, Activity } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { analyzeMealImage, reanalyzeMealWithContext, recalculateNutrition, MealAnalysisResult, reanalyzeMealWithFeedback } from '@/lib/ai-meal-service';
+import { analyzeMealImage, reanalyzeMealWithContext, recalculateNutrition, MealAnalysisResult, reanalyzeMealWithFeedback, guessIngredientQuantity, generateMealName } from '@/lib/ai-meal-service';
 import { MealIngredient } from '@/types/database';
 import * as ImagePicker from 'expo-image-picker';
 import FeedbackModal from '@/components/FeedbackModal';
@@ -33,11 +33,16 @@ export default function LogMealScreen() {
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [guessingId, setGuessingId] = useState<string | null>(null);
+  const [aiGuessedIds, setAiGuessedIds] = useState<Set<string>>(new Set());
+  const [showAiTooltip, setShowAiTooltip] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [mealName, setMealName] = useState('');
   const [cookingMethod, setCookingMethod] = useState('');
   const [hasOil, setHasOil] = useState(false);
   const [showMealSuccess, setShowMealSuccess] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const inputRefs = useRef<{ [key: string]: TextInput | null }>({});
 
   useEffect(() => { if (!permission) requestPermission(); }, []);
 
@@ -239,7 +244,7 @@ export default function LogMealScreen() {
             </TouchableOpacity>
             
             <View className="px-4 py-1.5 bg-blue-600 rounded-full items-center justify-center border border-white/20 shadow-xl shadow-blue-500/50">
-              <Text className="text-white font-black text-[10px] uppercase tracking-widest">Neural Scan</Text>
+              <Text className="text-white font-black text-[10px] uppercase tracking-widest">Scanning</Text>
             </View>
             
             <View className="w-12" />
@@ -289,14 +294,14 @@ export default function LogMealScreen() {
             <ScanPreview imageUri={capturedImage} />
             
             <View className="items-center mt-12">
-                <Text className="text-white text-2xl font-black text-center">Identifying Protocols</Text>
+                <Text className="text-white text-2xl font-black text-center">Checking Meal</Text>
                 <Text className="text-slate-500 font-bold mt-2 text-center leading-5 px-10">
-                    Neural engine is extracting nutritional data through visual synthesis...
+                    Identifying ingredients and estimating portions...
                 </Text>
                 
                 <View className="mt-12 flex-row items-center bg-blue-500/10 px-6 py-3 rounded-full border border-blue-500/20">
                     <ActivityIndicator color="#3B82F6" size="small" className="mr-3" />
-                    <Text className="text-blue-500 font-black text-[12px] uppercase tracking-widest">Processing Layer 7</Text>
+                    <Text className="text-blue-500 font-black text-[12px] uppercase tracking-widest">Working...</Text>
                 </View>
             </View>
         </MotiView>
@@ -312,12 +317,13 @@ export default function LogMealScreen() {
                 <TouchableOpacity onPress={() => { setCapturedImage(null); setCurrentStep('camera'); }} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center">
                     <ChevronLeft size={20} color="white" />
                 </TouchableOpacity>
-                <Text className="text-white font-black text-lg">Protocol Review</Text>
+                <Text className="text-white font-black text-lg">Review Meal</Text>
                 <View className="w-10" />
             </View>
 
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <ScrollView 
+                    ref={scrollViewRef}
                     style={{ flex: 1 }}
                     contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100, flexGrow: 1 }}
                     showsVerticalScrollIndicator={true}
@@ -341,7 +347,18 @@ export default function LogMealScreen() {
                     <View className="flex-row items-center gap-3 mb-6">
                         <View className="w-1.5 h-6 bg-blue-600 rounded-full" />
                         <Text className="text-white text-xl font-black">Composition</Text>
-                        <TouchableOpacity onPress={() => setIngredients([...ingredients, { id: Math.random().toString(), meal_id: '', ingredient_name: '', quantity: 0, unit: 'g', ai_detected: false, created_at: '' }])} className="ml-auto bg-slate-900/80 px-4 py-2 rounded-2xl border border-slate-800">
+                        <TouchableOpacity 
+                            onPress={() => {
+                                const newId = Math.random().toString();
+                                setIngredients([...ingredients, { id: newId, meal_id: '', ingredient_name: '', quantity: 0, unit: 'g', ai_detected: false, created_at: new Date().toISOString() }]);
+                                // Scroll to bottom and focus after state update
+                                setTimeout(() => {
+                                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                                    inputRefs.current[newId]?.focus();
+                                }, 100);
+                            }} 
+                            className="ml-auto bg-slate-900/80 px-4 py-2 rounded-2xl border border-slate-800"
+                        >
                             <Text className="text-blue-500 font-bold text-xs">+ Manual Entry</Text>
                         </TouchableOpacity>
                     </View>
@@ -352,24 +369,85 @@ export default function LogMealScreen() {
                                 <View className="flex-row items-center bg-slate-900/40 border border-slate-900 rounded-2xl p-4">
                                     <View className="flex-1">
                                         <TextInput 
+                                            ref={el => inputRefs.current[ing.id] = el}
                                             className="text-white font-bold text-base"
                                             value={ing.ingredient_name || ''}
                                             onChangeText={t => setIngredients(prev => prev.map(m => m.id === ing.id ? { ...m, ingredient_name: t } : m))}
+                                            onBlur={async () => {
+                                                // Trigger AI guess for quantity if manual entry and empty quantity
+                                                if (!ing.ai_detected && ing.ingredient_name && ing.quantity === 0) {
+                                                    setGuessingId(ing.id);
+                                                    const otherIngs = ingredients
+                                                        .filter(item => item.id !== ing.id)
+                                                        .map(item => ({ name: item.ingredient_name, quantity: item.quantity, unit: item.unit }));
+                                                    
+                                                    const result = await guessIngredientQuantity(capturedImage!, ing.ingredient_name, otherIngs);
+                                                    
+                                                    setIngredients(prev => prev.map(m => 
+                                                        m.id === ing.id ? { ...m, quantity: result.quantity, unit: result.unit } : m
+                                                    ));
+                                                    setAiGuessedIds(prev => new Set(prev).add(ing.id));
+                                                    setGuessingId(null);
+                                                }
+
+                                                // Sync meal name if a main ingredient changed
+                                                if (ing.ingredient_name && analysisResult) {
+                                                    const updatedIngredients = ingredients.map(m => ({ 
+                                                        name: m.ingredient_name, 
+                                                        quantity: m.quantity, 
+                                                        unit: m.unit 
+                                                    }));
+                                                    const newMealName = await generateMealName(updatedIngredients);
+                                                    setAnalysisResult({ ...analysisResult, mealName: newMealName });
+                                                }
+                                            }}
                                             placeholder="Add ingredient..."
                                             placeholderTextColor="#475569"
                                         />
                                         <View className="flex-row items-center mt-1">
-                                            <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">{ing.ai_detected ? 'AI Detected' : 'Manual'}</Text>
+                                            <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">
+                                                {ing.ai_detected ? 'AI Detected' : 'Manual Entry'}
+                                            </Text>
                                         </View>
                                     </View>
                                     <View className="flex-row items-center gap-2">
-                                        <TextInput 
-                                            className="bg-slate-950 px-3 py-2 rounded-xl text-blue-500 font-black w-[100px] text-center"
-                                            value={(ing.quantity ?? 0).toString()}
-                                            onChangeText={t => setIngredients(prev => prev.map(m => m.id === ing.id ? { ...m, quantity: parseFloat(t) || 0 } : m))}
-                                            keyboardType="numeric"
-                                        />
-                                        <TouchableOpacity onPress={() => setIngredients(prev => prev.filter(m => m.id !== ing.id))}>
+                                        <View className="relative">
+                                            {(aiGuessedIds.has(ing.id) || ing.ai_detected) && (
+                                                <TouchableOpacity 
+                                                    onPress={() => Alert.alert('AI Calculation', 'Ai generated this calculation based on the picture analysed')}
+                                                    className="absolute -top-2 -right-2 bg-blue-600 w-5 h-5 rounded-full items-center justify-center z-10 border-2 border-slate-900"
+                                                >
+                                                    <Text className="text-white font-black text-[7px] uppercase">AI</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                            {guessingId === ing.id ? (
+                                                <View className="bg-slate-950 px-3 py-2 rounded-xl w-[80px] h-[40px] items-center justify-center relative">
+                                                    <ActivityIndicator size="small" color="#3B82F6" />
+                                                    <View className="absolute inset-0 items-center justify-center pointer-events-none">
+                                                        <Text className="text-white font-black text-[8px] uppercase">Ai</Text>
+                                                    </View>
+                                                </View>
+                                            ) : (
+                                                <TextInput 
+                                                    className="bg-slate-950 px-3 py-2 rounded-xl text-blue-500 font-black w-[80px] text-center"
+                                                    value={(ing.quantity ?? 0).toString()}
+                                                    onChangeText={t => {
+                                                        const val = parseFloat(t) || 0;
+                                                        setIngredients(prev => prev.map(m => m.id === ing.id ? { ...m, quantity: val } : m));
+                                                        // If user manually changes it, remove the AI tag for this manual entry
+                                                        if (!ing.ai_detected) {
+                                                            setAiGuessedIds(prev => {
+                                                                const next = new Set(prev);
+                                                                next.delete(ing.id);
+                                                                return next;
+                                                            });
+                                                        }
+                                                    }}
+                                                    keyboardType="numeric"
+                                                />
+                                            )}
+                                        </View>
+                                        <TouchableOpacity onPress={() => setIngredients(prev => prev.filter(m => m.id !== ing.id))} className="ml-1">
                                             <Minus size={20} color="#EF4444" />
                                         </TouchableOpacity>
                                     </View>
@@ -379,11 +457,26 @@ export default function LogMealScreen() {
                     </View>
 
                     <TouchableOpacity 
-                        onPress={() => setCurrentStep('nutrition')}
+                        onPress={async () => {
+                            setLoading(true);
+                            try {
+                                const updatedMacros = await recalculateNutrition(ingredients, analysisResult.cookingMethod || 'grilled');
+                                setAnalysisResult({ ...analysisResult, ...updatedMacros });
+                                setCurrentStep('nutrition');
+                            } catch (e) {
+                                Alert.alert('Recalculation failed');
+                            } finally {
+                                setLoading(false);
+                            }
+                        }}
                         className="mt-12 mb-8 p-6 bg-blue-600 rounded-[32px] items-center flex-row justify-center shadow-xl shadow-blue-500/20"
                     >
-                        <Zap size={20} color="white" className="mr-3" />
-                        <Text className="text-white font-black text-lg">Synthesize Nutrition</Text>
+                        {loading ? <ActivityIndicator color="white" /> : (
+                            <>
+                                <Zap size={20} color="white" className="mr-3" />
+                                <Text className="text-white font-black text-lg">Calculate Macros</Text>
+                            </>
+                        )}
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -400,7 +493,7 @@ export default function LogMealScreen() {
                       <TouchableOpacity onPress={() => setCurrentStep('review')} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center">
                           <ChevronLeft size={20} color="white" />
                       </TouchableOpacity>
-                      <Text className="text-white font-black text-lg">Macro Synthesis</Text>
+                      <Text className="text-white font-black text-lg">Nutrition Facts</Text>
                       <View className="w-10" />
                   </View>
 
@@ -431,7 +524,7 @@ export default function LogMealScreen() {
                           </View>
 
                           <View className="bg-slate-900/30 border border-slate-900 rounded-[32px] p-8 mb-12">
-                              <Text className="text-white font-black mb-6 uppercase tracking-widest text-xs">Micronutrient Breakdown</Text>
+                              <Text className="text-white font-black mb-6 uppercase tracking-widest text-xs">Other Info</Text>
                               <MicroRow label="Fiber" value={`${analysisResult.fiber_g || 0}g`} />
                               <MicroRow label="Sugar" value={`${analysisResult.sugar_g || 0}g`} />
                               <MicroRow label="Sodium" value={`${analysisResult.sodium_mg || 0}mg`} />
@@ -445,7 +538,7 @@ export default function LogMealScreen() {
                               {saving ? <ActivityIndicator color="white" /> : (
                                   <>
                                     <Send size={20} color="white" className="mr-3" />
-                                    <Text className="text-white font-black text-lg">Transmit to Coach</Text>
+                                    <Text className="text-white font-black text-lg">Send to Coach</Text>
                                   </>
                               )}
                           </TouchableOpacity>
@@ -469,8 +562,8 @@ export default function LogMealScreen() {
                 }}
                 variant="success"
                 icon={<Check size={60} color="#10B981" />}
-                title="Meal Logged"
-                body={`${analysisResult?.mealName} has been synchronized with your daily protocol.`}
+                title="Meal Saved"
+                body={`${analysisResult?.mealName} has been added to your day.`}
                 statLabel="Estimated Calories"
                 statIcon={<Zap size={22} color="#F59E0B" fill="#F59E0B" />}
                 stat={`${formatCompactNumber(analysisResult?.calories || 0)} KCAL`}

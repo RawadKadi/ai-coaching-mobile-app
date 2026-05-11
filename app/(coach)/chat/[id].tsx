@@ -596,59 +596,70 @@ export default function CoachChatScreen() {
         onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
       >
-        <TouchableOpacity 
-            activeOpacity={0.9} 
-            delayLongPress={400}
-            onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
+        <Pressable 
+            delayLongPress={350}
+            unstable_pressDelay={0}
+            onLongPress={() => { 
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                setActiveMessageForMenu(item); 
+            }}
             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
         >
-          {isMedia ? (
-            <View>
-          <ChatMediaMessage 
-                content={item.content} 
-                isOwn={isMe} 
-                createdAt={item.created_at} 
-                isRead={item.read} 
-                isUploading={item.isUploading}
-                progress={item.progress}
-                replyTo={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : undefined}
-                onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
-                isHighlighted={item.id === highlightedMessageId}
-                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
-              />
-              {/* Reactions on media messages */}
-              {(() => {
-                try {
-                  const p = JSON.parse(item.content);
-                  const reactions = p.reactions || [];
-                  if (reactions.length === 0) return null;
-                  return (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
-                      {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
-                        .map(([emoji, count]: any) => (
-                          <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
-                            <Text style={{ fontSize: 12 }}>{emoji}</Text>
-                            {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
-                          </View>
-                        ))}
-                    </View>
-                  );
-                } catch { return null; }
-              })()}
-            </View>
-          ) : (
-            <MessageBubble 
-              item={item} 
-              isMe={isMe} 
-              repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
-              isHighlighted={item.id === highlightedMessageId}
-              onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
-              theme={theme}
-              user={user}
-              clientName={clientProfile?.profiles?.full_name}
-            />
+          {({ pressed }) => (
+            <MotiView
+               animate={{ scale: pressed ? 0.9 : 1 }}
+               transition={{ type: 'timing', duration: 100 }}
+               style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+            >
+              {isMedia ? (
+                <View>
+                  <ChatMediaMessage 
+                    content={item.content} 
+                    isOwn={isMe} 
+                    createdAt={item.created_at} 
+                    isRead={item.read} 
+                    isUploading={item.isUploading}
+                    progress={item.progress}
+                    replyTo={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : undefined}
+                    onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+                    isHighlighted={item.id === highlightedMessageId}
+                    onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
+                  />
+                  {/* Reactions on media messages */}
+                  {(() => {
+                    try {
+                      const p = JSON.parse(item.content);
+                      const reactions = p.reactions || [];
+                      if (reactions.length === 0) return null;
+                      return (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
+                          {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+                            .map(([emoji, count]: any) => (
+                              <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                                {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
+                              </View>
+                            ))}
+                        </View>
+                      );
+                    } catch { return null; }
+                  })()}
+                </View>
+              ) : (
+                <MessageBubble 
+                  item={item} 
+                  isMe={isMe} 
+                  repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
+                  isHighlighted={item.id === highlightedMessageId}
+                  onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+                  theme={theme}
+                  user={user}
+                  clientName={clientProfile?.profiles?.full_name}
+                />
+              )}
+            </MotiView>
           )}
-        </TouchableOpacity>
+        </Pressable>
       </Swipeable>
     );
   };

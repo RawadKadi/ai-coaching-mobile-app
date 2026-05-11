@@ -132,9 +132,9 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                 {/* Emoji Bar */}
                 <Pressable onPress={(e) => e.stopPropagation()}>
                   <MotiView 
-                    from={{ translateY: 10, opacity: 0 }}
-                    animate={{ translateY: 0, opacity: 1 }}
-                    transition={{ delay: 100 }}
+                    from={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', damping: 15, stiffness: 150 }}
                     style={styles.emojiBar}
                   >
                     {EMOJIS.map((emoji, index) => (
@@ -163,9 +163,9 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                 {/* Action Menu */}
                 <Pressable onPress={(e) => e.stopPropagation()}>
                   <MotiView 
-                    from={{ translateY: -10, opacity: 0 }}
-                    animate={{ translateY: 0, opacity: 1 }}
-                    transition={{ delay: 150 }}
+                    from={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', damping: 12, stiffness: 120 }}
                     style={styles.menuContainer}
                   >
                     <MenuOption 

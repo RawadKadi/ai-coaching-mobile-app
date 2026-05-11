@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, Modal, TextInput, Pressable, ActivityIndicator, ScrollView, Alert, Platform, SafeAreaView } from 'react-native';
+import { View, Text, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert, Platform, SafeAreaView } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
-import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat, Sparkles, ChevronLeft } from 'lucide-react-native';
+import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat, Sparkles, ChevronLeft, Info } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { parseScheduleRequest, ProposedSession, RateLimitError, extractSchedulingIntent } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
@@ -209,22 +209,22 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-            <View className="flex-1 bg-slate-950">
+            <View style={{ flex: 1, backgroundColor: '#020617' }}>
                 <View className="px-6 pt-6 pb-4 flex-row justify-between items-center border-b border-slate-900 bg-slate-950/80">
                     <View className="flex-row items-center gap-3">
                         {step !== 'input' && (
-                           <Pressable onPress={() => setStep(step === 'review' ? 'form' : 'input')}>
+                           <TouchableOpacity onPress={() => setStep(step === 'review' ? 'form' : 'input')}>
                                <ChevronLeft size={24} color="#94A3B8" />
-                           </Pressable>
+                           </TouchableOpacity>
                         )}
                         <View>
                             <Text className="text-white text-xl font-bold">AI Scheduler</Text>
                             <Text className="text-slate-500 text-xs">Setup sessions with {clientContext?.name || 'Athlete'}</Text>
                         </View>
                     </View>
-                    <Pressable onPress={() => { resetForm(); onClose(); }} className="p-2 bg-slate-900 rounded-full">
+                    <TouchableOpacity onPress={() => { resetForm(); onClose(); }} style={{ padding: 8, backgroundColor: '#0F172A', borderRadius: 9999 }}>
                         <X size={20} color="#94A3B8" />
-                    </Pressable>
+                    </TouchableOpacity>
                 </View>
 
                 {step === 'input' ? (
@@ -259,12 +259,27 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                     textAlignVertical="top"
                                 />
                                 <View className="flex-row justify-between items-center mt-8 pt-6 border-t border-white/5">
-                                    <Pressable className="w-14 h-14 rounded-full bg-slate-950 items-center justify-center border border-slate-800">
+                                    <TouchableOpacity style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B' }}>
                                         <Mic size={24} color="#3B82F6" />
-                                    </Pressable>
+                                    </TouchableOpacity>
                                     
-                                    <Pressable 
-                                        className={`flex-row items-center gap-3 py-4 px-8 rounded-[24px] ${input.trim() ? 'bg-blue-600 shadow-xl shadow-blue-500/40' : 'bg-slate-800'}`}
+                                    <TouchableOpacity 
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            paddingVertical: 16,
+                                            paddingHorizontal: 32,
+                                            borderRadius: 24,
+                                            backgroundColor: input.trim() ? '#2563EB' : '#1E293B',
+                                            ...(input.trim() ? {
+                                                shadowColor: '#3B82F6',
+                                                shadowOffset: { width: 0, height: 10 },
+                                                shadowOpacity: 0.4,
+                                                shadowRadius: 20,
+                                                elevation: 10
+                                            } : {})
+                                        }}
                                         onPress={handleAnalyze}
                                         disabled={!input.trim() || loading}
                                     >
@@ -276,7 +291,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                 <Text className="text-white font-black text-base uppercase tracking-widest">Draft Plan</Text>
                                             </>
                                         )}
-                                    </Pressable>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         </ScrollView>
@@ -314,9 +329,9 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 value={formTime}
                                 onChangeText={setFormTime}
                              />
-                             <Pressable className="bg-blue-600 py-4 rounded-2xl items-center" onPress={handleAnalyze}>
+                             <TouchableOpacity style={{ backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 16, alignItems: 'center' }} onPress={handleAnalyze}>
                                 <Text className="text-white font-bold text-lg">Validate Plan</Text>
-                             </Pressable>
+                             </TouchableOpacity>
                          </View>
                     </MotiView>
                 ) : (
@@ -350,28 +365,38 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                     <Text className="text-slate-400 text-sm mt-0.5 capitalize">{session.day_of_week}, {' '}{new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                                                 </View>
                                             </View>
-                                            <Pressable onPress={() => setProposedSessions(prev => prev.filter((_, i) => i !== index))}>
+                                            <TouchableOpacity onPress={() => setProposedSessions(prev => prev.filter((_, i) => i !== index))}>
                                                 <X size={18} color="#475569" />
-                                            </Pressable>
+                                            </TouchableOpacity>
                                         </View>
                                         {conflict && (
-                                            <Pressable 
-                                                className="mt-4 bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex-row items-center gap-3"
+                                            <TouchableOpacity 
+                                                style={{
+                                                    marginTop: 16,
+                                                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                                    borderColor: 'rgba(245, 158, 11, 0.2)',
+                                                    borderWidth: 1,
+                                                    padding: 12,
+                                                    borderRadius: 12,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 12
+                                                }}
                                                 onPress={() => handleConflictDetected(session, conflict)}
                                             >
                                                 <AlertTriangle size={16} color="#F59E0B" />
                                                 <Text className="text-amber-400 text-xs font-bold flex-1">{conflict.message}</Text>
                                                 <Text className="text-amber-500 text-xs font-bold underline">Review</Text>
-                                            </Pressable>
+                                            </TouchableOpacity>
                                         )}
                                     </View>
                                 );
                             })}
                         </ScrollView>
                         <View className="pt-6 pb-8 border-t border-slate-900 bg-slate-950">
-                             <Pressable className="bg-blue-600 py-4 rounded-2xl items-center" onPress={handleFinalConfirm}>
+                             <TouchableOpacity style={{ backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 16, alignItems: 'center' }} onPress={handleFinalConfirm}>
                                 <Text className="text-white font-bold text-lg">Send Session Invites</Text>
-                             </Pressable>
+                             </TouchableOpacity>
                         </View>
                     </MotiView>
                 )}

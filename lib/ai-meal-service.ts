@@ -265,11 +265,69 @@ RESPONSE FORMAT (JSON only):
             cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
         }
 
-        return JSON.parse(cleanedText);
-    } catch (error) {
-        console.error('Error recalculating nutrition:', error);
-        throw new Error('Failed to recalculate nutrition.');
+  } catch (error) {
+    console.error('Error recalculating nutrition:', error);
+    throw new Error('Failed to recalculate nutrition.');
+  }
+};
+
+/**
+ * Guess the quantity of a specific ingredient from the image
+ */
+export const guessIngredientQuantity = async (
+  imageUri: string,
+  ingredientName: string,
+  otherIngredients: Array<{ name: string, quantity: number, unit: string }>
+): Promise<{ quantity: number, unit: string }> => {
+  try {
+    const imagePart = await fileToGenerativePart(imageUri, 'image/jpeg');
+    const otherIngsText = otherIngredients.length > 0 
+      ? `Other ingredients already identified: ${otherIngredients.map(i => `${i.name} (${i.quantity}${i.unit})`).join(', ')}`
+      : 'No other ingredients identified yet.';
+
+    const prompt = `Estimate weight (g) of "${ingredientName}" in this meal. Return JSON ONLY: {"quantity": number, "unit": "g"}`;
+
+    const result = await callWithRetry(() => visionModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }, imagePart] }],
+        generationConfig: { maxOutputTokens: 20, temperature: 0.1 }
+    }));
+    const response = await result.response;
+    const text = response.text();
+    
+    let cleanedText = text.trim();
+    if (cleanedText.includes('```')) {
+      cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
     }
+    
+    const parsed = JSON.parse(cleanedText);
+    return {
+      quantity: parsed.quantity || 0,
+      unit: parsed.unit || 'g'
+    };
+  } catch (error) {
+    console.error('Error guessing ingredient quantity:', error);
+    return { quantity: 0, unit: 'g' };
+  }
+};
+
+/**
+ * Generate a descriptive meal name based on ingredients
+ */
+export const generateMealName = async (
+  ingredients: Array<{ name: string, quantity: number, unit: string }>
+): Promise<string> => {
+  try {
+    const ingList = ingredients.map(i => `${i.name} (${i.quantity}${i.unit})`).join(', ');
+    const prompt = `Given these ingredients: ${ingList}, generate a short, appetizing name for this meal (1-5 words). 
+Return ONLY the name, no other text.`;
+
+    const result = await callWithRetry(() => visionModel.generateContent(prompt));
+    const response = await result.response;
+    return response.text().trim().replace(/[*"]/g, '');
+  } catch (error) {
+    console.error('Error generating meal name:', error);
+    return 'Custom Meal';
+  }
 };
 
 /**

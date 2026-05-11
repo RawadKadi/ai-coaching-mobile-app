@@ -403,34 +403,45 @@ export default function CoachToCoachChat() {
         onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
       >
-        <TouchableOpacity 
-            activeOpacity={0.9} 
-            delayLongPress={800}
-            onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
+        <Pressable 
+            delayLongPress={350}
+            unstable_pressDelay={0}
+            onLongPress={() => { 
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                setActiveMessageForMenu(item); 
+            }}
             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
         >
-          {isMedia ? (
-            <ChatMediaMessage 
-              content={item.content} 
-              isOwn={isMe} 
-              createdAt={item.created_at} 
-              isRead={item.read} 
-              isUploading={item.isUploading}
-              progress={item.progress}
-            />
-          ) : (
-            <MessageBubble 
-              item={item} 
-              isMe={isMe} 
-              repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
-              isHighlighted={item.id === highlightedMessageId}
-              onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
-              theme={theme}
-              user={user}
-              otherCoachName={coachInfo?.full_name}
-            />
+          {({ pressed }) => (
+            <MotiView
+               animate={{ scale: pressed ? 0.9 : 1 }}
+               transition={{ type: 'timing', duration: 100 }}
+               style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+            >
+              {isMedia ? (
+                <ChatMediaMessage 
+                  content={item.content} 
+                  isOwn={isMe} 
+                  createdAt={item.created_at} 
+                  isRead={item.read} 
+                  isUploading={item.isUploading}
+                  progress={item.progress}
+                />
+              ) : (
+                <MessageBubble 
+                  item={item} 
+                  isMe={isMe} 
+                  repliedMsg={item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null}
+                  isHighlighted={item.id === highlightedMessageId}
+                  onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
+                  theme={theme}
+                  user={user}
+                  otherCoachName={coachInfo?.full_name}
+                />
+              )}
+            </MotiView>
           )}
-        </TouchableOpacity>
+        </Pressable>
       </Swipeable>
     );
   };
