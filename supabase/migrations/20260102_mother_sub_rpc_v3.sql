@@ -352,6 +352,8 @@ $$;
 -- 7. GET COACH'S MOTHER CHALLENGES
 -- ============================================================================
 
+DROP FUNCTION IF EXISTS get_coach_mother_challenges(UUID, UUID);
+
 CREATE OR REPLACE FUNCTION get_coach_mother_challenges(
     p_coach_id UUID,
     p_client_id UUID DEFAULT NULL
@@ -360,6 +362,7 @@ RETURNS TABLE (
     id UUID,
     client_id UUID,
     client_name TEXT,
+    client_avatar TEXT,
     name TEXT,
     description TEXT,
     start_date DATE,
@@ -379,6 +382,7 @@ BEGIN
         mc.id,
         mc.client_id,
         COALESCE(p.full_name, 'Client') as client_name,
+        p.avatar_url as client_avatar,
         mc.name,
         mc.description,
         mc.start_date,
@@ -394,7 +398,7 @@ BEGIN
     LEFT JOIN sub_challenges sc ON mc.id = sc.mother_challenge_id
     WHERE mc.coach_id = p_coach_id
     AND (p_client_id IS NULL OR mc.client_id = p_client_id)
-    GROUP BY mc.id, mc.client_id, p.full_name
+    GROUP BY mc.id, mc.client_id, p.full_name, p.avatar_url
     ORDER BY mc.start_date DESC;
 END;
 $$;

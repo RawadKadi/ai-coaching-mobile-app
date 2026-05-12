@@ -32,7 +32,8 @@ import {
   Reply,
   Video,
   Dumbbell,
-  Calendar
+  Calendar,
+  ArrowDown
 } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
@@ -102,6 +103,18 @@ export default function ClientMessagesScreen() {
   const [pressedMessageId, setPressedMessageId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const showScrollBottomRef = useRef(false);
+  const [newMessagesCount, setNewMessagesCount] = useState(0);
+
+  useEffect(() => {
+    showScrollBottomRef.current = showScrollBottom;
+  }, [showScrollBottom]);
+  
+  const scrollToBottom = () => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setNewMessagesCount(0);
+  };
   
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -181,6 +194,9 @@ export default function ClientMessagesScreen() {
       return [nm, ...prev];
     });
     markAsRead(nm.id);
+    if (showScrollBottomRef.current) {
+      setNewMessagesCount(prev => prev + 1);
+    }
   };
 
   const processOutgoingEcho = (nm: Message) => {
@@ -283,6 +299,7 @@ export default function ClientMessagesScreen() {
     if (error) Alert.alert('Error', 'Failed to send');
     setSending(false);
     setReplyingTo(null);
+    scrollToBottom();
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
@@ -319,6 +336,7 @@ export default function ClientMessagesScreen() {
 
     // Add to state immediately
     setMessages(prev => [optimisticMsg, ...prev]);
+    scrollToBottom();
 
     let finalContent = contentWithCid;
     try {
@@ -510,18 +528,38 @@ export default function ClientMessagesScreen() {
       >
           <View style={{ width: '100%',  alignItems: isMe ? 'flex-end' : 'flex-start' }}>
               {isMedia ? (
-                <ChatMediaMessage 
-                  content={item.content} 
-                  isOwn={isMe} 
-                  createdAt={item.created_at} 
-                  isRead={item.read} 
-                  isUploading={item.isUploading}
-                  progress={item.progress}
-                  onLongPress={() => { 
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
-                      setActiveMessageForMenu(item); 
-                  }}
-                />
+                <View>
+                  <ChatMediaMessage 
+                    content={item.content} 
+                    isOwn={isMe} 
+                    createdAt={item.created_at} 
+                    isRead={item.read} 
+                    isUploading={item.isUploading}
+                    progress={item.progress}
+                    onLongPress={() => { 
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                        setActiveMessageForMenu(item); 
+                    }}
+                  />
+                  {(() => {
+                    try {
+                      const p = JSON.parse(item.content);
+                      const reactions = p.reactions || [];
+                      if (reactions.length === 0) return null;
+                      return (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
+                          {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+                            .map(([emoji, count]: any) => (
+                              <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                                {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
+                              </View>
+                            ))}
+                        </View>
+                      );
+                    } catch { return null; }
+                  })()}
+                </View>
               ) : (
                 <MessageBubble 
                   item={item} 
@@ -579,9 +617,43 @@ export default function ClientMessagesScreen() {
                 inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
                 initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
                 onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
+                onScroll={(e) => {
+                  const offsetY = e.nativeEvent.contentOffset.y;
+                  if (offsetY > 300 && !showScrollBottom) {
+                    setShowScrollBottom(true);
+                  } else if (offsetY <= 300 && showScrollBottom) {
+                    setShowScrollBottom(false);
+                    setNewMessagesCount(0);
+                  }
+                }}
+                scrollEventThrottle={16}
                 delaysContentTouches={false} keyboardShouldPersistTaps="handled"
              />
         )}
+        <AnimatePresence>
+          {showScrollBottom && (
+            <MotiView
+              from={{ opacity: 0, scale: 0.8, translateY: 20 }}
+              animate={{ opacity: 1, scale: 1, translateY: 0 }}
+              exit={{ opacity: 0, scale: 0.8, translateY: 20 }}
+              transition={{ type: 'timing', duration: 200 }}
+              style={{ position: 'absolute', bottom: 100, right: 16, zIndex: 50 }}
+            >
+              <TouchableOpacity 
+                onPress={scrollToBottom}
+                activeOpacity={0.8}
+                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#1E293B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}
+              >
+                <ArrowDown size={20} color="#FFFFFF" />
+                {newMessagesCount > 0 && (
+                  <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' }}>
+                    <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{newMessagesCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </MotiView>
+          )}
+        </AnimatePresence>
         <ChatInputBar 
           onSendText={handleSendText} 
           onSendMedia={handleSendMedia} 
@@ -596,14 +668,27 @@ export default function ClientMessagesScreen() {
       <MessageOverlay 
           visible={!!activeMessageForMenu} message={activeMessageForMenu} isMe={activeMessageForMenu?.sender_id === user?.id}
           onClose={() => setActiveMessageForMenu(null)} onReaction={handleReaction} onAction={handleAction}
-          renderMessageContent={(msg: any, isMe: boolean) => (
-            <MessageBubble 
-              item={msg} 
-              isMe={isMe} 
-              theme={theme} 
-              repliedMsg={msg.reply_to_id ? messages.find(m => m.id === msg.reply_to_id) : null}
-            />
-          )}
+          renderMessageContent={(msg: any, isMe: boolean) => {
+            const liveMsg = messages.find(m => m.id === msg?.id) || msg;
+            if (isMediaMessage(liveMsg.content)) {
+              return (
+                <ChatMediaMessage
+                  content={liveMsg.content}
+                  isOwn={isMe}
+                  createdAt={liveMsg.created_at}
+                  isRead={liveMsg.read}
+                />
+              );
+            }
+            return (
+              <MessageBubble 
+                item={liveMsg} 
+                isMe={isMe} 
+                theme={theme} 
+                repliedMsg={liveMsg.reply_to_id ? messages.find(m => m.id === liveMsg.reply_to_id) : null}
+              />
+            );
+          }}
       />
     </View>
   );

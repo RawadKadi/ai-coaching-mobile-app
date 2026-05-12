@@ -10,10 +10,12 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import * as DocumentPicker from 'expo-document-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { useTheme } from '@/contexts/BrandContext';
 import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
+import DocumentPreviewModal from './DocumentPreviewModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PANEL_HEIGHT = 310;
@@ -242,7 +244,7 @@ export function ChatInputBar({
 
   // ─── Send text & media ─────────────────────────────────────────────────────
 
-  const handleSend = async () => {
+  const handleSend = async (captionOverride?: string) => {
     if (editingMessage) {
       // Edit mode: confirm the edit
       const msg = text.trim();
@@ -253,7 +255,7 @@ export function ChatInputBar({
       return;
     }
 
-    const msg = text.trim();
+    const msg = (captionOverride !== undefined ? captionOverride : text).trim();
     if ((!msg && !selectedMedia) || sending) return;
 
     // Strategic hold: If thumbnail is still generating, wait for it
@@ -369,14 +371,17 @@ export function ChatInputBar({
   const pickDocument = async () => {
     closePanel();
     try {
-      const DocumentPicker = require('expo-document-picker');
-      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync({ 
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/markdown', 'text/csv', 'text/plain', 'audio/mpeg', 'audio/mp3'], 
+        copyToCacheDirectory: true 
+      });
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
         handleMediaSelect(asset.uri, 'document', asset.name, asset.mimeType ?? 'application/octet-stream');
       }
-    } catch {
-      Alert.alert('Not available', 'Please run: npx expo install expo-document-picker');
+    } catch (e) {
+      console.error('Document picker error:', e);
+      Alert.alert('Not available', 'Could not pick document.');
     }
   };
 
@@ -467,54 +472,20 @@ export function ChatInputBar({
 
   return (
     <View style={{ backgroundColor: 'transparent' }}>
-      {/* ── Optional Media Preview ───────────────────────────────────────────── */}
+      {/* ── Full Screen Media Preview Modal ───────────────────────────────────────────── */}
       {selectedMedia && (
-        <View style={styles.mediaPreviewContainer}>
-          <View style={{ position: 'relative' }}>
-            <View style={[styles.mediaPreviewBox, { borderColor: theme.colors.border }]}>
-              {selectedMedia.type === 'image' || selectedMedia.type === 'video' ? (
-              <View style={{ flex: 1, width: '100%', height: '100%' }}>
-                {selectedMedia.type === 'image' ? (
-                  <Image 
-                    source={{ uri: selectedMedia.uri }} 
-                    style={styles.mediaPreviewImage} 
-                    contentFit="cover"
-                  />
-                ) : (
-                  <Video
-                    source={{ uri: selectedMedia.uri }}
-                    style={styles.mediaPreviewImage}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay={false}
-                  />
-                )}
-                
-                {isGeneratingThumbnail && selectedMedia.type === 'video' && (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }]}>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  </View>
-                )}
-
-                {selectedMedia.type === 'video' && !isGeneratingThumbnail && (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center' }]}>
-                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
-                      <Play size={12} color="#FFFFFF" style={{ marginLeft: 2 }} fill="#FFFFFF" />
-                    </View>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View style={styles.mediaPreviewDoc}>
-                <FileText size={24} color={theme.colors.primary} />
-                <Text style={{ color: theme.colors.text, fontSize: 10, marginTop: 4 }} numberOfLines={1}>{selectedMedia.fileName}</Text>
-              </View>
-            )}
-          </View>
-          <TouchableOpacity style={styles.mediaPreviewRemove} onPress={() => setSelectedMedia(null)}>
-            <X size={14} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
+        <DocumentPreviewModal
+          visible={!!selectedMedia}
+          uri={selectedMedia.uri}
+          type={selectedMedia.type}
+          fileName={selectedMedia.fileName || 'Attachment'}
+          onClose={() => setSelectedMedia(null)}
+          onSend={(caption) => {
+            setText('');
+            handleSend(caption);
+          }}
+          isSending={sending}
+        />
       )}
 
       {/* ── Reply Preview Bar ──────────────────────────────────────────────── */}
@@ -550,6 +521,7 @@ export function ChatInputBar({
                   if (content.type === 'video') return '🎥 Video';
                   if (content.type === 'gif') return '🎞 GIF';
                   if (content.type === 'document') return '📄 ' + (content.fileName || 'Document');
+                  return content.text || replyingTo.content;
                 } catch (e) {}
                 return replyingTo.content;
               })()}

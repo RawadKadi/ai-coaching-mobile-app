@@ -65,6 +65,7 @@ export interface MotherChallengeWithProgress extends MotherChallenge {
     completion_rate: number;
     sub_challenges?: SubChallenge[];
     client_name?: string;
+    client_avatar?: string;
 }
 
 // Today's Sub-Challenge (with mother context)

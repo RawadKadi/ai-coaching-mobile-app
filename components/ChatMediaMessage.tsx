@@ -10,11 +10,12 @@ import { Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/BrandContext';
-import { FileText, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target, Loader2 } from 'lucide-react-native';
+import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target, Loader2 } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import MealMessageCard from './MealMessageCard';
+import DocumentPreviewModal from './DocumentPreviewModal';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -569,6 +570,9 @@ const ChatMediaMessage: React.FC<Props> = ({
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
   const [isChallengeExpanded, setIsChallengeExpanded] = useState(false);
   const [isLocalPressed, setIsLocalPressed] = useState(false);
+  const [documentModalVisible, setDocumentModalVisible] = useState(false);
+  const [documentModalUrl, setDocumentModalUrl] = useState<string | null>(null);
+  const [documentModalName, setDocumentModalName] = useState<string | null>(null);
 
   useEffect(() => {
     if (isHighlighted) {
@@ -638,24 +642,116 @@ const ChatMediaMessage: React.FC<Props> = ({
       </TouchableOpacity>
     );
   } else if (media.type === 'document') {
+    const isAudio = media.url?.toLowerCase().split('?')[0].endsWith('.mp3') || media.url?.toLowerCase().split('?')[0].endsWith('.wav') || media.url?.toLowerCase().split('?')[0].endsWith('.m4a') || 
+                    media.fileName?.toLowerCase().endsWith('.mp3') || media.fileName?.toLowerCase().endsWith('.wav') || media.fileName?.toLowerCase().endsWith('.m4a');
+    
     messageBody = (
-      <TouchableOpacity style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface, borderColor: theme.colors.border }]} onPress={() => !isUploading && media?.url && Linking.openURL(media.url)}>
-        <View style={styles.docContainer}>
-          <FileText size={28} color={isOwn ? '#FFFFFF' : theme.colors.primary} />
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.docName, { color: isOwn ? '#FFFFFF' : theme.colors.text }]} numberOfLines={2}>{media.fileName || (isUploading ? 'Uploading…' : 'Document')}</Text>
-            <Text style={[styles.docHint, { color: isOwn ? 'rgba(255,255,255,0.7)' : theme.colors.textSecondary }]}>{isUploading ? `Uploading… ${progress}%` : 'Tap to open'}</Text>
+      <>
+        <TouchableOpacity 
+          activeOpacity={0.85}
+          style={[
+            styles.bubble, 
+            isOwn ? styles.myBubble : styles.theirBubble, 
+            { 
+              backgroundColor: isOwn ? theme.colors.primary : '#1E293B', 
+              borderColor: isOwn ? 'transparent' : 'rgba(255,255,255,0.08)', 
+              borderWidth: isOwn ? 0 : 1,
+              minWidth: 260, 
+              maxWidth: '85%',
+              padding: 12,
+              borderRadius: 20,
+              // Shadow for depth
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
+              elevation: 4,
+            }
+          ]} 
+          onPress={() => {
+            if (!isUploading && media?.url) {
+              setDocumentModalUrl(media.url);
+              setDocumentModalName(media.fileName || 'Document');
+              setDocumentModalVisible(true);
+            }
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ 
+              width: 52, 
+              height: 52, 
+              borderRadius: 14, 
+              backgroundColor: isOwn ? 'rgba(255,255,255,0.15)' : 'rgba(59, 130, 246, 0.15)', 
+              justifyContent: 'center', 
+              alignItems: 'center' 
+            }}>
+              {isAudio ? <FileAudio size={26} color={isOwn ? '#FFFFFF' : '#60A5FA'} /> : <FileText size={26} color={isOwn ? '#FFFFFF' : '#60A5FA'} />}
+            </View>
+            
+            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
+              <Text 
+                style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: 15, 
+                  fontWeight: '700',
+                  letterSpacing: -0.3
+                }} 
+                numberOfLines={1} 
+                ellipsizeMode="tail"
+              >
+                {media.fileName || (isUploading ? 'Uploading…' : 'Document')}
+              </Text>
+              <Text 
+                style={{ 
+                  color: isOwn ? 'rgba(255,255,255,0.6)' : '#94A3B8', 
+                  fontSize: 12, 
+                  marginTop: 3,
+                  fontWeight: '500'
+                }}
+              >
+                {isUploading ? `Uploading… ${progress}%` : isAudio ? 'Voice Message' : 'Document'}
+              </Text>
+            </View>
           </View>
-          {!isUploading && <Download size={20} color={isOwn ? '#FFFFFF' : theme.colors.textSecondary} />}
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8 }}>
-          {isEdited && <Text style={{ fontSize: 9, color: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.3)', fontStyle: 'italic', marginRight: 4 }}>Edited</Text>}
-          <Text style={{ fontSize: 9, color: isOwn ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)', fontWeight: 'bold' }}>
-            {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-          {isOwn && (isRead ? <CheckCheck size={11} color="#34D399" style={{ marginLeft: 4 }} /> : <Check size={11} color={isOwn ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)'} style={{ marginLeft: 4 }} />)}
-        </View>
-      </TouchableOpacity>
+          
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            justifyContent: 'flex-end', 
+            marginTop: 8,
+            paddingRight: 2 
+          }}>
+            {isEdited && (
+              <Text style={{ 
+                fontSize: 10, 
+                color: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(148, 163, 184, 0.5)', 
+                fontStyle: 'italic', 
+                marginRight: 6 
+              }}>Edited</Text>
+            )}
+            <Text style={{ 
+              fontSize: 10, 
+              color: isOwn ? 'rgba(255,255,255,0.7)' : '#64748B', 
+              fontWeight: '700' 
+            }}>
+              {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isOwn && (
+              isRead 
+                ? <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} /> 
+                : <Check size={13} color="rgba(255,255,255,0.6)" style={{ marginLeft: 4 }} />
+            )}
+          </View>
+        </TouchableOpacity>
+
+        <DocumentPreviewModal 
+          visible={documentModalVisible} 
+          uri={documentModalUrl}
+          type={isAudio ? 'audio' : 'document'}
+          fileName={documentModalName} 
+          onClose={() => setDocumentModalVisible(false)} 
+        />
+      </>
     );
   } else if (media.type === 'task_completion') {
     messageBody = (
@@ -664,7 +760,7 @@ const ChatMediaMessage: React.FC<Props> = ({
           activeOpacity={0.9} 
           delayLongPress={400} 
           onLongPress={onLongPress} 
-          style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
+          style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}
         >
           <TaskCompletedCard media={media} onPressImage={() => media.imageUrl && setIsTaskExpanded(true)} />
         </TouchableOpacity>
@@ -687,7 +783,7 @@ const ChatMediaMessage: React.FC<Props> = ({
           activeOpacity={0.9} 
           delayLongPress={400} 
           onLongPress={onLongPress} 
-          style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0 }]}
+          style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}
         >
           <ChallengeCompletedCard media={media} onPressImage={() => media.imageUrl && setIsChallengeExpanded(true)} />
         </TouchableOpacity>

@@ -5,8 +5,9 @@ import { useRouter } from 'expo-router';
 import { MotiView, MotiText, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Target, Sparkles, Clock, ChevronRight, Activity, TrendingUp } from 'lucide-react-native';
+import { Plus, Target, Sparkles, Clock, ChevronRight, Activity, TrendingUp, User } from 'lucide-react-native';
 import type { MotherChallengeWithProgress } from '@/types/challenges-v3';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 export default function CoachChallengesDashboard() {
   const router = useRouter();
@@ -176,9 +177,14 @@ const ChallengeCard = ({ challenge, index }: { challenge: MotherChallengeWithPro
     >
       <TouchableOpacity onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}>
         <View className="p-6">
-          <View className="flex-row justify-between items-start mb-6">
+          <View className="flex-row items-center gap-3 mb-6">
+            <BrandedAvatar 
+              imageUrl={challenge.client_avatar} 
+              name={challenge.client_name || 'Client'}
+              size={40} 
+            />
             <View className="flex-1">
-              <View className="flex-row items-center gap-2 mb-1">
+              <View className="flex-row items-center gap-2 mb-0.5">
                 {challenge.created_by === 'ai' && (
                   <View className="bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md flex-row items-center gap-1">
                     <Sparkles size={10} color="#818CF8" />
@@ -187,12 +193,19 @@ const ChallengeCard = ({ challenge, index }: { challenge: MotherChallengeWithPro
                 )}
                 <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">In Progress</Text>
               </View>
-              <Text className="text-white text-xl font-bold leading-tight">Manage {(challenge.client_name || 'Client').split(' ')[0]}'s Training Plan</Text>
-              <Text className="text-slate-400 text-sm mt-1">{challenge.name}</Text>
+              <Text className="text-white text-lg font-bold leading-tight">{challenge.client_name}</Text>
             </View>
-            <TouchableOpacity className="w-10 h-10 bg-slate-950 rounded-full items-center justify-center border border-slate-800">
+            <TouchableOpacity 
+              onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+              className="w-10 h-10 bg-slate-950 rounded-full items-center justify-center border border-slate-800"
+            >
               <ChevronRight size={20} color="#64748B" />
             </TouchableOpacity>
+          </View>
+
+          <View className="mb-6">
+            <Text className="text-slate-300 text-sm font-bold">{challenge.name}</Text>
+            <Text className="text-slate-500 text-xs mt-0.5">Training Plan</Text>
           </View>
 
           {/* Stats Bar */}

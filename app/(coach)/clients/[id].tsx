@@ -731,7 +731,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                 
                 <View className="flex-row justify-between items-start mb-10">
                     <View className="flex-row items-center gap-3">
-                        <BrandedAvatar name={challenge.name} size={32} />
+                        <BrandedAvatar name={challenge.client_name || 'Client'} size={32} imageUrl={challenge.client_avatar} />
                         <View>
                             <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Client</Text>
                             <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>

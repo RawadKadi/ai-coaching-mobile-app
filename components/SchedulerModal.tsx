@@ -161,17 +161,36 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             d.setDate(now.getDate() + 1);
             return toLocalISO(d);
         }
+        
         if (keyword in dayMap) {
             const targetDay = dayMap[keyword];
             const currentDay = now.getDay();
             let diff = targetDay - currentDay;
             if (diff < 0) diff += 7;
+            
+            // If it's today, check if the time has already passed
             if (diff === 0 && timeStr) {
-                 const [h, m] = timeStr.split(':').map(Number);
-                 const r = new Date(now); r.setHours(h || 0, m || 0, 0, 0);
-                 if (r < now) diff = 7;
+                // Parse time string like "10:30 PM" or "10pm" or "14:00"
+                let hours = 0;
+                let minutes = 0;
+                const timeMatch = timeStr.toLowerCase().match(/(\d+)(?::(\d+))?\s*(am|pm)?/);
+                
+                if (timeMatch) {
+                    hours = parseInt(timeMatch[1], 10);
+                    minutes = parseInt(timeMatch[2] || '0', 10);
+                    const ampm = timeMatch[3];
+                    
+                    if (ampm === 'pm' && hours < 12) hours += 12;
+                    if (ampm === 'am' && hours === 12) hours = 0;
+                    
+                    const r = new Date(now);
+                    r.setHours(hours, minutes, 0, 0);
+                    if (r < now) diff = 7;
+                }
             }
-            const d = new Date(now); d.setDate(d.getDate() + diff);
+            
+            const d = new Date(now);
+            d.setDate(now.getDate() + diff);
             return toLocalISO(d);
         }
         return keyword;
@@ -227,13 +246,31 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
     };
 
     const handleFinalConfirm = async () => {
+        if (!coach?.id) return;
         setLoading(true);
         try {
+            const sessionsToInsert = proposedSessions.map(session => ({
+                coach_id: coach.id,
+                client_id: targetClientId,
+                scheduled_at: session.scheduled_at,
+                duration_minutes: session.duration_minutes || 60,
+                session_type: session.session_type || 'training',
+                status: 'scheduled',
+                is_locked: true,
+                ai_generated: true,
+                meet_link: `https://meet.jit.si/${coach.id}-${targetClientId}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                notes: session.notes || `AI Scheduled session for ${clientContext?.name || 'Athlete'}`
+            }));
+
+            const { error } = await supabase.from('sessions').insert(sessionsToInsert);
+            if (error) throw error;
+
             await onConfirm(proposedSessions);
             resetForm();
             onClose();
-        } catch (error) {
-            Alert.alert('Error', 'Failed to schedule sessions.');
+        } catch (error: any) {
+            console.error('[SchedulerModal] Final Confirm Error:', error);
+            Alert.alert('Error', 'Failed to schedule sessions. ' + (error?.message || ''));
         } finally {
             setLoading(false);
         }
@@ -245,7 +282,16 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 <View className="px-6 pt-6 pb-4 flex-row justify-between items-center border-b border-slate-900 bg-slate-950/80">
                     <View className="flex-row items-center gap-3">
                         {step !== 'input' && (
-                           <TouchableOpacity onPress={() => setStep(step === 'review' ? 'form' : 'input')}>
+                           <TouchableOpacity onPress={() => {
+                               Alert.alert(
+                                   'Discard Changes?',
+                                   'This will clear your current AI scheduling progress. Are you sure you want to go back?',
+                                   [
+                                       { text: 'Cancel', style: 'cancel' },
+                                       { text: 'Yes, discard', style: 'destructive', onPress: () => { setStep('input'); setProposedSessions([]); } }
+                                   ]
+                               );
+                           }}>
                                <ChevronLeft size={24} color="#94A3B8" />
                            </TouchableOpacity>
                         )}
@@ -259,13 +305,53 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     </TouchableOpacity>
                 </View>
 
-                {step === 'input' ? (
-                    <MotiView 
-                      key="input"
-                      from={{ opacity: 0, translateX: -20 }}
-                      animate={{ opacity: 1, translateX: 0 }}
-                      className="flex-1"
-                    >
+                <AnimatePresence exitBeforeEnter>
+                    {loading && step !== 'review' ? (
+                        <MotiView 
+                            key="loading"
+                            from={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 1.05 }}
+                            transition={{ type: 'timing', duration: 300 }}
+                            className="flex-1 justify-center items-center py-24 px-6"
+                        >
+                            <MotiView 
+                                from={{ opacity: 0.5, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1.1 }}
+                                transition={{ type: 'timing', duration: 1000, loop: true }}
+                                style={{
+                                    width: 96,
+                                    height: 96,
+                                    backgroundColor: '#2563EB',
+                                    borderRadius: 32,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginBottom: 32,
+                                    borderWidth: 2,
+                                    borderColor: 'rgba(255,255,255,0.2)',
+                                    shadowColor: '#3B82F6',
+                                    shadowOffset: { width: 0, height: 20 },
+                                    shadowOpacity: 0.5,
+                                    shadowRadius: 30,
+                                    elevation: 15
+                                }}
+                            >
+                                <Sparkles size={40} color="white" fill="white" />
+                            </MotiView>
+                            <Text className="text-white text-3xl font-black text-center tracking-tighter mb-4">Validating Plan</Text>
+                            <Text className="text-slate-400 text-center leading-6 text-sm font-medium px-8">
+                                Checking calendar availability and analyzing schedule constraints...
+                            </Text>
+                        </MotiView>
+                    ) : step === 'input' ? (
+                        <MotiView 
+                          key="input"
+                          from={{ opacity: 0, translateX: -20 }}
+                          animate={{ opacity: 1, translateX: 0 }}
+                          exit={{ opacity: 0, translateX: 20 }}
+                          transition={{ type: 'timing', duration: 300 }}
+                          className="flex-1"
+                        >
                         <ScrollView className="flex-1 px-6 pt-8" showsVerticalScrollIndicator={false}>
                             <View className="p-8 rounded-[40px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden mb-8">
                                 <View className="absolute top-0 right-0 p-4 opacity-10">
@@ -342,108 +428,114 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         key="form"
                         from={{ opacity: 0, translateX: -20 }}
                         animate={{ opacity: 1, translateX: 0 }}
+                        exit={{ opacity: 0, translateX: 20 }}
+                        transition={{ type: 'timing', duration: 300 }}
                         className="flex-1 px-6 pt-8"
                     >
-                         <View className="mb-8 flex-row items-center gap-4">
-                            <View className="w-12 h-12 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20">
-                                <Info size={24} color="#F59E0B" />
-                            </View>
-                            <View className="flex-1">
-                                <Text className="text-white text-xl font-black tracking-tight leading-7">
-                                    {originallyMissingDays && originallyMissingTime ? "Days & Time Needed" : 
-                                     originallyMissingDays ? "You didn't mention the days needed" :
-                                     originallyMissingTime ? "You didn't mention the time" : "Details Needed"}
-                                </Text>
-                                <Text className="text-slate-500 text-xs font-medium mt-1">
-                                    {originallyMissingDays && originallyMissingTime ? "Specify both below for our ai to schedule it for you..." :
-                                     originallyMissingDays ? "Specify below for our ai to schedule it for you..." :
-                                     originallyMissingTime ? "Mention it in plain english for our ai to understand your session needs" :
-                                     "Please refine the schedule details below."}
-                                </Text>
-                            </View>
-                         </View>
-
-                         <View className="bg-slate-900/50 p-7 rounded-[32px] border border-slate-800">
-                             {/* Days Selector - Only show if originally missing */}
-                             {originallyMissingDays && (
-                                <View className="mb-8">
-                                    <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4">Days Needed</Text>
-                                    <View className="flex-row flex-wrap gap-2.5">
-                                        {DAYS.map(day => {
-                                            const isSelected = formDates.includes(day);
-                                            return (
-                                                <TouchableOpacity
-                                                    key={day}
-                                                    onPress={() => toggleDay(day)}
-                                                    style={{
-                                                        paddingHorizontal: 16,
-                                                        paddingVertical: 10,
-                                                        borderRadius: 14,
-                                                        backgroundColor: isSelected ? '#2563EB' : '#020617',
-                                                        borderWidth: 1,
-                                                        borderColor: isSelected ? '#3B82F6' : '#1E293B',
-                                                    }}
-                                                >
-                                                    <Text style={{
-                                                        color: isSelected ? 'white' : '#64748B',
-                                                        fontSize: 12,
-                                                        fontWeight: '700',
-                                                        textTransform: 'capitalize'
-                                                    }}>{day}</Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
+                        <>
+                             <View className="mb-8 flex-row items-center gap-4">
+                                    <View className="w-12 h-12 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20">
+                                        <Info size={24} color="#F59E0B" />
                                     </View>
-                                </View>
-                             )}
+                                    <View className="flex-1">
+                                        <Text className="text-white text-xl font-black tracking-tight leading-7">
+                                            {originallyMissingDays && originallyMissingTime ? "Days & Time Needed" : 
+                                             originallyMissingDays ? "You didn't mention the days needed" :
+                                             originallyMissingTime ? "You didn't mention the time" : "Details Needed"}
+                                        </Text>
+                                        <Text className="text-slate-500 text-xs font-medium mt-1">
+                                            {originallyMissingDays && originallyMissingTime ? "Specify both below for our ai to schedule it for you..." :
+                                             originallyMissingDays ? "Specify below for our ai to schedule it for you..." :
+                                             originallyMissingTime ? "Mention it in plain english for our ai to understand your session needs" :
+                                             "Please refine the schedule details below."}
+                                        </Text>
+                                    </View>
+                                 </View>
 
-                             {/* Time Input - Only show if originally missing */}
-                             {originallyMissingTime && (
-                                <View className="mb-10">
-                                    <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4">Selected Time</Text>
-                                    <TextInput
-                                       style={{
-                                           backgroundColor: '#020617',
-                                           borderWidth: 1,
-                                           borderColor: '#1E293B',
-                                           borderRadius: 18,
-                                           padding: 18,
-                                           color: 'white',
-                                           fontSize: 16,
-                                           fontWeight: '600'
-                                       }}
-                                       placeholder="e.g. 10:30 PM"
-                                       placeholderTextColor="#334155"
-                                       value={formTime}
-                                       onChangeText={setFormTime}
-                                    />
-                                </View>
-                             )}
+                                 <View className="bg-slate-900/50 p-7 rounded-[32px] border border-slate-800">
+                                     {/* Days Selector - Only show if originally missing */}
+                                     {originallyMissingDays && (
+                                        <View className="mb-8">
+                                            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4">Days Needed</Text>
+                                            <View className="flex-row flex-wrap gap-2.5">
+                                                {DAYS.map(day => {
+                                                    const isSelected = formDates.includes(day);
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={day}
+                                                            onPress={() => toggleDay(day)}
+                                                            style={{
+                                                                paddingHorizontal: 16,
+                                                                paddingVertical: 10,
+                                                                borderRadius: 14,
+                                                                backgroundColor: isSelected ? '#2563EB' : '#020617',
+                                                                borderWidth: 1,
+                                                                borderColor: isSelected ? '#3B82F6' : '#1E293B',
+                                                            }}
+                                                        >
+                                                            <Text style={{
+                                                                color: isSelected ? 'white' : '#64748B',
+                                                                fontSize: 12,
+                                                                fontWeight: '700',
+                                                                textTransform: 'capitalize'
+                                                            }}>{day}</Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                            </View>
+                                        </View>
+                                     )}
 
-                             <TouchableOpacity 
-                                 style={{ 
-                                    backgroundColor: '#2563EB', 
-                                    paddingVertical: 18, 
-                                    borderRadius: 20, 
-                                    alignItems: 'center',
-                                    shadowColor: '#3B82F6',
-                                    shadowOffset: { width: 0, height: 8 },
-                                    shadowOpacity: 0.3,
-                                    shadowRadius: 12,
-                                    elevation: 6,
-                                    marginTop: (!originallyMissingDays || !originallyMissingTime) ? 8 : 0
-                                 }} 
-                                 onPress={handleAnalyze}
-                             >
-                                <Text className="text-white font-black text-base uppercase tracking-widest">Validate Plan</Text>
-                             </TouchableOpacity>
-                         </View>
+                                     {/* Time Input - Only show if originally missing */}
+                                     {originallyMissingTime && (
+                                        <View className="mb-10">
+                                            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4">Selected Time</Text>
+                                            <TextInput
+                                               style={{
+                                                   backgroundColor: '#020617',
+                                                   borderWidth: 1,
+                                                   borderColor: '#1E293B',
+                                                   borderRadius: 18,
+                                                   padding: 18,
+                                                   color: 'white',
+                                                   fontSize: 16,
+                                                   fontWeight: '600'
+                                               }}
+                                               placeholder="e.g. 10:30 PM"
+                                               placeholderTextColor="#334155"
+                                               value={formTime}
+                                               onChangeText={setFormTime}
+                                            />
+                                        </View>
+                                     )}
+
+                                     <TouchableOpacity 
+                                         style={{ 
+                                            backgroundColor: '#2563EB', 
+                                            paddingVertical: 18, 
+                                            borderRadius: 20, 
+                                            alignItems: 'center',
+                                            shadowColor: '#3B82F6',
+                                            shadowOffset: { width: 0, height: 8 },
+                                            shadowOpacity: 0.3,
+                                            shadowRadius: 12,
+                                            elevation: 6,
+                                            marginTop: (!originallyMissingDays || !originallyMissingTime) ? 8 : 0
+                                         }} 
+                                         onPress={handleAnalyze}
+                                     >
+                                        <Text className="text-white font-black text-base uppercase tracking-widest">Validate Plan</Text>
+                                     </TouchableOpacity>
+                                 </View>
+                            </>
                     </MotiView>
                 ) : (
                     <MotiView 
                         key="review"
                         from={{ opacity: 0, translateX: -20 }}
                         animate={{ opacity: 1, translateX: 0 }}
+                        exit={{ opacity: 0, translateX: 20 }}
+                        transition={{ type: 'timing', duration: 300 }}
                         className="flex-1 px-6 pt-8"
                     >
                         <View className="mb-8 flex-row items-center gap-4">
@@ -505,6 +597,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         </View>
                     </MotiView>
                 )}
+                </AnimatePresence>
             </View>
 
             <ConflictResolutionModal 

@@ -19,7 +19,8 @@ import {
   Award,
   Zap,
   Smile,
-  Activity
+  Activity,
+  ArrowUpRight
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -259,10 +260,13 @@ export default function CoachDashboard() {
 
                     <TouchableOpacity 
                         onPress={() => setShowAnalyticsModal(true)}
-                        className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl overflow-hidden"
+                        className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl overflow-hidden relative"
                     >
                         <View className="w-12 h-12 bg-purple-600/10 rounded-2xl items-center justify-center mb-6 border border-purple-600/20">
                             <Activity size={24} color="#A855F7" />
+                        </View>
+                        <View className="absolute top-8 right-8">
+                            <ArrowUpRight size={22} color="#475569" />
                         </View>
                         
                         <Text className="text-white text-4xl font-black tracking-tighter">{displayActiveCount}</Text>
@@ -274,6 +278,7 @@ export default function CoachDashboard() {
                             heroNumber={displayActiveCount} 
                             label="Active Clients"
                             loading={loadingAnalytics}
+                            dataKey="high_performers"
                           />
                         </View>
 
@@ -288,10 +293,13 @@ export default function CoachDashboard() {
                 <View className="flex-row gap-4 mt-4">
                     <TouchableOpacity 
                       onPress={() => router.push('/(coach)/(tabs)/calendar')}
-                      className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl"
+                      className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl relative"
                     >
                         <View className="w-12 h-12 bg-orange-600/10 rounded-2xl items-center justify-center mb-6 border border-orange-600/20">
                             <Zap size={24} color="#F59E0B" />
+                        </View>
+                        <View className="absolute top-8 right-8">
+                            <ArrowUpRight size={22} color="#475569" />
                         </View>
                         <Text className="text-white text-4xl font-black tracking-tighter">{stats.todaysSessions}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Today's Sessions</Text>
@@ -302,10 +310,13 @@ export default function CoachDashboard() {
 
                     <TouchableOpacity 
                       onPress={() => router.push('/(coach)/challenges')}
-                      className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl"
+                      className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl relative"
                     >
                         <View className="w-12 h-12 bg-emerald-600/10 rounded-2xl items-center justify-center mb-6 border border-emerald-600/20">
                             <Trophy size={24} color="#10B981" />
+                        </View>
+                        <View className="absolute top-8 right-8">
+                            <ArrowUpRight size={22} color="#475569" />
                         </View>
                         <Text className="text-white text-4xl font-black tracking-tighter">{stats.activeChallenges}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Challenges</Text>
