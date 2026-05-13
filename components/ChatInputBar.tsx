@@ -13,7 +13,7 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import * as DocumentPicker from 'expo-document-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { useTheme } from '@/contexts/BrandContext';
-import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check } from 'lucide-react-native';
+import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check, Mic } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import DocumentPreviewModal from './DocumentPreviewModal';
 
@@ -685,25 +685,42 @@ export function ChatInputBar({
           </TouchableOpacity>
         </View>
 
-        {/* Send / Confirm Edit Button */}
-        <TouchableOpacity
-          style={[
-            styles.sendBtn,
-            { backgroundColor: editingMessage ? '#1E293B' : '#3B82F6' },
-            ((!text.trim() && !selectedMedia && !editingMessage) || isDisabled) && { opacity: 0.5 },
-          ]}
-          onPress={handleSend}
-          disabled={((!text.trim() && !selectedMedia && !editingMessage) || isDisabled)}
-          activeOpacity={0.8}
-        >
-          {sending ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : editingMessage ? (
-            <Check size={20} color="#34D399" strokeWidth={2.5} />
-          ) : (
-            <Send size={20} color="#FFFFFF" fill="#FFFFFF" />
-          )}
-        </TouchableOpacity>
+        {(!text.trim() && !selectedMedia && !editingMessage) ? (
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            <TouchableOpacity 
+              style={styles.iconBtn} 
+              onPress={openCamera}
+              activeOpacity={0.7}
+            >
+              <Camera size={24} color="#64748B" strokeWidth={2} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.iconBtn}
+              activeOpacity={0.7}
+            >
+              <Mic size={24} color="#64748B" strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.sendBtn,
+              { backgroundColor: editingMessage ? '#1E293B' : '#3B82F6' },
+              isDisabled && { opacity: 0.5 },
+            ]}
+            onPress={handleSend}
+            disabled={isDisabled}
+            activeOpacity={0.8}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : editingMessage ? (
+              <Check size={20} color="#34D399" strokeWidth={2.5} />
+            ) : (
+              <Send size={20} color="#FFFFFF" fill="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ── Sliding panel ──────────────────────────────────────────────────── */}

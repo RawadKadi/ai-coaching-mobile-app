@@ -336,52 +336,61 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
 
   const getToastStyle = () => {
     switch (toastType) {
-      case 'cancelled': return { backgroundColor: '#EF4444' }; // Red
-      case 'postponed': return { backgroundColor: '#EAB308' }; // Yellow
-      default: return { backgroundColor: '#10B981' }; // Green
+      case 'cancelled': return { backgroundColor: '#0f172a', borderColor: 'rgba(239, 68, 68, 0.2)', borderWidth: 1 };
+      case 'postponed': return { backgroundColor: '#0f172a', borderColor: 'rgba(234, 179, 8, 0.2)', borderWidth: 1 };
+      default: return { backgroundColor: '#0f172a', borderColor: 'rgba(16, 185, 129, 0.2)', borderWidth: 1 };
     }
   };
 
-  const getTextColor = () => {
+  const getIconColor = () => {
     switch (toastType) {
-      case 'postponed': return '#854D0E'; // Dark Yellow
-      default: return '#ECFDF5'; // Light Green/Red
+      case 'cancelled': return '#EF4444';
+      case 'postponed': return '#EAB308';
+      default: return '#10B981';
+    }
+  };
+
+  const getIconBgColor = () => {
+    switch (toastType) {
+      case 'cancelled': return 'rgba(239, 68, 68, 0.1)';
+      case 'postponed': return 'rgba(234, 179, 8, 0.1)';
+      default: return 'rgba(16, 185, 129, 0.1)';
     }
   };
 
   const getButtonText = () => {
     if (toastType === 'join') return 'Join';
     if (toastType === 'postponed' && coach) return 'Check Up';
-    return null; // No button for cancelled or client postponed view (unless we want one)
+    return null; // No button for cancelled or client postponed view
   };
 
   return (
     <SafeAreaView style={styles.container} pointerEvents="box-none">
       <Animated.View style={[styles.toast, getToastStyle(), { transform: [{ translateY: slideAnim }] }]}>
         <TouchableOpacity style={styles.content} onPress={handleAction} disabled={!getButtonText()}>
-          <View style={styles.iconContainer}>
-            {toastType === 'join' && <Video size={24} color="#FFFFFF" />}
-            {toastType === 'cancelled' && <X size={24} color="#FFFFFF" />}
-            {toastType === 'postponed' && <Clock size={24} color="#FFFFFF" />}
+          <View style={[styles.iconContainer, { backgroundColor: getIconBgColor() }]}>
+            {toastType === 'join' && <Video size={20} color={getIconColor()} />}
+            {toastType === 'cancelled' && <X size={20} color={getIconColor()} />}
+            {toastType === 'postponed' && <Clock size={20} color={getIconColor()} />}
           </View>
           <View style={styles.textContainer}>
-            <Text style={[styles.title, toastType === 'postponed' && { color: '#FFFFFF' }]}>
+            <Text style={styles.title}>
               {toastType === 'join' ? 'Session Starting' : (toastType === 'postponed' ? 'Session Postponed' : 'Session Cancelled')}
             </Text>
-            <Text style={[styles.message, { color: getTextColor() }, toastType === 'postponed' && { color: '#FEFCE8' }]}>
+            <Text style={styles.message}>
               {toastMessage}
             </Text>
           </View>
           {getButtonText() && (
-            <View style={styles.button}>
-              <Text style={[styles.buttonText, { color: toastType === 'postponed' ? '#EAB308' : '#10B981' }]}>
+            <View style={[styles.button, { backgroundColor: getIconColor() }]}>
+              <Text style={styles.buttonText}>
                 {getButtonText()}
               </Text>
             </View>
           )}
         </TouchableOpacity>
         <TouchableOpacity style={styles.closeButton} onPress={hideToast}>
-          <X size={20} color={toastType === 'postponed' ? '#FFFFFF' : '#ECFDF5'} />
+          <X size={18} color="#64748b" />
         </TouchableOpacity>
       </Animated.View>
     </SafeAreaView>
@@ -398,13 +407,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toast: {
-    width: '90%',
-    borderRadius: 12,
+    width: '92%',
+    borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
     marginTop: Platform.OS === 'android' ? 40 : 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -416,33 +425,41 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   iconContainer: {
-    marginRight: 12,
+    marginRight: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textContainer: {
     flex: 1,
   },
   title: {
+    color: '#ffffff',
     fontWeight: '700',
-    fontSize: 14,
-    marginBottom: 2,
+    fontSize: 15,
+    marginBottom: 4,
   },
   message: {
-    fontSize: 12,
+    color: '#94a3b8',
+    fontSize: 13,
+    lineHeight: 18,
   },
   button: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginLeft: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginLeft: 10,
   },
   buttonText: {
-    fontWeight: '700',
-    fontSize: 12,
+    color: '#0f172a',
+    fontWeight: '800',
+    fontSize: 13,
   },
   closeButton: {
     padding: 16,
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.2)',
+    borderLeftColor: 'rgba(255,255,255,0.05)',
   },
 });

@@ -10,8 +10,9 @@ import { Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/BrandContext';
-import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target, Loader2 } from 'lucide-react-native';
+import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target, Loader2, Clock, Video as LucideVideo } from 'lucide-react-native';
 import { MotiView } from 'moti';
+import { useRouter } from 'expo-router';
 import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import MealMessageCard from './MealMessageCard';
@@ -20,7 +21,7 @@ import DocumentPreviewModal from './DocumentPreviewModal';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type MediaContent = {
-  type: 'image' | 'video' | 'document' | 'gif' | 'challenge_completed' | 'task_completion' | 'meal' | 'meal_log';
+  type: 'image' | 'video' | 'document' | 'gif' | 'challenge_completed' | 'task_completion' | 'meal' | 'meal_log' | 'session_invite' | 'call_invite';
   url?: string;
   previewUrl?: string;
   thumbnailUrl?: string;
@@ -102,6 +103,8 @@ interface Props {
   isHighlighted?: boolean;
   onLongPress?: () => void; // Forwarded from parent chat for reaction menu
   isPressed?: boolean;
+  onCancelSession?: (sessionId: string) => void;
+  onRescheduleSession?: (sessionId: string) => void;
 }
 
 // ── Circular download progress ring ──────────────────────────────────────────
@@ -561,9 +564,131 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
   );
 }
 
+function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: any, isOwn: boolean, onCancel?: (id: string) => void, onReschedule?: (id: string) => void }) {
+  const theme = useTheme();
+  const router = useRouter();
+  
+  const isCancelled = media.status === 'cancelled';
+  const isRescheduled = media.status === 'rescheduled';
+  
+  const handleJoin = () => {
+    if (media.link) {
+      Linking.openURL(media.link);
+    }
+  };
+
+  if (isCancelled || isRescheduled) {
+    const title = isCancelled ? 'Session Cancelled' : 'Session Rescheduled';
+    const accentColor = isCancelled ? '#EF4444' : '#3B82F6';
+    const icon = isCancelled ? <X size={18} color={accentColor} /> : <RefreshCw size={18} color={accentColor} />;
+    
+    return (
+      <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: `${accentColor}33`, minWidth: 260 }]}>
+        <View style={{ padding: 16 }}>
+          <View style={styles.challengeHeader}>
+            <View style={[styles.challengeIconBox, { backgroundColor: `${accentColor}26` }]}>{icon}</View>
+            <Text style={[styles.challengeTitle, { color: accentColor, fontFamily: theme.typography.fontFamily }]}>{title}</Text>
+          </View>
+          <View style={styles.challengeBody}>
+            <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: '#94A3B8' }]}>
+              {isCancelled 
+                ? (isOwn ? 'You cancelled this session' : 'Coach cancelled this session')
+                : (isOwn ? 'You rescheduled this session' : 'Coach rescheduled this session')
+              }
+            </Text>
+            {isCancelled && media.cancellation_reason && (
+              <View style={{ marginTop: 8, backgroundColor: 'rgba(239, 68, 68, 0.05)', padding: 10, borderRadius: 8 }}>
+                <Text style={{ color: '#F8FAFC', fontSize: 12, fontStyle: 'italic' }}>"{media.cancellation_reason}"</Text>
+              </View>
+            )}
+            {isRescheduled && (
+              <TouchableOpacity 
+                onPress={() => router.push('/(client)/(tabs)/calendar')}
+                style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <Text style={{ color: '#3B82F6', fontSize: 13, fontWeight: '700' }}>View New Schedule</Text>
+                <ChevronLeft size={14} color="#3B82F6" style={{ transform: [{ rotate: '180deg' }] }} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: 'rgba(16, 185, 129, 0.2)', minWidth: 260 }]}>
+      <View style={{ padding: 16 }}>
+        <View style={styles.challengeHeader}>
+          <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}><LucideVideo size={18} color="#10B981" /></View>
+          <Text style={[styles.challengeTitle, { color: '#10B981', fontFamily: theme.typography.fontFamily }]}>Session Invitation</Text>
+        </View>
+        <View style={styles.challengeBody}>
+          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.description || 'Live Coaching Session'}</Text>
+          <View style={styles.challengeDetailsRow}>
+             <View style={styles.challengeDetailItem}>
+                <Clock size={12} color="#94A3B8" />
+                <Text style={styles.challengeDetailText}>
+                  {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : 'Now'}
+                </Text>
+             </View>
+          </View>
+        </View>
+        
+        <TouchableOpacity 
+          onPress={handleJoin}
+          style={{ 
+            backgroundColor: '#10B981', 
+            borderRadius: 12, 
+            paddingVertical: 10, 
+            alignItems: 'center', 
+            marginTop: 12 
+          }}
+        >
+          <Text style={{ color: '#0F172A', fontWeight: '900', fontSize: 14 }}>Join Session</Text>
+        </TouchableOpacity>
+
+        {isOwn && (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            <TouchableOpacity 
+              onPress={() => onReschedule?.(media.sessionId)}
+              style={{ 
+                flex: 1,
+                backgroundColor: 'rgba(255, 255, 255, 0.05)', 
+                borderRadius: 12, 
+                paddingVertical: 10, 
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.1)'
+              }}
+            >
+              <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 13 }}>Reschedule</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => onCancel?.(media.sessionId)}
+              style={{ 
+                flex: 1,
+                backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+                borderRadius: 12, 
+                paddingVertical: 10, 
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: 'rgba(239, 68, 68, 0.2)'
+              }}
+            >
+              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ── Main ChatMediaMessage Component ──────────────────────────────────────────
 const ChatMediaMessage: React.FC<Props> = ({ 
-  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress 
+  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress,
+  onCancelSession, onRescheduleSession
 }) => {
   const theme = useTheme();
   const highlightAnim = useRef(new Animated.Value(0)).current;
@@ -775,6 +900,25 @@ const ChatMediaMessage: React.FC<Props> = ({
           </Modal>
         )}
       </>
+    );
+  } else if (media.type === 'session_invite' || media.type === 'call_invite') {
+    messageBody = (
+      <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}>
+        <SessionInviteCard 
+          media={media} 
+          isOwn={isOwn} 
+          onCancel={onCancelSession}
+          onReschedule={onRescheduleSession}
+        />
+        {createdAt && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4, paddingRight: 4 }}>
+            <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>
+              {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isOwn && (isRead ? <CheckCheck size={12} color="#34D399" style={{ marginLeft: 4 }} /> : <Check size={12} color="#94A3B8" style={{ marginLeft: 4 }} />)}
+          </View>
+        )}
+      </View>
     );
   } else if (media.type === 'challenge_completed') {
     messageBody = (

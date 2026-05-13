@@ -77,7 +77,7 @@ function isMediaMessage(content: string): boolean {
   if (!content) return false;
   try {
     const p = JSON.parse(content);
-    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log'].includes(p.type);
+    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log', 'session_invite', 'call_invite'].includes(p.type);
   } catch {
     return false;
   }
@@ -766,6 +766,7 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
                     if (p.type === 'video') return '🎥 Video';
                     if (p.type === 'gif') return '🎞 GIF';
                     if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                    if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
                     return p.text || repliedMsg.content; 
                   } catch { return repliedMsg.content; }
                 })()}

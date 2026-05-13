@@ -34,7 +34,9 @@ import {
   Trash2,
   Edit2,
   TrendingUp,
-  Mail
+  Mail,
+  Check,
+  X
 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useTheme } from '@/contexts/BrandContext';
@@ -59,12 +61,13 @@ export default function ClientDetailsScreen() {
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
   const [challengeFilter, setChallengeFilter] = useState<'active' | 'history'>('active');
-  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins'>(
-    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : 'overview'
+  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins' | 'sessions'>(
+    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : (tab as string) === 'sessions' ? 'sessions' : 'overview'
   );
   const [checkins, setCheckins] = useState<any[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [streak, setStreak] = useState(0);
+  const [sessionLog, setSessionLog] = useState<any[]>([]);
   
   // Conflict Resolution State
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
@@ -146,6 +149,17 @@ export default function ClientDetailsScreen() {
       const viewerTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: id, p_timezone: viewerTimezone });
       setStreak(streakData || 0);
+
+      // Load Session Log
+      const { data: sessionLogData, error: sessionLogError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('client_id', id)
+        .order('scheduled_at', { ascending: false });
+
+      if (!sessionLogError && sessionLogData) {
+        setSessionLog(sessionLogData);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -328,10 +342,16 @@ export default function ClientDetailsScreen() {
                         <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'daily_tasks' ? 'text-white' : 'text-slate-500'}`}>Daily Tasks</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
-                        className={`pb-4 border-b-2 ${mainTab === 'checkins' ? 'border-blue-500' : 'border-transparent'}`}
+                        className={`mr-8 pb-4 border-b-2 ${mainTab === 'checkins' ? 'border-blue-500' : 'border-transparent'}`}
                         onPress={() => setMainTab('checkins')}
                     >
                         <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'checkins' ? 'text-white' : 'text-slate-500'}`}>Check-ins</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        className={`pb-4 border-b-2 ${mainTab === 'sessions' ? 'border-blue-500' : 'border-transparent'}`}
+                        onPress={() => setMainTab('sessions')}
+                    >
+                        <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'sessions' ? 'text-white' : 'text-slate-500'}`}>Sessions</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -505,7 +525,7 @@ export default function ClientDetailsScreen() {
                         </TouchableOpacity>
                     )}
                   </View>
-                ) : (
+                ) : mainTab === 'checkins' ? (
                   <View className="px-6 py-8">
                     {checkins.length === 0 ? (
                         <View className="p-12 items-center justify-center bg-slate-900/20 rounded-[40px] border border-slate-900 border-dashed">
@@ -550,6 +570,88 @@ export default function ClientDetailsScreen() {
                                         <Text className="text-slate-300 text-sm leading-5">{checkin.notes}</Text>
                                     </View>
                                 )}
+                            </MotiView>
+                        ))
+                    )}
+                  </View>
+                ) : (
+                  <View className="px-6 py-8">
+                    {sessionLog.length === 0 ? (
+                        <View className="p-12 items-center justify-center bg-slate-900/20 rounded-[40px] border border-slate-900 border-dashed">
+                             <CalendarIcon size={32} color="#1E293B" />
+                             <Text className="text-slate-700 font-black text-xs uppercase mt-6">No sessions logged</Text>
+                             <Text className="text-slate-800 text-[10px] mt-2 text-center px-4 leading-4">All 1-on-1 coordination happens directly in your chat.</Text>
+                        </View>
+                    ) : (
+                        sessionLog.map((session, idx) => (
+                            <MotiView 
+                                key={session.id}
+                                from={{ opacity: 0, translateY: 10 }} 
+                                animate={{ opacity: 1, translateY: 0 }} 
+                                transition={{ delay: idx * 50 }}
+                                className="bg-slate-900/40 rounded-[32px] p-6 mb-4 border border-white/5 flex-row items-center justify-between"
+                            >
+                                <View className="flex-1">
+                                    <View className="flex-row items-center gap-2 mb-1">
+                                      <CalendarIcon size={12} color="#64748B" />
+                                      <Text className="text-white font-black text-base">
+                                        {new Date(session.scheduled_at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                      </Text>
+                                    </View>
+                                    <View className="flex-row items-center gap-4">
+                                      <View className="flex-row items-center gap-1.5">
+                                        <Clock size={12} color="#94A3B8" />
+                                        <Text className="text-slate-400 font-bold text-xs">
+                                          {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                      </View>
+                                      <View className="w-1 h-1 rounded-full bg-slate-800" />
+                                      <Text className="text-slate-400 font-bold text-xs">{session.duration_minutes || 60} min</Text>
+                                    </View>
+                                </View>
+
+                                {(() => {
+                                  const isUpcoming = session.status === 'scheduled' && new Date(session.scheduled_at) > new Date();
+                                  const isMissed = (session.status === 'scheduled' && new Date(session.scheduled_at) <= new Date()) || (session.status === 'cancelled' && session.cancellation_reason === 'Client No-Show');
+                                  const isCompleted = session.status === 'completed';
+                                  const isDiscussed = session.status === 'cancelled' && session.cancellation_reason !== 'Client No-Show';
+
+                                  if (isCompleted) {
+                                    return (
+                                      <View className="bg-emerald-500/10 px-4 py-2 rounded-2xl border border-emerald-500/20 flex-row items-center gap-2">
+                                        <View className="w-5 h-5 rounded-full bg-emerald-500 items-center justify-center">
+                                          <Check size={12} color="white" />
+                                        </View>
+                                        <Text className="text-emerald-500 font-black text-[10px] uppercase tracking-widest">Completed</Text>
+                                      </View>
+                                    );
+                                  }
+                                  if (isUpcoming) {
+                                    return (
+                                      <View className="bg-blue-500/10 px-4 py-2 rounded-2xl border border-blue-500/20 flex-row items-center gap-2">
+                                        <Clock size={14} color="#3B82F6" />
+                                        <Text className="text-blue-500 font-black text-[10px] uppercase tracking-widest">Upcoming</Text>
+                                      </View>
+                                    );
+                                  }
+                                  if (isMissed) {
+                                    return (
+                                      <View className="bg-red-500/10 px-4 py-2 rounded-2xl border border-red-500/20 flex-row items-center gap-2">
+                                        <X size={14} color="#EF4444" />
+                                        <Text className="text-red-500 font-black text-[10px] uppercase tracking-widest">Missed</Text>
+                                      </View>
+                                    );
+                                  }
+                                  if (isDiscussed) {
+                                    return (
+                                      <View className="bg-slate-800/50 px-4 py-2 rounded-2xl border border-white/5 flex-row items-center gap-2">
+                                        <X size={14} color="#94A3B8" />
+                                        <Text className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Discussed</Text>
+                                      </View>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                             </MotiView>
                         ))
                     )}

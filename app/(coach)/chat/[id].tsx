@@ -14,7 +14,8 @@ import {
   Dimensions, 
   Alert, 
   Animated,
-  StatusBar
+  StatusBar,
+  TextInput
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,7 +31,8 @@ import {
   Activity,
   Reply,
   MoreVertical,
-  ArrowDown
+  ArrowDown,
+  X
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { safeBack } from '@/lib/navigation-utils';
@@ -74,7 +76,7 @@ function isMediaMessage(content: string): boolean {
   if (!content) return false;
   try {
     const p = JSON.parse(content);
-    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log'].includes(p.type);
+    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log', 'session_invite', 'call_invite'].includes(p.type);
   } catch {
     return false;
   }
@@ -98,6 +100,12 @@ export default function CoachChatScreen() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [schedulerVisible, setSchedulerVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [todaySession, setTodaySession] = useState<any>(null);
+  const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
+  const [selectedReason, setSelectedReason] = useState<string | null>(null);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
+  const [reschedulingMessageId, setReschedulingMessageId] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   const [pressedMessageId, setPressedMessageId] = useState<string | null>(null);
@@ -228,7 +236,51 @@ export default function CoachChatScreen() {
       .subscribe();
     reactionChannelRef.current = ch;
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id, id]);
+  }, [user?.id, clientUserId]); // Fixed dependency
+
+  // Fetch today's session for this client
+  useEffect(() => {
+    if (!clientUserId) return;
+    
+    const fetchTodaySession = async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('client_id', clientUserId)
+        .eq('status', 'scheduled')
+        .gte('scheduled_at', today.toISOString())
+        .lt('scheduled_at', tomorrow.toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        setTodaySession(data[0]);
+      } else {
+        setTodaySession(null);
+      }
+    };
+
+    fetchTodaySession();
+    
+    // Subscribe to session changes
+    const channel = supabase.channel(`sessions-${clientUserId}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'sessions',
+        filter: `client_id=eq.${clientUserId}`
+      }, () => {
+        fetchTodaySession();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [clientUserId]);
 
   // Flush buffered messages once clientUserId is known
   useEffect(() => {
@@ -449,7 +501,136 @@ export default function CoachChatScreen() {
     }
   };
 
-  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => {
+  const handleCancelSession = async (sessionId: string) => {
+    setCancellingSessionId(sessionId);
+    setSelectedReason(null);
+    setCancellationReason('');
+  };
+
+  const submitCancellation = async () => {
+    if (!cancellingSessionId) return;
+    
+    let finalReason = selectedReason;
+    if (selectedReason === 'Other') {
+      if (!cancellationReason.trim()) {
+        Alert.alert('Reason Required', 'Please type your reason.');
+        return;
+      }
+      finalReason = cancellationReason;
+    }
+
+    if (!finalReason) {
+      Alert.alert('Reason Required', 'Please select a reason.');
+      return;
+    }
+    
+    setIsSubmittingCancellation(true);
+    try {
+      // 1. Update session status
+      const { error: sessionError } = await supabase
+        .from('sessions')
+        .update({ 
+          status: 'cancelled', 
+          cancellation_reason: finalReason 
+        })
+        .eq('id', cancellingSessionId);
+      
+      if (sessionError) throw sessionError;
+
+      // 2. Find and update the chat message(s) that reference this session in local state
+      const messagesToUpdate = messages.filter(m => {
+        try {
+          const p = JSON.parse(m.content);
+          return p.sessionId === cancellingSessionId;
+        } catch { return false; }
+      });
+      
+      if (messagesToUpdate.length > 0) {
+        for (const msg of messagesToUpdate) {
+          try {
+            const p = JSON.parse(msg.content);
+            const updatedContent = JSON.stringify({
+              ...p,
+              status: 'cancelled',
+              cancellation_reason: finalReason
+            });
+            
+            // Update DB
+            await supabase.from('messages').update({ content: updatedContent }).eq('id', msg.id);
+            
+            // Update local state immediately for real-time feel
+            setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, content: updatedContent } : m));
+
+            // Broadcast the update
+            reactionChannelRef.current?.send({
+              type: 'broadcast',
+              event: 'message_edit',
+              payload: { messageId: msg.id, content: updatedContent }
+            });
+          } catch (e) {
+            console.error('[CoachChat] Error updating message:', e);
+          }
+        }
+      } else {
+        // Fallback: If not found in local state, try searching DB (robustness)
+        const { data: dbMessages } = await supabase
+          .from('messages')
+          .select('*')
+          .ilike('content', `%${cancellingSessionId}%`);
+        
+        if (dbMessages) {
+          for (const msg of dbMessages) {
+            try {
+              const p = JSON.parse(msg.content);
+              if (p.sessionId !== cancellingSessionId) continue;
+
+              const updatedContent = JSON.stringify({
+                ...p,
+                status: 'cancelled',
+                cancellation_reason: finalReason
+              });
+              await supabase.from('messages').update({ content: updatedContent }).eq('id', msg.id);
+              
+              // Broadcast the update
+              reactionChannelRef.current?.send({
+                type: 'broadcast',
+                event: 'message_edit',
+                payload: { messageId: msg.id, content: updatedContent }
+              });
+            } catch (e) {}
+          }
+        }
+      }
+
+      setCancellingSessionId(null);
+      setSelectedReason(null);
+      setCancellationReason('');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
+    } finally {
+      setIsSubmittingCancellation(false);
+    }
+  };
+
+  const handleRescheduleSession = (sessionId: string) => {
+    // Find the message associated with this session to mark it as rescheduled later
+    const msg = messages.find(m => {
+      try {
+        const p = JSON.parse(m.content);
+        return p.sessionId === sessionId;
+      } catch { return false; }
+    });
+    
+    if (msg) {
+      setReschedulingMessageId(msg.id);
+    } else {
+      setReschedulingMessageId(null);
+    }
+    setSchedulerVisible(true);
+  };
+
+  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit' | 'reschedule') => {
     if (!activeMessageForMenu) return;
     
     if (action === 'edit') {
@@ -491,6 +672,9 @@ export default function CoachChatScreen() {
       if (error) {
         Alert.alert('Error', 'Failed to delete message: ' + error.message);
       }
+    } else if (action === 'reschedule') {
+      setReschedulingMessageId(activeMessageForMenu.id);
+      setSchedulerVisible(true);
     }
     setActiveMessageForMenu(null);
   };
@@ -630,6 +814,8 @@ export default function CoachChatScreen() {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
                       setActiveMessageForMenu(item); 
                   }}
+                  onCancelSession={handleCancelSession}
+                  onRescheduleSession={handleRescheduleSession}
                 />
                 {/* Reactions on media messages */}
                 {(() => {
@@ -683,6 +869,8 @@ export default function CoachChatScreen() {
           isOwn={isMe}
           createdAt={liveMsg.created_at}
           isRead={liveMsg.read}
+          onCancelSession={handleCancelSession}
+          onRescheduleSession={handleRescheduleSession}
         />
       );
     }
@@ -733,7 +921,13 @@ export default function CoachChatScreen() {
              </View>
           </View>
           <View className="flex-row items-center gap-2">
-            <TouchableOpacity onPress={() => setSchedulerVisible(true)} className="w-10 h-10 items-center justify-center rounded-full bg-white/5"><Calendar size={20} color="#F8FAFC" /></TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => setSchedulerVisible(true)} 
+              className={`w-10 h-10 items-center justify-center rounded-full ${todaySession ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-white/5'}`}
+            >
+              <Calendar size={20} color={todaySession ? '#10B981' : '#F8FAFC'} />
+              {todaySession && <View className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#0F172A]" />}
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setMenuVisible(true)} className="w-10 h-10 items-center justify-center rounded-full bg-white/5"><MoreVertical size={20} color="#94A3B8" /></TouchableOpacity>
           </View>
         </View>
@@ -798,17 +992,47 @@ export default function CoachChatScreen() {
 
       <SchedulerModal 
         visible={schedulerVisible} 
-        onClose={() => setSchedulerVisible(false)} 
-        targetClientId={id as string}
+        onClose={() => {
+          setSchedulerVisible(false);
+          setReschedulingMessageId(null);
+        }} 
+        onConfirm={async (sessions) => {
+          console.log('[CoachChat] Scheduler confirmed:', sessions);
+          
+          // If we were rescheduling, update the local message state
+          if (reschedulingMessageId) {
+            setMessages(prev => prev.map(m => {
+              if (m.id === reschedulingMessageId) {
+                try {
+                  const p = JSON.parse(m.content);
+                  const updatedContent = JSON.stringify({ ...p, status: 'rescheduled' });
+                  
+                  // Broadcast the reschedule status
+                  reactionChannelRef.current?.send({
+                    type: 'broadcast',
+                    event: 'message_edit',
+                    payload: { messageId: m.id, content: updatedContent }
+                  });
+                  
+                  return { ...m, content: updatedContent };
+                } catch (e) { return m; }
+              }
+              return m;
+            }));
+          }
+
+          setSchedulerVisible(false);
+          setReschedulingMessageId(null);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }}
         clientContext={{ 
           name: clientProfile?.profiles?.full_name || 'Athlete', 
           timezone: 'UTC',
           avatar_url: clientProfile?.profiles?.avatar_url
         }}
         existingSessions={[]} 
-        onConfirm={async (sessions) => {
-          console.log('Confirmed sessions:', sessions);
-        }}
+        targetClientId={clientUserId || ''}
+        reschedulingMessageId={reschedulingMessageId}
       />
       
       <Modal visible={menuVisible} transparent animationType="slide">
@@ -853,6 +1077,109 @@ export default function CoachChatScreen() {
             />
           </MotiView>
         </Pressable>
+      </Modal>
+
+      {/* Cancellation Reason Modal */}
+      <Modal 
+        visible={!!cancellingSessionId} 
+        transparent 
+        animationType="fade"
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <Pressable 
+            className="flex-1 bg-black/80 justify-center items-center px-6"
+            onPress={() => setCancellingSessionId(null)}
+          >
+            <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%' }}>
+              <MotiView
+                from={{ opacity: 0, scale: 0.9, translateY: 20 }}
+                animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                style={{ width: '100%', backgroundColor: '#0F172A', borderRadius: 32, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+              >
+                <View className="flex-row justify-between items-center mb-6">
+                  <Text className="text-white text-xl font-black">Cancel Session</Text>
+                  <TouchableOpacity onPress={() => setCancellingSessionId(null)}>
+                    <X size={24} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+                
+                <Text className="text-slate-400 mb-6 text-sm font-medium">Why are you cancelling this session?</Text>
+                
+                <View className="gap-3 mb-6">
+                  {[
+                    'Personal/Emergency',
+                    'Schedule Conflict',
+                    'Client No-Show',
+                    'Discussed in Chat',
+                    'Other'
+                  ].map((reason) => {
+                    const isSelected = selectedReason === reason;
+                    return (
+                      <Pressable
+                        key={reason}
+                        onPressIn={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setSelectedReason(reason);
+                        }}
+                        style={{
+                          padding: 16,
+                          borderRadius: 20,
+                          borderWidth: 1,
+                          borderColor: isSelected ? '#10B981' : 'rgba(255,255,255,0.05)',
+                          backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : '#0F172A'
+                        }}
+                      >
+                        <View className="flex-row items-center justify-between">
+                          <Text style={{ 
+                            fontSize: 14, 
+                            fontWeight: '700', 
+                            color: isSelected ? '#10B981' : '#F8FAFC' 
+                          }}>{reason}</Text>
+                          {isSelected && <Check size={18} color="#10B981" />}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {selectedReason === 'Other' && (
+                  <View style={{ height: 140, marginBottom: 24, overflow: 'hidden' }}>
+                    <MotiView
+                      from={{ opacity: 0, translateY: -10 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      transition={{ type: 'timing', duration: 200 }}
+                      style={{ flex: 1 }}
+                    >
+                      <TextInput
+                        className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white text-base flex-1"
+                        multiline
+                        placeholder="Explain why (optional if obvious)..."
+                        placeholderTextColor="#475569"
+                        value={cancellationReason}
+                        onChangeText={setCancellationReason}
+                        autoFocus
+                        textAlignVertical="top"
+                        style={{ height: '100%' }}
+                      />
+                    </MotiView>
+                  </View>
+                )}
+                
+                <TouchableOpacity 
+                  onPress={submitCancellation}
+                  disabled={!selectedReason || isSubmittingCancellation}
+                  className={`py-4 rounded-2xl items-center mb-2 ${selectedReason ? 'bg-red-500' : 'bg-slate-800'}`}
+                >
+                  {isSubmittingCancellation ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text className="text-white font-black text-base">Cancel Session</Text>
+                  )}
+                </TouchableOpacity>
+              </MotiView>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -940,6 +1267,7 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
                     if (p.type === 'video') return '🎥 Video';
                     if (p.type === 'gif') return '🎞 GIF';
                     if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                    if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
                     return p.text || repliedMsg.content; 
                   } catch { return repliedMsg.content; }
                 })()}

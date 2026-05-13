@@ -8,6 +8,7 @@ export interface ProposedSession {
     recurrence?: 'weekly' | 'once';
     day_of_week?: string;
     status?: string;
+    aiRecurrenceDetected?: boolean;
 }
 
 export interface ScheduleRequest {
@@ -24,6 +25,7 @@ export interface ScheduleRequest {
 export interface ScheduleResponse {
     sessions: ProposedSession[];
     missing_info: string[];
+    summary_message?: string; // e.g., "I've drafted 3 sessions based on your request."
     clarification?: {
         type: 'recurrence_ambiguity' | 'duration_invalid' | 'general';
         message: string;
@@ -152,8 +154,34 @@ RULES & LOGIC:
    - **Action**: Ask recurrence (unless "only" is used).
    - Return "clarification": { "type": "recurrence_ambiguity", "message": "Do you want to schedule this for just this specific date, or every week?" }
 
-5. **LOOP PREVENTION**:
-   - If input contains "Just this date", "Every week", "1", "2": APPLY IT AND RETURN.
+6. **SCENARIO-BASED INTENT RECOGNITION**:
+   
+   **Scenario A: The Multi-Day Standard**
+   - Input: "Schedule Mon, Wed, Fri at 10am"
+   - Action: Return 3 separate session objects.
+   - Recurrence: Set to "weekly" by default.
+
+   **Scenario B: The Global Override**
+   - Input: "Schedule all sessions at 1pm, but Wednesday at 5pm"
+   - Action: Identify relevant days (if unspecified, assume Mon-Fri). Create sessions for each day at 1pm, EXCEPT Wednesday which MUST be 5pm.
+   - Recurrence: Set to "weekly" by default.
+
+   **Scenario C: The Specific Date (One-Time)**
+   - Input: "Let's meet this Friday at 9am" or "May 22nd at 2pm"
+   - Action: Return 1 session object for that specific date.
+   - Recurrence: Set to "once" by default.
+
+   **Scenario D: The Vague/Lazy Input**
+   - Input: "Monday 9am"
+   - Action: Return 1 session object. 
+   - Recurrence: Set to "once" by default, but flag aiRecurrenceDetected if it's a general weekday without a specific "this" or "next".
+
+7. **DISTRIBUTIVE SCHEDULING**:
+   - If the coach says "all sessions at [Time A] only [Day] at [Time B]", it means:
+     - All relevant days (usually Mon-Fri or specified days) should be at [Time A].
+     - EXCEPT the specific [Day] which should be at [Time B].
+   - Example: "draft all sessions at 1pm only wed at 5pm"
+     - RESULT: Mon @ 1pm, Tue @ 1pm, Wed @ 5pm, Thu @ 1pm, Fri @ 1pm.
 
 RESPONSE FORMAT (JSON ONLY):
 {
@@ -164,9 +192,11 @@ RESPONSE FORMAT (JSON ONLY):
       "session_type": "training",
       "notes": "Context from input",
       "recurrence": "weekly", // or "once"
-      "day_of_week": "Monday" // Optional
+      "day_of_week": "Monday",
+      "aiRecurrenceDetected": true // if the intent for recurrence was clearly identified from prompt
     }
   ],
+  "summary_message": "I've drafted 3 sessions based on your request.",
   "missing_info": [],
   "clarification": null // or { "type": "...", "message": "..." }
 }
@@ -208,7 +238,7 @@ Return ONLY a valid JSON object matching this schema. Do not include markdown fo
             "time": "string or null" // e.g. "10:30 PM", "14:00", or null if not mentioned
         }
     ],
-    "recurrence": "once" | "weekly" | null,
+    "recurrence": "once" | "weekly" | null, // Keywords: "Every", "Weekly", "Monthly", "Each", "Repeatedly" -> "weekly". "This", "Once", "On [Date]", "Today", "Tomorrow" -> "once". DEFAULT to "once" if no keyword found.
     "missing_info": ["time", "dates", "recurrence"] // List fields that were not specified
 }
 `;
@@ -256,5 +286,81 @@ Return ONLY a valid JSON object matching this schema. Do not include markdown fo
             recurrence: null,
             missing_info: ['time', 'dates']
         };
+    }
+};
+
+export interface AgendaContext {
+    days: string[];
+    times: string[]; // e.g. ["13:00", "14:00"]
+}
+
+const LOCAL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+export const extractAgendaContext = async (input: string): Promise<AgendaContext> => {
+    const lowerInput = input.toLowerCase();
+    
+    // Optimization: Local Regex "Fast Pass" for simple day/time patterns
+    const foundDays = LOCAL_DAYS.filter(day => lowerInput.includes(day));
+    
+    // Simple time regex (handles: 1pm, 13:00, 2:30 pm, 10 am)
+    const timeRegex = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/g;
+    const foundTimes: string[] = [];
+    let match;
+    
+    while ((match = timeRegex.exec(lowerInput)) !== null) {
+        let h = parseInt(match[1]);
+        const m = match[2] ? parseInt(match[2]) : 0;
+        const ampm = match[3];
+
+        if (ampm === 'pm' && h < 12) h += 12;
+        if (ampm === 'am' && h === 12) h = 0;
+        
+        if (h >= 0 && h < 24) {
+            foundTimes.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+        }
+    }
+
+    // If we found specific days/times and it's not a complex request (no "all week", "next", etc.)
+    // skip the AI and return local results to save API quota.
+    const isComplex = lowerInput.includes('every') || lowerInput.includes('all') || lowerInput.includes('next') || lowerInput.includes('-');
+    if (foundDays.length > 0 && !isComplex) {
+        return { days: foundDays, times: foundTimes };
+    }
+
+    try {
+        const prompt = `
+Extract the specific days of the week and specific times mentioned in this coaching scheduling input.
+Return a JSON object with:
+- "days": array of lowercase day names (monday, tuesday, etc.)
+- "times": array of 24h format strings (e.g. "13:00")
+
+Handle ranges like "Mon-Fri" or "all week" (return all 5/7 days).
+Handle vague times like "1pm" -> "13:00".
+
+Input: "${input}"
+
+Example: "Schedule Mon, Wed at 1pm" -> {"days": ["monday", "wednesday"], "times": ["13:00"]}
+Example: "all sessions at 1pm and wednesday at 2pm" -> {"days": ["monday", "tuesday", "wednesday", "thursday", "friday"], "times": ["13:00", "14:00"]}
+
+Return ONLY the JSON object.
+`;
+
+        const result = await callWithRetry(() => visionModel.generateContent(prompt));
+        let text = (await result.response).text().trim();
+        
+        if (text.startsWith('```json')) {
+            text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        } else if (text.startsWith('```')) {
+            text = text.replace(/```[a-z]*\n?/g, '').replace(/```\n?/g, '').trim();
+        }
+
+        const parsed = JSON.parse(text);
+        return {
+            days: Array.isArray(parsed.days) ? parsed.days : [],
+            times: Array.isArray(parsed.times) ? parsed.times : []
+        };
+    } catch (error) {
+        console.error('Error extracting agenda context:', error);
+        return { days: [], times: [] };
     }
 };

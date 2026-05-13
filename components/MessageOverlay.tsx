@@ -48,7 +48,7 @@ interface MessageOverlayProps {
   isMe: boolean;
   onClose: () => void;
   onReaction: (emoji: string) => void;
-  onAction: (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => void;
+  onAction: (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit' | 'reschedule') => void;
   renderMessageContent: (item: any, isMe: boolean) => React.ReactNode;
 }
 
@@ -78,7 +78,7 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
 
   const canEdit = isMe && isWithin15Minutes(message?.created_at);
 
-  const handleAction = (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => {
+  const handleAction = (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit' | 'reschedule') => {
     console.log('[MessageOverlay] handleAction internal triggered:', action);
     console.log('[MessageOverlay] onAction prop type:', typeof onAction);
     console.log('[MessageOverlay] onAction body:', onAction?.toString?.().substring(0, 200));
@@ -208,6 +208,25 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                         />
                       </>
                     )}
+
+                    {(() => {
+                      try {
+                        const p = JSON.parse(message.content);
+                        if (p.type === 'session_invite' || p.type === 'call_invite') {
+                          return (
+                            <>
+                              <MenuDivider />
+                              <MenuOption 
+                                icon={<Calendar size={20} color="#10B981" />} 
+                                label="Reschedule" 
+                                onPress={() => handleAction('reschedule')}
+                              />
+                            </>
+                          );
+                        }
+                      } catch {}
+                      return null;
+                    })()}
 
                     {isMe && (
                       <>
