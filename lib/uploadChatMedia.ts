@@ -13,6 +13,9 @@ function getMimeType(ext: string): string {
         mp4: 'video/mp4',
         mov: 'video/quicktime',
         avi: 'video/x-msvideo',
+        m4a: 'audio/mp4',
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
         pdf: 'application/pdf',
         doc: 'application/msword',
         docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -33,7 +36,7 @@ export async function uploadChatMedia(
     // 1. Extract extension safely
     let ext = 'jpg';
     const cleanUri = localUri.split('?')[0].split('#')[0];
-    const match = cleanUri.match(/\.(jpg|jpeg|png|gif|webp|heic|heif|mp4|mov|avi|pdf|doc|docx|txt)$/i);
+    const match = cleanUri.match(/\.(jpg|jpeg|png|gif|webp|heic|heif|mp4|mov|avi|m4a|mp3|wav|pdf|doc|docx|txt)$/i);
     if (match) {
         ext = match[1].toLowerCase();
     } else if (localUri.startsWith('data:')) {

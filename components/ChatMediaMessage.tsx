@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Linking, Modal, SafeAreaView, Animated, PanResponder, Dimensions, Pressable
+  Linking, Modal, SafeAreaView, Animated, Dimensions, Pressable,
+  ActivityIndicator
 } from 'react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
-import { Video, ResizeMode, AVPlaybackStatus, VideoFullscreenUpdate } from 'expo-av';
+import { Video, ResizeMode, AVPlaybackStatus, VideoFullscreenUpdate, Audio } from 'expo-av';
 import { Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -18,10 +20,11 @@ import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import MealMessageCard from './MealMessageCard';
 import DocumentPreviewModal from './DocumentPreviewModal';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const BUBBLE_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 320);
 
 type MediaContent = {
-  type: 'image' | 'video' | 'document' | 'gif' | 'challenge_completed' | 'task_completion' | 'meal' | 'meal_log' | 'session_invite' | 'call_invite';
+  type: 'image' | 'video' | 'document' | 'audio' | 'gif' | 'challenge_completed' | 'task_completion' | 'meal' | 'meal_log' | 'session_invite' | 'call_invite';
   url?: string;
   previewUrl?: string;
   thumbnailUrl?: string;
@@ -40,6 +43,7 @@ type MediaContent = {
   description?: string;
   timestamp?: string;
   imageUrl?: string; // For task completions with photo verification
+  text?: string; // Caption text for the media
 };
 
 // ── Media Caching Hook ──────────────────────────────────────────────────────
@@ -685,7 +689,208 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
   );
 }
 
-// ── Main ChatMediaMessage Component ──────────────────────────────────────────
+// ── Voice Note Player ────────────────────────────────────────────────────────
+function VoiceNotePlayer({ uri, duration, isOwn, theme }: { uri: string, duration?: number, isOwn: boolean, theme: any }) {
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [position, setPosition] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(duration ? duration * 1000 : 0);
+  const [barWidth, setBarWidth] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  // Pre-load sound if it's a "fresh" message (less than 1 min old) or just on mount
+  useEffect(() => {
+    let mounted = true;
+    const loadSound = async () => {
+      try {
+        if (!uri) return;
+        setIsLoading(true);
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: false, volume: 1.0, isMuted: false },
+          (status) => {
+            if (status.isLoaded && mounted) {
+              if (!isDragging) {
+                setPosition(status.positionMillis);
+              }
+              setTotalDuration(status.durationMillis || 0);
+              setIsPlaying(status.isPlaying);
+              if (status.didJustFinish) {
+                setIsPlaying(false);
+                setPosition(0);
+                soundRef.current?.setPositionAsync(0);
+              }
+            }
+          }
+        );
+        if (mounted) {
+          soundRef.current = newSound;
+          setSound(newSound);
+          setIsLoaded(true);
+          setIsLoading(false);
+        } else {
+          newSound.unloadAsync();
+        }
+      } catch (error) {
+        console.error('Error loading sound:', error);
+        if (mounted) setIsLoading(false);
+      }
+    };
+
+    loadSound();
+    return () => {
+      mounted = false;
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, [uri]);
+
+  const togglePlayback = async () => {
+    if (!soundRef.current || !isLoaded) {
+      setIsLoading(true);
+      return;
+    }
+
+    try {
+      if (isPlaying) {
+        await soundRef.current.pauseAsync();
+      } else {
+        if (position >= totalDuration - 100) {
+          await soundRef.current.setPositionAsync(0);
+        }
+        await soundRef.current.playAsync();
+      }
+    } catch (error) {
+      console.error('Playback error:', error);
+    }
+  };
+
+  const handleSeek = async (progress: number) => {
+    if (!soundRef.current || !isLoaded || totalDuration <= 0) return;
+    const newPosition = progress * totalDuration;
+    setPosition(newPosition);
+    await soundRef.current.setPositionAsync(newPosition);
+  };
+
+  const onGestureEvent = (event: any) => {
+    if (barWidth <= 0) return;
+    const { x } = event.nativeEvent;
+    const newProgress = Math.max(0, Math.min(1, x / barWidth));
+    setPosition(newProgress * totalDuration);
+  };
+
+  const onHandlerStateChange = (event: any) => {
+    const { state, x } = event.nativeEvent;
+    if (state === State.BEGAN || state === State.ACTIVE) {
+      setIsDragging(true);
+      if (barWidth > 0) {
+        const newProgress = Math.max(0, Math.min(1, x / barWidth));
+        setPosition(newProgress * totalDuration);
+      }
+    } else if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
+      setIsDragging(false);
+      if (barWidth > 0) {
+        const newProgress = Math.max(0, Math.min(1, x / barWidth));
+        handleSeek(newProgress);
+      }
+    }
+  };
+
+  const onSeekTouch = async (evt: any) => {
+    if (barWidth <= 0) return;
+    const { locationX } = evt.nativeEvent;
+    const newProgress = Math.max(0, Math.min(1, locationX / barWidth));
+    handleSeek(newProgress);
+  };
+
+  const formatTime = (millis: number) => {
+    const totalSeconds = Math.floor(millis / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  };
+
+  const progress = totalDuration > 0 ? position / totalDuration : 0;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', width: 220, paddingVertical: 4 }}>
+      <TouchableOpacity 
+        onPress={togglePlayback}
+        disabled={isLoading}
+        style={{ 
+          width: 44, 
+          height: 44, 
+          borderRadius: 22, 
+          backgroundColor: isOwn ? 'rgba(255,255,255,0.25)' : theme.colors.primary, 
+          justifyContent: 'center', 
+          alignItems: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+        }}
+      >
+        {isLoading ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : isPlaying ? (
+          <Pause size={22} color="#FFFFFF" fill="#FFFFFF" />
+        ) : (
+          <Play size={22} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 3 }} />
+        )}
+      </TouchableOpacity>
+
+      <View style={{ flex: 1, marginHorizontal: 12 }}>
+        <PanGestureHandler
+          onGestureEvent={onGestureEvent}
+          onHandlerStateChange={onHandlerStateChange}
+          activeOffsetX={[-5, 5]}
+          failOffsetY={[-10, 10]}
+          disallowInterruption={true}
+          shouldCancelWhenOutside={false}
+        >
+          <View 
+            onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+            style={{ height: 28, justifyContent: 'center' }}
+          >
+          {/* Track background */}
+          <View style={{ height: 4, backgroundColor: isOwn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+            <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: '#FFFFFF' }} />
+          </View>
+          
+          {/* Draggable thumb/knob */}
+          <View 
+            style={{ 
+              position: 'absolute', 
+              left: `${progress * 100}%`, 
+              marginLeft: -8,
+              width: 16, 
+              height: 16, 
+              borderRadius: 8, 
+              backgroundColor: '#FFFFFF',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 3,
+              elevation: 4,
+              borderWidth: 1,
+              borderColor: 'rgba(0,0,0,0.05)'
+            }} 
+          />
+        </View>
+      </PanGestureHandler>
+        
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: -2 }}>
+          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>{formatTime(position)}</Text>
+          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>{formatTime(totalDuration)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 const ChatMediaMessage: React.FC<Props> = ({ 
   content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress,
   onCancelSession, onRescheduleSession
@@ -718,90 +923,337 @@ const ChatMediaMessage: React.FC<Props> = ({
   let media: MediaContent | null = null;
   let isEdited = false;
   try { 
-    media = JSON.parse(content); 
+    const trimmed = content.trim();
+    let p = JSON.parse(trimmed);
+    // Handle double stringification
+    if (typeof p === 'string' && p.startsWith('{')) {
+      p = JSON.parse(p);
+    }
+    media = p;
     isEdited = !!media?.is_edited;
-  } catch { return null; }
-  if (!media) return null;
+  } catch { 
+    // Manual fallback parsing if JSON.parse fails but it looks like our media structure
+    const trimmed = content.trim();
+    if (trimmed.startsWith('{')) {
+      const typeMatch = trimmed.match(/"type"\s*:\s*"([^"]+)"/);
+      const urlMatch = trimmed.match(/"url"\s*:\s*"([^"]+)"/);
+      const textMatch = trimmed.match(/"text"\s*:\s*"([^"]+)"/);
+      const durationMatch = trimmed.match(/"duration"\s*:\s*(\d+)/);
+      const fileNameMatch = trimmed.match(/"fileName"\s*:\s*"([^"]+)"/);
+      
+      if (typeMatch) {
+        media = {
+          type: typeMatch[1] as any,
+          url: urlMatch ? urlMatch[1] : undefined,
+          text: textMatch ? textMatch[1] : undefined,
+          duration: durationMatch ? parseInt(durationMatch[1]) : undefined,
+          fileName: fileNameMatch ? fileNameMatch[1] : undefined
+        };
+      }
+    }
+  }
+  if (!media || !media.type) return null;
 
   let messageBody = null;
 
   if ((media.type === 'image' || media.type === 'gif') && media.url) {
+    const hasCaption = !!media.text;
+    const captionLength = media.text?.length || 0;
+    const isVeryLongCaption = captionLength > 250;
+    const currentWidth = isVeryLongCaption ? BUBBLE_WIDTH : 240;
+    const imageHeight = isVeryLongCaption ? 320 : 240;
+
     messageBody = (
-      <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { width: 220, height: replyTo ? 240 : 200, padding: 0, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10 }]} pointerEvents="none" />
-        {replyTo && <View style={{ padding: 4, backgroundColor: theme.colors.surface }}><ChatReplyContext message={replyTo} onPress={() => replyTo.id && onPressReply?.(replyTo.id)} isMe={isOwn} /></View>}
-        <CustomImagePlayer uri={media.url} previewUrl={media.previewUrl} type={media.type as 'image' | 'gif'} isOwn={isOwn} isUploading={isUploading} progress={progress} onCancel={onCancel} onLongPress={onLongPress} />
-        {createdAt && (
-          <View style={styles.timeBadgeContainer}>
-            {isEdited && <Text style={[styles.timeBadgeText, { opacity: 0.6, fontStyle: 'italic', marginRight: 4 }]}>Edited</Text>}
-            <Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-            {isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}
+      <View style={[
+        isOwn ? styles.myBubble : styles.theirBubble, 
+        { 
+          width: currentWidth, 
+          backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+          borderRadius: 20,
+          borderWidth: isOwn ? 0 : 1,
+          borderColor: 'rgba(255,255,255,0.08)',
+          overflow: 'visible'
+        }
+      ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10, borderRadius: 20 }]} pointerEvents="none" />
+        
+        {/* Media Container with clipping */}
+        <View style={{ 
+          width: '100%', 
+          height: imageHeight, 
+          borderTopLeftRadius: 18, 
+          borderTopRightRadius: 18,
+          borderBottomLeftRadius: hasCaption ? 0 : 18,
+          borderBottomRightRadius: hasCaption ? 0 : 4,
+          overflow: 'hidden',
+          backgroundColor: 'rgba(255,255,255,0.05)'
+        }}>
+          {replyTo && (
+            <View style={{ padding: 4, backgroundColor: 'rgba(0,0,0,0.1)' }}>
+              <ChatReplyContext 
+                message={replyTo} 
+                onPress={() => replyTo.id && onPressReply?.(replyTo.id)} 
+                isMe={isOwn} 
+              />
+            </View>
+          )}
+
+          <CustomImagePlayer 
+            uri={media.url} 
+            previewUrl={media.previewUrl} 
+            type={media.type as 'image' | 'gif'} 
+            isOwn={isOwn} 
+            isUploading={isUploading} 
+            progress={progress} 
+            onCancel={onCancel} 
+            onLongPress={onLongPress} 
+          />
+          
+          {!hasCaption && createdAt && (
+            <View style={styles.timeBadgeContainer}>
+              {isEdited && <Text style={[styles.timeBadgeText, { opacity: 0.6, fontStyle: 'italic', marginRight: 4 }]}>Edited</Text>}
+              <Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              {isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}
+            </View>
+          )}
+        </View>
+
+        {media.text && (
+          <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 }}>
+            <Text style={{ 
+              color: '#FFFFFF', 
+              fontSize: 15, 
+              lineHeight: 22,
+              fontFamily: theme.typography.fontFamily 
+            }}>
+              {media.text}
+            </Text>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'flex-end',
+              marginTop: 8
+            }}>
+              {isEdited && (
+                <Text style={{ 
+                  fontSize: 10, 
+                  color: 'rgba(255,255,255,0.5)', 
+                  fontStyle: 'italic', 
+                  marginRight: 4 
+                }}>Edited</Text>
+              )}
+              <Text style={{ 
+                fontSize: 10, 
+                color: 'rgba(255,255,255,0.7)', 
+                fontWeight: '700' 
+              }}>
+                {new Date(createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {isOwn && (
+                isRead 
+                  ? <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} /> 
+                  : <Check size={13} color="rgba(255,255,255,0.6)" style={{ marginLeft: 4 }} />
+              )}
+            </View>
           </View>
         )}
       </View>
     );
-  } else if (media.type === 'video' && media.url) {
+  } else if (media.type === 'audio' && media.url) {
     messageBody = (
-      <TouchableOpacity
-        activeOpacity={1}
-        onLongPress={onLongPress}
-        delayLongPress={400}
-        style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { width: 250, height: replyTo ? 290 : 250, padding: 0, overflow: 'hidden', backgroundColor: '#000000' }]}
-      >
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10 }]} pointerEvents="none" />
-        {replyTo && <View style={{ padding: 4, backgroundColor: theme.colors.surface }}><ChatReplyContext message={replyTo} onPress={() => replyTo.id && onPressReply?.(replyTo.id)} isMe={isOwn} /></View>}
-        <CustomVideoPlayer 
-          uri={media.url} 
-          thumbnailUrl={media.thumbnailUrl}
-          isUploading={isUploading} 
-          progress={progress} 
-          onCancel={onCancel} 
-        />
-        {createdAt && (
-          <View style={[styles.timeBadgeContainer, { bottom: 8, right: 8 }]}>
-            {isEdited && <Text style={[styles.timeBadgeText, { opacity: 0.6, fontStyle: 'italic', marginRight: 4 }]}>Edited</Text>}
-            <Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-            {isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}
+      <View style={[
+        isOwn ? styles.myBubble : styles.theirBubble, 
+        { 
+          backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+          borderRadius: 20,
+          borderWidth: isOwn ? 0 : 1,
+          borderColor: 'rgba(255,255,255,0.08)',
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          minWidth: 240,
+        }
+      ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10, borderRadius: 20 }]} pointerEvents="none" />
+        
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <VoiceNotePlayer 
+            uri={media.url} 
+            duration={media.duration} 
+            isOwn={isOwn} 
+            theme={theme} 
+          />
+          
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            position: 'absolute',
+            bottom: -2,
+            right: 0
+          }}>
+            <Text style={{ 
+              fontSize: 9, 
+              color: 'rgba(255,255,255,0.7)', 
+              fontWeight: '700' 
+            }}>
+              {new Date(createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isOwn && (
+              isRead 
+                ? <CheckCheck size={11} color="#10B981" style={{ marginLeft: 3 }} /> 
+                : <Check size={11} color="rgba(255,255,255,0.6)" style={{ marginLeft: 3 }} />
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  } else if (media.type === 'video' && media.url) {
+    const hasCaption = !!media.text;
+    const captionLength = media.text?.length || 0;
+    const isVeryLongCaption = captionLength > 250;
+    const currentWidth = isVeryLongCaption ? BUBBLE_WIDTH : 260;
+    const videoHeight = isVeryLongCaption ? 220 : 180;
+
+    messageBody = (
+      <View style={[
+        isOwn ? styles.myBubble : styles.theirBubble, 
+        { 
+          width: currentWidth, 
+          backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+          borderRadius: 20,
+          borderWidth: isOwn ? 0 : 1,
+          borderColor: 'rgba(255,255,255,0.08)',
+          overflow: 'visible'
+        }
+      ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10, borderRadius: 20 }]} pointerEvents="none" />
+        
+        {/* Media Container with clipping */}
+        <View style={{ 
+          width: '100%', 
+          height: videoHeight, 
+          borderTopLeftRadius: 18, 
+          borderTopRightRadius: 18,
+          borderBottomLeftRadius: hasCaption ? 0 : 18,
+          borderBottomRightRadius: hasCaption ? 0 : 4,
+          overflow: 'hidden',
+          backgroundColor: '#000'
+        }}>
+          {replyTo && (
+            <View style={{ padding: 4, backgroundColor: 'rgba(0,0,0,0.1)' }}>
+              <ChatReplyContext 
+                message={replyTo} 
+                onPress={() => replyTo.id && onPressReply?.(replyTo.id)} 
+                isMe={isOwn} 
+              />
+            </View>
+          )}
+
+          <CustomVideoPlayer 
+            uri={media.url} 
+            thumbnailUrl={media.thumbnailUrl}
+            isUploading={isUploading} 
+            progress={progress} 
+            onCancel={onCancel} 
+          />
+          
+          {!hasCaption && createdAt && (
+            <View style={[styles.timeBadgeContainer, { bottom: 8, right: 8 }]}>
+              {isEdited && <Text style={[styles.timeBadgeText, { opacity: 0.6, fontStyle: 'italic', marginRight: 4 }]}>Edited</Text>}
+              <Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              {isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}
+            </View>
+          )}
+        </View>
+
+        {media.text && (
+          <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 }}>
+            <Text style={{ 
+              color: '#FFFFFF', 
+              fontSize: 15, 
+              lineHeight: 22,
+              fontFamily: theme.typography.fontFamily 
+            }}>
+              {media.text}
+            </Text>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'flex-end',
+              marginTop: 8
+            }}>
+              {isEdited && (
+                <Text style={{ 
+                  fontSize: 10, 
+                  color: 'rgba(255,255,255,0.5)', 
+                  fontStyle: 'italic', 
+                  marginRight: 4 
+                }}>Edited</Text>
+              )}
+              <Text style={{ 
+                fontSize: 10, 
+                color: 'rgba(255,255,255,0.7)', 
+                fontWeight: '700' 
+              }}>
+                {new Date(createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {isOwn && (
+                isRead 
+                  ? <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} /> 
+                  : <Check size={13} color="rgba(255,255,255,0.6)" style={{ marginLeft: 4 }} />
+              )}
+            </View>
           </View>
         )}
-      </TouchableOpacity>
+      </View>
     );
-  } else if (media.type === 'document') {
-    const isAudio = media.url?.toLowerCase().split('?')[0].endsWith('.mp3') || media.url?.toLowerCase().split('?')[0].endsWith('.wav') || media.url?.toLowerCase().split('?')[0].endsWith('.m4a') || 
-                    media.fileName?.toLowerCase().endsWith('.mp3') || media.fileName?.toLowerCase().endsWith('.wav') || media.fileName?.toLowerCase().endsWith('.m4a');
+  } else if (media.type === 'document' || media.type === 'audio') {
+    const isAudio = media.type === 'audio';
     
     messageBody = (
-      <>
-        <TouchableOpacity 
-          activeOpacity={0.85}
-          style={[
-            styles.bubble, 
-            isOwn ? styles.myBubble : styles.theirBubble, 
-            { 
-              backgroundColor: isOwn ? theme.colors.primary : '#1E293B', 
-              borderColor: isOwn ? 'transparent' : 'rgba(255,255,255,0.08)', 
-              borderWidth: isOwn ? 0 : 1,
-              minWidth: 260, 
-              maxWidth: '85%',
-              padding: 12,
-              borderRadius: 20,
-              // Shadow for depth
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-              elevation: 4,
-            }
-          ]} 
-          onPress={() => {
-            if (!isUploading && media?.url) {
-              setDocumentModalUrl(media.url);
-              setDocumentModalName(media.fileName || 'Document');
-              setDocumentModalVisible(true);
-            }
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View 
+        style={[
+          styles.bubble, 
+          isOwn ? styles.myBubble : styles.theirBubble, 
+          { 
+            backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.08)',
+            minWidth: 260, 
+            maxWidth: '85%',
+            padding: 12,
+            borderRadius: 20,
+            // Shadow for depth
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            elevation: 4,
+          }
+        ]} 
+      >
+        {isAudio && !isUploading ? (
+          <VoiceNotePlayer 
+            uri={media.url!} 
+            duration={media.duration} 
+            isOwn={isOwn} 
+            theme={theme} 
+          />
+        ) : (
+          <TouchableOpacity 
+            activeOpacity={0.9} 
+            delayLongPress={400} 
+            onLongPress={onLongPress} 
+            onPress={() => {
+              if (!isUploading && media?.url) {
+                setDocumentModalUrl(media.url);
+                setDocumentModalName(media.fileName || 'Document');
+                setDocumentModalVisible(true);
+              }
+            }}
+            style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}
+          >
             <View style={{ 
               width: 52, 
               height: 52, 
@@ -837,37 +1289,37 @@ const ChatMediaMessage: React.FC<Props> = ({
                 {isUploading ? `Uploading… ${progress}%` : isAudio ? 'Voice Message' : 'Document'}
               </Text>
             </View>
-          </View>
-          
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            justifyContent: 'flex-end', 
-            marginTop: 8,
-            paddingRight: 2 
-          }}>
-            {isEdited && (
-              <Text style={{ 
-                fontSize: 10, 
-                color: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(148, 163, 184, 0.5)', 
-                fontStyle: 'italic', 
-                marginRight: 6 
-              }}>Edited</Text>
-            )}
+          </TouchableOpacity>
+        )}
+        
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: 'flex-end', 
+          marginTop: 8,
+          paddingRight: 2 
+        }}>
+          {isEdited && (
             <Text style={{ 
               fontSize: 10, 
-              color: isOwn ? 'rgba(255,255,255,0.7)' : '#64748B', 
-              fontWeight: '700' 
-            }}>
-              {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isOwn && (
-              isRead 
-                ? <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} /> 
-                : <Check size={13} color="rgba(255,255,255,0.6)" style={{ marginLeft: 4 }} />
-            )}
-          </View>
-        </TouchableOpacity>
+              color: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(148, 163, 184, 0.5)', 
+              fontStyle: 'italic', 
+              marginRight: 6 
+            }}>Edited</Text>
+          )}
+          <Text style={{ 
+            fontSize: 10, 
+            color: isOwn ? 'rgba(255,255,255,0.7)' : '#64748B', 
+            fontWeight: '700' 
+          }}>
+            {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          {isOwn && (
+            isRead 
+              ? <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} /> 
+              : <Check size={13} color="rgba(255,255,255,0.6)" style={{ marginLeft: 4 }} />
+          )}
+        </View>
 
         <DocumentPreviewModal 
           visible={documentModalVisible} 
@@ -876,7 +1328,7 @@ const ChatMediaMessage: React.FC<Props> = ({
           fileName={documentModalName} 
           onClose={() => setDocumentModalVisible(false)} 
         />
-      </>
+      </View>
     );
   } else if (media.type === 'task_completion') {
     messageBody = (

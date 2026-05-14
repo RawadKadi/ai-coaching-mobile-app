@@ -56,12 +56,16 @@ type Message = {
 };
 
 function isMediaMessage(content: string): boolean {
-  try {
-    const p = JSON.parse(content);
-    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion'].includes(p.type);
-  } catch {
-    return false;
-  }
+  if (!content || typeof content !== 'string') return false;
+  const s = content.trim();
+  // If it starts with { and contains "type" and "url" (or just "type" for meal logs), it's media.
+  // We use string checks instead of JSON.parse for the high-level detection to avoid throw/catch overhead.
+  const hasType = s.includes('"type"');
+  const hasUrl = s.includes('"url"');
+  const hasTask = s.includes('"taskName"');
+  const isMeal = s.includes('"type":"meal"');
+  
+  return s.startsWith('{') && (hasType && (hasUrl || hasTask || isMeal));
 }
 
 export default function ClientMessagesScreen() {
@@ -268,7 +272,7 @@ export default function ClientMessagesScreen() {
     let finalContent = contentWithCid;
     try {
       if (parsedContent.isOptimistic && parsedContent.url && !parsedContent.url.startsWith('http')) {
-        const folder = parsedContent.type === 'video' ? 'videos' : (parsedContent.type === 'document' ? 'documents' : 'images');
+        const folder = parsedContent.type === 'video' ? 'videos' : (parsedContent.type === 'audio' ? 'audio' : (parsedContent.type === 'document' ? 'documents' : 'images'));
         const publicUrl = await uploadChatMedia(
           parsedContent.url,
           folder,
@@ -681,18 +685,39 @@ const ClientMessageBubble = ({ item, isMe, isHighlighted, repliedMsg, onReplyPre
   let isEdited = false;
 
   try {
-    const p = JSON.parse(item.content);
-    displayContent = p.text || item.content;
+    const trimmed = item.content.trim();
+    if (!trimmed.startsWith('{')) throw new Error('Not JSON');
+    
+    let p = JSON.parse(trimmed);
+    // Handle double stringification
+    if (typeof p === 'string' && p.startsWith('{')) {
+      p = JSON.parse(p);
+    }
+    
+    // Aggressive type extraction for malformed/nested JSON
+    const type = p.type || 
+                (trimmed.includes('"type":"audio"') ? 'audio' : null) || 
+                (trimmed.includes('"type":"image"') ? 'image' : null) ||
+                (trimmed.includes('"type":"video"') ? 'video' : null) ||
+                (trimmed.includes('"type":"document"') ? 'document' : null) ||
+                (trimmed.includes('"type":"meal"') ? 'meal' : null);
+    
+    const mediaTypes = ['challenge_completed', 'task_completion', 'image', 'video', 'gif', 'document', 'audio', 'session_invite', 'call_invite'];
+    if (type && (mediaTypes.includes(type) || type === 'meal' || type === 'meal_log')) {
+      if (type === 'meal' || type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
+      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+    }
+    
+    displayContent = p.text || (type && type !== 'text' ? '' : item.content);
     reactions = p.reactions || [];
     isEdited = !!p.is_edited;
     if (p.type === 'deleted') { isDeleted = true; deletedBy = p.deleted_by; }
-    // Delegate media types to ChatMediaMessage to avoid showing raw JSON
-    if (p.type === 'meal' || p.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
-    if (p.type === 'challenge_completed' || p.type === 'task_completion' ||
-        p.type === 'image' || p.type === 'video' || p.type === 'gif' || p.type === 'document') {
+  } catch {
+    // Final defensive check: if string contains media markers, don't show as text
+    if (item.content.includes('"type"') && (item.content.includes('"url"') || item.content.includes('"taskName"'))) {
       return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
     }
-  } catch {}
+  }
 
   if (isDeleted) {
     return (

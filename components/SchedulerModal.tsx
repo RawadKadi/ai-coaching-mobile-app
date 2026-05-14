@@ -678,7 +678,8 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                            
+                            {/* Coach Agenda Section */}
+                            <View className="mb-12">
                                 <View className="flex-row items-center justify-between mb-4">
                                     <View className="flex-row items-center gap-3">
                                         <Text className="text-white text-lg font-black tracking-tight">Your Agenda</Text>

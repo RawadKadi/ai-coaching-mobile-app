@@ -1,15 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, StatusBar } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, StatusBar, Dimensions } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search } from 'lucide-react-native';
+import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search, ChevronsLeftRight } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
 import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CALENDAR_BOX_MARGIN = 24;
+const CALENDAR_BOX_PADDING = 24;
+const PAGE_WIDTH = SCREEN_WIDTH - (CALENDAR_BOX_MARGIN * 2) - (CALENDAR_BOX_PADDING * 2);
 
 export default function CalendarScreen() {
   const { profile, coach } = useAuth();
@@ -19,10 +24,14 @@ export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewingMonth, setViewingMonth] = useState(new Date());
   const [showManualScheduler, setShowManualScheduler] = useState(false);
   const [showAIScheduler, setShowAIScheduler] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [initialClientData, setInitialClientData] = useState<any>(null);
+  
+  const PAGE_INDICES = Array.from({ length: 101 }, (_, i) => i - 50); // -50 to 50 pages (approx 2 years)
+  const INITIAL_PAGE_INDEX = 50;
  
   useEffect(() => {
     const fetchClientData = async () => {
@@ -52,13 +61,28 @@ export default function CalendarScreen() {
     });
   };
 
-  const days = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = (day === 0 ? 6 : day - 1);
-    d.setDate(d.getDate() - diff + i);
-    return d;
-  });
+  const getDaysForPage = (pageIndex: number) => {
+    return Array.from({ length: 14 }, (_, i) => {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = (day === 0 ? 6 : day - 1);
+      d.setDate(d.getDate() - diff + (pageIndex * 14) + i);
+      return d;
+    });
+  };
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      const pageIndex = viewableItems[0].item;
+      const pageDays = getDaysForPage(pageIndex);
+      // Update the month based on the first day of the visible 2-week block
+      setViewingMonth(pageDays[0]);
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50
+  }).current;
 
   if (loading && !refreshing) return <View className="flex-1 bg-slate-950 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View>;
 
@@ -69,46 +93,88 @@ export default function CalendarScreen() {
           {/* Header */}
           <View className="px-6 pt-10 pb-4">
               <Text className="text-white text-4xl font-black tracking-tight mb-2">
-                  {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  {viewingMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </Text>
               <Text className="text-slate-400 font-medium">
                   You have {getSessionsForDate(selectedDate).length} sessions scheduled for today.
               </Text>
           </View>
-
+          <View className="px-8 flex-row justify-end mb-2 opacity-40">
+              <View className="flex-row items-center gap-1">
+                  <ChevronsLeftRight size={14} color="#64748B" />
+                  <Text className="text-slate-500 text-[10px] font-black uppercase">Swipe</Text>
+              </View>
+          </View>
           {/* Calendar Box */}
           <View className="bg-slate-900/30 rounded-[48px] p-6 mx-6 my-4 border border-white/5">
               <View className="flex-row justify-between mb-6 px-2">
-                  {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, i) => (
-                      <View key={i} className="flex-1 items-center">
-                          <Text className="text-slate-500 text-[9px] font-black">{day}</Text>
-                      </View>
-                  ))}
+                  <View className="flex-row flex-1 justify-between">
+                    {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, i) => (
+                        <View key={i} className="flex-1 items-center">
+                            <Text className="text-slate-500 text-[9px] font-black">{day}</Text>
+                        </View>
+                    ))}
+                  </View>
+                  
               </View>
               
-              <View className="flex-row flex-wrap justify-between">
-                  {days.map((item, i) => {
-                      const isS = item.toDateString() === selectedDate.toDateString();
-                      const has = getSessionsForDate(item).length > 0;
-                      return (
-                          <Pressable 
-                              key={item.toISOString()}
-                              onPress={() => setSelectedDate(item)}
-                              style={{ width: '14.28%' }}
-                              className="items-center justify-center mb-3"
-                          >
-                              <View className={`w-10 h-10 rounded-full items-center justify-center ${isS ? 'bg-blue-600 shadow-xl shadow-blue-500/50' : ''}`}>
-                                  <Text className={`text-base font-black ${isS ? 'text-white' : item.getMonth() !== new Date().getMonth() ? 'text-slate-800' : 'text-slate-400'}`}>
-                                      {item.getDate()}
-                                  </Text>
-                                  {has && (
-                                      <View className={`absolute -bottom-1 w-1 h-1 rounded-full ${isS ? 'bg-white' : 'bg-blue-600'}`} />
-                                  )}
-                              </View>
-                          </Pressable>
-                      );
+              <FlatList
+                  horizontal
+                  pagingEnabled
+                  snapToInterval={PAGE_WIDTH}
+                  snapToAlignment="start"
+                  decelerationRate="fast"
+                  showsHorizontalScrollIndicator={false}
+                  data={PAGE_INDICES}
+                  keyExtractor={(item) => item.toString()}
+                  initialScrollIndex={INITIAL_PAGE_INDEX}
+                  getItemLayout={(_, index) => ({
+                      length: PAGE_WIDTH,
+                      offset: PAGE_WIDTH * index,
+                      index,
                   })}
-              </View>
+                  onViewableItemsChanged={onViewableItemsChanged}
+                  viewabilityConfig={viewabilityConfig}
+                  renderItem={({ item: pageIndex }) => {
+                      const pageDays = getDaysForPage(pageIndex);
+                      const week1 = pageDays.slice(0, 7);
+                      const week2 = pageDays.slice(7, 14);
+
+                      const renderDay = (item: Date) => {
+                          const isS = item.toDateString() === selectedDate.toDateString();
+                          const isToday = item.toDateString() === new Date().toDateString();
+                          const has = getSessionsForDate(item).length > 0;
+                          return (
+                              <View key={item.toISOString()} className="flex-1 items-center justify-center">
+                                  <Pressable 
+                                      onPress={() => setSelectedDate(item)}
+                                      className="items-center justify-center"
+                                  >
+                                      <View className={`w-9 h-9 rounded-full items-center justify-center ${isS ? 'bg-blue-600 shadow-xl shadow-blue-500/50' : ''}`}>
+                                          <Text className={`text-base font-black ${isS ? 'text-white' : item.getMonth() !== viewingMonth.getMonth() ? 'text-slate-800' : isToday ? 'text-blue-500' : 'text-slate-400'}`}>
+                                              {item.getDate()}
+                                          </Text>
+                                          {has && (
+                                              <View className={`absolute -bottom-1 w-1 h-1 rounded-full ${isS ? 'bg-white' : 'bg-blue-600'}`} />
+                                          )}
+                                      </View>
+                                  </Pressable>
+                              </View>
+                          );
+                      };
+
+                      return (
+                          <View style={{ width: PAGE_WIDTH }}>
+                              <View className="flex-row mb-4">
+                                  {week1.map(renderDay)}
+                              </View>
+                              <View className="flex-row">
+                                  {week2.map(renderDay)}
+                              </View>
+                          </View>
+                      );
+                  }}
+              />
           </View>
 
           <ScrollView 

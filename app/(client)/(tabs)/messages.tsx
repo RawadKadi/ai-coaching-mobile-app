@@ -74,13 +74,15 @@ type Message = {
 
 // Helper to detect if a message content is a media-type or system card
 function isMediaMessage(content: string): boolean {
-  if (!content) return false;
-  try {
-    const p = JSON.parse(content);
-    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log', 'session_invite', 'call_invite'].includes(p.type);
-  } catch {
-    return false;
-  }
+  if (!content || typeof content !== 'string') return false;
+  const s = content.trim();
+  // If it starts with { and contains "type" and "url" (or just "type" for meal logs), it's media.
+  const hasType = s.includes('"type"');
+  const hasUrl = s.includes('"url"');
+  const hasTask = s.includes('"taskName"');
+  const isMeal = s.includes('"type":"meal"');
+  
+  return s.startsWith('{') && (hasType && (hasUrl || hasTask || isMeal));
 }    
 
 export default function ClientMessagesScreen() {
@@ -703,16 +705,39 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
   let isEdited = false;
 
   try {
-    const p = JSON.parse(item.content);
-    displayContent = p.text || item.content;
+    const trimmed = item.content.trim();
+    if (!trimmed.startsWith('{')) throw new Error('Not JSON');
+    
+    let p = JSON.parse(trimmed);
+    // Handle double stringification
+    if (typeof p === 'string' && p.startsWith('{')) {
+      p = JSON.parse(p);
+    }
+    
+    // Aggressive type extraction for malformed/nested JSON
+    const type = p.type || 
+                (trimmed.includes('"type":"audio"') ? 'audio' : null) || 
+                (trimmed.includes('"type":"image"') ? 'image' : null) ||
+                (trimmed.includes('"type":"video"') ? 'video' : null) ||
+                (trimmed.includes('"type":"document"') ? 'document' : null) ||
+                (trimmed.includes('"type":"meal"') ? 'meal' : null);
+    
+    const mediaTypes = ['challenge_completed', 'task_completion', 'image', 'video', 'gif', 'document', 'audio', 'session_invite', 'call_invite'];
+    if (type && (mediaTypes.includes(type) || type === 'meal' || type === 'meal_log')) {
+      if (type === 'meal' || type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
+      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+    }
+    
+    displayContent = p.text || (type && type !== 'text' ? '' : item.content);
     reactions = p.reactions || [];
     isEdited = !!p.is_edited;
-    if (p.type === 'deleted') {
-      isDeleted = true;
-      deletedBy = p.deleted_by;
+    if (p.type === 'deleted') { isDeleted = true; deletedBy = p.deleted_by; }
+  } catch {
+    // Final defensive check: if string contains media markers, don't show as text
+    if (item.content.includes('"type"') && (item.content.includes('"url"') || item.content.includes('"taskName"'))) {
+      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
     }
-    if (p.type === 'meal' || p.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
-  } catch {}
+  }
 
   if (isDeleted) {
     const isDeletedByMe = deletedBy === user?.id;

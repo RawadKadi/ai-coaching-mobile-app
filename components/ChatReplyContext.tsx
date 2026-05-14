@@ -45,6 +45,11 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
       snippet = '🏆 Protocol Achieved: ' + (content.taskName || '');
     } else if (content.type === 'meal' || content.type === 'meal_log') {
       snippet = '🍽️ Meal Log';
+    } else if (content.type === 'audio') {
+      const duration = content.duration || 0;
+      const mins = Math.floor(duration / 60);
+      const secs = duration % 60;
+      snippet = `🎙️ Voice message (${mins}:${secs.toString().padStart(2, '0')})`;
     } else {
       snippet = content.text || message.content;
     }

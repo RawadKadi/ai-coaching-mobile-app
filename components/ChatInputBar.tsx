@@ -16,6 +16,7 @@ import { useTheme } from '@/contexts/BrandContext';
 import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check, Mic } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import DocumentPreviewModal from './DocumentPreviewModal';
+import { VoiceInput } from './ui/voice-input';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PANEL_HEIGHT = 310;
@@ -255,7 +256,8 @@ export function ChatInputBar({
       return;
     }
 
-    const msg = (captionOverride !== undefined ? captionOverride : text).trim();
+    const actualCaption = typeof captionOverride === 'string' ? captionOverride : undefined;
+    const msg = (actualCaption !== undefined ? actualCaption : (text || '')).trim();
     if ((!msg && !selectedMedia) || sending) return;
 
     // Strategic hold: If thumbnail is still generating, wait for it
@@ -272,6 +274,8 @@ export function ChatInputBar({
     const mediaToSend = selectedMedia;
     setSelectedMedia(null);
 
+    const msgToSend = msg;
+
     if (mediaToSend) {
       // Notify parent immediately with local info
       await onSendMedia(JSON.stringify({
@@ -280,22 +284,51 @@ export function ChatInputBar({
         thumbnailUrl: mediaToSend.thumbnailUri, // Local thumbnail if available
         fileName: mediaToSend.fileName,
         mimeType: mediaToSend.mimeType,
+        text: msgToSend || undefined, // Include caption if it exists
         isOptimistic: true // Flag to indicate this is not yet on server
       }), replyingTo?.id);
+      
+      // If we sent media with a caption, we don't send a separate text message
+      if (replyingTo) {
+          onCancelReply?.();
+      }
+      return;
     }
     
-    if (replyingTo && !mediaToSend) {
+    if (replyingTo) {
         onCancelReply?.();
     }
 
-    if (msg) {
+    if (msgToSend) {
       if (isTypingRef.current) {
         isTypingRef.current = false;
         onTyping?.(false);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       }
-      await onSendText(msg, replyingTo?.id);
+      await onSendText(msgToSend, replyingTo?.id);
     }
+  };
+
+  const handleVoiceStop = async (uri: string, duration: number) => {
+    // Notify parent immediately with local info
+    await onSendMedia(JSON.stringify({
+      type: 'audio',
+      url: uri, // Use local URI optimistically
+      duration: duration,
+      isOptimistic: true // Flag to indicate this is not yet on server
+    }), replyingTo?.id);
+    
+    if (replyingTo) {
+      onCancelReply?.();
+    }
+  };
+
+  const handleVoiceStart = () => {
+    // Optional logic for starting recording
+  };
+
+  const handleVoiceCancel = () => {
+    // Optional logic for cancelling recording
   };
 
   // ─── Media helpers ─────────────────────────────────────────────────────────
@@ -521,6 +554,12 @@ export function ChatInputBar({
                   if (content.type === 'video') return '🎥 Video';
                   if (content.type === 'gif') return '🎞 GIF';
                   if (content.type === 'document') return '📄 ' + (content.fileName || 'Document');
+                  if (content.type === 'audio') {
+                    const duration = content.duration || 0;
+                    const mins = Math.floor(duration / 60);
+                    const secs = duration % 60;
+                    return `🎙️ Voice message (${mins}:${secs.toString().padStart(2, '0')})`;
+                  }
                   return content.text || replyingTo.content;
                 } catch (e) {}
                 return replyingTo.content;
@@ -694,12 +733,13 @@ export function ChatInputBar({
             >
               <Camera size={24} color="#64748B" strokeWidth={2} />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.iconBtn}
-              activeOpacity={0.7}
-            >
-              <Mic size={24} color="#64748B" strokeWidth={2} />
-            </TouchableOpacity>
+            <VoiceInput 
+              onStart={handleVoiceStart} 
+              onStop={handleVoiceStop} 
+              onCancel={handleVoiceCancel}
+              theme={theme}
+              disabled={isDisabled}
+            />
           </View>
         ) : (
           <TouchableOpacity
