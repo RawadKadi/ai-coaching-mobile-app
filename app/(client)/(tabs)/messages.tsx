@@ -542,6 +542,8 @@ export default function ClientMessagesScreen() {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
                         setActiveMessageForMenu(item); 
                     }}
+                    senderAvatarUrl={isMe ? profile?.avatar_url : coachProfile?.avatar_url}
+                    senderName={isMe ? profile?.full_name : coachProfile?.full_name}
                   />
                   {(() => {
                     try {
@@ -572,6 +574,9 @@ export default function ClientMessagesScreen() {
                   theme={theme}
                   user={user}
                   coachName={coachProfile?.full_name}
+                  coachAvatarUrl={coachProfile?.avatar_url}
+                  clientName={profile?.full_name}
+                  clientAvatarUrl={profile?.avatar_url}
                   onLongPress={() => { 
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
                       setActiveMessageForMenu(item); 
@@ -679,6 +684,8 @@ export default function ClientMessagesScreen() {
                   isOwn={isMe}
                   createdAt={liveMsg.created_at}
                   isRead={liveMsg.read}
+                  senderAvatarUrl={isMe ? profile?.avatar_url : coachProfile?.avatar_url}
+                  senderName={isMe ? profile?.full_name : coachProfile?.full_name}
                 />
               );
             }
@@ -687,6 +694,10 @@ export default function ClientMessagesScreen() {
                 item={liveMsg} 
                 isMe={isMe} 
                 theme={theme} 
+                coachName={coachProfile?.full_name}
+                coachAvatarUrl={coachProfile?.avatar_url}
+                clientName={profile?.full_name}
+                clientAvatarUrl={profile?.avatar_url}
                 repliedMsg={liveMsg.reply_to_id ? messages.find(m => m.id === liveMsg.reply_to_id) : null}
               />
             );
@@ -695,7 +706,10 @@ export default function ClientMessagesScreen() {
     </View>
   );
 }
-const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, coachName, onLongPress }: any) => {
+const MessageBubble = ({ 
+  item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, 
+  coachName, coachAvatarUrl, clientName, clientAvatarUrl, onLongPress 
+}: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [isPressed, setIsPressed] = React.useState(false);
   let displayContent = item.content;
@@ -725,7 +739,16 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
     const mediaTypes = ['challenge_completed', 'task_completion', 'image', 'video', 'gif', 'document', 'audio', 'session_invite', 'call_invite'];
     if (type && (mediaTypes.includes(type) || type === 'meal' || type === 'meal_log')) {
       if (type === 'meal' || type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
-      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          senderAvatarUrl={isMe ? clientAvatarUrl : coachAvatarUrl}
+          senderName={isMe ? clientName : coachName}
+        />
+      );
     }
     
     displayContent = p.text || (type && type !== 'text' ? '' : item.content);
@@ -735,7 +758,16 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
   } catch {
     // Final defensive check: if string contains media markers, don't show as text
     if (item.content.includes('"type"') && (item.content.includes('"url"') || item.content.includes('"taskName"'))) {
-      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          senderAvatarUrl={isMe ? clientAvatarUrl : coachAvatarUrl}
+          senderName={isMe ? clientName : coachName}
+        />
+      );
     }
   }
 

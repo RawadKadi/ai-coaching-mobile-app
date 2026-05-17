@@ -3,9 +3,10 @@ import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platfor
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search, ChevronsLeftRight } from 'lucide-react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search, ChevronsLeftRight, CalendarDays } from 'lucide-react-native';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
+import { DatePickerOverlay } from '@/components/DatePickerOverlay';
 import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
@@ -19,6 +20,7 @@ const PAGE_WIDTH = SCREEN_WIDTH - (CALENDAR_BOX_MARGIN * 2) - (CALENDAR_BOX_PADD
 export default function CalendarScreen() {
   const { profile, coach } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,11 +29,42 @@ export default function CalendarScreen() {
   const [viewingMonth, setViewingMonth] = useState(new Date());
   const [showManualScheduler, setShowManualScheduler] = useState(false);
   const [showAIScheduler, setShowAIScheduler] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [initialClientData, setInitialClientData] = useState<any>(null);
   
   const PAGE_INDICES = Array.from({ length: 101 }, (_, i) => i - 50); // -50 to 50 pages (approx 2 years)
   const INITIAL_PAGE_INDEX = 50;
+  const flatListRef = useRef<FlatList>(null);
+
+  const getPageIndexForDate = (targetDate: Date) => {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = (day === 0 ? 6 : day - 1);
+    const startOfThisWeek = new Date(today);
+    startOfThisWeek.setDate(today.getDate() - diff);
+    startOfThisWeek.setHours(0, 0, 0, 0);
+
+    const target = new Date(targetDate);
+    const targetDay = target.getDay();
+    const targetDiff = (targetDay === 0 ? 6 : targetDay - 1);
+    const startOfTargetWeek = new Date(target);
+    startOfTargetWeek.setDate(target.getDate() - targetDiff);
+    startOfTargetWeek.setHours(0, 0, 0, 0);
+
+    const diffMs = startOfTargetWeek.getTime() - startOfThisWeek.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    return Math.floor(diffDays / 14);
+  };
+
+  const scrollToDate = (date: Date) => {
+    const pageIndex = getPageIndexForDate(date);
+    const arrayIndex = Math.max(0, Math.min(100, pageIndex + 50));
+    flatListRef.current?.scrollToIndex({
+      index: arrayIndex,
+      animated: true,
+    });
+  };
  
   useEffect(() => {
     const fetchClientData = async () => {
@@ -43,7 +76,18 @@ export default function CalendarScreen() {
     fetchClientData();
   }, [selectedClient, showManualScheduler, showAIScheduler]);
 
-  useFocusEffect(useCallback(() => { if (profile) loadSessions(); }, [profile]));
+  useFocusEffect(useCallback(() => {
+    if (profile) loadSessions();
+    if (params?.resetToToday === 'true') {
+      const today = new Date();
+      setSelectedDate(today);
+      setViewingMonth(today);
+      setTimeout(() => {
+        scrollToDate(today);
+      }, 100);
+      router.setParams({ resetToToday: '' });
+    }
+  }, [profile, params?.resetToToday]));
 
   const loadSessions = async () => {
     try {
@@ -92,9 +136,18 @@ export default function CalendarScreen() {
       <View style={{ flex: 1, paddingTop: insets.top }}>
           {/* Header */}
           <View className="px-6 pt-10 pb-4">
-              <Text className="text-white text-4xl font-black tracking-tight mb-2">
-                  {viewingMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </Text>
+              <View className="flex-row items-center justify-between">
+                <Text className="text-white text-4xl font-black tracking-tight mb-2">
+                    {viewingMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </Text>
+                {/* Date picker trigger */}
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  className="w-10 h-10 bg-slate-800/60 rounded-2xl items-center justify-center border border-white/8 mb-2"
+                >
+                  <CalendarDays size={18} color="#60A5FA" />
+                </Pressable>
+              </View>
               <Text className="text-slate-400 font-medium">
                   You have {getSessionsForDate(selectedDate).length} sessions scheduled for today.
               </Text>
@@ -119,6 +172,7 @@ export default function CalendarScreen() {
               </View>
               
               <FlatList
+                  ref={flatListRef}
                   horizontal
                   pagingEnabled
                   snapToInterval={PAGE_WIDTH}
@@ -269,6 +323,21 @@ export default function CalendarScreen() {
                   onConfirm={async () => loadSessions()} 
                   clientContext={selectedClient} targetClientId={selectedClient.id} existingSessions={sessions}
               />
+          )}
+          {/* Date Picker Overlay */}
+          {showDatePicker && (
+            <DatePickerOverlay
+              visible={showDatePicker}
+              selectedDate={selectedDate}
+              onSelect={(date) => {
+                setSelectedDate(date);
+                setViewingMonth(date);
+                setTimeout(() => {
+                  scrollToDate(date);
+                }, 50);
+              }}
+              onClose={() => setShowDatePicker(false)}
+            />
           )}
       </View>
     </View>

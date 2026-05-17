@@ -27,7 +27,7 @@ interface SchedulerModalProps {
     reschedulingMessageId?: string | null;
 }
 
-export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId }: SchedulerModalProps) {
+export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId, reschedulingMessageId }: SchedulerModalProps) {
     const { coach, profile } = useAuth();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -150,7 +150,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 setIsAgendaThinking(false);
                 lastProcessedInput.current = '';
             }
-        }, 1200); // Increased debounce to 1.2s to protect API
+        }, 2000); // 2s debounce to protect API quota
         return () => clearTimeout(timeout);
     }, [input, step]);
 
@@ -246,6 +246,35 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         return null;
     }, [input]);
 
+    const draftConflict = useMemo(() => {
+        if (!draftStartTime) return null;
+        const dEnd = new Date(draftStartTime.getTime() + 60 * 60000); // assume 60m
+        const sessionsToCheck = agendaSessions.length > 0 ? agendaSessions : existingSessions;
+
+        for (const existing of sessionsToCheck) {
+            if (existing.status === 'cancelled') continue;
+            const existingStart = new Date(existing.scheduled_at);
+            const existingEnd = new Date(existingStart.getTime() + (existing.duration_minutes || 60) * 60000);
+
+            // 1. Absolute Daily Singularity check (Same Client, Same Day)
+            if (existing.client_id === targetClientId && draftStartTime.toDateString() === existingStart.toDateString()) {
+                return {
+                    type: 'daily_limit',
+                    message: `Conflict Detected: ${clientContext.name} already has a session on ${draftStartTime.toLocaleDateString('en-US', { weekday: 'long' })} at ${existingStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+                };
+            }
+
+            // 2. Coach overlap check
+            if (draftStartTime < existingEnd && dEnd > existingStart) {
+                return {
+                    type: 'time_conflict',
+                    message: `Conflict: You already have a session at this time with ${existing.client?.profiles?.full_name || 'another client'}.`
+                };
+            }
+        }
+        return null;
+    }, [draftStartTime, agendaSessions, existingSessions, targetClientId, clientContext]);
+
     const handleAnalyze = async () => {
         if (step === 'form') {
             if (formDates.length === 0 || !formTime) {
@@ -301,39 +330,61 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         }
     };
 
+    // Builds a full UTC ISO string from a local date string + a human time string like "1:00 PM" or "13:00"
+    const buildISODateTime = (isoDate: string, timeStr: string): string | null => {
+        const timeMatch = timeStr.toLowerCase().match(/(\d+)(?::(\d+))?\s*(am|pm)?/);
+        if (!timeMatch) return null;
+
+        let hours = parseInt(timeMatch[1], 10);
+        const minutes = parseInt(timeMatch[2] || '0', 10);
+        const ampm = timeMatch[3];
+
+        if (ampm === 'pm' && hours < 12) hours += 12;
+        if (ampm === 'am' && hours === 12) hours = 0;
+        if (!ampm && hours < 7) hours += 12; // Treat bare "1" as 1pm if under 7
+
+        // Build as local time to avoid timezone shift
+        const [year, month, day] = isoDate.split('-').map(Number);
+        const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
+        return date.toISOString();
+    };
+
     const finalizeWithAI = async (sessionIntents: { date: string, time: string | null }[], recurrence: 'weekly' | 'once', aiDetected = false) => {
         setLoading(true);
         try {
             const allSessions: ProposedSession[] = [];
-            for (const intent of sessionIntents) {
-                const isoDate = resolveDateKeywordToISO(intent.date, intent.time);
-                const result = await parseScheduleRequest({
-                    coachInput: `Schedule on ${isoDate} at ${intent.time} ${recurrence === 'weekly' ? 'every week' : 'one time'}`,
-                    currentDate: new Date().toLocaleString(),
-                    clientContext,
-                    currentProposedSessions: proposedSessions,
-                    existingSessions: existingSessions,
-                });
 
-                if (result.sessions && result.sessions.length > 0) {
-                    allSessions.push(...result.sessions.map(s => ({
-                        ...s, 
-                        recurrence, 
-                        aiRecurrenceDetected: aiDetected,
-                        day_of_week: s.day_of_week || new Date(isoDate).toLocaleDateString('en-US', { weekday: 'long' }) 
-                    })));
-                } else if (result.clarification) {
-                    Alert.alert('Details Needed', result.clarification.message);
-                    setLoading(false);
-                    return;
+            for (const intent of sessionIntents) {
+                if (!intent.date || !intent.time) continue;
+
+                const isoDate = resolveDateKeywordToISO(intent.date, intent.time);
+                const scheduledAt = buildISODateTime(isoDate, intent.time);
+
+                if (!scheduledAt) {
+                    console.warn('[finalizeWithAI] Could not parse time for intent:', intent);
+                    continue;
                 }
+
+                allSessions.push({
+                    scheduled_at: scheduledAt,
+                    duration_minutes: 60,
+                    session_type: 'training',
+                    notes: `AI scheduled session for ${clientContext?.name || 'Athlete'}`,
+                    recurrence,
+                    day_of_week: new Date(isoDate).toLocaleDateString('en-US', { weekday: 'long' }),
+                    aiRecurrenceDetected: aiDetected,
+                });
             }
+
             if (allSessions.length > 0) {
                 setProposedSessions(allSessions as any);
                 setStep('review');
+            } else {
+                Alert.alert('No Sessions', 'Could not build sessions from the given info. Please try again.');
             }
         } catch (error) {
-            Alert.alert('Error', 'AI service busy. Please try again.');
+            console.error('[finalizeWithAI] Error:', error);
+            Alert.alert('Error', 'Failed to build sessions. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -407,6 +458,37 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 const existingStart = new Date(existing.scheduled_at);
                 const existingEnd = new Date(existingStart.getTime() + (existing.duration_minutes || 60) * 60000);
 
+                // --- 1. Daily Singularity Conflict (Same Client, Same Day) ---
+                const sameClient = existing.client_id === targetClientId;
+                const sameDay = currentOccurrenceStart.toDateString() === existingStart.toDateString();
+                
+                if (sameClient && sameDay) {
+                    return {
+                        type: 'daily_limit',
+                        message: `Conflict Detected: ${clientContext.name} already has a session on ${currentOccurrenceStart.toLocaleDateString('en-US', { weekday: 'long' })} at ${existingStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
+                        existingSession: {
+                            id: existing.id,
+                            client_id: existing.client_id,
+                            client_name: clientContext.name,
+                            scheduled_at: existing.scheduled_at,
+                            duration_minutes: existing.duration_minutes,
+                            session_type: existing.session_type,
+                            recurrence: existing.recurrence_rule ? 'weekly' : 'once'
+                        },
+                        proposedSession: {
+                            client_id: targetClientId,
+                            client_name: clientContext.name,
+                            scheduled_at: currentOccurrenceStart.toISOString(),
+                            duration_minutes: duration,
+                            session_type: proposed.session_type,
+                            recurrence: proposed.recurrence as any,
+                            day_of_week: proposed.day_of_week
+                        },
+                        recommendations: []
+                    };
+                }
+
+                // --- 2. Time Overlap Conflict (General, Coach Time Overlap) ---
                 if (currentOccurrenceStart < existingEnd && currentOccurrenceEnd > existingStart) {
                     return {
                         type: 'time_conflict',
@@ -420,7 +502,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             scheduled_at: existing.scheduled_at,
                             duration_minutes: existing.duration_minutes,
                             session_type: existing.session_type,
-                            recurrence: 'once'
+                            recurrence: existing.recurrence_rule ? 'weekly' : 'once'
                         },
                         proposedSession: {
                             client_id: targetClientId,
@@ -451,11 +533,51 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
         setConflictInfo(null);
     };
 
-    const handleFinalConfirm = async () => {
+    const handleFinalConfirm = async (bypassConfirmation = false) => {
         if (!coach?.id) return;
+
+        // Check if there is any daily singularity conflict
+        const dailySingularityConflict = proposedSessions
+            .map(s => checkConflict(s))
+            .find(c => c && c.type === 'daily_limit');
+
+        if (dailySingularityConflict && !bypassConfirmation) {
+            const isExistingRecurrent = dailySingularityConflict.existingSession.recurrence === 'weekly';
+            const sessionTypeLabel = isExistingRecurrent ? 'Recurrent' : 'One-Time';
+
+            Alert.alert(
+                'Replace Session?',
+                `This will replace the existing ${sessionTypeLabel} session. Proceed?`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                        text: 'Proceed', 
+                        onPress: () => handleFinalConfirm(true) // Confirmed, bypass check
+                    }
+                ]
+            );
+            return;
+        }
+
         setLoading(true);
         try {
             const sessionsToInsert = [];
+            const idsToDelete = [];
+            const idsToCancel = [];
+
+            // If we confirmed the replacement, execute the Replacement Protocol
+            if (dailySingularityConflict) {
+                const existing = dailySingularityConflict.existingSession;
+                const isExistingRecurrent = existing.recurrence === 'weekly';
+
+                if (isExistingRecurrent) {
+                    // Recurrent: Exception Overlay -> cancel this specific date's session
+                    idsToCancel.push(existing.id);
+                } else {
+                    // One-Time: DELETE the old session
+                    idsToDelete.push(existing.id);
+                }
+            }
             
             for (const proposed of proposedSessions) {
                 const recurrenceRule = proposed.recurrence === 'weekly' ? `FREQ=WEEKLY;BYDAY=${proposed.day_of_week?.substring(0, 2).toUpperCase()}` : null;
@@ -480,6 +602,24 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         recurrence_rule: i === 0 ? recurrenceRule : null // Store RRULE on the first instance
                     });
                 }
+            }
+
+            // Perform DELETEs for One-Time replacements
+            if (idsToDelete.length > 0) {
+                const { error: deleteError } = await supabase
+                    .from('sessions')
+                    .delete()
+                    .in('id', idsToDelete);
+                if (deleteError) throw deleteError;
+            }
+
+            // Perform UPDATE status to 'cancelled' for Recurrent exception overlays
+            if (idsToCancel.length > 0) {
+                const { error: cancelError } = await supabase
+                    .from('sessions')
+                    .update({ status: 'cancelled', notes: 'Exception Overlay Cancelled' })
+                    .in('id', idsToCancel);
+                if (cancelError) throw cancelError;
             }
 
             const { error } = await supabase.from('sessions').insert(sessionsToInsert);
@@ -547,14 +687,20 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                     </View>
                     <TouchableOpacity 
                         onPress={() => {
-                            Alert.alert(
-                                "Discard Draft?",
-                                "You will lose any progress made in this session. Are you sure you want to exit?",
-                                [
-                                    { text: "Cancel", style: "cancel" },
-                                    { text: "Exit", style: "destructive", onPress: () => { resetForm(); onClose(); } }
-                                ]
-                            );
+                            const hasAnyProgress = input.trim().length > 0 || proposedSessions.length > 0 || formDates.length > 0 || formTime.length > 0;
+                            if (hasAnyProgress) {
+                                Alert.alert(
+                                    "Discard Draft?",
+                                    "You will lose any progress made in this session. Are you sure you want to exit?",
+                                    [
+                                        { text: "Cancel", style: "cancel" },
+                                        { text: "Exit", style: "destructive", onPress: () => { resetForm(); onClose(); } }
+                                    ]
+                                );
+                            } else {
+                                resetForm();
+                                onClose();
+                            }
                         }} 
                         style={{ padding: 8, backgroundColor: '#0F172A', borderRadius: 9999 }}
                     >
@@ -609,8 +755,8 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                           transition={{ type: 'timing', duration: 300 }}
                           className="flex-1"
                         >
-                        <ScrollView className="flex-1 px-6 pt-8" showsVerticalScrollIndicator={false}>
-                            <View className="p-8 rounded-[40px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden mb-8">
+                        <ScrollView className="flex-1 px-6 pt-8" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
+                            <View className="p-8 rounded-[40px] bg-blue-600/10 border border-blue-500/20 items-center mb-8">
                                 <View className="absolute top-0 right-0 p-4 opacity-10">
                                     <Sparkles size={120} color="#3B82F6" />
                                 </View>
@@ -642,6 +788,16 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                     onChangeText={setInput}
                                     textAlignVertical="top"
                                 />
+                                {draftConflict && (
+                                    <MotiView
+                                        from={{ opacity: 0, translateY: 10 }}
+                                        animate={{ opacity: 1, translateY: 0 }}
+                                        className="mt-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex-row items-center gap-3"
+                                    >
+                                        <AlertTriangle size={18} color="#EF4444" />
+                                        <Text className="text-red-400 text-xs font-bold flex-1 leading-4">{draftConflict.message}</Text>
+                                    </MotiView>
+                                )}
                                 <View className="flex-row justify-between items-center mt-8 pt-6 border-t border-white/5">
                                     <TouchableOpacity style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B' }}>
                                         <Mic size={24} color="#3B82F6" />
@@ -802,7 +958,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             transition={{ type: 'timing', duration: 300 }}
                             className="flex-1 px-6 pt-8"
                         >
-                            <ScrollView showsVerticalScrollIndicator={false}>
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
                                 <View className="mb-8 flex-row items-center gap-4">
                                     <View className="w-12 h-12 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20">
                                         <Info size={24} color="#F59E0B" />
@@ -901,6 +1057,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             exit={{ opacity: 0, translateX: 20 }}
                             transition={{ type: 'timing', duration: 300 }}
                             className="flex-1 px-6 pt-8 pb-32"
+                            style={{ overflow: 'visible' }}
                         >
                             <View className="mb-8 flex-row items-center gap-4">
                                 <View className="w-12 h-12 bg-green-500/10 rounded-2xl items-center justify-center border border-green-500/20">
@@ -914,13 +1071,33 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 </View>
                             </View>
 
-                            <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+                            <ScrollView className="flex-1" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
+                                {proposedSessions.some(s => checkConflict(s)?.type === 'daily_limit') && (
+                                    <View className="mb-6 p-5 rounded-[28px] bg-blue-600/10 border border-blue-500/20 flex-row gap-4 items-start">
+                                        <View className="w-10 h-10 rounded-xl bg-blue-600/20 items-center justify-center border border-blue-500/30">
+                                            <Sparkles size={20} color="#3B82F6" fill="#3B82F6" />
+                                        </View>
+                                        <View className="flex-1">
+                                            <Text className="text-white text-sm font-black tracking-tight">AI Assistant Tip</Text>
+                                            <Text className="text-slate-300 text-xs font-medium mt-1 leading-5">
+                                                {(() => {
+                                                    const conf = proposedSessions.map(s => checkConflict(s)).find(c => c && c.type === 'daily_limit');
+                                                    if (!conf) return '';
+                                                    const proposedTime = new Date(conf.proposedSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                                    const proposedDay = new Date(conf.proposedSession.scheduled_at).toLocaleDateString('en-US', { weekday: 'long' });
+                                                    const existingTime = new Date(conf.existingSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                                    return `I've drafted that for ${proposedDay} at ${proposedTime}, but I noticed ${clientContext.name.split(' ')[0]} already has a ${existingTime} sync. I'll swap them once you hit send.`;
+                                                })()}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
                                 {proposedSessions.map((session, index) => {
                                     const conflict = checkConflict(session);
                                     const isNeuralGlow = session.aiRecurrenceDetected;
 
                                     return (
-                                        <View key={index} className="relative mb-6">
+                                        <View key={index} className="relative mb-6" style={{ overflow: 'visible' }}>
                                             {isNeuralGlow && (
                                                 <MotiView
                                                     from={{ opacity: 0.1, scale: 0.98 }}

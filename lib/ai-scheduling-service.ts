@@ -224,22 +224,39 @@ RESPONSE FORMAT (JSON ONLY):
 export const extractSchedulingIntent = async (input: string): Promise<IntentExtractionResponse> => {
     try {
         const prompt = `
-Extract scheduling intent from this coach input. 
-Handle typos (e.g., "Wednsday" -> "wednesday"), abbreviations (e.g., "wed" -> "wednesday").
-IMPORTANT: Resolve all dates to their standard lowercase names (monday, tuesday, wednesday, thursday, friday, saturday, sunday, today, tomorrow).
+You are a scheduling intent extractor for a coaching app.
+Your job: parse the coach's input and return EVERY individual session that should be scheduled, with its exact day and time.
+
+Rules:
+- Handle typos ("wednsday" -> "wednesday"), abbreviations ("wed" -> "wednesday", "mon" -> "monday").
+- Resolve all day names to lowercase: monday, tuesday, wednesday, thursday, friday, saturday, sunday, today, tomorrow.
+- "all days" or "all sessions" = monday, tuesday, wednesday, thursday, friday (Mon-Fri by default unless context says otherwise).
+- Override pattern: "all at X only [day] at Y" means every standard day gets time X EXCEPT the specified day which gets time Y.
+- Expand ALL implied days into explicit session entries. One entry per session.
+- If a day is not specified at all, return a single session with date: null.
+- If a time is not specified, return time: null.
+- "every week", "weekly", "each" -> recurrence: "weekly". "once", "today", "this friday", specific date -> recurrence: "once". Default: "once".
+
+Examples:
+Input: "all days at 1pm only wednesday at 5pm"
+Output sessions: monday@1pm, tuesday@1pm, wednesday@5pm, thursday@1pm, friday@1pm
+
+Input: "schedule tuesday and thursday at 10am"
+Output sessions: tuesday@10am, thursday@10am
+
+Input: "schedule at 3pm"
+Output sessions: [{ date: null, time: "3:00 PM" }]
 
 Input: "${input}"
 
-Return ONLY a valid JSON object matching this schema. Do not include markdown formatting or backticks.
+Return ONLY valid JSON, no markdown:
 {
-    "sessions": [
-        {
-            "date": "string or null", // e.g. "friday", "today", or null if not mentioned
-            "time": "string or null" // e.g. "10:30 PM", "14:00", or null if not mentioned
-        }
-    ],
-    "recurrence": "once" | "weekly" | null, // Keywords: "Every", "Weekly", "Monthly", "Each", "Repeatedly" -> "weekly". "This", "Once", "On [Date]", "Today", "Tomorrow" -> "once". DEFAULT to "once" if no keyword found.
-    "missing_info": ["time", "dates", "recurrence"] // List fields that were not specified
+  "sessions": [
+    { "date": "monday", "time": "1:00 PM" },
+    { "date": "wednesday", "time": "5:00 PM" }
+  ],
+  "recurrence": "weekly",
+  "missing_info": []
 }
 `;
 

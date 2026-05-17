@@ -60,6 +60,7 @@ export function ChatInputBar({
 
   const theme = useTheme();
   const [text, setText] = useState('');
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel>(null);
   const [gifQuery, setGifQuery] = useState('');
   const [gifResults, setGifResults] = useState<GifResult[]>([]);
@@ -310,6 +311,7 @@ export function ChatInputBar({
   };
 
   const handleVoiceStop = async (uri: string, duration: number) => {
+    setIsVoiceRecording(false);
     // Notify parent immediately with local info
     await onSendMedia(JSON.stringify({
       type: 'audio',
@@ -324,11 +326,11 @@ export function ChatInputBar({
   };
 
   const handleVoiceStart = () => {
-    // Optional logic for starting recording
+    setIsVoiceRecording(true);
   };
 
   const handleVoiceCancel = () => {
-    // Optional logic for cancelling recording
+    setIsVoiceRecording(false);
   };
 
   // ─── Media helpers ─────────────────────────────────────────────────────────
@@ -642,35 +644,38 @@ export function ChatInputBar({
         Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 0 : 24 } : { paddingBottom: 12 },
       ]}>
 
-        {/* Left: Cancel Edit (X) in edit mode, Plus otherwise */}
-        {editingMessage ? (
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => { setText(''); onCancelEdit?.(); }}
-            activeOpacity={0.7}
-          >
-            <X size={24} color="#F97316" strokeWidth={2.5} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => togglePanel('attach')}
-            activeOpacity={0.7}
-            disabled={isDisabled}
-          >
-            <Plus
-              size={24}
-              color={activePanel === 'attach' ? '#3B82F6' : '#64748B'}
-              strokeWidth={2.5}
-            />
-          </TouchableOpacity>
+        {/* Left: Cancel Edit (X) in edit mode, Plus otherwise — hidden while recording */}
+        {!isVoiceRecording && (
+          editingMessage ? (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => { setText(''); onCancelEdit?.(); }}
+              activeOpacity={0.7}
+            >
+              <X size={24} color="#F97316" strokeWidth={2.5} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => togglePanel('attach')}
+              activeOpacity={0.7}
+              disabled={isDisabled}
+            >
+              <Plus
+                size={24}
+                color={activePanel === 'attach' ? '#3B82F6' : '#64748B'}
+                strokeWidth={2.5}
+              />
+            </TouchableOpacity>
+          )
         )}
 
-        {/* Styled Focus Input */}
-        <View style={[
-          styles.inputWrapper,
-          { backgroundColor: '#0F172A', borderColor: '#1E293B' },
-        ]}>
+        {/* Styled Focus Input — hidden while recording */}
+        {!isVoiceRecording && (
+          <View style={[
+            styles.inputWrapper,
+            { backgroundColor: '#0F172A', borderColor: '#1E293B' },
+          ]}>
           <TextInput
             ref={inputRef}
             style={[
@@ -722,17 +727,20 @@ export function ChatInputBar({
               <Path d="M12 22C15.5 22 18.5 20 20 17H12C10.3 17 9 15.7 9 14V12H4C4 17.5 7.5 22 12 22Z" fill={activePanel === 'emoji' ? '#3B82F6' : '#64748B'} />
             </Svg>
           </TouchableOpacity>
-        </View>
+          </View>
+        )}
 
         {(!text.trim() && !selectedMedia && !editingMessage) ? (
-          <View style={{ flexDirection: 'row', gap: 4 }}>
-            <TouchableOpacity 
-              style={styles.iconBtn} 
-              onPress={openCamera}
-              activeOpacity={0.7}
-            >
-              <Camera size={24} color="#64748B" strokeWidth={2} />
-            </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {!isVoiceRecording && (
+              <TouchableOpacity 
+                style={styles.iconBtn} 
+                onPress={openCamera}
+                activeOpacity={0.7}
+              >
+                <Camera size={24} color="#64748B" strokeWidth={2} />
+              </TouchableOpacity>
+            )}
             <VoiceInput 
               onStart={handleVoiceStart} 
               onStop={handleVoiceStop} 

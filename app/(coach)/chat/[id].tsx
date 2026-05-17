@@ -813,15 +813,17 @@ export default function CoachChatScreen() {
                     isOwn={isMe} 
                     createdAt={item.created_at} 
                     isRead={item.read} 
-                  isUploading={item.isUploading}
-                  progress={item.progress}
-                  onLongPress={() => { 
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
-                      setActiveMessageForMenu(item); 
-                  }}
-                  onCancelSession={handleCancelSession}
-                  onRescheduleSession={handleRescheduleSession}
-                />
+                    isUploading={item.isUploading}
+                    progress={item.progress}
+                    onLongPress={() => { 
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                        setActiveMessageForMenu(item); 
+                    }}
+                    onCancelSession={handleCancelSession}
+                    onRescheduleSession={handleRescheduleSession}
+                    senderAvatarUrl={isMe ? profile?.avatar_url : clientProfile?.profiles?.avatar_url}
+                    senderName={isMe ? profile?.full_name : clientProfile?.profiles?.full_name}
+                  />
                 {/* Reactions on media messages */}
                 {(() => {
                   try {
@@ -851,7 +853,10 @@ export default function CoachChatScreen() {
                 onReplyPress={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
                 theme={theme}
                 user={user}
-                clientName={clientProfile?.full_name}
+                clientName={clientProfile?.profiles?.full_name}
+                clientAvatarUrl={clientProfile?.profiles?.avatar_url}
+                coachName={profile?.full_name}
+                coachAvatarUrl={profile?.avatar_url}
                 onLongPress={() => { 
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
                     setActiveMessageForMenu(item); 
@@ -876,6 +881,8 @@ export default function CoachChatScreen() {
           isRead={liveMsg.read}
           onCancelSession={handleCancelSession}
           onRescheduleSession={handleRescheduleSession}
+          senderAvatarUrl={isMe ? profile?.avatar_url : clientProfile?.profiles?.avatar_url}
+          senderName={isMe ? profile?.full_name : clientProfile?.profiles?.full_name}
         />
       );
     }
@@ -886,6 +893,9 @@ export default function CoachChatScreen() {
         theme={theme} 
         user={user}
         clientName={clientProfile?.profiles?.full_name}
+        clientAvatarUrl={clientProfile?.profiles?.avatar_url}
+        coachName={profile?.full_name}
+        coachAvatarUrl={profile?.avatar_url}
         repliedMsg={msg.reply_to_id ? messages.find((m: any) => m.id === msg.reply_to_id) : null}
       />
     );
@@ -1199,7 +1209,10 @@ const OptionItem = ({ icon, title, sub, onPress }: any) => (
 
 const styles = StyleSheet.create({ header: { backgroundColor: '#020617' } });
 
-const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, clientName, onLongPress }: any) => {
+const MessageBubble = ({ 
+  item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, 
+  clientName, clientAvatarUrl, coachName, coachAvatarUrl, onLongPress 
+}: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [isPressed, setIsPressed] = React.useState(false);
   let displayContent = item.content;
@@ -1229,7 +1242,16 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
     const mediaTypes = ['challenge_completed', 'task_completion', 'image', 'video', 'gif', 'document', 'audio', 'session_invite', 'call_invite'];
     if (type && (mediaTypes.includes(type) || type === 'meal' || type === 'meal_log')) {
       if (type === 'meal' || type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
-      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          senderAvatarUrl={isMe ? coachAvatarUrl : clientAvatarUrl}
+          senderName={isMe ? coachName : clientName}
+        />
+      );
     }
     
     displayContent = p.text || (type && type !== 'text' ? '' : item.content);
@@ -1239,7 +1261,16 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
   } catch {
     // Final defensive check: if string contains media markers, don't show as text
     if (item.content.includes('"type"') && (item.content.includes('"url"') || item.content.includes('"taskName"'))) {
-      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          senderAvatarUrl={isMe ? coachAvatarUrl : clientAvatarUrl}
+          senderName={isMe ? coachName : clientName}
+        />
+      );
     }
   }
 

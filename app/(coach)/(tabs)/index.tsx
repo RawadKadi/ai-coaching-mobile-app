@@ -292,7 +292,7 @@ export default function CoachDashboard() {
                 {/* New Strategic Stats Row */}
                 <View className="flex-row gap-4 mt-4">
                     <TouchableOpacity 
-                      onPress={() => router.push('/(coach)/(tabs)/calendar')}
+                      onPress={() => router.push({ pathname: '/(coach)/(tabs)/calendar', params: { resetToToday: 'true' } })}
                       className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl relative"
                     >
                         <View className="w-12 h-12 bg-orange-600/10 rounded-2xl items-center justify-center mb-6 border border-orange-600/20">

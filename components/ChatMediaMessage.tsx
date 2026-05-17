@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Linking, Modal, SafeAreaView, Animated, Dimensions, Pressable,
@@ -11,6 +11,7 @@ import { Video, ResizeMode, AVPlaybackStatus, VideoFullscreenUpdate, Audio } fro
 import { Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/contexts/BrandContext';
 import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target, Loader2, Clock, Video as LucideVideo } from 'lucide-react-native';
 import { MotiView } from 'moti';
@@ -19,6 +20,37 @@ import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import MealMessageCard from './MealMessageCard';
 import DocumentPreviewModal from './DocumentPreviewModal';
+
+// ── Global playback speed (persisted, shared across all voice note players) ───
+const SPEED_STEPS = [1, 1.5, 2] as const;
+type PlaybackSpeed = typeof SPEED_STEPS[number];
+const SPEED_KEY = 'voice_note_playback_speed';
+let _cachedSpeed: PlaybackSpeed = 1; // in-memory cache so all mounted players share it
+let _speedListeners: Array<(s: PlaybackSpeed) => void> = [];
+
+async function loadGlobalSpeed(): Promise<PlaybackSpeed> {
+  try {
+    const stored = await AsyncStorage.getItem(SPEED_KEY);
+    if (stored) {
+      const parsed = parseFloat(stored);
+      if (SPEED_STEPS.includes(parsed as PlaybackSpeed)) {
+        _cachedSpeed = parsed as PlaybackSpeed;
+      }
+    }
+  } catch {}
+  return _cachedSpeed;
+}
+
+async function saveGlobalSpeed(speed: PlaybackSpeed) {
+  _cachedSpeed = speed;
+  _speedListeners.forEach(cb => cb(speed));
+  try { await AsyncStorage.setItem(SPEED_KEY, String(speed)); } catch {}
+}
+
+function nextSpeed(current: PlaybackSpeed): PlaybackSpeed {
+  const idx = SPEED_STEPS.indexOf(current);
+  return SPEED_STEPS[(idx + 1) % SPEED_STEPS.length];
+}
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const BUBBLE_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 320);
@@ -105,10 +137,12 @@ interface Props {
   replyTo?: any;
   onPressReply?: (id: string) => void;
   isHighlighted?: boolean;
-  onLongPress?: () => void; // Forwarded from parent chat for reaction menu
+  onLongPress?: () => void;
   isPressed?: boolean;
   onCancelSession?: (sessionId: string) => void;
   onRescheduleSession?: (sessionId: string) => void;
+  senderAvatarUrl?: string;   // profile photo of the message sender
+  senderName?: string;        // fallback for initials
 }
 
 // ── Circular download progress ring ──────────────────────────────────────────
@@ -690,7 +724,19 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
 }
 
 // ── Voice Note Player ────────────────────────────────────────────────────────
-function VoiceNotePlayer({ uri, duration, isOwn, theme }: { uri: string, duration?: number, isOwn: boolean, theme: any }) {
+function VoiceNotePlayer({
+  uri, duration, isOwn, theme, senderAvatarUrl, senderName,
+  createdAt, isRead,
+}: {
+  uri: string;
+  duration?: number;
+  isOwn: boolean;
+  theme: any;
+  senderAvatarUrl?: string;
+  senderName?: string;
+  createdAt?: string;
+  isRead?: boolean;
+}) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -699,7 +745,33 @@ function VoiceNotePlayer({ uri, duration, isOwn, theme }: { uri: string, duratio
   const [totalDuration, setTotalDuration] = useState(duration ? duration * 1000 : 0);
   const [barWidth, setBarWidth] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(_cachedSpeed);
   const soundRef = useRef<Audio.Sound | null>(null);
+
+  // Load persisted speed on mount & subscribe to global changes
+  useEffect(() => {
+    let active = true;
+    loadGlobalSpeed().then(s => { if (active) setPlaybackSpeed(s); });
+    const listener = (s: PlaybackSpeed) => { if (active) setPlaybackSpeed(s); };
+    _speedListeners.push(listener);
+    return () => {
+      active = false;
+      _speedListeners = _speedListeners.filter(l => l !== listener);
+    };
+  }, []);
+
+  // Apply speed whenever it changes while sound is loaded
+  useEffect(() => {
+    if (soundRef.current && isLoaded) {
+      soundRef.current.setRateAsync(playbackSpeed, true).catch(() => {});
+    }
+  }, [playbackSpeed, isLoaded]);
+
+  const cycleSpeed = useCallback(async () => {
+    const next = nextSpeed(playbackSpeed);
+    await saveGlobalSpeed(next);
+  }, [playbackSpeed]);
+
 
   // Pre-load sound if it's a "fresh" message (less than 1 min old) or just on mount
   useEffect(() => {
@@ -762,6 +834,8 @@ function VoiceNotePlayer({ uri, duration, isOwn, theme }: { uri: string, duratio
         if (position >= totalDuration - 100) {
           await soundRef.current.setPositionAsync(0);
         }
+        // Apply current speed before playing
+        await soundRef.current.setRateAsync(playbackSpeed, true);
         await soundRef.current.playAsync();
       }
     } catch (error) {
@@ -816,22 +890,89 @@ function VoiceNotePlayer({ uri, duration, isOwn, theme }: { uri: string, duratio
 
   const progress = totalDuration > 0 ? position / totalDuration : 0;
 
+  // Whether to show avatar (at start, before playback begins / after it resets)
+  const showAvatar = position === 0 && !isPlaying;
+
+  // Initials fallback for avatar
+  const initials = senderName
+    ? senderName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', width: 220, paddingVertical: 4 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', width: 240, paddingVertical: 4 }}>
+
+      {/* Left slot: avatar+mic (not started) OR speed badge (playing/paused mid-way) */}
+      <TouchableOpacity
+        onPress={showAvatar ? undefined : cycleSpeed}
+        activeOpacity={showAvatar ? 1 : 0.7}
+        style={{
+          width: 44,
+          height: 44,
+          marginRight: 8,
+          flexShrink: 0,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        {showAvatar ? (
+          // Profile photo + mic badge
+          <View style={{ width: 44, height: 44 }}>
+            {senderAvatarUrl ? (
+              <Image
+                source={{ uri: senderAvatarUrl }}
+                style={{ width: 44, height: 44, borderRadius: 22 }}
+                contentFit="cover"
+              />
+            ) : (
+              // Fallback initials circle
+              <View style={{
+                width: 44, height: 44, borderRadius: 22,
+                backgroundColor: isOwn ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.12)',
+                justifyContent: 'center', alignItems: 'center',
+              }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{initials}</Text>
+              </View>
+            )}
+            {/* Mic badge bottom-right */}
+            <View style={{
+              position: 'absolute', bottom: -2, right: -2,
+              width: 20, height: 20, borderRadius: 10,
+              backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+              borderWidth: 2,
+              borderColor: isOwn ? theme.colors.primary : '#0F172A',
+              justifyContent: 'center', alignItems: 'center',
+            }}>
+              <Text style={{ fontSize: 9 }}>🎤</Text>
+            </View>
+          </View>
+        ) : (
+          // Speed badge
+          <View style={{
+            minWidth: 40,
+            height: 28,
+            borderRadius: 8,
+            backgroundColor: isOwn ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 6,
+          }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800', letterSpacing: -0.3 }}>
+              {playbackSpeed === 1 ? '1×' : `${playbackSpeed}×`}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* Play/Pause button */}
       <TouchableOpacity 
         onPress={togglePlayback}
         disabled={isLoading}
         style={{ 
           width: 44, 
           height: 44, 
-          borderRadius: 22, 
-          backgroundColor: isOwn ? 'rgba(255,255,255,0.25)' : theme.colors.primary, 
           justifyContent: 'center', 
           alignItems: 'center',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
+          flexShrink: 0,
         }}
       >
         {isLoading ? (
@@ -883,9 +1024,26 @@ function VoiceNotePlayer({ uri, duration, isOwn, theme }: { uri: string, duratio
         </View>
       </PanGestureHandler>
         
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: -2 }}>
-          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>{formatTime(position)}</Text>
-          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>{formatTime(totalDuration)}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>
+            {formatTime(totalDuration)}
+          </Text>
+          {createdAt && (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ 
+                fontSize: 9, 
+                color: 'rgba(255,255,255,0.7)', 
+                fontWeight: '700' 
+              }}>
+                {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {isOwn && (
+                isRead 
+                  ? <CheckCheck size={11} color="#10B981" style={{ marginLeft: 3 }} /> 
+                  : <Check size={11} color="rgba(255,255,255,0.6)" style={{ marginLeft: 3 }} />
+              )}
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -893,7 +1051,7 @@ function VoiceNotePlayer({ uri, duration, isOwn, theme }: { uri: string, duratio
 }
 const ChatMediaMessage: React.FC<Props> = ({ 
   content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress,
-  onCancelSession, onRescheduleSession
+  onCancelSession, onRescheduleSession, senderAvatarUrl, senderName,
 }) => {
   const theme = useTheme();
   const highlightAnim = useRef(new Animated.Value(0)).current;
@@ -1081,29 +1239,12 @@ const ChatMediaMessage: React.FC<Props> = ({
             uri={media.url} 
             duration={media.duration} 
             isOwn={isOwn} 
-            theme={theme} 
+            theme={theme}
+            senderAvatarUrl={senderAvatarUrl}
+            senderName={senderName}
+            createdAt={createdAt}
+            isRead={isRead}
           />
-          
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            position: 'absolute',
-            bottom: -2,
-            right: 0
-          }}>
-            <Text style={{ 
-              fontSize: 9, 
-              color: 'rgba(255,255,255,0.7)', 
-              fontWeight: '700' 
-            }}>
-              {new Date(createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isOwn && (
-              isRead 
-                ? <CheckCheck size={11} color="#10B981" style={{ marginLeft: 3 }} /> 
-                : <Check size={11} color="rgba(255,255,255,0.6)" style={{ marginLeft: 3 }} />
-            )}
-          </View>
         </View>
       </View>
     );
@@ -1239,6 +1380,8 @@ const ChatMediaMessage: React.FC<Props> = ({
             duration={media.duration} 
             isOwn={isOwn} 
             theme={theme} 
+            senderAvatarUrl={senderAvatarUrl}
+            senderName={senderName}
           />
         ) : (
           <TouchableOpacity 

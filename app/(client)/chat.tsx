@@ -514,6 +514,8 @@ export default function ClientMessagesScreen() {
                   onPressReply={() => item.reply_to_id && scrollToMessage(item.reply_to_id)}
                   isHighlighted={isHighlighted}
                   onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setActiveMessageForMenu(item); }}
+                  senderAvatarUrl={isMe ? profile?.avatar_url : coachProfile?.avatar_url}
+                  senderName={isMe ? profile?.full_name : coachProfile?.full_name}
                 />
                 {/* Reactions on media */}
                 {(() => {
@@ -545,6 +547,9 @@ export default function ClientMessagesScreen() {
                 theme={theme}
                 user={user}
                 coachName={coachProfile?.full_name}
+                coachAvatarUrl={coachProfile?.avatar_url}
+                clientName={profile?.full_name}
+                clientAvatarUrl={profile?.avatar_url}
               />
             )}
           </View>
@@ -557,7 +562,16 @@ export default function ClientMessagesScreen() {
     // Refresh to get the latest version from messages state (reactions)
     const liveMsg = messages.find(m => m.id === msg?.id) || msg;
     if (isMediaMessage(liveMsg.content)) {
-      return <ChatMediaMessage content={liveMsg.content} isOwn={isMe} createdAt={liveMsg.created_at} isRead={liveMsg.read} />;
+      return (
+        <ChatMediaMessage 
+          content={liveMsg.content} 
+          isOwn={isMe} 
+          createdAt={liveMsg.created_at} 
+          isRead={liveMsg.read} 
+          senderAvatarUrl={isMe ? profile?.avatar_url : coachProfile?.avatar_url}
+          senderName={isMe ? profile?.full_name : coachProfile?.full_name}
+        />
+      );
     }
     return (
       <ClientMessageBubble
@@ -566,6 +580,9 @@ export default function ClientMessagesScreen() {
         theme={theme}
         user={user}
         coachName={coachProfile?.full_name}
+        coachAvatarUrl={coachProfile?.avatar_url}
+        clientName={profile?.full_name}
+        clientAvatarUrl={profile?.avatar_url}
         repliedMsg={msg.reply_to_id ? messages.find((m: any) => m.id === msg.reply_to_id) : null}
       />
     );
@@ -665,7 +682,10 @@ export default function ClientMessagesScreen() {
                 isMe={isMe} 
                 theme={theme} 
                 user={user}
-                coachName={coach?.name}
+                coachName={coachProfile?.full_name}
+                coachAvatarUrl={coachProfile?.avatar_url}
+                clientName={profile?.full_name}
+                clientAvatarUrl={profile?.avatar_url}
               />
             </View>
           )}
@@ -676,7 +696,10 @@ export default function ClientMessagesScreen() {
 }
 
 // ── Client Message Bubble ─────────────────────────────────────────────────────
-const ClientMessageBubble = ({ item, isMe, isHighlighted, repliedMsg, onReplyPress, theme, user, coachName }: any) => {
+const ClientMessageBubble = ({ 
+  item, isMe, isHighlighted, repliedMsg, onReplyPress, theme, user, 
+  coachName, coachAvatarUrl, clientName, clientAvatarUrl 
+}: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   let displayContent = item.content;
   let reactions: any[] = [];
@@ -705,7 +728,16 @@ const ClientMessageBubble = ({ item, isMe, isHighlighted, repliedMsg, onReplyPre
     const mediaTypes = ['challenge_completed', 'task_completion', 'image', 'video', 'gif', 'document', 'audio', 'session_invite', 'call_invite'];
     if (type && (mediaTypes.includes(type) || type === 'meal' || type === 'meal_log')) {
       if (type === 'meal' || type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
-      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          senderAvatarUrl={isMe ? clientAvatarUrl : coachAvatarUrl}
+          senderName={isMe ? clientName : coachName}
+        />
+      );
     }
     
     displayContent = p.text || (type && type !== 'text' ? '' : item.content);
@@ -715,7 +747,16 @@ const ClientMessageBubble = ({ item, isMe, isHighlighted, repliedMsg, onReplyPre
   } catch {
     // Final defensive check: if string contains media markers, don't show as text
     if (item.content.includes('"type"') && (item.content.includes('"url"') || item.content.includes('"taskName"'))) {
-      return <ChatMediaMessage content={item.content} isOwn={isMe} createdAt={item.created_at} isRead={item.read} />;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          senderAvatarUrl={isMe ? clientAvatarUrl : coachAvatarUrl}
+          senderName={isMe ? clientName : coachName}
+        />
+      );
     }
   }
 

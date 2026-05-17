@@ -46,6 +46,7 @@ import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { MotiView, AnimatePresence } from 'moti';
+import { useReducedMotion } from 'react-native-reanimated';
 
 export default function ClientDetailsScreen() {
   const { id, tab } = useLocalSearchParams();
@@ -81,6 +82,8 @@ export default function ClientDetailsScreen() {
   const [editingDescription, setEditingDescription] = useState('');
   const [editingCategory, setEditingCategory] = useState<any>('general');
   const [updating, setUpdating] = useState(false);
+  const [pastSessionsExpanded, setPastSessionsExpanded] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
 
@@ -328,31 +331,37 @@ export default function ClientDetailsScreen() {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
             >
                 {/* Main Tab Navigation */}
-                <View className="px-6 mt-4 flex-row border-b border-white/5">
-                    <TouchableOpacity 
-                        className={`mr-8 pb-4 border-b-2 ${mainTab === 'overview' ? 'border-blue-500' : 'border-transparent'}`}
-                        onPress={() => setMainTab('overview')}
+                <View className="border-b border-white/5 mt-4">
+                    <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 24 }}
                     >
-                        <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'overview' ? 'text-white' : 'text-slate-500'}`}>Overview</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        className={`mr-8 pb-4 border-b-2 ${mainTab === 'daily_tasks' ? 'border-emerald-500' : 'border-transparent'}`}
-                        onPress={() => setMainTab('daily_tasks')}
-                    >
-                        <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'daily_tasks' ? 'text-white' : 'text-slate-500'}`}>Daily Tasks</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        className={`mr-8 pb-4 border-b-2 ${mainTab === 'checkins' ? 'border-blue-500' : 'border-transparent'}`}
-                        onPress={() => setMainTab('checkins')}
-                    >
-                        <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'checkins' ? 'text-white' : 'text-slate-500'}`}>Check-ins</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        className={`pb-4 border-b-2 ${mainTab === 'sessions' ? 'border-blue-500' : 'border-transparent'}`}
-                        onPress={() => setMainTab('sessions')}
-                    >
-                        <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'sessions' ? 'text-white' : 'text-slate-500'}`}>Sessions</Text>
-                    </TouchableOpacity>
+                        <TouchableOpacity 
+                            className={`mr-8 pb-4 border-b-2 ${mainTab === 'overview' ? 'border-blue-500' : 'border-transparent'}`}
+                            onPress={() => setMainTab('overview')}
+                        >
+                            <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'overview' ? 'text-white' : 'text-slate-500'}`}>Overview</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            className={`mr-8 pb-4 border-b-2 ${mainTab === 'daily_tasks' ? 'border-emerald-500' : 'border-transparent'}`}
+                            onPress={() => setMainTab('daily_tasks')}
+                        >
+                            <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'daily_tasks' ? 'text-white' : 'text-slate-500'}`}>Daily Tasks</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            className={`mr-8 pb-4 border-b-2 ${mainTab === 'checkins' ? 'border-blue-500' : 'border-transparent'}`}
+                            onPress={() => setMainTab('checkins')}
+                        >
+                            <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'checkins' ? 'text-white' : 'text-slate-500'}`}>Check-ins</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            className={`pb-4 border-b-2 ${mainTab === 'sessions' ? 'border-blue-500' : 'border-transparent'}`}
+                            onPress={() => setMainTab('sessions')}
+                        >
+                            <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'sessions' ? 'text-white' : 'text-slate-500'}`}>Sessions</Text>
+                        </TouchableOpacity>
+                    </ScrollView>
                 </View>
 
                 {mainTab === 'overview' ? (
@@ -574,27 +583,254 @@ export default function ClientDetailsScreen() {
                         ))
                     )}
                   </View>
-                ) : (
-                  <View className="px-6 py-8">
-                    {sessionLog.length === 0 ? (
-                        <View className="p-12 items-center justify-center bg-slate-900/20 rounded-[40px] border border-slate-900 border-dashed">
-                             <CalendarIcon size={32} color="#1E293B" />
-                             <Text className="text-slate-700 font-black text-xs uppercase mt-6">No sessions logged</Text>
-                             <Text className="text-slate-800 text-[10px] mt-2 text-center px-4 leading-4">All 1-on-1 coordination happens directly in your chat.</Text>
+                ) : (() => {
+                  // Compute Weekly Slots and Ad-Hoc/Past Sessions
+                  const activeWeeklySlots = sessionLog.filter(s => s.recurrence_rule && s.recurrence_rule.includes('WEEKLY'));
+                  const weeklySlotConfigs = activeWeeklySlots.map(s => {
+                    const d = new Date(s.scheduled_at);
+                    return {
+                      dayOfWeek: d.getDay(),
+                      hour: d.getHours(),
+                      minute: d.getMinutes(),
+                      sessionType: s.session_type,
+                      duration: s.duration_minutes || 60,
+                      session: s
+                    };
+                  });
+
+                  const upcomingSessions = sessionLog.filter(s => {
+                    return s.status === 'scheduled' && new Date(s.scheduled_at) > new Date();
+                  });
+
+                  const upcomingWeeklyOccurrences: any[] = [];
+                  const upcomingAdHocSessions: any[] = [];
+
+                  upcomingSessions.forEach(s => {
+                    const d = new Date(s.scheduled_at);
+                    const isWeeklyOccurrence = weeklySlotConfigs.some(cfg => {
+                      const dayMatches = d.getDay() === cfg.dayOfWeek;
+                      const timeDiffMin = Math.abs((d.getHours() * 60 + d.getMinutes()) - (cfg.hour * 60 + cfg.minute));
+                      return dayMatches && timeDiffMin <= 30;
+                    });
+                    
+                    if (isWeeklyOccurrence) {
+                      upcomingWeeklyOccurrences.push(s);
+                    } else {
+                      upcomingAdHocSessions.push(s);
+                    }
+                  });
+
+                  const pastSessions = sessionLog.filter(s => {
+                    const isPast = new Date(s.scheduled_at) <= new Date();
+                    const isCompletedOrCancelled = s.status === 'completed' || s.status === 'cancelled';
+                    return isPast || isCompletedOrCancelled;
+                  });
+
+                  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                  const weeklyCadence = daysOfWeek.map((dayName, idx) => {
+                    const targetDayOfWeek = idx === 6 ? 0 : idx + 1; // 0 for Sunday, 1 for Monday, etc.
+                    const slotCfg = weeklySlotConfigs.find(cfg => cfg.dayOfWeek === targetDayOfWeek);
+                    
+                    if (slotCfg) {
+                      const conflictingSession = upcomingAdHocSessions.find(s => {
+                        const d = new Date(s.scheduled_at);
+                        return d.getDay() === targetDayOfWeek;
+                      });
+                      
+                      return {
+                        day: dayName,
+                        status: conflictingSession ? 'Rescheduled' : 'Active',
+                        is_active: true,
+                        session: slotCfg.session,
+                        rescheduled: conflictingSession ? {
+                          date: new Date(conflictingSession.scheduled_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+                          time: new Date(conflictingSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                          session: conflictingSession
+                        } : null
+                      };
+                    }
+                    
+                    return {
+                      day: dayName,
+                      status: 'Not Set',
+                      is_active: false
+                    };
+                  });
+
+                  return (
+                    <View className="px-6 py-8">
+                      {/* Action Button */}
+                      <TouchableOpacity 
+                        onPress={() => setSchedulerVisible(true)}
+                        className="mb-8 h-14 bg-orange-500 rounded-[24px] flex-row items-center justify-center gap-3 shadow-lg shadow-orange-500/20"
+                      >
+                        <Plus size={18} color="white" strokeWidth={3} />
+                        <Text className="text-white font-black text-sm uppercase tracking-wider">Schedule Session</Text>
+                      </TouchableOpacity>
+
+                      {/* Primary Focus: Weekly Cadence */}
+                      <View className="mb-8">
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View>
+                            <Text className="text-white text-xl font-black">Weekly Slots</Text>
+                            <Text className="text-slate-500 text-xs mt-1">Regular weekly session times</Text>
+                          </View>
+                          <View className="w-8 h-8 rounded-full bg-slate-900 border border-white/5 items-center justify-center">
+                            <CalendarIcon size={14} color="#94A3B8" />
+                          </View>
                         </View>
-                    ) : (
-                        sessionLog.map((session, idx) => (
-                            <MotiView 
-                                key={session.id}
-                                from={{ opacity: 0, translateY: 10 }} 
-                                animate={{ opacity: 1, translateY: 0 }} 
-                                transition={{ delay: idx * 50 }}
-                                className="bg-slate-900/40 rounded-[32px] p-6 mb-4 border border-white/5 flex-row items-center justify-between"
+                        
+                        <View className="gap-3">
+                          {weeklyCadence.map((dayItem, idx) => (
+                            <MotiView
+                              key={dayItem.day}
+                              from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
+                              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
+                              transition={{ delay: idx * 30 }}
+                              className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
                             >
+                              <View className="flex-1">
+                                <Text className="text-white font-black text-base">{dayItem.day}</Text>
+                                {dayItem.is_active ? (
+                                  dayItem.status === 'Rescheduled' && dayItem.rescheduled ? (
+                                    <View className="mt-1.5 gap-1">
+                                      <Text className="text-slate-400 font-bold text-xs">
+                                        {dayItem.session.session_type.replace('_', ' ')} · {new Date(dayItem.session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </Text>
+                                      <Text className="text-amber-500 font-medium text-xs">
+                                        Moved to {dayItem.rescheduled.date} at {dayItem.rescheduled.time}
+                                      </Text>
+                                    </View>
+                                  ) : (
+                                    <Text className="text-slate-400 font-bold text-xs mt-1">
+                                      {dayItem.session.session_type.replace('_', ' ')} · {new Date(dayItem.session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                  )
+                                ) : (
+                                  <Text className="text-slate-500 font-medium text-xs mt-1">Not scheduled</Text>
+                                )}
+                              </View>
+                              
+                              <View>
+                                {dayItem.is_active ? (
+                                  dayItem.status === 'Rescheduled' ? (
+                                    <View className="bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20">
+                                      <Text className="text-amber-500 font-black text-[9px] uppercase tracking-wider">Rescheduled</Text>
+                                    </View>
+                                  ) : (
+                                    <View className="bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                                      <Text className="text-emerald-400 font-black text-[9px] uppercase tracking-wider">Set</Text>
+                                    </View>
+                                  )
+                                ) : (
+                                  <View className="bg-slate-800/40 px-3 py-1.5 rounded-xl border border-white/5">
+                                    <Text className="text-slate-500 font-black text-[9px] uppercase tracking-wider">Not Set</Text>
+                                  </View>
+                                )}
+                              </View>
+                            </MotiView>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* Secondary Focus: Upcoming Ad-Hoc */}
+                      <View className="mb-8">
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View>
+                            <Text className="text-white text-xl font-black">Extra Sessions</Text>
+                            <Text className="text-slate-500 text-xs mt-1">One-time meetings and special sessions</Text>
+                          </View>
+                          <View className="w-8 h-8 rounded-full bg-slate-900 border border-white/5 items-center justify-center">
+                            <Plus size={14} color="#94A3B8" />
+                          </View>
+                        </View>
+                        
+                        {upcomingAdHocSessions.length === 0 ? (
+                          <View className="p-8 items-center justify-center bg-slate-900/20 rounded-[32px] border border-slate-900 border-dashed">
+                            <Text className="text-slate-500 font-bold text-xs uppercase">No extra sessions</Text>
+                            <Text className="text-slate-600 text-[10px] mt-1 text-center">Only your regular weekly schedule is active.</Text>
+                          </View>
+                        ) : (
+                          <View className="gap-3">
+                            {upcomingAdHocSessions.map((session, idx) => (
+                              <MotiView
+                                key={session.id}
+                                from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
+                                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
+                                transition={{ delay: idx * 30 }}
+                                className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
+                              >
                                 <View className="flex-1">
+                                  <View className="flex-row items-center gap-2 mb-1">
+                                    <CalendarIcon size={12} color="#64748B" />
+                                    <Text className="text-white font-black text-sm">
+                                      {new Date(session.scheduled_at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                    </Text>
+                                  </View>
+                                  <View className="flex-row items-center gap-4">
+                                    <View className="flex-row items-center gap-1.5">
+                                      <Clock size={12} color="#94A3B8" />
+                                      <Text className="text-slate-400 font-bold text-xs">
+                                        {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </Text>
+                                    </View>
+                                    <View className="w-1 h-1 rounded-full bg-slate-800" />
+                                    <Text className="text-slate-400 font-bold text-xs">{session.duration_minutes || 60} min</Text>
+                                    <View className="w-1 h-1 rounded-full bg-slate-800" />
+                                    <Text className="text-slate-400 font-bold text-xs capitalize">{session.session_type.replace('_', ' ')}</Text>
+                                  </View>
+                                </View>
+                                
+                                <View className="bg-blue-500/10 px-3 py-1.5 rounded-xl border border-blue-500/20">
+                                  <Text className="text-blue-400 font-black text-[9px] uppercase tracking-wider">Upcoming</Text>
+                                </View>
+                              </MotiView>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Tertiary Focus: History */}
+                      <View className="mb-6">
+                        <TouchableOpacity
+                          onPress={() => {
+                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                            setPastSessionsExpanded(!pastSessionsExpanded);
+                          }}
+                          className="flex-row items-center justify-between p-5 bg-slate-900/30 rounded-[24px] border border-white/5"
+                        >
+                          <View className="flex-row items-center gap-3">
+                            <Clock size={16} color="#64748B" />
+                            <Text className="text-slate-400 font-black text-sm uppercase tracking-wider">Past Sessions ({pastSessions.length})</Text>
+                          </View>
+                          <MotiView
+                            from={{ rotate: '0deg' }}
+                            animate={{ rotate: pastSessionsExpanded ? '90deg' : '0deg' }}
+                            transition={{ type: 'timing', duration: 200 }}
+                          >
+                            <ChevronRight size={18} color="#64748B" />
+                          </MotiView>
+                        </TouchableOpacity>
+                        
+                        {pastSessionsExpanded && (
+                          <View className="mt-3 gap-3">
+                            {pastSessions.length === 0 ? (
+                              <View className="p-8 items-center justify-center bg-slate-900/20 rounded-[32px] border border-slate-900 border-dashed">
+                                <Text className="text-slate-600 font-bold text-xs uppercase">No past sessions</Text>
+                              </View>
+                            ) : (
+                              pastSessions.map((session, idx) => (
+                                <MotiView
+                                  key={session.id}
+                                  from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
+                                  animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
+                                  transition={{ delay: idx * 20 }}
+                                  className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
+                                >
+                                  <View className="flex-1">
                                     <View className="flex-row items-center gap-2 mb-1">
                                       <CalendarIcon size={12} color="#64748B" />
-                                      <Text className="text-white font-black text-base">
+                                      <Text className="text-white font-black text-sm">
                                         {new Date(session.scheduled_at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
                                       </Text>
                                     </View>
@@ -607,56 +843,54 @@ export default function ClientDetailsScreen() {
                                       </View>
                                       <View className="w-1 h-1 rounded-full bg-slate-800" />
                                       <Text className="text-slate-400 font-bold text-xs">{session.duration_minutes || 60} min</Text>
+                                      <View className="w-1 h-1 rounded-full bg-slate-800" />
+                                      <Text className="text-slate-400 font-bold text-xs capitalize">{session.session_type.replace('_', ' ')}</Text>
                                     </View>
-                                </View>
-
-                                {(() => {
-                                  const isUpcoming = session.status === 'scheduled' && new Date(session.scheduled_at) > new Date();
-                                  const isMissed = (session.status === 'scheduled' && new Date(session.scheduled_at) <= new Date()) || (session.status === 'cancelled' && session.cancellation_reason === 'Client No-Show');
-                                  const isCompleted = session.status === 'completed';
-                                  const isDiscussed = session.status === 'cancelled' && session.cancellation_reason !== 'Client No-Show';
-
-                                  if (isCompleted) {
-                                    return (
-                                      <View className="bg-emerald-500/10 px-4 py-2 rounded-2xl border border-emerald-500/20 flex-row items-center gap-2">
-                                        <View className="w-5 h-5 rounded-full bg-emerald-500 items-center justify-center">
-                                          <Check size={12} color="white" />
+                                  </View>
+                                  
+                                  {(() => {
+                                    const isCompleted = session.status === 'completed';
+                                    const isMissed = (session.status === 'scheduled' && new Date(session.scheduled_at) <= new Date()) || (session.status === 'cancelled' && session.cancellation_reason === 'Client No-Show');
+                                    const isDiscussed = session.status === 'cancelled' && session.cancellation_reason !== 'Client No-Show';
+                                    
+                                    if (isCompleted) {
+                                      return (
+                                        <View className="bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex-row items-center gap-1">
+                                          <Check size={10} color="#10B981" strokeWidth={3} />
+                                          <Text className="text-emerald-400 font-black text-[9px] uppercase tracking-wider">Completed</Text>
                                         </View>
-                                        <Text className="text-emerald-500 font-black text-[10px] uppercase tracking-widest">Completed</Text>
-                                      </View>
-                                    );
-                                  }
-                                  if (isUpcoming) {
+                                      );
+                                    }
+                                    if (isMissed) {
+                                      return (
+                                        <View className="bg-red-500/10 px-3 py-1.5 rounded-xl border border-red-500/20 flex-row items-center gap-1">
+                                          <X size={10} color="#EF4444" strokeWidth={3} />
+                                          <Text className="text-red-400 font-black text-[9px] uppercase tracking-wider">Missed</Text>
+                                        </View>
+                                      );
+                                    }
+                                    if (isDiscussed) {
+                                      return (
+                                        <View className="bg-slate-800 px-3 py-1.5 rounded-xl border border-white/5 flex-row items-center gap-1">
+                                          <Text className="text-slate-400 font-black text-[9px] uppercase tracking-wider">Discussed</Text>
+                                        </View>
+                                      );
+                                    }
                                     return (
-                                      <View className="bg-blue-500/10 px-4 py-2 rounded-2xl border border-blue-500/20 flex-row items-center gap-2">
-                                        <Clock size={14} color="#3B82F6" />
-                                        <Text className="text-blue-500 font-black text-[10px] uppercase tracking-widest">Upcoming</Text>
+                                      <View className="bg-slate-800 px-3 py-1.5 rounded-xl border border-white/5 flex-row items-center gap-1">
+                                        <Text className="text-slate-400 font-black text-[9px] uppercase tracking-wider capitalize">{session.status}</Text>
                                       </View>
                                     );
-                                  }
-                                  if (isMissed) {
-                                    return (
-                                      <View className="bg-red-500/10 px-4 py-2 rounded-2xl border border-red-500/20 flex-row items-center gap-2">
-                                        <X size={14} color="#EF4444" />
-                                        <Text className="text-red-500 font-black text-[10px] uppercase tracking-widest">Missed</Text>
-                                      </View>
-                                    );
-                                  }
-                                  if (isDiscussed) {
-                                    return (
-                                      <View className="bg-slate-800/50 px-4 py-2 rounded-2xl border border-white/5 flex-row items-center gap-2">
-                                        <X size={14} color="#94A3B8" />
-                                        <Text className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Discussed</Text>
-                                      </View>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                            </MotiView>
-                        ))
-                    )}
-                  </View>
-                )}
+                                  })()}
+                                </MotiView>
+                              ))
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })()}
             </ScrollView>
         </View>
       </SafeAreaView>
