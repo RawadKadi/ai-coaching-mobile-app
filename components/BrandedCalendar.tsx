@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { MotiView, AnimatePresence } from 'moti';
 
 interface BrandedCalendarProps {
   selectedDate: Date;
@@ -45,29 +44,31 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
       const isToday = date.toDateString() === new Date().toDateString();
 
       days.push(
-        <TouchableOpacity
+        <Pressable
           key={d}
           onPress={() => onSelect(date)}
           className="w-[14.28%] aspect-square items-center justify-center p-1"
         >
-          <View 
-            className={`w-full h-full rounded-xl items-center justify-center border ${
-              isSelected 
-                ? 'bg-blue-600 border-blue-400 shadow-lg shadow-blue-500/20' 
-                : isToday 
-                  ? 'bg-blue-600/10 border-blue-600/30' 
-                  : 'bg-slate-900/50 border-white/5'
-            }`}
-          >
-            <Text 
-              className={`text-sm font-black ${
-                isSelected ? 'text-white' : isToday ? 'text-blue-400' : 'text-slate-400'
-              }`}
+          {({ pressed }) => (
+            <View 
+              className={`w-full h-full rounded-xl items-center justify-center border ${
+                isSelected 
+                  ? 'bg-blue-600 border-blue-400 shadow-lg shadow-blue-500/20' 
+                  : isToday 
+                    ? 'bg-blue-600/10 border-blue-600/30' 
+                    : 'bg-slate-900/50 border-white/5'
+              } ${pressed ? 'opacity-70 scale-95' : ''}`}
             >
-              {d}
-            </Text>
-          </View>
-        </TouchableOpacity>
+              <Text 
+                className={`text-sm font-black ${
+                  isSelected ? 'text-white' : isToday ? 'text-blue-400' : 'text-slate-400'
+                }`}
+              >
+                {d}
+              </Text>
+            </View>
+          )}
+        </Pressable>
       );
     }
 
@@ -90,18 +91,24 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
         </View>
         
         <View className="flex-row gap-2">
-          <TouchableOpacity 
+          <Pressable 
             onPress={handlePrevMonth}
-            className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5"
+            className="w-10 h-10 rounded-xl items-center justify-center border border-white/5"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? '#1E293B' : '#0F172A',
+            })}
           >
             <ChevronLeft size={18} color="#94A3B8" />
-          </TouchableOpacity>
-          <TouchableOpacity 
+          </Pressable>
+          <Pressable 
             onPress={handleNextMonth}
-            className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5"
+            className="w-10 h-10 rounded-xl items-center justify-center border border-white/5"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? '#1E293B' : '#0F172A',
+            })}
           >
             <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
 

@@ -130,7 +130,7 @@ const handleSaveSessions = async (proposedSessions: ProposedSession[]) => {
 
     // Perform updates first
     if (sessionsToUpdate.length > 0) {
-      console.log('[SaveSessions] Updating', sessionsTo Update.length, 'sessions');
+      console.log('[SaveSessions] Updating', sessionsToUpdate.length, 'sessions');
       for (const { id, data } of sessionsToUpdate) {
         const { error } = await supabase.from('sessions').update(data).eq('id', id);
         if (error) {

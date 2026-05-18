@@ -118,11 +118,15 @@ export default function CoachDashboard() {
   const loadDashboardData = async () => {
     if (!coach) return;
     try {
-      const [statsResult, checkinsResult, clientsResult] = await Promise.all([
+      const [statsResult, checkinsResult, clientsResult, challengesResult] = await Promise.all([
         supabase.rpc('get_coach_stats'),
         supabase.rpc('get_recent_checkins'),
-        supabase.rpc('get_my_clients')
+        supabase.rpc('get_my_clients'),
+        supabase.rpc('get_coach_mother_challenges', { p_coach_id: coach?.id })
       ]);
+
+      const activeChallengesCount = (challengesResult?.data || [])
+        .filter((c: any) => c.status === 'active').length;
 
       if (statsResult.data) {
         // Handle both object and array response (Supabase returns array for RETURNS TABLE)
@@ -134,7 +138,7 @@ export default function CoachDashboard() {
           compliantToday: statsData?.compliantToday || 0,
           pendingCheckIns: statsData?.pendingCheckIns || 0,
           unreadMessages: unreadCount,
-          activeChallenges: statsData?.activeChallenges || 0,
+          activeChallenges: activeChallengesCount,
           todaysSessions: statsData?.todaysSessions || 0,
         });
       }

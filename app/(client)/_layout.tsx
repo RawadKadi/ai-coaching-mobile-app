@@ -20,7 +20,7 @@ export default function ClientLayout() {
         router.replace('/(client)/onboarding');
       }
     }
-  }, [session, profile, loading, segments]);
+  }, [session, profile, loading, inOnboarding]);
 
   return (
     <View style={{ flex: 1 }}>

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, TextInput } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Sparkles, Calendar, ChevronRight, Zap, Target as FocusIcon, Flame, ShieldCheck, Check, Search } from 'lucide-react-native';
@@ -334,15 +333,12 @@ export default function AISuggestChallengeScreen() {
                 </View>
 
                 {scheduleMode === 'later' && (
-                  <MotiView 
-                    from={{ opacity: 0, translateY: 10 }}
-                    animate={{ opacity: 1, translateY: 0 }}
-                  >
+                  <View>
                     <BrandedCalendar 
                       selectedDate={customStartDate}
                       onSelect={setCustomStartDate}
                     />
-                  </MotiView>
+                  </View>
                 )}
               </View>
             )}

@@ -68,7 +68,12 @@ const CHALLENGE_TEMPLATES = {
 export async function generateWeeklyChallenges(
     clientId: string,
     clientName: string,
-    startDate: Date
+    startDate: Date,
+    options?: {
+        focusType?: 'training' | 'nutrition' | 'recovery' | 'consistency' | 'all';
+        intensity?: 'low' | 'medium' | 'high' | 'all';
+        durationDays?: number;
+    }
 ): Promise<SubChallengeTemplate[]> {
     try {
         // 1. Fetch client's challenge history to avoid repetition
@@ -86,46 +91,90 @@ export async function generateWeeklyChallenges(
         console.log(`[AI] Generating for ${clientName}, avoiding ${usedNames.size} previous challenges`);
 
         const challenges: SubChallengeTemplate[] = [];
+        const daysToGenerate = options?.durationDays || 7;
+        const focus = options?.focusType || 'training';
+        const targetIntensity = options?.intensity || 'medium';
 
-        // 2. Generate 3 challenges per day for 7 days (21 total)
-        for (let day = 0; day < 7; day++) {
+        // 2. Generate challenges for each day
+        for (let day = 0; day < daysToGenerate; day++) {
             const date = new Date(startDate);
             date.setDate(date.getDate() + day);
             const dateStr = date.toISOString().split('T')[0];
 
-            // Pick 1 from each category, avoiding previous challenges
-            const training = pickUnused(CHALLENGE_TEMPLATES.training, usedNames);
-            const nutrition = pickUnused(CHALLENGE_TEMPLATES.nutrition, usedNames);
-            const recovery = pickUnused(CHALLENGE_TEMPLATES.recovery, usedNames);
+            let dayTemplates: { template: any; category: 'training' | 'nutrition' | 'recovery' | 'consistency' }[] = [];
 
-            challenges.push(
-                {
-                    name: training.name,
-                    description: training.desc,
-                    assigned_date: dateStr,
-                    focus_type: 'training',
-                    intensity: training.intensity as any
-                },
-                {
-                    name: nutrition.name,
-                    description: nutrition.desc,
-                    assigned_date: dateStr,
-                    focus_type: 'nutrition',
-                    intensity: nutrition.intensity as any
-                },
-                {
-                    name: recovery.name,
-                    description: recovery.desc,
-                    assigned_date: dateStr,
-                    focus_type: 'recovery',
-                    intensity: recovery.intensity as any
-                }
-            );
+            if (focus === 'training') {
+                const t1 = pickUnused(CHALLENGE_TEMPLATES.training, usedNames, targetIntensity);
+                usedNames.add(t1.name);
+                const t2 = pickUnused(CHALLENGE_TEMPLATES.training, usedNames, targetIntensity);
+                usedNames.add(t2.name);
+                const r = pickUnused(CHALLENGE_TEMPLATES.recovery, usedNames, targetIntensity);
+                usedNames.add(r.name);
+                dayTemplates = [
+                    { template: t1, category: 'training' },
+                    { template: t2, category: 'training' },
+                    { template: r, category: 'recovery' }
+                ];
+            } else if (focus === 'nutrition') {
+                const n1 = pickUnused(CHALLENGE_TEMPLATES.nutrition, usedNames, targetIntensity);
+                usedNames.add(n1.name);
+                const n2 = pickUnused(CHALLENGE_TEMPLATES.nutrition, usedNames, targetIntensity);
+                usedNames.add(n2.name);
+                const c = pickUnused(CHALLENGE_TEMPLATES.consistency, usedNames, targetIntensity);
+                usedNames.add(c.name);
+                dayTemplates = [
+                    { template: n1, category: 'nutrition' },
+                    { template: n2, category: 'nutrition' },
+                    { template: c, category: 'consistency' }
+                ];
+            } else if (focus === 'recovery') {
+                const r1 = pickUnused(CHALLENGE_TEMPLATES.recovery, usedNames, targetIntensity);
+                usedNames.add(r1.name);
+                const r2 = pickUnused(CHALLENGE_TEMPLATES.recovery, usedNames, targetIntensity);
+                usedNames.add(r2.name);
+                const t = pickUnused(CHALLENGE_TEMPLATES.training, usedNames, targetIntensity);
+                usedNames.add(t.name);
+                dayTemplates = [
+                    { template: r1, category: 'recovery' },
+                    { template: r2, category: 'recovery' },
+                    { template: t, category: 'training' }
+                ];
+            } else if (focus === 'consistency') {
+                const c1 = pickUnused(CHALLENGE_TEMPLATES.consistency, usedNames, targetIntensity);
+                usedNames.add(c1.name);
+                const c2 = pickUnused(CHALLENGE_TEMPLATES.consistency, usedNames, targetIntensity);
+                usedNames.add(c2.name);
+                const n = pickUnused(CHALLENGE_TEMPLATES.nutrition, usedNames, targetIntensity);
+                usedNames.add(n.name);
+                dayTemplates = [
+                    { template: c1, category: 'consistency' },
+                    { template: c2, category: 'consistency' },
+                    { template: n, category: 'nutrition' }
+                ];
+            } else {
+                // Default: 1 from each major category
+                const t = pickUnused(CHALLENGE_TEMPLATES.training, usedNames, targetIntensity);
+                usedNames.add(t.name);
+                const n = pickUnused(CHALLENGE_TEMPLATES.nutrition, usedNames, targetIntensity);
+                usedNames.add(n.name);
+                const r = pickUnused(CHALLENGE_TEMPLATES.recovery, usedNames, targetIntensity);
+                usedNames.add(r.name);
+                dayTemplates = [
+                    { template: t, category: 'training' },
+                    { template: n, category: 'nutrition' },
+                    { template: r, category: 'recovery' }
+                ];
+            }
 
-            // Mark as used
-            usedNames.add(training.name);
-            usedNames.add(nutrition.name);
-            usedNames.add(recovery.name);
+            for (const { template, category } of dayTemplates) {
+                challenges.push({
+                    name: template.name,
+                    description: template.desc || template.description,
+                    assigned_date: dateStr,
+                    focus_type: category,
+                    intensity: (template.intensity || targetIntensity) as any
+                });
+            }
         }
 
         console.log(`[AI] Generated ${challenges.length} unique challenges`);
@@ -138,13 +187,26 @@ export async function generateWeeklyChallenges(
 }
 
 /**
- * Pick a random template that hasn't been used recently
+ * Pick a template that hasn't been used recently, optionally matching target intensity
  */
-function pickUnused(templates: any[], usedNames: Set<string>) {
-    const available = templates.filter(t => !usedNames.has(t.name));
+function pickUnused(templates: any[], usedNames: Set<string>, targetIntensity?: string) {
+    let available = templates.filter(t => !usedNames.has(t.name));
 
-    // If all have been used, pick any (client has done many challenges)
+    if (targetIntensity && targetIntensity !== 'all') {
+        const matchingIntensity = available.filter(t => t.intensity === targetIntensity);
+        if (matchingIntensity.length > 0) {
+            available = matchingIntensity;
+        }
+    }
+
+    // If all have been used, pick any matching intensity
     if (available.length === 0) {
+        if (targetIntensity && targetIntensity !== 'all') {
+            const matchingIntensity = templates.filter(t => t.intensity === targetIntensity);
+            if (matchingIntensity.length > 0) {
+                return matchingIntensity[Math.floor(Math.random() * matchingIntensity.length)];
+            }
+        }
         return templates[Math.floor(Math.random() * templates.length)];
     }
 

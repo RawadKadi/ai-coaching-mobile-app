@@ -1,11 +1,11 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MotiView, MotiText, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Target, Sparkles, Clock, ChevronRight, Activity, TrendingUp, User } from 'lucide-react-native';
+import { Plus, Target, Sparkles, Clock, ChevronRight, Activity, TrendingUp, User, ArrowLeft } from 'lucide-react-native';
 import type { MotherChallengeWithProgress } from '@/types/challenges-v3';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
@@ -18,6 +18,45 @@ export default function CoachChallengesDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeChallenges, setActiveChallenges] = useState<MotherChallengeWithProgress[]>([]);
   const [historyChallenges, setHistoryChallenges] = useState<MotherChallengeWithProgress[]>([]);
+  
+  const [modalVisible, setModalVisible] = useState(false);
+  const slideAnim = useRef(new Animated.Value(600)).current; // Start off-screen (bottom)
+  const fadeAnim = useRef(new Animated.Value(0)).current;   // Start transparent
+
+  const openModal = () => {
+    setModalVisible(true);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 65,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeModal = (callback?: () => void) => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 600,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setModalVisible(false);
+      if (callback) callback();
+    });
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -74,17 +113,17 @@ export default function CoachChallengesDashboard() {
   return (
     <View className="flex-1 bg-slate-950">
       {/* Header */}
-      <View className="px-6 pt-20 pb-6 flex-row justify-between items-center bg-slate-950 shadow-2xl z-10">
-        <View>
-          <Text className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Growth Tracking</Text>
-          <Text className="text-white text-3xl font-bold mt-1">Challenges</Text>
-        </View>
+      <View className="px-6 pt-20 pb-6 flex-row items-center gap-4 bg-slate-950 shadow-2xl z-10">
         <TouchableOpacity 
-          className="w-12 h-12 bg-blue-600 rounded-full items-center justify-center shadow-lg"
-          onPress={() => router.push('/(coach)/challenges/suggest')}
+          onPress={() => router.back()}
+          className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5"
         >
-          <Sparkles size={22} color="white" />
+          <ArrowLeft size={20} color="white" />
         </TouchableOpacity>
+        <View>
+          <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Growth Tracking</Text>
+          <Text className="text-white text-3xl font-black mt-0.5 tracking-tight">Challenges</Text>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -143,10 +182,89 @@ export default function CoachChallengesDashboard() {
       {/* FAB */}
       <TouchableOpacity 
         className="absolute bottom-8 right-6 w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-2xl elevation-5"
-        onPress={() => router.push('/(coach)/challenges/create')}
+        onPress={openModal}
       >
         <Plus size={28} color="white" />
       </TouchableOpacity>
+
+      {/* Creation Mode Modal */}
+      {modalVisible && (
+        <Animated.View
+          style={{ opacity: fadeAnim }}
+          className="absolute inset-0 bg-slate-950/80 z-50 justify-end"
+        >
+          {/* Backdrop Touchable to Close */}
+          <TouchableOpacity 
+            activeOpacity={1} 
+            className="absolute inset-0" 
+            onPress={() => closeModal()} 
+          />
+
+          {/* Modal Content */}
+          <Animated.View
+            style={{ transform: [{ translateY: slideAnim }] }}
+            className="bg-slate-900 rounded-[32px] p-6 border border-slate-800 shadow-2xl m-6 mb-10"
+          >
+            {/* Header inside Modal */}
+            <View className="items-center mb-6">
+              <View className="w-12 h-12 bg-purple-500/10 rounded-2xl items-center justify-center mb-3">
+                <Sparkles size={24} color="#A78BFA" />
+              </View>
+              <Text className="text-white text-xl font-bold">Create Challenge</Text>
+              <Text className="text-slate-400 text-xs mt-1 text-center">
+                How would you like to build this plan?
+              </Text>
+            </View>
+
+            {/* Option 1: AI Creator */}
+            <TouchableOpacity
+              onPress={() => {
+                closeModal(() => {
+                  router.push('/(coach)/challenges/suggest');
+                });
+              }}
+              activeOpacity={0.7}
+              className="bg-slate-950 rounded-3xl p-5 border border-slate-800 flex-row items-center gap-4 mb-4"
+            >
+              <View className="w-12 h-12 rounded-2xl bg-blue-600 items-center justify-center shadow-lg shadow-blue-500/30">
+                <Sparkles size={22} color="white" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white text-base font-bold">Create with AI</Text>
+                <Text className="text-slate-400 text-xs mt-0.5">Generate a progression-based program</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Option 2: Manual Creator */}
+            <TouchableOpacity
+              onPress={() => {
+                closeModal(() => {
+                  router.push('/(coach)/challenges/create');
+                });
+              }}
+              activeOpacity={0.7}
+              className="bg-slate-950 rounded-3xl p-5 border border-slate-800 flex-row items-center gap-4 mb-4"
+            >
+              <View className="w-12 h-12 rounded-2xl bg-emerald-600 items-center justify-center shadow-lg shadow-emerald-500/30">
+                <Plus size={22} color="white" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white text-base font-bold">Create Manually</Text>
+                <Text className="text-slate-400 text-xs mt-0.5">Build a program step-by-step</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Cancel Button */}
+            <TouchableOpacity
+              onPress={() => closeModal()}
+              activeOpacity={0.7}
+              className="py-3 items-center justify-center"
+            >
+              <Text className="text-slate-500 text-sm font-bold">Cancel</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -167,6 +285,9 @@ const TabButton = ({ title, active, count, onPress }: any) => (
 
 const ChallengeCard = ({ challenge, index }: { challenge: MotherChallengeWithProgress, index: number }) => {
   const router = useRouter();
+  const totalSubs = Number(challenge.total_subs || 0);
+  const completedSubs = Number(challenge.completed_subs || 0);
+  const completionRate = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
   
   return (
     <MotiView
@@ -214,14 +335,14 @@ const ChallengeCard = ({ challenge, index }: { challenge: MotherChallengeWithPro
                <Activity size={14} color="#3B82F6" />
                <Text className="text-slate-500 text-xs font-medium">Completion Rate</Text>
             </View>
-            <Text className="text-white font-bold text-sm">{challenge.completion_rate}%</Text>
+            <Text className="text-white font-bold text-sm">{completionRate}%</Text>
           </View>
 
           {/* Progress Visualization */}
           <View className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
              <View 
                 className="h-full bg-blue-500 rounded-full" 
-                style={{ width: `${challenge.completion_rate}%` }} 
+                style={{ width: `${completionRate}%` }} 
              />
           </View>
           

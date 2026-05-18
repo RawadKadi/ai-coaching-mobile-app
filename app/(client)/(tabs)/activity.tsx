@@ -22,7 +22,8 @@ import {
   Sparkles,
   ArrowUpRight,
   ChevronDown,
-  X
+  X,
+  TrendingUp
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
@@ -188,7 +189,7 @@ export default function ActivityScreen() {
           .from('habit_logs')
           .select('*')
           .eq('client_id', client?.id)
-          .eq('date', selectedDate),
+          .eq('date', selectedDate)
       ]);
 
       if (mealsResult.error) throw mealsResult.error;
@@ -584,6 +585,7 @@ export default function ActivityScreen() {
   };
 
   const totalCalories = meals.reduce((sum, meal) => sum + (meal.calories || 0), 0);
+  const totalProtein = meals.reduce((sum, meal) => sum + (meal.protein_g || 0), 0);
   const totalWorkoutMinutes = workouts.reduce((sum, workout) => sum + (workout.duration_minutes || 0), 0);
   const completedHabits = habitLogs.filter((log) => log.completed).length;
 
@@ -637,24 +639,24 @@ export default function ActivityScreen() {
           {/* Summary Metric Grid */}
           <View style={{ paddingHorizontal: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16, marginBottom: 40 }}>
             <MetricCard 
-              label="KCAL Burnt" 
-              value={formatCompactNumber(totalCalories)} 
+              label="Calories" 
+              value={`${formatCompactNumber(totalCalories)} kcal`} 
               icon={<Utensils size={18} color="#F59E0B" />} 
             />
             <MetricCard 
               label="Streak" 
-              value={formatCompactNumber(streak)} 
+              value={`${formatCompactNumber(streak)} days`} 
               icon={<Award size={18} color="#10B981" />} 
             />
             <MetricCard 
-              label="Habit Velocity" 
-              value={`${completedHabits}/${habits.length}`} 
-              icon={<Award size={18} color="#818CF8" />} 
+              label="Protein" 
+              value={`${formatCompactNumber(totalProtein)} g`} 
+              icon={<Target size={18} color="#818CF8" />} 
             />
             <MetricCard 
-              label="Rank Status" 
-              value="Protocol-A" 
-              icon={<Zap size={18} color="#3B82F6" />} 
+              label="Workout Time" 
+              value={`${totalWorkoutMinutes} min`} 
+              icon={<Dumbbell size={18} color="#3B82F6" />} 
             />
           </View>
 

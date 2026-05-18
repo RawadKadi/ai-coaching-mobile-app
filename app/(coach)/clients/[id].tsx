@@ -62,13 +62,14 @@ export default function ClientDetailsScreen() {
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
   const [challengeFilter, setChallengeFilter] = useState<'active' | 'history'>('active');
-  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins' | 'sessions'>(
-    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : (tab as string) === 'sessions' ? 'sessions' : 'overview'
+  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins' | 'sessions' | 'stats'>(
+    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : (tab as string) === 'sessions' ? 'sessions' : (tab as string) === 'stats' ? 'stats' : 'overview'
   );
   const [checkins, setCheckins] = useState<any[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [streak, setStreak] = useState(0);
   const [sessionLog, setSessionLog] = useState<any[]>([]);
+  const [stepsLog, setStepsLog] = useState<any[]>([]);
   
   // Conflict Resolution State
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
@@ -162,6 +163,16 @@ export default function ClientDetailsScreen() {
 
       if (!sessionLogError && sessionLogData) {
         setSessionLog(sessionLogData);
+      }
+
+      // Load steps logs
+      const { data: stepsData } = await supabase
+        .from('daily_logs')
+        .select('*')
+        .eq('client_id', id)
+        .order('date', { ascending: false });
+      if (stepsData) {
+        setStepsLog(stepsData);
       }
     } catch (error) {
       console.error(error);
@@ -286,6 +297,15 @@ export default function ClientDetailsScreen() {
     );
   }
 
+  // Calculate Today's Steps
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+  const todayLog = stepsLog.find(log => log.date === todayStr);
+  const todaySteps = todayLog ? todayLog.steps : 0;
+
   const filteredChallenges = challenges.filter(c => challengeFilter === 'active' ? c.status === 'active' : c.status === 'completed');
 
   return (
@@ -356,10 +376,16 @@ export default function ClientDetailsScreen() {
                             <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'checkins' ? 'text-white' : 'text-slate-500'}`}>Check-ins</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            className={`pb-4 border-b-2 ${mainTab === 'sessions' ? 'border-blue-500' : 'border-transparent'}`}
+                            className={`mr-8 pb-4 border-b-2 ${mainTab === 'sessions' ? 'border-blue-500' : 'border-transparent'}`}
                             onPress={() => setMainTab('sessions')}
                         >
                             <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'sessions' ? 'text-white' : 'text-slate-500'}`}>Sessions</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            className={`pb-4 border-b-2 ${mainTab === 'stats' ? 'border-indigo-500' : 'border-transparent'}`}
+                            onPress={() => setMainTab('stats')}
+                        >
+                            <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'stats' ? 'text-white' : 'text-slate-500'}`}>Stats</Text>
                         </TouchableOpacity>
                     </ScrollView>
                 </View>
@@ -378,6 +404,7 @@ export default function ClientDetailsScreen() {
                             <InfoTile icon={<Scale size={14} color="#64748B" />} label="Weight" value={client.latest_weight ? `${client.latest_weight} kg` : 'Not set'} />
                             <InfoTile icon={<User size={14} color="#64748B" />} label="Height" value={client.height_cm ? `${client.height_cm} cm` : 'Not set'} />
                             <InfoTile icon={<Clock size={14} color="#64748B" />} label="Age" value={client.date_of_birth ? `${Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 3600 * 24 * 365.25))}` : 'Not set'} />
+                            <InfoTile icon={<Zap size={14} color="#6366F1" />} label="Today's Steps" value={todaySteps ? `${todaySteps.toLocaleString()} steps` : '0 steps'} />
                         </View>
                     </View>
                 </View>
@@ -583,7 +610,7 @@ export default function ClientDetailsScreen() {
                         ))
                     )}
                   </View>
-                ) : (() => {
+                ) : mainTab === 'sessions' ? (() => {
                   // Compute Weekly Slots and Ad-Hoc/Past Sessions
                   const activeWeeklySlots = sessionLog.filter(s => s.recurrence_rule && s.recurrence_rule.includes('WEEKLY'));
                   const weeklySlotConfigs = activeWeeklySlots.map(s => {
@@ -890,6 +917,207 @@ export default function ClientDetailsScreen() {
                       </View>
                     </View>
                   );
+                })() : (() => {
+                  // Stats tab content for Coach
+                  const validWeights = checkins.filter(c => c.weight_kg !== null && c.weight_kg !== undefined);
+                  const latestWeight = validWeights.length > 0 ? Number(validWeights[0].weight_kg) : null;
+                  const latestWeightDate = validWeights.length > 0 ? validWeights[0].date : null;
+
+                  let weightDaysAgo = 0;
+                  if (latestWeightDate) {
+                    const checkinDate = new Date(latestWeightDate);
+                    const todayDate = new Date();
+                    const diffTime = Math.abs(todayDate.getTime() - checkinDate.getTime());
+                    weightDaysAgo = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  }
+
+                  const validSleep = checkins.filter(c => c.sleep_hours !== null && c.sleep_hours !== undefined);
+                  const avgSleep = validSleep.length > 0 
+                    ? (validSleep.reduce((sum, c) => sum + Number(c.sleep_hours), 0) / validSleep.length).toFixed(1) 
+                    : null;
+
+                  const validEnergy = checkins.filter(c => c.energy_level !== null && c.energy_level !== undefined);
+                  const avgEnergy = validEnergy.length > 0 
+                    ? (validEnergy.reduce((sum, c) => sum + Number(c.energy_level), 0) / validEnergy.length).toFixed(1) 
+                    : null;
+
+                  return (
+                    <View className="px-6 py-8">
+                      {/* Metric Grid */}
+                      <View className="flex-row flex-wrap justify-between gap-4 mb-8">
+                        {/* Today's Steps Card (Full Width) */}
+                        <View className="w-full bg-indigo-500/10 rounded-[32px] p-6 border border-indigo-500/20 flex-row items-center justify-between">
+                          <View className="flex-row items-center gap-4">
+                            <View className="w-12 h-12 bg-indigo-500/20 rounded-2xl items-center justify-center border border-indigo-500/30">
+                              <Zap size={22} color="#818CF8" />
+                            </View>
+                            <View>
+                              <Text className="text-indigo-400 text-[10px] font-black uppercase tracking-wider">Today's Steps</Text>
+                              <Text className="text-white text-2xl font-black mt-1">
+                                {todaySteps.toLocaleString()}
+                              </Text>
+                            </View>
+                          </View>
+                          <View className="bg-indigo-500/20 px-3 py-1.5 rounded-xl border border-indigo-500/30">
+                            <Text className="text-indigo-400 font-black text-[9px] uppercase tracking-wider">Today</Text>
+                          </View>
+                        </View>
+
+                        {/* Streak Card */}
+                        <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
+                          <View className="w-10 h-10 bg-emerald-500/10 rounded-2xl items-center justify-center border border-emerald-500/20 mb-3">
+                            <Award size={18} color="#10B981" />
+                          </View>
+                          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Active Streak</Text>
+                          <Text className="text-white text-lg font-black mt-1">{streak} Days</Text>
+                        </View>
+
+                        {/* Weight Card */}
+                        <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
+                          <View className="w-10 h-10 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20 mb-3">
+                            <Scale size={18} color="#F59E0B" />
+                          </View>
+                          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">
+                            {weightDaysAgo > 5 ? `Weight (${weightDaysAgo}d ago)` : 'Last Weight'}
+                          </Text>
+                          <Text className="text-white text-lg font-black mt-1">{latestWeight ? `${latestWeight} kg` : '--'}</Text>
+                          {weightDaysAgo > 5 && (
+                            <View className="mt-1 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                              <Text className="text-red-400 text-[8px] font-black uppercase">Not Updated</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Average Sleep Card */}
+                        <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
+                          <View className="w-10 h-10 bg-indigo-500/10 rounded-2xl items-center justify-center border border-indigo-500/20 mb-3">
+                            <Clock size={18} color="#6366F1" />
+                          </View>
+                          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Avg Sleep</Text>
+                          <Text className="text-white text-lg font-black mt-1">{avgSleep ? `${avgSleep} hrs` : '--'}</Text>
+                        </View>
+
+                        {/* Average Energy Card */}
+                        <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
+                          <View className="w-10 h-10 bg-orange-500/10 rounded-2xl items-center justify-center border border-orange-500/20 mb-3">
+                            <Zap size={18} color="#F97316" />
+                          </View>
+                          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Avg Energy</Text>
+                          <Text className="text-white text-lg font-black mt-1">{avgEnergy ? `${avgEnergy}/10` : '--'}</Text>
+                        </View>
+                      </View>
+
+                      {/* Daily Activity / Synced Steps Section */}
+                      <View className="mb-8">
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View>
+                            <Text className="text-white text-xl font-black">Synced Activity</Text>
+                            <Text className="text-slate-500 text-xs mt-1">Steps automatically synced from client's device</Text>
+                          </View>
+                        </View>
+
+                        {stepsLog.length === 0 ? (
+                          <View className="p-8 items-center justify-center bg-slate-900/20 rounded-[32px] border border-slate-900 border-dashed">
+                            <Text className="text-slate-500 font-bold text-xs uppercase">No steps synced yet</Text>
+                            <Text className="text-slate-600 text-[10px] mt-1 text-center">The client hasn't enabled device sync yet.</Text>
+                          </View>
+                        ) : (
+                          <View className="gap-3">
+                            {stepsLog.slice(0, 10).map((logItem, idx) => (
+                              <MotiView
+                                key={logItem.id}
+                                from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
+                                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
+                                transition={{ delay: idx * 30 }}
+                                className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
+                              >
+                                <View className="flex-1">
+                                  <Text className="text-white font-black text-sm">
+                                    {new Date(logItem.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                  </Text>
+                                  <Text className="text-slate-400 font-bold text-xs mt-1">
+                                    {logItem.steps ? `${logItem.steps.toLocaleString()} steps` : '0 steps'}
+                                  </Text>
+                                </View>
+                                <View className="bg-indigo-500/10 px-3 py-1.5 rounded-xl border border-indigo-500/20">
+                                  <Text className="text-indigo-400 font-black text-[9px] uppercase tracking-wider">Synced</Text>
+                                </View>
+                              </MotiView>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Weight Logs Section */}
+                      <View className="mb-8">
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View>
+                            <Text className="text-white text-xl font-black">Weigh-in History</Text>
+                            <Text className="text-slate-500 text-xs mt-1">All weight records logged by the client</Text>
+                          </View>
+                        </View>
+
+                        {validWeights.length === 0 ? (
+                          <View className="p-8 items-center justify-center bg-slate-900/20 rounded-[32px] border border-slate-900 border-dashed">
+                            <Text className="text-slate-500 font-bold text-xs uppercase">No weight records yet</Text>
+                            <Text className="text-slate-600 text-[10px] mt-1 text-center">No weight data logged in check-ins.</Text>
+                          </View>
+                        ) : (
+                          <View className="gap-3">
+                            {validWeights.slice(0, 10).map((checkin, idx) => {
+                              const currentWeight = Number(checkin.weight_kg);
+                              const prevCheckin = validWeights[idx + 1];
+                              const prevWeight = prevCheckin ? Number(prevCheckin.weight_kg) : null;
+                              const diff = prevWeight !== null ? (currentWeight - prevWeight) : null;
+
+                              return (
+                                <MotiView
+                                  key={checkin.id}
+                                  from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
+                                  animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
+                                  transition={{ delay: idx * 30 }}
+                                  className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
+                                >
+                                  <View className="flex-1">
+                                    <Text className="text-white font-black text-sm">
+                                      {new Date(checkin.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                    </Text>
+                                    <Text className="text-slate-400 font-bold text-xs mt-1">
+                                      {currentWeight} kg
+                                    </Text>
+                                  </View>
+                                  {diff !== null && (
+                                    <View className={`px-3 py-1.5 rounded-xl border flex-row items-center gap-1 ${
+                                      diff < 0 
+                                        ? 'bg-emerald-500/10 border-emerald-500/20' 
+                                        : diff > 0 
+                                          ? 'bg-amber-500/10 border-amber-500/20'
+                                          : 'bg-slate-800 border-white/5'
+                                    }`}>
+                                      <TrendingUp 
+                                        size={10} 
+                                        color={diff < 0 ? '#10B981' : diff > 0 ? '#F59E0B' : '#64748B'} 
+                                        style={diff < 0 ? { transform: [{ rotate: '180deg' }] } : undefined}
+                                      />
+                                      <Text className={`font-black text-[9px] uppercase tracking-wider ${
+                                        diff < 0 
+                                          ? 'text-emerald-400' 
+                                          : diff > 0 
+                                            ? 'text-amber-500'
+                                            : 'text-slate-400'
+                                      }`}>
+                                        {diff < 0 ? `${diff.toFixed(1)} kg` : diff > 0 ? `+${diff.toFixed(1)} kg` : 'Stable'}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </MotiView>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
                 })()}
             </ScrollView>
         </View>
@@ -1037,6 +1265,10 @@ const InfoTile = ({ icon, label, value, fullWidth, selectable }: { icon: any, la
 const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: any, coachId: string, index: number, isEditing?: boolean, onDelete?: () => void }) => {
     const router = useRouter();
     const [showMenu, setShowMenu] = useState(false);
+    const totalSubs = Number(challenge.total_subs || 0);
+    const completedSubs = Number(challenge.completed_subs || 0);
+    const completionRate = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
+    
     return (
         <Swipeable
             renderRightActions={() => (
@@ -1093,11 +1325,11 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
 
                 <View className="flex-row justify-between items-end mb-3">
                     <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Progress</Text>
-                    <Text className="text-white text-xl font-black tracking-tight">{challenge.completion_rate}%</Text>
+                    <Text className="text-white text-xl font-black tracking-tight">{completionRate}%</Text>
                 </View>
 
                 <View className="w-full h-2 bg-slate-950 rounded-full overflow-hidden mb-10">
-                    <View className="h-full bg-blue-600 rounded-full" style={{ width: `${challenge.completion_rate}%` }} />
+                    <View className="h-full bg-blue-600 rounded-full" style={{ width: `${completionRate}%` }} />
                 </View>
 
                 <View className="flex-row gap-3">

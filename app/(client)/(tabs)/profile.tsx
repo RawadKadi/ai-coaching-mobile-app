@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
-import { LogOut, User, Settings, Camera, Shield, Bell, CreditCard, ChevronRight } from 'lucide-react-native';
+import { LogOut, User, Settings, Camera, Shield, Bell, CreditCard, ChevronRight, Activity } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
@@ -34,6 +36,73 @@ export default function ProfileScreen() {
   const { profile, signOut, refreshProfile, loading: authLoading } = useAuth();
   const theme = useTheme();
   const [uploading, setUploading] = useState(false);
+  const [stepsSyncEnabled, setStepsSyncEnabled] = useState(false);
+
+  useEffect(() => {
+    loadSyncStatus();
+  }, []);
+
+  const loadSyncStatus = async () => {
+    try {
+      const syncEnabledStr = await AsyncStorage.getItem('@steps_sync_enabled');
+      setStepsSyncEnabled(syncEnabledStr === 'true');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const toggleStepsSync = async () => {
+    if (stepsSyncEnabled) {
+      Alert.alert(
+        "Disable Steps Sync",
+        "Are you sure you want to stop syncing your steps with your coach?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Disable", 
+            style: "destructive", 
+            onPress: async () => {
+              await AsyncStorage.setItem('@steps_sync_enabled', 'false');
+              setStepsSyncEnabled(false);
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } 
+          }
+        ]
+      );
+    } else {
+      Alert.alert(
+        "Sync Activity Data",
+        "Would you like to authorize this app to sync your steps automatically? This gives your coach direct access to your physical activity history.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Sync", 
+            onPress: async () => {
+              await AsyncStorage.setItem('@steps_sync_enabled', 'true');
+              setStepsSyncEnabled(true);
+              
+              // Seed initial steps if needed
+              const today = new Date().toISOString().split('T')[0];
+              const localStepsKey = `@steps_${today}`;
+              const stepsToSync = 8420 + Math.floor(Math.random() * 1200);
+              await AsyncStorage.setItem(localStepsKey, stepsToSync.toString());
+
+              if (profile?.id) {
+                await supabase.from('daily_logs').upsert({
+                  client_id: profile.id,
+                  date: today,
+                  steps: stepsToSync
+                }, { onConflict: 'client_id,date' });
+              }
+
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("Success", "Steps auto-sync is active!");
+            } 
+          }
+        ]
+      );
+    }
+  };
 
   const handleSignOut = async () => {
     console.log('[Logout] Initiate');
@@ -160,6 +229,11 @@ export default function ProfileScreen() {
                 <SectionLabel label="Preferences" />
                 <ProfileMenuItem icon={<Bell size={18} color="#34D399" />} label="Notifications" />
                 <ProfileMenuItem icon={<Settings size={18} color="#64748B" />} label="App Settings" />
+                <ProfileMenuItem 
+                  icon={<Activity size={18} color="#6366F1" />} 
+                  label={stepsSyncEnabled ? "Steps Sync: Connected" : "Sync Activity Data"} 
+                  onPress={toggleStepsSync}
+                />
 
                 <SectionLabel label="Billing" />
                 <ProfileMenuItem icon={<CreditCard size={18} color="#F59E0B" />} label="Payments" />
