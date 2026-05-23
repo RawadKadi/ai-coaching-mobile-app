@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import { ChevronDown, Clock, Check } from 'lucide-react-native';
-import { MotiView, AnimatePresence } from 'moti';
 
 interface BrandedDurationPickerProps {
   value: number;
@@ -15,20 +14,20 @@ export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ va
 
   return (
     <View>
-      <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[2px] mb-3 ml-1">{label}</Text>
+      <Text style={styles.headerLabel}>{label}</Text>
       
       <TouchableOpacity 
         onPress={() => setIsOpen(true)}
         activeOpacity={0.8}
-        className="h-20 bg-slate-900 border border-white/5 rounded-[28px] px-8 flex-row items-center justify-between shadow-2xl shadow-black/40"
+        style={styles.pickerButton}
       >
-        <View className="flex-row items-center gap-4">
-          <View className="w-10 h-10 bg-blue-600/10 rounded-xl items-center justify-center border border-blue-600/20">
+        <View style={styles.pickerContent}>
+          <View style={styles.iconContainer}>
             <Clock size={20} color="#3B82F6" />
           </View>
           <View>
-            <Text className="text-white font-black text-xl">{value} Days</Text>
-            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">Protocol Length</Text>
+            <Text style={styles.daysText}>{value} Days</Text>
+            <Text style={styles.subText}>Length</Text>
           </View>
         </View>
         <ChevronDown size={20} color="#475569" />
@@ -42,24 +41,24 @@ export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ va
         <TouchableOpacity 
           activeOpacity={1} 
           onPress={() => setIsOpen(false)}
-          className="flex-1 bg-black/80 justify-end"
+          style={styles.modalOverlay}
         >
-          <View className="bg-slate-950 rounded-t-[48px] border-t border-white/10 p-8 pb-12 max-h-[60%]">
-            <View className="flex-row justify-between items-center mb-8">
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
               <View>
-                <Text className="text-white text-2xl font-black">Select Duration</Text>
-                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[2px] mt-1">Days Range: 3-14</Text>
+                <Text style={styles.modalTitle}>Select Duration</Text>
+                <Text style={styles.modalSubtitle}>Days Range: 3-14</Text>
               </View>
               <TouchableOpacity 
                 onPress={() => setIsOpen(false)}
-                className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/10"
+                style={styles.doneButton}
               >
-                <Text className="text-slate-400 font-bold">Done</Text>
+                <Text style={styles.doneButtonText}>Done</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View className="flex-row flex-wrap gap-3">
+              <View style={styles.gridContainer}>
                 {options.map((opt) => (
                   <TouchableOpacity
                     key={opt}
@@ -67,13 +66,22 @@ export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ va
                       onSelect(opt);
                       setIsOpen(false);
                     }}
-                    className={`flex-1 min-w-[30%] h-16 rounded-2xl border items-center justify-center ${value === opt ? 'bg-blue-600 border-blue-400' : 'bg-slate-900 border-white/5'}`}
+                    style={[
+                      styles.gridOption,
+                      value === opt ? styles.gridOptionActive : styles.gridOptionInactive
+                    ]}
                   >
-                    <View className="flex-row items-center gap-2">
-                        <Text className={`text-xl font-black ${value === opt ? 'text-white' : 'text-slate-400'}`}>{opt}</Text>
+                    <View style={styles.optionRow}>
+                        <Text style={[
+                          styles.optionText,
+                          value === opt ? styles.optionTextActive : styles.optionTextInactive
+                        ]}>{opt}</Text>
                         {value === opt && <Check size={14} color="white" />}
                     </View>
-                    <Text className={`text-[8px] font-black uppercase tracking-widest ${value === opt ? 'text-blue-200' : 'text-slate-600'}`}>Days</Text>
+                    <Text style={[
+                      styles.optionLabel,
+                      value === opt ? styles.optionLabelActive : styles.optionLabelInactive
+                    ]}>Days</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -84,3 +92,156 @@ export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ va
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  headerLabel: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  pickerButton: {
+    height: 80,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 28,
+    paddingHorizontal: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  pickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    marginRight: 16,
+  },
+  daysText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 20,
+  },
+  subText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#020617',
+    borderTopLeftRadius: 48,
+    borderTopRightRadius: 48,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 32,
+    paddingBottom: 48,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  modalSubtitle: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginTop: 4,
+  },
+  doneButton: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  doneButtonText: {
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridOption: {
+    width: '31%',
+    height: 64,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  gridOptionActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#3B82F6',
+  },
+  gridOptionInactive: {
+    backgroundColor: '#0F172A',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  optionText: {
+    fontSize: 20,
+    fontWeight: '900',
+    marginRight: 4,
+  },
+  optionTextActive: {
+    color: '#FFFFFF',
+  },
+  optionTextInactive: {
+    color: '#94A3B8',
+  },
+  optionLabel: {
+    fontSize: 8,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  optionLabelActive: {
+    color: '#BFDBFE',
+  },
+  optionLabelInactive: {
+    color: '#475569',
+  },
+});

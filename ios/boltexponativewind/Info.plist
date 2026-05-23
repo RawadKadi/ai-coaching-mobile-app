@@ -51,6 +51,12 @@
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your photos</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to read your steps to sync them with your coach.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to sync your steps with your coach.</string>
+    <key>NSMotionUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to read your steps to sync them with your coach.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

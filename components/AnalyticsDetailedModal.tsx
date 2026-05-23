@@ -31,8 +31,8 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const chartWidth = SCREEN_WIDTH - 48;
-  const chartHeight = 250;
-  const padding = 10;
+  const chartHeight = 200;
+  const paddingX = 16;
 
   // Calculate scales
   const stats = useMemo(() => {
@@ -46,13 +46,15 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
   const points = useMemo(() => {
     if (data.length < 2) return { roster: [], performers: [] };
     
+    const usableWidth = chartWidth - paddingX * 2;
+    
     return {
       roster: data.map((d, i) => ({
-        x: (i / (data.length - 1)) * chartWidth,
+        x: paddingX + (i / (data.length - 1)) * usableWidth,
         y: chartHeight - ((d.total_roster - stats.min) / stats.range) * chartHeight
       })),
       performers: data.map((d, i) => ({
-        x: (i / (data.length - 1)) * chartWidth,
+        x: paddingX + (i / (data.length - 1)) * usableWidth,
         y: chartHeight - ((d.high_performers - stats.min) / stats.range) * chartHeight
       }))
     };
@@ -66,18 +68,19 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
 
     return {
       rosterLine,
-      rosterArea: `${rosterLine} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`,
+      rosterArea: `${rosterLine} L ${points.roster[points.roster.length - 1].x} ${chartHeight} L ${points.roster[0].x} ${chartHeight} Z`,
       performersLine,
-      performersArea: `${performersLine} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`
+      performersArea: `${performersLine} L ${points.performers[points.performers.length - 1].x} ${chartHeight} L ${points.performers[0].x} ${chartHeight} Z`
     };
-  }, [points, chartWidth, chartHeight]);
+  }, [points, chartHeight]);
 
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderMove: (evt) => {
       const x = evt.nativeEvent.locationX;
-      const index = Math.round((x / chartWidth) * (data.length - 1));
+      const usableWidth = chartWidth - paddingX * 2;
+      const index = Math.round(((x - paddingX) / usableWidth) * (data.length - 1));
       const safeIndex = Math.max(0, Math.min(data.length - 1, index));
       
       if (safeIndex !== activeIndex) {
@@ -137,7 +140,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
 
         {/* Chart Container */}
         <View className="px-6 flex-1">
-          <View className="bg-slate-900/20 rounded-[40px] border border-white/5 p-6 h-[350px] justify-center overflow-hidden">
+          <View className="bg-slate-900/20 rounded-[40px] border border-white/5 py-6 px-0 h-[270px] justify-center overflow-hidden">
             <View {...panResponder.panHandlers} className="relative">
               <Svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
                 {/* Horizontal Grid Lines */}

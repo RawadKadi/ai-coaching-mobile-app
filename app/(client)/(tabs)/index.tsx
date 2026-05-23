@@ -26,6 +26,7 @@ import { CheckIn, Habit, HabitLog } from '@/types/database';
 import { formatCompactNumber } from '@/lib/format-utils';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { isHealthSyncAvailable, requestHealthPermissions, getTodaySteps } from '@/lib/health-service';
 
 export default function ClientDashboard() {
   const router = useRouter();
@@ -150,23 +151,28 @@ export default function ClientDashboard() {
       // Auto-Sync Steps Tracker
       let syncedSteps: number | null = null;
       if (isSyncEnabled) {
-        // Read local steps cache or create highly realistic simulated steps count
         const localStepsKey = `@steps_${today}`;
         const storedSteps = await AsyncStorage.getItem(localStepsKey);
-        let stepsToSync = storedSteps ? parseInt(storedSteps) : 8420 + Math.floor(Math.random() * 1200);
-        await AsyncStorage.setItem(localStepsKey, stepsToSync.toString());
+        
+        let stepsToSync = storedSteps ? parseInt(storedSteps) : 0;
 
-        try {
-          await supabase.from('daily_logs').upsert({
-            client_id: client.id,
-            date: today,
-            steps: stepsToSync
-          }, { onConflict: 'client_id,date' });
-          syncedSteps = stepsToSync;
-        } catch (dbErr) {
-          console.warn('Upserting steps failed. Checking if daily_logs table exists:', dbErr);
-          syncedSteps = stepsToSync;
+        if (await isHealthSyncAvailable()) {
+          const realSteps = await getTodaySteps();
+          if (realSteps !== null) {
+            stepsToSync = realSteps;
+            await AsyncStorage.setItem(localStepsKey, stepsToSync.toString());
+            try {
+              await supabase.from('daily_logs').upsert({
+                client_id: client.id,
+                date: today,
+                steps: stepsToSync
+              }, { onConflict: 'client_id,date' });
+            } catch (dbErr) {
+              console.warn('Upserting steps failed:', dbErr);
+            }
+          }
         }
+        syncedSteps = stepsToSync;
       } else if (dailyLogResult.data) {
         syncedSteps = dailyLogResult.data.steps;
       }
@@ -181,33 +187,74 @@ export default function ClientDashboard() {
   const handleStepsSyncPress = async () => {
     if (stepsSyncEnabled) {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Alert.alert(
-        "Steps Synced",
-        `Your steps are automatically synced from your device! Today's count: ${todaySteps?.toLocaleString() || '0'} steps.`,
-        [{ text: "Awesome" }]
-      );
+      
+      // Perform active real sync when user requests it
+      const realSteps = await getTodaySteps();
+      if (realSteps !== null) {
+        const today = new Date().toISOString().split('T')[0];
+        const localStepsKey = `@steps_${today}`;
+        await AsyncStorage.setItem(localStepsKey, realSteps.toString());
+        
+        if (client?.id) {
+          try {
+            await supabase.from('daily_logs').upsert({
+              client_id: client.id,
+              date: today,
+              steps: realSteps
+            }, { onConflict: 'client_id,date' });
+          } catch (dbErr) {
+            console.warn('Upserting steps failed:', dbErr);
+          }
+        }
+        
+        setTodaySteps(realSteps);
+        
+        Alert.alert(
+          "Steps Synced",
+          `Today: ${realSteps.toLocaleString()} steps.`,
+          [{ text: "Ok" }]
+        );
+      } else {
+        Alert.alert(
+          "Sync Failed",
+          "Cannot read steps. Please check your Health app settings.",
+          [{ text: "Ok" }]
+        );
+      }
       return;
     }
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
-      "Sync Activity Data",
-      "Would you like to authorize this app to sync your steps automatically? This gives your coach direct access to your physical activity history.",
+      "Share Steps?",
+      "Let this app sync steps from your health app to share progress with your coach?",
       [
         { text: "Not Now", style: "cancel" },
         { 
-          text: "Sync", 
+          text: "Share Steps", 
           onPress: async () => {
             try {
+              const hasPermission = await requestHealthPermissions();
+              if (!hasPermission) {
+                Alert.alert(
+                  "Permission Required",
+                  "Enable permissions in your Health settings to sync steps.",
+                  [{ text: "Ok" }]
+                );
+                return;
+              }
+
               await AsyncStorage.setItem('@steps_sync_enabled', 'true');
               setStepsSyncEnabled(true);
               
               const today = new Date().toISOString().split('T')[0];
               const localStepsKey = `@steps_${today}`;
-              const stepsToSync = 8420 + Math.floor(Math.random() * 1200);
+              const realSteps = await getTodaySteps();
+              const stepsToSync = realSteps !== null ? realSteps : 0;
+              
               await AsyncStorage.setItem(localStepsKey, stepsToSync.toString());
 
-              if (client?.id) {
+              if (client?.id && stepsToSync > 0) {
                 await supabase.from('daily_logs').upsert({
                   client_id: client.id,
                   date: today,
@@ -216,7 +263,7 @@ export default function ClientDashboard() {
               }
 
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert("Success", "Steps auto-sync is active!");
+              Alert.alert("Connected!", "Your steps are now sharing automatically.");
               loadDashboardData();
             } catch (err) {
               console.error(err);
@@ -291,7 +338,7 @@ export default function ClientDashboard() {
                   onPress={() => router.push('/(client)/check-in')}
                 />
                 <MetricCard 
-                  label={stepsSyncEnabled ? "Steps (Synced)" : "Steps (Auto)"} 
+                  label={stepsSyncEnabled ? "Steps" : "Sync Steps"} 
                   value={todaySteps !== null ? `${todaySteps.toLocaleString()}` : 'Sync'} 
                   icon={<Activity size={20} color={stepsSyncEnabled ? "#6366F1" : "#64748B"} />} 
                   active={stepsSyncEnabled}

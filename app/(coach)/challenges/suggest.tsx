@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, TextInput, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Sparkles, Calendar, ChevronRight, Zap, Target as FocusIcon, Flame, ShieldCheck, Check, Search } from 'lucide-react-native';
+import { ArrowLeft, Sparkles, Calendar, ChevronRight, ChevronLeft, Zap, Target as FocusIcon, Flame, ShieldCheck, Check, Search } from 'lucide-react-native';
 import { generateWeeklyChallenges } from '@/lib/ai-challenge-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { BrandedCalendar } from '@/components/BrandedCalendar';
@@ -56,9 +56,15 @@ export default function AISuggestChallengeScreen() {
   const loadClients = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_coach_clients', { p_coach_id: coach?.id });
+      // get_my_clients returns client_avatar (full URL from profiles) — same as rest of the app
+      const { data, error } = await supabase.rpc('get_my_clients');
       if (error) throw error;
-      setClients(data || []);
+      const mapped = (data || []).map((item: any) => ({
+        id: item.client_id,
+        full_name: item.client_name,
+        avatar_url: item.client_avatar,
+      }));
+      setClients(mapped);
     } catch (error) {
       console.error('Load error:', error);
     } finally {
@@ -89,6 +95,7 @@ export default function AISuggestChallengeScreen() {
         params: {
           clientId: selectedClient.id,
           clientName: selectedClient.full_name,
+          clientAvatar: selectedClient.avatar_url || '',
           startDate: startDate.toISOString().split('T')[0],
           challenges: JSON.stringify(challenges)
         }
@@ -165,8 +172,8 @@ export default function AISuggestChallengeScreen() {
         >
             {step === 1 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Select Target</Text>
-                <Text style={{ color: '#64748B', marginBottom: 24 }}>Choose the client for this AI Setup.</Text>
+                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Select Client</Text>
+                <Text style={{ color: '#64748B', marginBottom: 24 }}>Choose a client.</Text>
                 
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A', paddingHorizontal: 16, height: 56, borderRadius: 16, borderWidth: 1, borderColor: '#1E293B', marginBottom: 24 }}>
                   <Search size={20} color="#475569" />
@@ -207,7 +214,7 @@ export default function AISuggestChallengeScreen() {
                                 <BrandedAvatar size={44} name={client.full_name} imageUrl={client.avatar_url} />
                                 <View style={{ marginLeft: 12 }}>
                                     <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>{client.full_name}</Text>
-                                    <Text style={{ color: '#475569', fontSize: 12 }}>Ready for Optimization</Text>
+                                    <Text style={{ color: '#475569', fontSize: 12 }}>Ready</Text>
                                 </View>
                             </View>
                             <View style={{
@@ -230,8 +237,8 @@ export default function AISuggestChallengeScreen() {
 
             {step === 2 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Daily Context</Text>
-                <Text style={{ color: '#64748B', marginBottom: 24 }}>Define the primary focus for the AI engine.</Text>
+                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Focus Area</Text>
+                <Text style={{ color: '#64748B', marginBottom: 24 }}>Choose what they should focus on.</Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                     {(['training', 'nutrition', 'recovery', 'consistency'] as ChallengeFocusType[]).map((f) => {
@@ -259,7 +266,7 @@ export default function AISuggestChallengeScreen() {
                     })}
                 </View>
 
-                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 24, marginBottom: 16 }}>Intensity Baseline</Text>
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 24, marginBottom: 16 }}>Difficulty</Text>
                 <View style={{ flexDirection: 'row' }}>
                     {(['low', 'medium', 'high'] as const).map((int) => {
                         const isActive = intensity === int;
@@ -299,35 +306,47 @@ export default function AISuggestChallengeScreen() {
 
             {step === 3 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Timeline</Text>
-                <Text style={{ color: '#64748B', marginBottom: 32 }}>How long and when should this challenge run?</Text>
+                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Start Date</Text>
+                <Text style={{ color: '#64748B', marginBottom: 32 }}>Select length and start date.</Text>
 
-                <View className="mb-10">
+                <View style={styles.container}>
                   <BrandedDurationPicker 
                     value={durationDays}
                     onSelect={setDurationDays}
-                    label="Challenge Duration"
+                    label="Duration"
                   />
                 </View>
 
-                <View className="mb-10">
-                  <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, marginLeft: 4 }}>Execution Start</Text>
-                  <View className="flex-row gap-4">
+                <View style={styles.container}>
+                  <Text style={styles.sectionTitle}>Start Date</Text>
+                  <View style={styles.rowGap}>
                     <TouchableOpacity 
                       onPress={() => setScheduleMode('now')}
                       activeOpacity={0.8}
-                      className={`flex-1 h-24 rounded-[32px] border items-center justify-center ${scheduleMode === 'now' ? 'bg-blue-600 border-blue-400' : 'bg-slate-900 border-white/5'}`}
+                      style={[
+                        styles.buttonBase,
+                        scheduleMode === 'now' ? styles.buttonActive : styles.buttonInactive
+                      ]}
                     >
                       <Zap size={24} color={scheduleMode === 'now' ? 'white' : '#475569'} />
-                      <Text className={`font-black text-xs uppercase mt-2 tracking-widest ${scheduleMode === 'now' ? 'text-white' : 'text-slate-500'}`}>Launch Now</Text>
+                      <Text style={[
+                        styles.buttonText,
+                        scheduleMode === 'now' ? styles.buttonTextActive : styles.buttonTextInactive
+                      ]}>Start Now</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                       onPress={() => setScheduleMode('later')}
                       activeOpacity={0.8}
-                      className={`flex-1 h-24 rounded-[32px] border items-center justify-center ${scheduleMode === 'later' ? 'bg-blue-600 border-blue-400' : 'bg-slate-900 border-white/5'}`}
+                      style={[
+                        styles.buttonBase,
+                        scheduleMode === 'later' ? styles.buttonActive : styles.buttonInactive
+                      ]}
                     >
                       <Calendar size={24} color={scheduleMode === 'later' ? 'white' : '#475569'} />
-                      <Text className={`font-black text-xs uppercase mt-2 tracking-widest ${scheduleMode === 'later' ? 'text-white' : 'text-slate-500'}`}>Set Date</Text>
+                      <Text style={[
+                        styles.buttonText,
+                        scheduleMode === 'later' ? styles.buttonTextActive : styles.buttonTextInactive
+                      ]}>Pick Date</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -349,9 +368,9 @@ export default function AISuggestChallengeScreen() {
                     <View style={{ width: 64, height: 64, backgroundColor: '#2563EB', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
                         <Zap size={32} color="white" />
                     </View>
-                    <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>Ready for Generation</Text>
+                    <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>Ready to create</Text>
                     <Text style={{ color: '#94A3B8', textAlign: 'center', marginTop: 12, lineHeight: 20, paddingHorizontal: 16, fontSize: 14 }}>
-                        A {durationDays}-day targeted {focusType} protocol for {selectedClient?.full_name} will be created.
+                        We will create a {durationDays}-day {focusType} plan for {selectedClient?.full_name}.
                     </Text>
                 </View>
 
@@ -362,12 +381,22 @@ export default function AISuggestChallengeScreen() {
                                 <Calendar size={16} color="#3B82F6" />
                             </View>
                             <View>
-                                <Text style={{ color: '#475569', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }}>Schedule</Text>
-                                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>{scheduleMode === 'now' ? 'Immediate Start' : 'Custom Launch'}</Text>
+                                <Text style={{ color: '#475569', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }}>Start Date</Text>
+                                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>{scheduleMode === 'now' ? 'Starts today' : 'Starts later'}</Text>
                             </View>
                         </View>
                         <Text style={{ color: '#60A5FA', fontWeight: '900', fontSize: 13 }}>
-                            {scheduleMode === 'now' ? 'Today' : customStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {scheduleMode === 'now' ? 'Today' : (() => {
+                              try {
+                                if (customStartDate instanceof Date && !isNaN(customStartDate.getTime())) {
+                                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                  return `${months[customStartDate.getMonth()]} ${customStartDate.getDate()}, ${customStartDate.getFullYear()}`;
+                                }
+                              } catch (e) {
+                                console.error('Error formatting date:', e);
+                              }
+                              return 'Custom Date';
+                            })()}
                         </Text>
                     </View>
 
@@ -376,8 +405,8 @@ export default function AISuggestChallengeScreen() {
                             <ShieldCheck size={16} color="#10B981" />
                         </View>
                         <View>
-                            <Text style={{ color: '#475569', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }}>Security</Text>
-                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Verification Layer Active</Text>
+                            <Text style={{ color: '#475569', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }}>Secure</Text>
+                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Secure connection</Text>
                         </View>
                     </View>
                 </View>
@@ -387,44 +416,147 @@ export default function AISuggestChallengeScreen() {
 
         {/* Footer Navigation */}
         <View style={{ paddingHorizontal: 24, paddingVertical: 24, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: '#0F172A' }}>
-            <TouchableOpacity 
-              onPress={() => {
-                if (step < 4) setStep(step + 1);
-                else handleGenerate();
-              }}
-              disabled={(step === 1 && !selectedClient) || generating}
-              style={{
-                height: 60,
-                borderRadius: 20,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: (step === 1 && !selectedClient) ? '#0F172A' : '#2563EB',
-                opacity: generating ? 0.7 : 1
-              }}
-            >
+            {step > 1 ? (
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity 
+                  onPress={() => setStep(step - 1)}
+                  disabled={generating}
+                  style={{
+                    flex: 1,
+                    height: 60,
+                    borderRadius: 20,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#0F172A',
+                    borderWidth: 1,
+                    borderColor: '#1E293B',
+                    opacity: generating ? 0.7 : 1
+                  }}
+                >
+                  <ChevronLeft size={18} color="#94A3B8" style={{ marginRight: 4 }} />
+                  <Text style={{ color: '#94A3B8', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>
+                    Back
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  onPress={() => {
+                    if (step < 4) setStep(step + 1);
+                    else handleGenerate();
+                  }}
+                  disabled={generating}
+                  style={{
+                    flex: 2,
+                    height: 60,
+                    borderRadius: 20,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#2563EB',
+                    opacity: generating ? 0.7 : 1
+                  }}
+                >
+                  {generating ? (
+                      <ActivityIndicator color="white" />
+                  ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {step === 4 ? (
+                          <>
+                             <Sparkles size={20} color="white" style={{ marginRight: 10 }} />
+                             <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Create Plan</Text>
+                          </>
+                        ) : (
+                          <>
+                             <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: 'white', marginRight: 8 }}>
+                               Next
+                             </Text>
+                             <ChevronRight size={18} color="white" />
+                          </>
+                        )}
+                      </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                onPress={() => {
+                  if (step < 4) setStep(step + 1);
+                  else handleGenerate();
+                }}
+                disabled={(step === 1 && !selectedClient) || generating}
+                style={{
+                  height: 60,
+                  borderRadius: 20,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: (step === 1 && !selectedClient) ? '#0F172A' : '#2563EB',
+                  opacity: generating ? 0.7 : 1
+                }}
+              >
                 {generating ? (
                     <ActivityIndicator color="white" />
                 ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      {step === 4 ? (
-                        <>
-                           <Sparkles size={20} color="white" style={{ marginRight: 10 }} />
-                           <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Generate Strategy</Text>
-                        </>
-                      ) : (
-                        <>
-                           <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: step === 1 && !selectedClient ? '#475569' : 'white', marginRight: 8 }}>
-                             Continue Session
-                           </Text>
-                           <ChevronRight size={18} color={step === 1 && !selectedClient ? '#1E293B' : 'white'} />
-                        </>
-                      )}
+                         <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: step === 1 && !selectedClient ? '#475569' : 'white', marginRight: 8 }}>
+                           Next
+                         </Text>
+                         <ChevronRight size={18} color={step === 1 && !selectedClient ? '#1E293B' : 'white'} />
                     </View>
                 )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+            )}
         </View>
       </SafeAreaView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 40,
+  },
+  sectionTitle: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  rowGap: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  buttonBase: {
+    flex: 1,
+    height: 96,
+    borderRadius: 32,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#3B82F6',
+  },
+  buttonInactive: {
+    backgroundColor: '#0F172A',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  buttonText: {
+    fontWeight: '900',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    marginTop: 8,
+    letterSpacing: 1.5,
+  },
+  buttonTextActive: {
+    color: '#FFFFFF',
+  },
+  buttonTextInactive: {
+    color: '#64748B',
+  },
+});

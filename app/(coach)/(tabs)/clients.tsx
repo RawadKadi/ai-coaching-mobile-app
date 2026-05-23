@@ -54,6 +54,8 @@ export default function ClientsScreen() {
       const sub = supabase.channel('coach_management_changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'coach_client_links', filter: `coach_id=eq.${coach.id}` }, () => loadClients())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'coach_hierarchy', filter: `parent_coach_id=eq.${coach.id}` }, () => loadSubCoaches())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'habit_logs' }, () => loadClients())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_challenges' }, () => loadClients())
         .subscribe();
       return () => { sub.unsubscribe(); };
     } else { setLoading(false); }

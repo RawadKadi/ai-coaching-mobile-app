@@ -7,6 +7,67 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Check, RefreshCw, Plus, Trash2, Edit3, Sparkles, Calendar, Clock, ChevronRight, Zap, Dumbbell, Apple, Moon } from 'lucide-react-native';
 import { SubChallengeTemplate } from '@/lib/ai-challenge-service';
 
+const formatDateSafe = (dateStr: string) => {
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parts[0];
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${months[month - 1]} ${day}, ${year}`;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return dateStr;
+};
+
+const parseLocalDate = (dateStr: string) => {
+  try {
+    if (!dateStr) return new Date();
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+  } catch (e) {
+    console.error('Error parsing local date:', e);
+  }
+  return new Date(dateStr);
+};
+
+const getDayNameSafe = (dateStr: string) => {
+  try {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dateObj = parseLocalDate(dateStr);
+    const day = dateObj.getDay();
+    if (!isNaN(day)) {
+      return dayNames[day];
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return '';
+};
+
+const getMonthDaySafe = (dateStr: string) => {
+  try {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dateObj = parseLocalDate(dateStr);
+    const month = dateObj.getMonth();
+    const day = dateObj.getDate();
+    if (!isNaN(month) && !isNaN(day)) {
+      return `${monthNames[month]} ${day}`;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return '';
+};
+
 export default function ReviewChallengesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -17,10 +78,9 @@ export default function ReviewChallengesScreen() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const [isSuccess, setIsSuccess] = useState(false);
-
   const clientId = params.clientId as string;
   const clientName = params.clientName as string;
+  const clientAvatar = params.clientAvatar as string;
   const startDate = params.startDate as string;
 
   const challengesByDate = challenges.reduce((acc, challenge, idx) => {
@@ -47,34 +107,69 @@ export default function ReviewChallengesScreen() {
 
   const handleApprove = async () => {
     if (challenges.length === 0) return;
+    if (!coach) {
+      Alert.alert('Error', 'Not logged in as a coach');
+      return;
+    }
     try {
+      console.log('handleApprove: starting execution...');
       setCreating(true);
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 6);
+      console.log('handleApprove: startDate =', startDate);
 
-      const { error } = await supabase.rpc('create_mother_challenge', {
-        p_coach_id: coach!.id,
-        p_client_id: clientId,
-        p_name: `Elite Performance: Week starting ${new Date(startDate).toLocaleDateString()}`,
-        p_description: `Personalized 7-day adaptive training strategy for ${clientName}`,
-        p_start_date: startDate,
-        p_end_date: endDate.toISOString().split('T')[0],
-        p_sub_challenges: challenges.map(c => ({
+      const parsedStart = parseLocalDate(startDate);
+      const endDateObj = new Date(parsedStart);
+      endDateObj.setDate(endDateObj.getDate() + 6);
+      
+      const endYear = endDateObj.getFullYear();
+      const endMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
+      const endDay = String(endDateObj.getDate()).padStart(2, '0');
+      const endDateStr = `${endYear}-${endMonth}-${endDay}`;
+      console.log('handleApprove: endDateStr =', endDateStr);
+
+      // Map intensities directly matching database enums ('low', 'medium', 'high')
+      const mappedSubChallenges = challenges.map(c => {
+        return {
           name: c.name,
           description: c.description,
           assigned_date: c.assigned_date,
           focus_type: c.focus_type,
           intensity: c.intensity
-        })),
+        };
+      });
+      console.log('handleApprove: mappedSubChallenges =', JSON.stringify(mappedSubChallenges));
+
+      console.log('handleApprove: calling supabase.rpc(create_mother_challenge)...');
+      const rpcPayload = {
+        p_coach_id: coach.id,
+        p_client_id: clientId,
+        p_name: `Weekly Plan: ${formatDateSafe(startDate)}`,
+        p_description: `Weekly plan for ${clientName}`,
+        p_start_date: startDate,
+        p_end_date: endDateStr,
+        p_sub_challenges: mappedSubChallenges,
         p_created_by: 'coach',
         p_mode: 'relative'
-      });
+      };
+      console.log('handleApprove: rpcPayload =', JSON.stringify(rpcPayload));
+
+      const { data, error } = await supabase.rpc('create_mother_challenge', rpcPayload);
+      console.log('handleApprove: supabase.rpc returned:', { data, error });
 
       if (error) throw error;
-      setIsSuccess(true);
+      // Navigate to dashboard with success params — modal will show there
+      router.replace({
+        pathname: '/(coach)/(tabs)',
+        params: {
+          planSent: '1',
+          clientName: clientName || '',
+          clientAvatar: clientAvatar || '',
+        }
+      });
     } catch (error: any) {
+      console.error('handleApprove: caught error:', error);
       Alert.alert('Error', error.message || 'Failed to launch plan');
     } finally {
+      console.log('handleApprove: finally block executing, setting creating to false');
       setCreating(false);
     }
   };
@@ -88,47 +183,6 @@ export default function ReviewChallengesScreen() {
     }
   };
 
-  if (isSuccess) {
-    return (
-      <View className="flex-1 bg-slate-950 items-center justify-center px-6">
-        <MotiView
-          from={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', damping: 15 }}
-          className="w-24 h-24 bg-blue-600 rounded-full items-center justify-center mb-8 shadow-2xl shadow-blue-500/50"
-        >
-          <Check size={48} color="white" strokeWidth={4} />
-        </MotiView>
-        
-        <MotiView
-          from={{ opacity: 0, translateY: 20 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ delay: 200 }}
-          className="items-center"
-        >
-          <Text className="text-white text-4xl font-black tracking-tighter mb-4 text-center">Protocol Launched!</Text>
-          <Text className="text-slate-400 text-lg text-center leading-6 px-4">
-            {(clientName || '').split(' ')[0]} can now see their new daily tasks.
-          </Text>
-        </MotiView>
-
-        <MotiView
-          from={{ opacity: 0, translateY: 40 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ delay: 400 }}
-          className="w-full mt-16"
-        >
-          <TouchableOpacity 
-            onPress={() => router.replace('/(coach)/(tabs)')}
-            className="w-full h-16 bg-blue-600 rounded-3xl items-center justify-center shadow-xl shadow-blue-500/20"
-          >
-            <Text className="text-white text-xl font-bold">Done</Text>
-          </TouchableOpacity>
-        </MotiView>
-      </View>
-    );
-  }
-
   return (
     <View className="flex-1 bg-slate-950">
       {/* Header */}
@@ -137,7 +191,7 @@ export default function ReviewChallengesScreen() {
           <ArrowLeft size={20} color="#94A3B8" />
         </TouchableOpacity>
         <View className="flex-1">
-            <Text className="text-white text-xl font-bold">Review Strategy</Text>
+            <Text className="text-white text-xl font-bold">Review Plan</Text>
             <Text className="text-slate-500 text-xs font-medium">Assigned to {clientName}</Text>
         </View>
       </View>
@@ -150,21 +204,21 @@ export default function ReviewChallengesScreen() {
             className="mx-6 mt-8 bg-blue-600 p-8 rounded-[40px] shadow-2xl shadow-blue-500/30"
           >
               <View className="flex-row justify-between items-center mb-6">
-                <View className="bg-white/20 px-3 py-1 rounded-full border border-white/30">
-                   <Text className="text-white text-[10px] font-bold uppercase tracking-widest">AI Performance Strategy</Text>
-                </View>
-                <Sparkles size={20} color="white" />
-              </View>
-              <Text className="text-white text-2xl font-bold leading-tight">Adaptive Weekly Protocol</Text>
-              <Text className="text-white/80 mt-2 text-sm leading-5"> This logic optimizes for high-compliance tasks tailored to recent activity levels.</Text>
-          </MotiView>
+                 <View className="bg-white/20 px-3 py-1 rounded-full border border-white/30">
+                    <Text className="text-white text-[10px] font-bold uppercase tracking-widest">AI Plan</Text>
+                 </View>
+                 <Sparkles size={20} color="white" />
+               </View>
+               <Text className="text-white text-2xl font-bold leading-tight">Weekly Plan</Text>
+               <Text className="text-white/80 mt-2 text-sm leading-5">This plan is custom built for your client.</Text>
+           </MotiView>
 
           {/* Timeline Tasks */}
           <View className="mt-10">
               {dates.map((date) => {
                   const dayTasks = challengesByDate[date];
-                  const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
-                  const dateStr = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  const dayName = getDayNameSafe(date);
+                  const dateStr = getMonthDaySafe(date);
 
                   return (
                       <View key={date} className="mb-8">
@@ -206,7 +260,7 @@ export default function ReviewChallengesScreen() {
                                       <Text className="text-slate-400 text-sm leading-5" numberOfLines={2}>{task.description}</Text>
                                       <View className="flex-row gap-2 mt-4">
                                           <View className="bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
-                                              <Text className="text-slate-500 text-[10px] font-bold uppercase">{task.intensity} intensity</Text>
+                                              <Text className="text-slate-500 text-[10px] font-bold uppercase">{task.intensity}</Text>
                                           </View>
                                       </View>
                                   </MotiView>
@@ -230,11 +284,12 @@ export default function ReviewChallengesScreen() {
               ) : (
                   <>
                     <Check size={22} color="white" />
-                    <Text className="text-white font-bold text-lg">Approve & Launch Protocol</Text>
+                    <Text className="text-white font-bold text-lg">Send Plan</Text>
                   </>
               )}
           </TouchableOpacity>
       </View>
+
     </View>
   );
 }

@@ -106,16 +106,42 @@ export async function uploadChatMedia(
 
         onXhrCreated?.(xhr);
 
+        let currentPct = 0;
+        let intervalId: any = null;
+
+        if (onProgress) {
+            onProgress(0);
+            intervalId = setInterval(() => {
+                if (currentPct < 95) {
+                    const remaining = 95 - currentPct;
+                    let step = 1;
+                    if (remaining > 50) {
+                        step = Math.floor(Math.random() * 3) + 2; // 2% to 4%
+                    } else if (remaining > 20) {
+                        step = Math.floor(Math.random() * 2) + 1; // 1% to 2%
+                    } else {
+                        step = Math.random() < 0.3 ? 1 : 0; // 0% or 1%
+                    }
+                    currentPct = Math.min(95, currentPct + step);
+                    onProgress(currentPct);
+                }
+            }, 350);
+        }
+
         if (xhr.upload && onProgress) {
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
-                    const pct = Math.round((e.loaded / e.total) * 100);
-                    onProgress(pct);
+                    const realPct = Math.round((e.loaded / e.total) * 100);
+                    if (realPct > currentPct) {
+                        currentPct = realPct;
+                        onProgress(currentPct);
+                    }
                 }
             };
         }
 
         xhr.onload = () => {
+            if (intervalId) clearInterval(intervalId);
             if (xhr.status >= 200 && xhr.status < 300) {
                 onProgress?.(100);
                 resolve();
@@ -123,8 +149,14 @@ export async function uploadChatMedia(
                 reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText}`));
             }
         };
-        xhr.onerror = () => reject(new Error('Network error during upload. Please check your connection.'));
-        xhr.ontimeout = () => reject(new Error('Upload timed out. The file might be too large.'));
+        xhr.onerror = () => {
+            if (intervalId) clearInterval(intervalId);
+            reject(new Error('Network error during upload. Please check your connection.'));
+        };
+        xhr.ontimeout = () => {
+            if (intervalId) clearInterval(intervalId);
+            reject(new Error('Upload timed out. The file might be too large.'));
+        };
         xhr.timeout = 180_000;
         xhr.send(formData);
     });

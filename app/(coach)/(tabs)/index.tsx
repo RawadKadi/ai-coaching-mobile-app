@@ -88,20 +88,33 @@ export default function CoachDashboard() {
     .filter(id => id !== profile?.id)
     .filter(id => onlineUserIds.has(id)).length;
     
-  // Use the higher of the two (DB last_seen or Realtime Presence) for immediate responsiveness
-  const displayActiveCount = Math.max(stats.activeClients, realTimeActiveCount);
+  // Display count is stats.activeClients (streak >= 1)
+  const displayActiveCount = stats.activeClients;
 
   useEffect(() => {
     if (coach) {
       loadDashboardData();
       
-      // Subscribe to real-time check-in updates
-      const checkinSubscription = supabase.channel('coach_dashboard_checkins')
+      // Subscribe to real-time check-in, habit log, and challenge updates
+      const checkinSubscription = supabase.channel('coach_dashboard_realtime')
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'check_ins' },
           () => {
-            // Reload dashboard data when any check-in changes
+            loadDashboardData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'habit_logs' },
+          () => {
+            loadDashboardData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'sub_challenges' },
+          () => {
             loadDashboardData();
           }
         )
@@ -274,13 +287,13 @@ export default function CoachDashboard() {
                         </View>
                         
                         <Text className="text-white text-4xl font-black tracking-tighter">{displayActiveCount}</Text>
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Clients</Text>
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Now</Text>
 
                         <View className="h-12 mt-2 opacity-40">
                           <AnalyticsSparkline 
                             data={analyticsData} 
                             heroNumber={displayActiveCount} 
-                            label="Active Clients"
+                            label="Active Now"
                             loading={loadingAnalytics}
                             dataKey="high_performers"
                           />

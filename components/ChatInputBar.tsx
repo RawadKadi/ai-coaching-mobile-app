@@ -507,6 +507,13 @@ export function ChatInputBar({
 
   return (
     <View style={{ backgroundColor: 'transparent' }}>
+      {activePanel && (
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.backdrop}
+          onPress={closePanel}
+        />
+      )}
       {/* ── Full Screen Media Preview Modal ───────────────────────────────────────────── */}
       {selectedMedia && (
         <DocumentPreviewModal
@@ -778,8 +785,9 @@ export function ChatInputBar({
             styles.panel,
             {
               backgroundColor: '#0F172A',
-              borderTopColor: 'rgba(255,255,255,0.05)',
+              borderColor: 'rgba(255,255,255,0.05)',
               height: panelHeightAnim,
+              marginTop: 8,
             },
           ]}
         >
@@ -793,7 +801,7 @@ export function ChatInputBar({
 
           {/* ── Attach panel ─────────────────────────────────────────────── */}
           {activePanel === 'attach' && (
-            <View style={styles.attachList}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.attachList}>
               <Text style={[styles.panelTitle, { color: '#64748B', fontFamily: theme.typography.fontFamily }]}>
                 Send file
               </Text>
@@ -839,7 +847,7 @@ export function ChatInputBar({
                   </View>
                 </TouchableOpacity>
               )}
-            </View>
+            </ScrollView>
           )}
 
           {/* ── GIF panel ────────────────────────────────────────── */}
@@ -1087,7 +1095,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   panel: {
-    borderTopWidth: 1,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: 1,
+    borderBottomWidth: 0,
     overflow: 'hidden',
   },
   // Attach panel
@@ -1261,5 +1272,13 @@ const styles = StyleSheet.create({
   editBannerSnippet: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.45)',
+  },
+  backdrop: {
+    position: 'absolute',
+    top: -SCREEN_HEIGHT,
+    left: -SCREEN_WIDTH,
+    width: SCREEN_WIDTH * 3,
+    height: SCREEN_HEIGHT * 2,
+    backgroundColor: 'transparent',
   },
 });
