@@ -382,13 +382,18 @@ export default function LogMealScreen() {
                                                         .filter(item => item.id !== ing.id)
                                                         .map(item => ({ name: item.ingredient_name, quantity: item.quantity, unit: item.unit }));
                                                     
-                                                    const result = await guessIngredientQuantity(capturedImage!, ing.ingredient_name, otherIngs);
-                                                    
-                                                    setIngredients(prev => prev.map(m => 
-                                                        m.id === ing.id ? { ...m, quantity: result.quantity, unit: result.unit } : m
-                                                    ));
-                                                    setAiGuessedIds(prev => new Set(prev).add(ing.id));
-                                                    setGuessingId(null);
+                                                    try {
+                                                        const result = await guessIngredientQuantity(capturedImage!, ing.ingredient_name, otherIngs);
+                                                        
+                                                        setIngredients(prev => prev.map(m => 
+                                                            m.id === ing.id ? { ...m, quantity: result.quantity, unit: result.unit } : m
+                                                        ));
+                                                        setAiGuessedIds(prev => new Set(prev).add(ing.id));
+                                                    } catch (err) {
+                                                        Alert.alert('AI Notice', `Could not identify "${ing.ingredient_name}" in the photo. Please enter the amount manually if you're sure it exists.`);
+                                                    } finally {
+                                                        setGuessingId(null);
+                                                    }
                                                 }
 
                                                 // Sync meal name if a main ingredient changed

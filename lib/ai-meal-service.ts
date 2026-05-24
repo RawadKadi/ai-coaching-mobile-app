@@ -305,8 +305,8 @@ export const guessIngredientQuantity = async (
       unit: parsed.unit || 'g'
     };
   } catch (error) {
-    console.error('Error guessing ingredient quantity:', error);
-    return { quantity: 0, unit: 'g' };
+    console.warn('Error guessing ingredient quantity:', error);
+    throw new Error('Could not identify ingredient');
   }
 };
 

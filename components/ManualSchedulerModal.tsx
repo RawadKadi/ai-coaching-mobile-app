@@ -284,7 +284,7 @@ export default function ManualSchedulerModal({
     );
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
             <View className="flex-1 bg-[#020617]">
                 <StatusBar barStyle="light-content" />
                 <View className="flex-1">
@@ -430,7 +430,7 @@ export default function ManualSchedulerModal({
                                             </Pressable>
                                         </View>
 
-                                        {recurrence === 'once' ? (
+                                        {recurrence === 'once' && (
                                             <View>
                                                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Select Specific Date</Text>
                                                 <BrandedCalendar 
@@ -438,7 +438,9 @@ export default function ManualSchedulerModal({
                                                     onSelect={(date) => setSelectedDates([date])} 
                                                 />
                                             </View>
-                                        ) : (
+                                        )}
+                                        
+                                        {recurrence === 'weekly' && (
                                             <View>
                                                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Weekly Frequency</Text>
                                                 <View className="flex-row justify-between mb-12">
@@ -457,7 +459,10 @@ export default function ManualSchedulerModal({
                                                 </View>
 
                                                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Termination</Text>
-                                                <Pressable className="flex-row items-center justify-between p-8 bg-slate-900 rounded-[40px] border border-white/5">
+                                                <Pressable 
+                                                    onPress={() => Alert.alert("Coming Soon", "Setting a termination date will be available in a future update.")}
+                                                    className="flex-row items-center justify-between p-8 bg-slate-900 rounded-[40px] border border-white/5"
+                                                >
                                                     <View>
                                                         <Text className="text-slate-500 text-[10px] font-bold">Repeat until:</Text>
                                                         <Text className="text-white text-xl font-black mt-1">Dec 31, 2026</Text>
@@ -696,23 +701,33 @@ export default function ManualSchedulerModal({
                     <View className="p-8 pb-12 border-t border-white/5 flex-row gap-4 items-center bg-[#020617]">
                         <Pressable 
                             onPress={() => currentStepIdx === 0 ? onClose() : setStep(steps[currentStepIdx - 1])}
-                            className={`h-18 px-10 rounded-[28px] items-center justify-center ${currentStepIdx === 0 ? '' : 'bg-slate-900 border border-white/5'}`}
+                            className="px-8 py-5 items-center justify-center rounded-full bg-slate-900"
                         >
-                            <Text className="text-slate-400 font-black text-lg">{currentStepIdx === 0 ? 'Cancel' : 'Back'}</Text>
+                            <Text className="text-white font-bold text-sm">Back</Text>
                         </Pressable>
 
                         <Pressable 
-                            disabled={!canContinue() || loading}
-                            onPress={() => step === 'confirm' ? handleConfirm() : setStep(steps[currentStepIdx + 1])}
-                            style={{ backgroundColor: canContinue() ? '#FF5C00' : '#1E293B' }}
-                            className={`flex-1 h-20 rounded-[32px] items-center justify-center flex-row gap-4 shadow-2xl ${canContinue() ? 'shadow-blue-600/40' : ''}`}
+                            onPress={() => {
+                                if (!canContinue()) {
+                                    Alert.alert("Action Required", step === 'days' && recurrence === 'weekly' ? "Please select at least one weekday for your recurring session." : "Please complete the required fields to continue.");
+                                    return;
+                                }
+                                if (step === 'confirm') handleConfirm();
+                                else {
+                                    const nextStep = steps[steps.indexOf(step) + 1];
+                                    setStep(nextStep);
+                                }
+                            }}
+                            className={`flex-1 px-8 py-5 items-center justify-center rounded-full flex-row gap-2 ${canContinue() && !loading ? 'bg-blue-600' : 'bg-slate-800'}`}
                         >
                             {loading ? (
                                 <ActivityIndicator color="white" />
                             ) : (
                                 <>
-                                    <Text className="text-white font-black text-2xl tracking-tighter">{step === 'confirm' ? 'FINALIZE BOOKING' : 'Next Step'}</Text>
-                                    <ArrowRight size={24} color="white" strokeWidth={3} />
+                                    <Text className={`font-black text-sm tracking-wide ${canContinue() ? 'text-white' : 'text-slate-500'}`}>
+                                        {step === 'confirm' ? 'Schedule Sessions' : 'Next Step'}
+                                    </Text>
+                                    {step !== 'confirm' && <ArrowRight size={16} color={canContinue() ? 'white' : '#64748B'} />}
                                 </>
                             )}
                         </Pressable>

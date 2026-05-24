@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 interface BrandedCalendarProps {
@@ -13,117 +13,84 @@ const MONTH_NAMES = [
 ];
 
 export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, onSelect }) => {
-  const safeSelectedDate = selectedDate instanceof Date && !isNaN(selectedDate.getTime()) 
-    ? selectedDate 
-    : new Date();
+  const today = new Date();
 
-  const initialMonth = new Date(safeSelectedDate.getFullYear(), safeSelectedDate.getMonth(), 1);
-
-  // Generate 60 months (2 years back, 3 years forward)
-  const months = useMemo(() => {
-    const list = [];
-    const start = new Date(initialMonth.getFullYear() - 2, initialMonth.getMonth(), 1);
-    for (let i = 0; i < 60; i++) {
-      list.push(new Date(start.getFullYear(), start.getMonth() + i, 1));
-    }
-    return list;
-  }, []);
-
-  const initialIndex = 24; // 2 years back = index 24
-  const flatListRef = useRef<FlatList>(null);
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [containerWidth, setContainerWidth] = useState(0);
-  
-  // Update internal index silently if container is ready
-  useEffect(() => {
-    if (containerWidth > 0 && flatListRef.current) {
-        flatListRef.current.scrollToIndex({ index: currentIndex, animated: false });
-    }
-  }, [containerWidth]);
-
-  // Jump to selected date's month if it changes externally
-  useEffect(() => {
-    if (selectedDate && !isNaN(selectedDate.getTime()) && containerWidth > 0) {
-       const targetIndex = months.findIndex(m => m.getMonth() === selectedDate.getMonth() && m.getFullYear() === selectedDate.getFullYear());
-       if (targetIndex !== -1 && targetIndex !== currentIndex) {
-           setCurrentIndex(targetIndex);
-           flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
-       }
-    }
-  }, [selectedDate, containerWidth]);
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
 
   const handlePrevMonth = () => {
-    if (currentIndex > 0) {
-      const nextIdx = currentIndex - 1;
-      setCurrentIndex(nextIdx);
-      flatListRef.current?.scrollToIndex({ index: nextIdx, animated: true });
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear(y => y - 1);
+    } else {
+      setViewMonth(m => m - 1);
     }
   };
 
   const handleNextMonth = () => {
-    if (currentIndex < months.length - 1) {
-      const nextIdx = currentIndex + 1;
-      setCurrentIndex(nextIdx);
-      flatListRef.current?.scrollToIndex({ index: nextIdx, animated: true });
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear(y => y + 1);
+    } else {
+      setViewMonth(m => m + 1);
     }
   };
 
-  const renderMonth = ({ item: monthDate }: { item: Date }) => {
-    if (containerWidth === 0) return <View />;
+  const totalDays = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const startDay = new Date(viewYear, viewMonth, 1).getDay();
+  // Monday-first: 0=Sun→6, 1=Mon→0, ...
+  const adjustedStartDay = startDay === 0 ? 6 : startDay - 1;
 
-    const year = monthDate.getFullYear();
-    const month = monthDate.getMonth();
-    const totalDays = new Date(year, month + 1, 0).getDate();
-    const startDay = new Date(year, month, 1).getDay();
-    const adjustedStartDay = startDay === 0 ? 6 : startDay - 1;
-    
-    const days = [];
-    for (let i = 0; i < adjustedStartDay; i++) {
-      days.push(<View key={`empty-${i}`} style={styles.cell} />);
-    }
+  const cells: React.ReactNode[] = [];
 
-    for (let d = 1; d <= totalDays; d++) {
-      const date = new Date(year, month, d);
-      const isSelected = selectedDate ? date.toDateString() === selectedDate.toDateString() : false;
-      const isToday = date.toDateString() === new Date().toDateString();
+  // Empty leading cells
+  for (let i = 0; i < adjustedStartDay; i++) {
+    cells.push(<View key={`empty-${i}`} style={styles.cell} />);
+  }
 
-      days.push(
-        <TouchableOpacity
-          key={d}
-          onPress={() => onSelect(date)}
-          style={styles.cell}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.dayInner, isSelected && styles.daySelected, !isSelected && isToday && styles.dayToday]}>
-            <Text style={[styles.dayText, isSelected && styles.dayTextSelected, !isSelected && isToday && styles.dayTextToday]}>{d}</Text>
-          </View>
-        </TouchableOpacity>
-      );
-    }
+  // Day cells
+  for (let d = 1; d <= totalDays; d++) {
+    const date = new Date(viewYear, viewMonth, d);
+    const isSelected = selectedDate
+      ? date.toDateString() === selectedDate.toDateString()
+      : false;
+    const isToday = date.toDateString() === today.toDateString();
 
-    return (
-      <View style={{ width: containerWidth, flexDirection: 'row', flexWrap: 'wrap' }}>
-        {days}
-      </View>
+    cells.push(
+      <TouchableOpacity
+        key={d}
+        onPress={() => onSelect(date)}
+        style={styles.cell}
+        activeOpacity={0.7}
+      >
+        <View style={[
+          styles.dayInner,
+          isSelected && styles.daySelected,
+          !isSelected && isToday && styles.dayToday,
+        ]}>
+          <Text style={[
+            styles.dayText,
+            isSelected && styles.dayTextSelected,
+            !isSelected && isToday && styles.dayTextToday,
+          ]}>
+            {d}
+          </Text>
+        </View>
+      </TouchableOpacity>
     );
-  };
+  }
 
   const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const currentVisibleMonth = months[currentIndex] || initialMonth;
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.monthTitle}>
-            {MONTH_NAMES[currentVisibleMonth.getMonth()]}
-          </Text>
-          <Text style={styles.yearLabel}>
-            {currentVisibleMonth.getFullYear()}
-          </Text>
+          <Text style={styles.monthTitle}>{MONTH_NAMES[viewMonth]}</Text>
+          <Text style={styles.yearLabel}>{viewYear}</Text>
         </View>
-        
+
         <View style={styles.navButtons}>
           <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn} activeOpacity={0.7}>
             <ChevronLeft size={18} color="#94A3B8" />
@@ -134,37 +101,16 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
         </View>
       </View>
 
-      {/* Week Day Labels */}
+      {/* Week day labels */}
       <View style={styles.weekRow}>
         {weekDays.map((day, i) => (
           <Text key={i} style={styles.weekLabel}>{day}</Text>
         ))}
       </View>
 
-      {/* Days Grid - FlatList Carousel */}
-      <View 
-        style={{ flex: 1, minHeight: 320 }}
-        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-      >
-        {containerWidth > 0 && (
-          <FlatList
-            ref={flatListRef}
-            data={months}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            initialScrollIndex={initialIndex}
-            getItemLayout={(_, index) => ({ length: containerWidth, offset: containerWidth * index, index })}
-            keyExtractor={item => item.toISOString()}
-            renderItem={renderMonth}
-            onMomentumScrollEnd={(e) => {
-              const newIndex = Math.round(e.nativeEvent.contentOffset.x / containerWidth);
-              if (newIndex !== currentIndex) {
-                setCurrentIndex(newIndex);
-              }
-            }}
-          />
-        )}
+      {/* Days grid — plain View, zero gesture conflict */}
+      <View style={styles.grid}>
+        {cells}
       </View>
     </View>
   );
@@ -172,7 +118,7 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#020617', // slate-950 (or dark slate)
+    backgroundColor: '#020617',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 32,
@@ -192,7 +138,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   yearLabel: {
-    color: '#475569', // slate-600
+    color: '#475569',
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
@@ -267,4 +213,3 @@ const styles = StyleSheet.create({
     color: '#60A5FA',
   },
 });
-

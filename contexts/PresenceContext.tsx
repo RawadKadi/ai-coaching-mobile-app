@@ -44,10 +44,10 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
         .update({ last_seen_at: new Date().toISOString() })
         .eq('id', user.id);
       
-      if (error) console.error('[Presence] DB Heartbeat error:', error);
+      if (error) console.warn('[Presence] DB Heartbeat error:', error);
       
     } catch (e) {
-      console.error('[Presence] Track/Heartbeat error:', e);
+      console.warn('[Presence] Track/Heartbeat error:', e);
     }
   }, [user?.id]);
 

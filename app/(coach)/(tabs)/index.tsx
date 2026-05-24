@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, StatusBar, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, ScrollView, SectionList, ActivityIndicator, TouchableOpacity, StatusBar, RefreshControl } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,6 +61,8 @@ export default function CoachDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
+  const [hasMoreCheckins, setHasMoreCheckins] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const { onlineUserIds } = usePresence();
   const [clientUserIds, setClientUserIds] = useState<string[]>([]);
   const [stats, setStats] = useState({ 
@@ -170,7 +172,7 @@ export default function CoachDashboard() {
     try {
       const [statsResult, checkinsResult, clientsResult, challengesResult] = await Promise.all([
         supabase.rpc('get_coach_stats'),
-        supabase.rpc('get_recent_checkins'),
+        supabase.rpc('get_recent_checkins', { p_cursor: null, p_limit: 15 }),
         supabase.rpc('get_my_clients'),
         supabase.rpc('get_coach_mother_challenges', { p_coach_id: coach?.id })
       ]);
@@ -203,6 +205,7 @@ export default function CoachDashboard() {
       }
 
       setRecentCheckins(checkinsResult.data || []);
+      setHasMoreCheckins((checkinsResult.data || []).length === 15);
 
       // Fetch analytics trend data
       setLoadingAnalytics(true);
@@ -218,6 +221,66 @@ export default function CoachDashboard() {
       setLoadingAnalytics(false);
     }
   };
+
+  
+  const loadMoreCheckins = async () => {
+    if (!coach || loadingMore || !hasMoreCheckins || recentCheckins.length === 0) return;
+    setLoadingMore(true);
+    try {
+      const lastCheckin = recentCheckins[recentCheckins.length - 1];
+      const result = await supabase.rpc('get_recent_checkins', { 
+        p_cursor: lastCheckin.created_at, 
+        p_limit: 15 
+      });
+      
+      const newData = result.data || [];
+      if (newData.length > 0) {
+        setRecentCheckins(prev => {
+          // Avoid duplicates if real-time fired
+          const existingIds = new Set(prev.map(c => c.checkin_id));
+          return [...prev, ...newData.filter((c: any) => !existingIds.has(c.checkin_id))];
+        });
+      }
+      setHasMoreCheckins(newData.length === 15);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const groupedCheckins = useMemo(() => {
+    const groups: { [key: string]: any[] } = {};
+    
+    recentCheckins.forEach(item => {
+      const date = new Date(item.created_at);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const checkDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      
+      let headerStr = '';
+      if (checkDate.getTime() === today.getTime()) {
+        headerStr = `TODAY — ${date.toLocaleDateString([], { month: 'short', day: 'numeric' }).toUpperCase()}`;
+      } else if (checkDate.getTime() === yesterday.getTime()) {
+        headerStr = `YESTERDAY — ${date.toLocaleDateString([], { month: 'short', day: 'numeric' }).toUpperCase()}`;
+      } else {
+        headerStr = date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+      }
+      
+      if (!groups[headerStr]) {
+        groups[headerStr] = [];
+      }
+      groups[headerStr].push(item);
+    });
+
+    return Object.keys(groups).map(key => ({
+      title: key,
+      data: groups[key]
+    }));
+  }, [recentCheckins]);
 
   const handleOpenAIScheduler = async () => {
     setLoadingClients(true);
@@ -262,10 +325,12 @@ export default function CoachDashboard() {
     <View style={{ flex: 1 }} className="bg-slate-950">
       <StatusBar barStyle="light-content" translucent />
       <View style={{ flex: 1, paddingTop: insets.top }}>
-          <ScrollView 
+          <SectionList
             style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 140 }}
+            sections={groupedCheckins}
+            keyExtractor={(item, index) => item.checkin_id + index}
             refreshControl={
               <RefreshControl 
                 refreshing={refreshing} 
@@ -274,8 +339,11 @@ export default function CoachDashboard() {
                 progressViewOffset={insets.top}
               />
             }
-          >
-            {/* New Premium Identity Header */}
+            onEndReached={loadMoreCheckins}
+            onEndReachedThreshold={0.5}
+            ListHeaderComponent={
+              <View>
+                {/* New Premium Identity Header */}
             <MotiView 
               from={{ opacity: 0, translateY: -10 }} 
               animate={{ opacity: 1, translateY: 0 }} 
@@ -447,12 +515,13 @@ export default function CoachDashboard() {
                 />
               </View>
             </View>
-
-            {/* Activity Indicator / Placeholder */}
-            <View className="px-6">
-              <Text className="text-white text-2xl font-black tracking-tighter mb-8">Current Feed</Text>
-              
-              {recentCheckins.length === 0 ? (
+                <View className="px-6 mb-8">
+                  <Text className="text-white text-2xl font-black tracking-tighter">Current Feed</Text>
+                </View>
+              </View>
+            }
+            ListEmptyComponent={
+              <View className="px-6">
                 <View className="p-16 bg-slate-900/20 rounded-[48px] border border-white/5 border-dashed items-center justify-center">
                   <View className="w-16 h-16 bg-slate-900 rounded-[28px] items-center justify-center border border-white/5 mb-6">
                       <TrendingUp size={28} color="#1e293b" />
@@ -460,45 +529,55 @@ export default function CoachDashboard() {
                   <Text className="text-slate-700 font-black text-[10px] uppercase tracking-[3px]">Real-time activity</Text>
                   <Text className="text-slate-800 font-medium text-[10px] mt-2 text-center leading-4">Recent events will surface here as they happen.</Text>
                 </View>
-              ) : (
-                <View className="gap-4">
-                  {recentCheckins.map((item) => (
-                    <TouchableOpacity 
-                      key={item.checkin_id}
-                      onPress={() => router.push(`/(coach)/clients/${item.client_id}?tab=checkins`)}
-                      className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 flex-row items-center"
-                    >
-                      <BrandedAvatar name={item.client_name} imageUrl={item.client_avatar} size={48} />
-                      <View className="flex-1 ml-4">
-                        <View className="flex-row items-center justify-between">
-                          <Text className="text-white font-bold text-sm tracking-tight">{item.client_name}</Text>
-                          <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
-                            {formatActivityDate(item.created_at)}
-                          </Text>
-                        </View>
-                        <Text className="text-blue-500 font-black text-[10px] uppercase tracking-[2px] mt-1">Daily Check-in Synced</Text>
-                        <View className="flex-row items-center gap-3 mt-3">
-                          <View className="flex-row items-center gap-1">
-                            <TrendingUp size={10} color="#94A3B8" />
-                            <Text className="text-slate-400 text-[10px] font-bold">{item.weight_kg}kg</Text>
-                          </View>
-                          <View className="flex-row items-center gap-1">
-                            <Zap size={10} color="#94A3B8" />
-                            <Text className="text-slate-400 text-[10px] font-bold">Energy {item.energy_level}/10</Text>
-                          </View>
-                          <View className="flex-row items-center gap-1">
-                            <Smile size={10} color="#94A3B8" />
-                            <Text className="text-slate-400 text-[10px] font-bold" numberOfLines={1}>{item.mood}</Text>
-                          </View>
-                        </View>
+              </View>
+            }
+            renderSectionHeader={({ section: { title } }) => (
+              <View className="px-6 py-2 mb-2">
+                <Text className="text-slate-500 font-black text-[10px] uppercase tracking-widest">{title}</Text>
+              </View>
+            )}
+            renderItem={({ item }) => (
+              <View className="px-6 mb-4">
+                <TouchableOpacity 
+                  onPress={() => router.push(`/(coach)/clients/${item.client_id}?tab=checkins`)}
+                  className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 flex-row items-center"
+                >
+                  <BrandedAvatar name={item.client_name} imageUrl={item.client_avatar} size={48} />
+                  <View className="flex-1 ml-4">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-white font-bold text-sm tracking-tight">{item.client_name}</Text>
+                      <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
+                        {formatActivityDate(item.created_at)}
+                      </Text>
+                    </View>
+                    <Text className="text-blue-500 font-black text-[10px] uppercase tracking-[2px] mt-1">Daily Check-in Synced</Text>
+                    <View className="flex-row items-center gap-3 mt-3">
+                      <View className="flex-row items-center gap-1">
+                        <TrendingUp size={10} color="#94A3B8" />
+                        <Text className="text-slate-400 text-[10px] font-bold">{item.weight_kg}kg</Text>
                       </View>
-                      <ChevronRight size={16} color="#334155" style={{ marginLeft: 8 }} />
-                    </TouchableOpacity>
-                  ))}
+                      <View className="flex-row items-center gap-1">
+                        <Zap size={10} color="#94A3B8" />
+                        <Text className="text-slate-400 text-[10px] font-bold">Energy {item.energy_level}/10</Text>
+                      </View>
+                      <View className="flex-row items-center gap-1">
+                        <Smile size={10} color="#94A3B8" />
+                        <Text className="text-slate-400 text-[10px] font-bold" numberOfLines={1}>{item.mood}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <ChevronRight size={16} color="#334155" style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
+              </View>
+            )}
+            ListFooterComponent={
+              loadingMore ? (
+                <View className="py-4 items-center justify-center">
+                  <ActivityIndicator color="#3B82F6" />
                 </View>
-              )}
-            </View>
-          </ScrollView>
+              ) : null
+            }
+          />
 
         
 

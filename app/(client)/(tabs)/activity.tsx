@@ -9,16 +9,16 @@ import { Meal, Workout, Habit, HabitLog } from '@/types/database';
 import FeedbackModal from '@/components/FeedbackModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import streakQuotes from '@/assets/streak_quotes.json';
-import { 
-  Utensils, 
-  Dumbbell, 
-  Calendar as CalendarIcon, 
-  CheckCircle, 
-  Circle, 
-  Camera, 
-  Zap, 
-  ChevronRight, 
-  Clock, 
+import {
+  Utensils,
+  Dumbbell,
+  Calendar as CalendarIcon,
+  CheckCircle,
+  Circle,
+  Camera,
+  Zap,
+  ChevronRight,
+  Clock,
   Target,
   Award,
   Sparkles,
@@ -27,7 +27,8 @@ import {
   X,
   TrendingUp,
   Apple,
-  Moon
+  Moon,
+  Video
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
@@ -49,7 +50,7 @@ export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
   const { client, profile, refreshProfile } = useAuth();
   const theme = useTheme();
-  
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -57,8 +58,11 @@ export default function ActivityScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>([]);
   const [challenges, setChallenges] = useState<any[]>([]);
+  const [sessionsTaken, setSessionsTaken] = useState(0);
+  const [sessionsTotal, setSessionsTotal] = useState(0);
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
+  const [activeMotherChallenges, setActiveMotherChallenges] = useState<any[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [streak, setStreak] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -186,7 +190,7 @@ export default function ActivityScreen() {
   const loadActivityData = async () => {
     try {
       if (!refreshing) setLoading(true);
-      const [mealsResult, workoutsResult, habitsResult, logsResult] = await Promise.all([
+      const [mealsResult, workoutsResult, habitsResult, logsResult, sessionsResult, motherChallengeResult] = await Promise.all([
         supabase
           .from('meals')
           .select('*')
@@ -208,19 +212,38 @@ export default function ActivityScreen() {
           .from('habit_logs')
           .select('*')
           .eq('client_id', client?.id)
-          .eq('date', selectedDate)
+          .eq('date', selectedDate),
+        supabase
+          .from('sessions')
+          .select('id, status, scheduled_at')
+          .eq('client_id', client?.id)
+          .lte('scheduled_at', new Date().toISOString()),
+        supabase.rpc('get_client_mother_challenges', { p_client_id: client?.id, p_status: 'active' })
       ]);
 
       if (mealsResult.error) throw mealsResult.error;
       if (workoutsResult.error) throw workoutsResult.error;
       if (habitsResult.error) throw habitsResult.error;
       if (logsResult.error) throw logsResult.error;
+      if (sessionsResult.error) throw sessionsResult.error;
+      if (motherChallengeResult.error) console.error('Error loading mother challenge:', motherChallengeResult.error);
 
       setMeals(mealsResult.data || []);
       setWorkouts(workoutsResult.data || []);
       setHabits(habitsResult.data || []);
       const logs = logsResult.data || [];
       setHabitLogs(logs);
+
+      const allSessions = sessionsResult.data || [];
+      const validSessions = allSessions.filter((s: any) => s.status !== 'cancelled' && s.status !== 'postponed');
+      setSessionsTotal(validSessions.length);
+      setSessionsTaken(validSessions.filter((s: any) => s.status === 'completed').length);
+
+      if (motherChallengeResult.data && motherChallengeResult.data.length > 0) {
+        setActiveMotherChallenges(motherChallengeResult.data);
+      } else {
+        setActiveMotherChallenges([]);
+      }
 
       // Get sub-challenges via RPC
       const { data: subsData, error: subsError } = await supabase.rpc('get_todays_sub_challenges', {
@@ -294,7 +317,7 @@ export default function ActivityScreen() {
           .from('clients')
           .update({ streak_reset_acknowledged_date: todayStr })
           .eq('id', client.id);
-        
+
         if (error) throw error;
         await refreshProfile();
       }
@@ -329,7 +352,7 @@ export default function ActivityScreen() {
       // Update local state for immediate feedback
       const updatedChallenges = challenges.map(c => c.id === challenge.id ? { ...c, completed: newCompleted } : c);
       setChallenges(updatedChallenges);
-      
+
       // Close sheet if it's open (usually after toggle)
       if (showDetailsModal) closeSheet();
 
@@ -338,7 +361,7 @@ export default function ActivityScreen() {
         const allHabitsDone = habits.length === 0 || habits.every(h => habitLogs.find(l => l.habit_id === h.id)?.completed);
         const otherChallengesDone = updatedChallenges.filter(c => c.id !== challenge.id).every(c => c.completed);
         const allChallengesNowDone = updatedChallenges.every(c => c.completed);
-        
+
         if (allHabitsDone && otherChallengesDone) {
           setShowCelebration(true);
           setStreak(prev => prev + 1); // Optimistic streak update
@@ -456,7 +479,7 @@ export default function ActivityScreen() {
   const handleCameraVerification = async (habit: Habit) => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      
+
       if (permissionResult.granted === false) {
         Alert.alert('Permission Required', 'You need to allow camera access to verify this challenge.');
         return;
@@ -473,7 +496,7 @@ export default function ActivityScreen() {
         const fileExt = 'jpg';
         const fileName = `${client?.id}/${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
-        
+
         const { error: uploadError } = await supabase.storage
           .from('habit-verifications')
           .upload(filePath, decode(result.assets[0].base64), {
@@ -495,25 +518,25 @@ export default function ActivityScreen() {
             date: today,
             completed: true,
             image_url: publicUrl,
-          }, { 
-            onConflict: 'habit_id,date' 
+          }, {
+            onConflict: 'habit_id,date'
           })
           .select()
           .single();
 
         if (error) throw error;
-        
+
         // Update local state: replace existing log for this habit/date if it exists, otherwise add new
         const updatedLogs = habitLogs.find(l => l.habit_id === habit.id && l.date === today)
           ? habitLogs.map(l => (l.habit_id === habit.id && l.date === today) ? data : l)
           : [...habitLogs, data];
-          
+
         setHabitLogs(updatedLogs);
 
         // Check for total daily completion
         const allHabitsDone = habits.every(h => updatedLogs.find(l => l.habit_id === h.id)?.completed);
         const allChallengesDone = challenges.every(c => c.completed);
-        
+
         if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
           setShowCelebration(true);
           setStreak(prev => prev + 1); // Optimistic streak update
@@ -538,9 +561,9 @@ export default function ActivityScreen() {
             .from('habit_logs')
             .delete()
             .eq('id', existingLog.id);
-            
+
           if (deleteError) throw deleteError;
-          
+
           setHabitLogs(prev => prev.filter(l => l.id !== existingLog.id));
           sendCompletionMessage(habit.name, false, undefined, habit.description);
           return;
@@ -570,7 +593,7 @@ export default function ActivityScreen() {
           .single();
 
         if (error) throw error;
-        
+
         const updatedLogs = habitLogs.map((log) => (log.id === existingLog.id ? data : log));
         setHabitLogs(updatedLogs);
 
@@ -578,7 +601,7 @@ export default function ActivityScreen() {
         if (newCompleted) {
           const allHabitsDone = habits.every(h => updatedLogs.find(l => l.habit_id === h.id)?.completed);
           const allChallengesDone = challenges.every(c => c.completed);
-          
+
           if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
             setShowCelebration(true);
             setStreak(prev => prev + 1); // Optimistic streak update
@@ -598,14 +621,14 @@ export default function ActivityScreen() {
           .single();
 
         if (error) throw error;
-        
+
         const updatedLogs = [...habitLogs, data];
         setHabitLogs(updatedLogs);
 
         // Check for total daily completion
         const allHabitsDone = habits.every(h => updatedLogs.find(l => l.habit_id === h.id)?.completed);
         const allChallengesDone = challenges.every(c => c.completed);
-        
+
         if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
           setShowCelebration(true);
           setStreak(prev => prev + 1); // Optimistic streak update
@@ -615,12 +638,12 @@ export default function ActivityScreen() {
 
       // Schedule message check
       timeoutRefs.current[habit.id] = setTimeout(() => {
-        const lastStatus = lastReportedStatus.current[habit.id] ?? false; 
-        
+        const lastStatus = lastReportedStatus.current[habit.id] ?? false;
+
         if (newCompleted !== lastStatus) {
           sendCompletionMessage(habit.name, newCompleted, undefined, habit.description);
         }
-        
+
         delete timeoutRefs.current[habit.id];
       }, 5000);
 
@@ -651,7 +674,7 @@ export default function ActivityScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
       <StatusBar barStyle="light-content" translucent />
-      
+
       <View style={{ flex: 1, paddingTop: insets.top }}>
         {/* Header Section */}
         <View style={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 24 }}>
@@ -660,7 +683,7 @@ export default function ActivityScreen() {
               <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>Your Progress</Text>
               <Text style={{ color: '#3b82f6', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 2, fontSize: 10, marginTop: 4 }}>{formattedDate}</Text>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={{ width: 48, height: 48, backgroundColor: '#0f172a', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b' }}
               onPress={() => router.push('/(client)/schedule-timeline' as any)}
             >
@@ -669,212 +692,226 @@ export default function ActivityScreen() {
           </View>
         </View>
 
-        <ScrollView 
+        <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
           refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={onRefresh} 
-              tintColor="#3B82F6" 
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#3B82F6"
             />
           }
         >
           {/* Summary Metric Grid */}
           <View style={{ paddingHorizontal: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16, marginBottom: 40 }}>
-            <MetricCard 
-              label="Calories" 
-              value={`${formatCompactNumber(totalCalories)} kcal`} 
-              icon={<Utensils size={18} color="#F59E0B" />} 
+            <MetricCard
+              label="Calories"
+              value={`${formatCompactNumber(totalCalories)} kcal`}
+              icon={<Utensils size={18} color="#F59E0B" />}
             />
-            <MetricCard 
-              label="Streak" 
-              value={`${formatCompactNumber(streak)} days`} 
-              icon={<Award size={18} color="#10B981" />} 
+            <MetricCard
+              label="Streak"
+              value={`${formatCompactNumber(streak)} days`}
+              icon={<Award size={18} color="#10B981" />}
             />
-            <MetricCard 
-              label="Protein" 
-              value={`${formatCompactNumber(totalProtein)} g`} 
-              icon={<Target size={18} color="#818CF8" />} 
+            <MetricCard
+              label="Protein"
+              value={`${formatCompactNumber(totalProtein)} g`}
+              icon={<Target size={18} color="#818CF8" />}
             />
-            <MetricCard 
-              label="Workout Time" 
-              value={`${totalWorkoutMinutes} min`} 
-              icon={<Dumbbell size={18} color="#3B82F6" />} 
+            <MetricCard
+              label="Sessions Taken"
+              value={sessionsTotal > 0 ? `${sessionsTaken} / ${sessionsTotal}` : '--'}
+              icon={<Video size={18} color="#3B82F6" />}
             />
           </View>
 
           {/* Activity Logs Section */}
           <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
-            
-            {/* Challenges Section */}
-            <CategorySummaryCard 
-              title="Active Challenges"
-              icon={<Target size={20} color="#3B82F6" />}
-              totalCount={challenges.length}
-              completedCount={challenges.filter(c => c.completed).length}
-              isExpanded={expandedCategories['challenges']}
-              onPress={() => toggleCategory('challenges')}
-            />
-            {expandedCategories['challenges'] && (
-              <View style={{ marginBottom: 24 }}>
-                {challenges.length === 0 ? (
-                  <EmptyState message="No active challenges assigned." />
-                ) : (
-                  <View style={{ gap: 12 }}>
-                    {challenges.map((challenge, idx) => {
-                      const getFocusIcon = (type: string, completed: boolean) => {
-                        const color = completed ? '#3B82F6' : '#94A3B8';
-                        switch (type?.toLowerCase()) {
-                          case 'training': return <Dumbbell size={20} color={color} />;
-                          case 'nutrition': return <Apple size={20} color={color} />;
-                          case 'recovery': return <Moon size={20} color={color} />;
-                          default: return <Zap size={20} color={color} />;
-                        }
-                      };
 
-                      return (
-                        <ActivityCard 
-                          key={challenge.id}
-                          title={challenge.name}
-                          sub={challenge.focus_type}
-                          completed={challenge.completed}
-                          icon={getFocusIcon(challenge.focus_type, challenge.completed)}
-                        onToggle={() => handleToggleChallenge(challenge)}
-                        onPress={() => handleOpenDetails(challenge)}
-                        delay={idx * 50}
-                      />
-                    )})}
-                  </View>
-                )}
+            {/* Challenges Section */}
+            
+            <View style={{ marginBottom: 16, marginTop: 8 }}>
+              <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Challenges</Text>
+            </View>
+            {activeMotherChallenges && activeMotherChallenges.length > 0 ? (
+              <View style={{ marginBottom: 24 }}>
+                {activeMotherChallenges.map((motherChallenge: any) => {
+                  const motherSubs = challenges.filter(c => c.mother_challenge_id === motherChallenge.id);
+                  const currentDay = Math.max(1, Math.floor((new Date(selectedDate).getTime() - new Date(motherChallenge.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+                  return (
+                    <View key={motherChallenge.id} style={{ marginBottom: 32 }}>
+                      <TouchableOpacity
+                        onPress={() => router.push('/(client)/challenges')}
+                        style={{
+                          backgroundColor: '#0f172a',
+                          borderRadius: 32,
+                          padding: 24,
+                          borderWidth: 1,
+                          borderColor: '#1e293b'
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Target size={16} color="#3B82F6" />
+                            <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
+                              Active Challenge
+                            </Text>
+                          </View>
+                          <ChevronRight size={16} color="#475569" />
+                        </View>
+
+                        <Text style={{ color: 'white', fontSize: 20, fontWeight: '900', marginBottom: 12 }}>
+                          🔥 {motherChallenge.name}
+                        </Text>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 6 }}>
+                          <CalendarIcon size={14} color="#94A3B8" />
+                          <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '700' }}>
+                            Day {currentDay} of {motherChallenge.duration_days} • {motherChallenge.total_subs} Total Protocols
+                          </Text>
+                        </View>
+
+                        <View style={{ height: 12, backgroundColor: '#1e293b', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
+                          <View
+                            style={{
+                              height: '100%',
+                              width: `${Math.min(100, (motherChallenge.completed_subs / Math.max(1, motherChallenge.total_subs)) * 100)}%`,
+                              backgroundColor: '#3B82F6',
+                              borderRadius: 6
+                            }}
+                          />
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                          <Text style={{ color: 'white', fontSize: 12, fontWeight: '900' }}>
+                            {Math.round((motherChallenge.completed_subs / Math.max(1, motherChallenge.total_subs)) * 100)}%
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+
+
+
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={{ marginBottom: 24 }}>
+                <EmptyState message="No active challenges assigned." />
               </View>
             )}
+
 
             {/* Habits Section */}
-            <CategorySummaryCard 
-              title="Daily Protocols"
-              icon={<CheckCircle size={20} color="#10B981" />}
-              totalCount={habits.length}
-              completedCount={habits.filter(h => habitLogs.find(l => l.habit_id === h.id)?.completed).length}
-              isExpanded={expandedCategories['habits']}
-              onPress={() => toggleCategory('habits')}
-            />
-            {expandedCategories['habits'] && (
-              <View style={{ marginBottom: 24 }}>
-                {habits.length === 0 ? (
-                  <EmptyState message="No habits established for this protocol." />
-                ) : (
-                  <View style={{ gap: 12 }}>
-                    {habits.map((habit, idx) => {
-                      const log = habitLogs.find(l => l.habit_id === habit.id);
-                      const isCompleted = log?.completed || false;
-                        return (
-                          <ActivityCard 
-                            key={habit.id}
-                            title={habit.name}
-                            sub={
-                              (habit.category ? `${habit.category.toUpperCase()} • ` : '') + 
-                              (habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle')
-                            }
-                            completed={isCompleted}
-                          icon={<CheckCircle size={20} color={isCompleted ? '#10B981' : '#94A3B8'} />}
-                          onToggle={() => toggleHabit(habit)}
-                          delay={idx * 50}
-                        />
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            )}
+            <View style={{ marginBottom: 16, marginTop: 8 }}>
+              <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Daily Tasks</Text>
+            </View>
+            <View style={{ marginBottom: 24 }}>
+              {habits.length === 0 ? (
+                <EmptyState message="No daily tasks established." />
+              ) : (
+                <View style={{ gap: 12 }}>
+                  {habits.map((habit, idx) => {
+                    const log = habitLogs.find(l => l.habit_id === habit.id);
+                    const isCompleted = log?.completed || false;
+                    return (
+                      <ActivityCard
+                        key={habit.id}
+                        title={habit.name}
+                        sub={
+                          (habit.category ? `${habit.category.toUpperCase()} • ` : '') +
+                          (habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle')
+                        }
+                        completed={isCompleted}
+                        icon={<CheckCircle size={20} color={isCompleted ? '#10B981' : '#94A3B8'} />}
+                        onToggle={() => toggleHabit(habit)}
+                        delay={idx * 50}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+    
+
 
             {/* Meals Section */}
-            <CategorySummaryCard 
-              title="Nutrition Intake"
-              icon={<Utensils size={20} color="#F59E0B" />}
-              totalCount={meals.length}
-              completedCount={0}
-              showProgressBar={false}
-              isExpanded={expandedCategories['meals']}
-              onPress={() => toggleCategory('meals')}
-            />
-            {expandedCategories['meals'] && (
-              <View style={{ marginBottom: 24 }}>
-                {meals.length === 0 ? (
-                  <EmptyState message="No meals tracked for today." />
-                ) : (
-                  <View style={{ gap: 12 }}>
-                    {meals.map((meal, idx) => (
-                      <ActivityCard 
-                        key={meal.id}
-                        title={meal.name}
-                        sub={`${meal.meal_type.toUpperCase()} • ${formatCompactNumber(meal.calories || 0)} kcal`}
-                        completed={true}
-                        icon={<Utensils size={20} color="#F59E0B" />}
-                        readOnly
-                        delay={idx * 50}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
+            <View style={{ marginBottom: 16, marginTop: 8 }}>
+              <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Nutrition</Text>
+            </View>
+            <View style={{ marginBottom: 24 }}>
+              {meals.length === 0 ? (
+                <EmptyState message="No meals tracked for today." />
+              ) : (
+                <View style={{ gap: 12 }}>
+                  {meals.map((meal, idx) => (
+                    <ActivityCard
+                      key={meal.id}
+                      title={meal.name}
+                      sub={`${meal.meal_type.toUpperCase()} • ${formatCompactNumber(meal.calories || 0)} kcal`}
+                      completed={true}
+                      icon={<Utensils size={20} color="#F59E0B" />}
+                      readOnly
+                      delay={idx * 50}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+    
+
 
             {/* Workouts Section */}
-            <CategorySummaryCard 
-              title="Performance Training"
-              icon={<Dumbbell size={20} color="#8B5CF6" />}
-              totalCount={workouts.length}
-              completedCount={0}
-              showProgressBar={false}
-              isExpanded={expandedCategories['workouts']}
-              onPress={() => toggleCategory('workouts')}
-            />
-            {expandedCategories['workouts'] && (
-              <View style={{ marginBottom: 24 }}>
-                {workouts.length === 0 ? (
-                  <EmptyState message="No workouts recorded for today." />
-                ) : (
-                  <View style={{ gap: 12 }}>
-                    {workouts.map((workout, idx) => (
-                      <ActivityCard 
-                        key={workout.id}
-                        title={workout.name}
-                        sub={`${workout.duration_minutes} MIN • ${workout.exercises?.length || 0} EXERCISES`}
-                        completed={true}
-                        icon={<Dumbbell size={20} color="#8B5CF6" />}
-                        readOnly
-                        delay={idx * 50}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
+            <View style={{ marginBottom: 16, marginTop: 8 }}>
+              <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Performance</Text>
+            </View>
+            <View style={{ marginBottom: 24 }}>
+              {workouts.length === 0 ? (
+                <EmptyState message="No workouts recorded for today." />
+              ) : (
+                <View style={{ gap: 12 }}>
+                  {workouts.map((workout, idx) => (
+                    <ActivityCard
+                      key={workout.id}
+                      title={workout.name}
+                      sub={`${workout.duration_minutes} MIN • ${workout.exercises?.length || 0} EXERCISES`}
+                      completed={true}
+                      icon={<Dumbbell size={20} color="#8B5CF6" />}
+                      readOnly
+                      delay={idx * 50}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+    
 
           </View>
         </ScrollView>
       </View>
-      
-       {/* All tasks done — Protocol Fulfilled */}
-       <FeedbackModal
-         visible={showCelebration}
-         onClose={() => setShowCelebration(false)}
-         variant="success"
-         accentColor={streakInfo.accent}
-         accentBg={streakInfo.accent + '14'}
-         accentBorder={streakInfo.accent + '33'}
-         icon={<Text style={{ fontSize: 52 }}>{streakInfo.emoji}</Text>}
-         title={streakInfo.title}
-         body={streakInfo.quote}
-         statLabel="Current Streak"
-         statIcon={<Zap size={22} color={streakInfo.accent} fill={streakInfo.accent} />}
-         stat={`${formatCompactNumber(streak)} Days`}
-         ctaLabel="Keep it up"
-         ctaBg={streakInfo.accent}
-         ctaTextColor={['#F59E0B', '#D4AF37', '#F97316'].includes(streakInfo.accent) ? '#0f172a' : '#ffffff'}
-       />
+
+      {/* All tasks done — Protocol Fulfilled */}
+      <FeedbackModal
+        visible={showCelebration}
+        onClose={() => setShowCelebration(false)}
+        variant="success"
+        accentColor={streakInfo.accent}
+        accentBg={streakInfo.accent + '14'}
+        accentBorder={streakInfo.accent + '33'}
+        icon={<Text style={{ fontSize: 52 }}>{streakInfo.emoji}</Text>}
+        title={streakInfo.title}
+        body={streakInfo.quote}
+        statLabel="Current Streak"
+        statIcon={<Zap size={22} color={streakInfo.accent} fill={streakInfo.accent} />}
+        stat={`${formatCompactNumber(streak)} Days`}
+        ctaLabel="Keep it up"
+        ctaBg={streakInfo.accent}
+        ctaTextColor={['#F59E0B', '#D4AF37', '#F97316'].includes(streakInfo.accent) ? '#0f172a' : '#ffffff'}
+      />
 
       {/* Streak lost */}
       <FeedbackModal
@@ -889,7 +926,7 @@ export default function ActivityScreen() {
         stat="0 Days"
         ctaLabel="Start fresh today"
       />
-      
+
       {/* Individual Challenge Secured */}
       <FeedbackModal
         visible={showChallengeSuccessModal}
@@ -897,12 +934,12 @@ export default function ActivityScreen() {
         variant="success"
         icon={<Target size={52} color="#10B981" />}
         title="Objective Secured"
-        body={allChallengesFinished 
+        body={allChallengesFinished
           ? `All challenges secured. Stay ready for ${(() => {
-              const d = new Date();
-              d.setDate(d.getDate() + 1);
-              return d.toLocaleDateString('en-US', { weekday: 'long' });
-            })()} — keep that energy up.` 
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            return d.toLocaleDateString('en-US', { weekday: 'long' });
+          })()} — keep that energy up.`
           : `"${completedChallengeName}" has been successfully synchronized.`
         }
         ctaLabel="Continue Mission"
@@ -910,122 +947,122 @@ export default function ActivityScreen() {
 
       {/* Modern Details Overlay */}
       <Modal visible={showDetailsModal} transparent statusBarTranslucent animationType="none">
-          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-            {/* Backdrop */}
-            <Animated.View 
-              style={{ 
-                ...StyleSheet.absoluteFillObject, 
-                backgroundColor: 'rgba(0,0,0,0.6)',
-                opacity: sheetAnim.interpolate({
-                  inputRange: [0, SCREEN_HEIGHT],
-                  outputRange: [1, 0]
-                })
-              }} 
-            >
-              <TouchableOpacity activeOpacity={1} style={{ flex: 1 }} onPress={closeSheet} />
-            </Animated.View>
-            
-            <Animated.View 
-              {...panResponder.panHandlers}
-              style={{ 
-                backgroundColor: '#0f172a', 
-                borderTopLeftRadius: 48, 
-                borderTopRightRadius: 48, 
-                padding: 32, 
-                borderTopWidth: 1, 
-                borderTopColor: '#1e293b', 
-                maxHeight: '85%', 
-                paddingBottom: insets.bottom + 32,
-                transform: [
-                  { translateY: sheetAnim },
-                  { translateY: panY }
-                ]
-              }}
-            >
-              <View style={{ width: 48, height: 6, backgroundColor: '#1e293b', borderRadius: 3, alignSelf: 'center', marginBottom: 32 }} />
-              
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ width: 48, height: 48, backgroundColor: '#3b82f61a', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#3b82f633' }}>
-                    <Sparkles size={24} color="#3B82F6" />
-                  </View>
-                  <View>
-                    <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{selectedChallenge?.name}</Text>
-                    <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Global Protocol</Text>
-                  </View>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          {/* Backdrop */}
+          <Animated.View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              opacity: sheetAnim.interpolate({
+                inputRange: [0, SCREEN_HEIGHT],
+                outputRange: [1, 0]
+              })
+            }}
+          >
+            <TouchableOpacity activeOpacity={1} style={{ flex: 1 }} onPress={closeSheet} />
+          </Animated.View>
+
+          <Animated.View
+            {...panResponder.panHandlers}
+            style={{
+              backgroundColor: '#0f172a',
+              borderTopLeftRadius: 48,
+              borderTopRightRadius: 48,
+              padding: 32,
+              borderTopWidth: 1,
+              borderTopColor: '#1e293b',
+              maxHeight: '85%',
+              paddingBottom: insets.bottom + 32,
+              transform: [
+                { translateY: sheetAnim },
+                { translateY: panY }
+              ]
+            }}
+          >
+            <View style={{ width: 48, height: 6, backgroundColor: '#1e293b', borderRadius: 3, alignSelf: 'center', marginBottom: 32 }} />
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 48, height: 48, backgroundColor: '#3b82f61a', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#3b82f633' }}>
+                  <Sparkles size={24} color="#3B82F6" />
+                </View>
+                <View>
+                  <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{selectedChallenge?.name}</Text>
+                  <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Global Protocol</Text>
                 </View>
               </View>
+            </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {selectedChallenge && (
-                  <>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
-                      <Badge label={selectedChallenge.focus_type} />
-                      {selectedChallenge.intensity && <Badge label={selectedChallenge.intensity} color="border-orange-500/20 text-orange-500 bg-orange-500/5" />}
-                      <Badge label="Daily Objective" color="border-green-500/20 text-green-500 bg-green-500/5" />
-                    </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedChallenge && (
+                <>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
+                    <Badge label={selectedChallenge.focus_type} />
+                    {selectedChallenge.intensity && <Badge label={selectedChallenge.intensity} color="border-orange-500/20 text-orange-500 bg-orange-500/5" />}
+                    <Badge label="Daily Objective" color="border-green-500/20 text-green-500 bg-green-500/5" />
+                  </View>
 
-                    <Text style={{ color: '#94a3b8', fontSize: 16, lineHeight: 28, fontWeight: '500', marginBottom: 40 }}>
-                      {selectedChallenge.description || 'No detailed instructions provided for this challenge. Ensure you maintain proper form and stay hydrated.'}
-                    </Text>
+                  <Text style={{ color: '#94a3b8', fontSize: 16, lineHeight: 28, fontWeight: '500', marginBottom: 40 }}>
+                    {selectedChallenge.description || 'No detailed instructions provided for this challenge. Ensure you maintain proper form and stay hydrated.'}
+                  </Text>
 
-                    <TouchableOpacity 
-                      style={{ 
-                        padding: 24, 
-                        borderRadius: 32, 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        flexDirection: 'row', 
-                        gap: 12, 
-                        backgroundColor: selectedChallenge.completed ? '#1e293b' : '#2563eb' 
-                      }}
-                      onPress={() => {
-                        handleToggleChallenge(selectedChallenge);
-                      }}
-                    >
-                      {selectedChallenge.completed ? (
-                        <>
-                          <X size={20} color="#94A3B8" />
-                          <Text style={{ color: '#94a3b8', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Remove Completion</Text>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle size={20} color="white" />
-                          <Text style={{ color: 'white', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Confirm Completion</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </>
-                )}
-              </ScrollView>
-            </Animated.View>
-          </View>
+                  <TouchableOpacity
+                    style={{
+                      padding: 24,
+                      borderRadius: 32,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 12,
+                      backgroundColor: selectedChallenge.completed ? '#1e293b' : '#2563eb'
+                    }}
+                    onPress={() => {
+                      handleToggleChallenge(selectedChallenge);
+                    }}
+                  >
+                    {selectedChallenge.completed ? (
+                      <>
+                        <X size={20} color="#94A3B8" />
+                        <Text style={{ color: '#94a3b8', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Remove Completion</Text>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle size={20} color="white" />
+                        <Text style={{ color: 'white', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 14 }}>Confirm Completion</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </Animated.View>
+        </View>
       </Modal>
     </View>
   );
 }
 
 // Support Components
-const CategorySummaryCard = ({ 
-  title, 
-  icon, 
-  totalCount, 
-  completedCount, 
-  isExpanded, 
-  onPress, 
-  showProgressBar = true 
+const CategorySummaryCard = ({
+  title,
+  icon,
+  totalCount,
+  completedCount,
+  isExpanded,
+  onPress,
+  showProgressBar = true
 }: any) => {
   const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-  
+
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       activeOpacity={0.8}
       onPress={onPress}
-      style={{ 
-        backgroundColor: '#0f172a', 
-        borderRadius: 32, 
-        borderWidth: 1, 
-        borderColor: isExpanded ? '#3b82f633' : '#1e293b', 
+      style={{
+        backgroundColor: '#0f172a',
+        borderRadius: 32,
+        borderWidth: 1,
+        borderColor: isExpanded ? '#3b82f633' : '#1e293b',
         padding: 20,
         marginBottom: isExpanded ? 16 : 12,
       }}
@@ -1037,8 +1074,8 @@ const CategorySummaryCard = ({
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 18, fontWeight: '900', color: 'white' }}>{title}</Text>
           <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
-            {showProgressBar 
-              ? `${completedCount} / ${totalCount} COMPLETED` 
+            {showProgressBar
+              ? `${completedCount} / ${totalCount} COMPLETED`
               : `${totalCount} LOGGED`}
           </Text>
         </View>
@@ -1046,7 +1083,7 @@ const CategorySummaryCard = ({
           {isExpanded ? <ChevronDown size={16} color="#94A3B8" /> : <ChevronRight size={16} color="#94A3B8" />}
         </View>
       </View>
-      
+
       {showProgressBar && totalCount > 0 && (
         <View style={{ marginTop: 24, marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ flex: 1, height: 8, backgroundColor: '#1e293b', borderRadius: 4, overflow: 'hidden' }}>
@@ -1064,19 +1101,19 @@ const CategorySummaryCard = ({
 const MetricCard = ({ label, value, icon, active, onPress }: any) => {
   const displayValue = typeof value === 'number' ? formatCompactNumber(value) : value;
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       activeOpacity={0.7}
       disabled={!onPress}
       onPress={onPress}
-      style={{ 
-        width: '47%', 
-        backgroundColor: active ? '#0f172a' : '#0f172a66', 
-        padding: 20, 
-        borderRadius: 36, 
-        borderWidth: 1, 
-        borderColor: active ? '#3b82f633' : '#1e293b', 
-        alignItems: 'center', 
-        justifyContent: 'center' 
+      style={{
+        width: '47%',
+        backgroundColor: active ? '#0f172a' : '#0f172a66',
+        padding: 20,
+        borderRadius: 36,
+        borderWidth: 1,
+        borderColor: active ? '#3b82f633' : '#1e293b',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}
     >
       <View style={{ width: 40, height: 40, backgroundColor: '#020617', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b', marginBottom: 12 }}>
@@ -1099,18 +1136,18 @@ const SectionHeader = ({ title, count, marginTop = 0 }: any) => (
 
 const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly, delay = 0 }: any) => (
   <View style={{ marginBottom: 12 }}>
-    <TouchableOpacity 
+    <TouchableOpacity
       activeOpacity={0.7}
       disabled={!onPress}
       onPress={onPress}
-      style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        padding: 20, 
-        backgroundColor: '#0f172a66', 
-        borderRadius: 32, 
-        borderWidth: 1, 
-        borderColor: completed ? '#3b82f633' : '#1e293b' 
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#0f172a66',
+        borderRadius: 32,
+        borderWidth: 1,
+        borderColor: completed ? '#3b82f633' : '#1e293b'
       }}
     >
       <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: completed ? '#3b82f61a' : '#020617', borderColor: completed ? '#3b82f633' : '#1e293b' }}>
@@ -1121,7 +1158,7 @@ const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly
         <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>{sub}</Text>
       </View>
       {!readOnly && (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
             onToggle && onToggle();
           }}
@@ -1146,13 +1183,13 @@ const EmptyState = ({ message }: { message: string }) => (
 const Badge = ({ label, color = "#3b82f6" }: any) => {
   const isCustom = color !== "#3b82f6";
   return (
-    <View style={{ 
-        paddingHorizontal: 16, 
-        paddingVertical: 8, 
-        borderRadius: 999, 
-        borderWidth: 1, 
-        borderColor: isCustom ? 'rgba(249, 115, 22, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-        backgroundColor: isCustom ? 'rgba(249, 115, 22, 0.05)' : 'rgba(59, 130, 246, 0.05)'
+    <View style={{
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: isCustom ? 'rgba(249, 115, 22, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+      backgroundColor: isCustom ? 'rgba(249, 115, 22, 0.05)' : 'rgba(59, 130, 246, 0.05)'
     }}>
       <Text style={{ color: isCustom ? '#f97316' : '#3b82f6', fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>{label}</Text>
     </View>

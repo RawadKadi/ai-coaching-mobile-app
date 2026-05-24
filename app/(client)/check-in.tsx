@@ -126,14 +126,14 @@ export default function CheckInScreen() {
       
       const checkinData = data;
 
-      // Move to summary immediately to show success
-      setCurrentStep('summary');
-      setAiGenerating(true);
+      // Show modal immediately
+      setShowAcknowledgment(true);
 
-      // AI generation - we await this now to make it "instant" for the dashboard
-      try {
-        const { generateText } = await import('@/lib/google-ai');
-        const prompt = `Act as an elite AI fitness coach. Analyze this daily check-in:
+      // AI generation - run in background so we don't block
+      (async () => {
+        try {
+          const { generateText } = await import('@/lib/google-ai');
+          const prompt = `Act as an elite AI fitness coach. Analyze this daily check-in:
 Weight: ${weight ? weight + 'kg' : 'Not provided'}
 Sleep: ${sleep ? sleep + 'hrs' : 'Not provided'}
 Energy (1-10): ${energy}
@@ -143,21 +143,19 @@ Mood: ${mood}
 Notes: ${notes}
 
 Provide exactly 2 short, punchy sentences of encouraging insight or advice based on these metrics. Be direct and premium. Use simple coaching language.`;
-        
-        const analysis = await generateText(prompt);
-        
-        if (analysis && checkinData?.id) {
-          await supabase
-            .from('check_ins')
-            .update({ ai_analysis: analysis.trim() })
-            .eq('id', checkinData.id);
+          
+          const analysis = await generateText(prompt);
+          
+          if (analysis && checkinData?.id) {
+            await supabase
+              .from('check_ins')
+              .update({ ai_analysis: analysis.trim() })
+              .eq('id', checkinData.id);
+          }
+        } catch (aiError) {
+          console.error("AI Analysis failed:", aiError);
         }
-      } catch (aiError) {
-        console.error("AI Analysis failed:", aiError);
-      } finally {
-        setAiGenerating(false);
-        setShowAcknowledgment(true);
-      }
+      })();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save check-in');
     } finally {
@@ -174,8 +172,8 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
         <ChevronLeft size={24} color="white" />
       </TouchableOpacity>
       <View className="items-center">
-        <Text className="text-white font-black text-xs uppercase tracking-[4px]">Daily Protocol</Text>
-        <Text className="text-blue-500 font-bold text-[10px] mt-1">STEP {['metrics', 'vitals', 'mood', 'summary'].indexOf(currentStep) + 1} OF 4</Text>
+        <Text className="text-white font-black text-xs uppercase tracking-[4px]">Daily Check-in</Text>
+        <Text className="text-blue-500 font-bold text-[10px] mt-1">STEP {['metrics', 'vitals', 'mood'].indexOf(currentStep) + 1} OF 3</Text>
       </View>
       <TouchableOpacity 
         key={`header-check-${currentStep === 'metrics' && !isMetricsValid ? 'disabled' : 'enabled'}`}
@@ -388,8 +386,8 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
             <ActivityIndicator color="white" />
           ) : (
             <>
-              <Text className="text-white font-black text-lg uppercase tracking-widest">Sync Protocol</Text>
-              <Sparkles size={20} color="white" strokeWidth={3} />
+              <Text className="text-white font-black text-lg uppercase tracking-widest">Complete Check-in</Text>
+              <Check size={20} color="white" strokeWidth={3} />
             </>
           )}
         </TouchableOpacity>
@@ -416,13 +414,13 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
           <View className="w-24 h-24 bg-blue-600/10 rounded-[32px] items-center justify-center border border-blue-600/20 mb-8">
             <Heart size={40} color="#3B82F6" />
           </View>
-          <Text className="text-white text-3xl font-black tracking-tighter text-center">Already Synced</Text>
-          <Text className="text-slate-500 font-medium text-lg mt-4 text-center px-10">You've already completed your daily protocol. Rest up!</Text>
+          <Text className="text-white text-3xl font-black tracking-tighter text-center">Already Checked In</Text>
+          <Text className="text-slate-500 font-medium text-lg mt-4 text-center px-10">You've already completed your check-in for today. Rest up!</Text>
           <TouchableOpacity 
             onPress={() => router.back()}
             className="mt-12 bg-slate-900 px-10 py-5 rounded-[24px] border border-white/5"
           >
-            <Text className="text-white font-black text-xs uppercase tracking-widest">Return to Base</Text>
+            <Text className="text-white font-black text-xs uppercase tracking-widest">Back to Dashboard</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -449,10 +447,10 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
             router.back();
           }}
           variant="info"
-          icon={<Sparkles size={60} color="#3B82F6" />}
-          title="Protocol Synced"
-          body="Your daily metrics have been securely transmitted. Your coach has been notified."
-          ctaLabel="Return to Base"
+          icon={<CheckCircle2 size={60} color="#3B82F6" />}
+          title="Check-in Complete"
+          body="Your update was sent to your coach."
+          ctaLabel="Back to Dashboard"
         />
       </View>
     </TouchableWithoutFeedback>
