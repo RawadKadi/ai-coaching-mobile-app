@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { MotiView, MotiText, AnimatePresence } from 'moti';
+import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, X, AlertCircle, CheckCircle, Calendar, Target, Clock, Dumbbell, Apple, Moon, Zap, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, X, Calendar, Clock, Dumbbell, Apple, Moon, Zap, Edit2 } from 'lucide-react-native';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 export default function ChallengeDetailScreen() {
   const router = useRouter();
@@ -37,7 +38,27 @@ export default function ChallengeDetailScreen() {
       const { data, error } = await supabase.rpc('get_mother_challenge_details', { p_mother_challenge_id: id });
       if (error) throw error;
       if (!data || data.length === 0) { router.back(); return; }
-      setChallenge(data[0]);
+      
+      const challengeObj = data[0];
+
+      // Fetch client details including avatar and email via existing RPC to bypass RLS
+      const { data: extraData } = await supabase
+        .from('mother_challenges')
+        .select('client_id')
+        .eq('id', id)
+        .single();
+
+      if (extraData?.client_id) {
+        const { data: clientDetails } = await supabase
+          .rpc('get_client_details', { target_client_id: extraData.client_id });
+
+        if (clientDetails && clientDetails.profiles) {
+          challengeObj.client_avatar = clientDetails.profiles.avatar_url;
+          challengeObj.client_email = clientDetails.profiles.email;
+        }
+      }
+      
+      setChallenge(challengeObj);
     } catch (error) {
       console.error('Error loading challenge:', error);
     } finally {
@@ -75,26 +96,45 @@ export default function ChallengeDetailScreen() {
 
   return (
     <View className="flex-1 bg-slate-950">
-      {/* Header */}
-      <View className="px-6 pt-16 pb-6 flex-row items-center gap-4 bg-slate-950 border-b border-slate-900">
-        <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full">
-          <ArrowLeft size={20} color="#94A3B8" />
-        </TouchableOpacity>
-        <View className="flex-1">
-           <Text className="text-white text-xl font-bold" numberOfLines={1}>{challenge.name}</Text>
-           <Text className="text-slate-500 text-xs font-medium">Tracking {(challenge.client_name || 'Client').split(' ')[0]}'s progress</Text>
+      {/* Header with Client Profile Picture and Name */}
+      <View className="px-6 pt-16 pb-6 flex-row items-center justify-between bg-slate-950 border-b border-slate-900">
+        <View className="flex-row items-center gap-4">
+          <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
+            <ArrowLeft size={20} color="white" />
+          </TouchableOpacity>
+          <BrandedAvatar name={challenge.client_name || 'Client'} size={40} imageUrl={challenge.client_avatar} />
+          <View>
+            <Text className="text-white text-lg font-black">{challenge.client_name || 'Client'}</Text>
+            {challenge.client_email ? (
+              <Text className="text-slate-500 text-xs font-medium">{challenge.client_email}</Text>
+            ) : (
+              <Text className="text-slate-500 text-xs font-medium">Tracking progress</Text>
+            )}
+          </View>
         </View>
-        <TouchableOpacity onPress={handleCancel} className="p-2 bg-red-500/10 rounded-full border border-red-500/20">
-          <X size={20} color="#EF4444" />
+        <TouchableOpacity 
+          onPress={handleCancel} 
+          className="flex-row items-center gap-1.5 px-3 py-1.5 bg-red-500/10 rounded-full border border-red-500/20"
+        >
+          <X size={12} color="#EF4444" />
+          <Text className="text-red-500 text-xs font-semibold">cancel plan</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        {/* Dynamic Challenge Name/Title in Main Content */}
+        <View className="mx-6 mt-8">
+          <Text className="text-white text-2xl font-black tracking-tight">{challenge.name}</Text>
+          {challenge.description && (
+            <Text className="text-slate-500 text-sm font-medium mt-2 leading-5">{challenge.description}</Text>
+          )}
+        </View>
+
         {/* Performance Overview */}
         <MotiView 
           from={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="mx-6 mt-8 bg-slate-900 p-6 rounded-[32px] border border-slate-800"
+          className="mx-6 mt-6 bg-slate-900 p-6 rounded-[32px] border border-slate-800"
         >
           <View className="flex-row justify-between items-center mb-6">
             <View className="bg-blue-600/10 border border-blue-500/20 px-3 py-1 rounded-full">
@@ -131,15 +171,26 @@ export default function ChallengeDetailScreen() {
         <View className="mt-10 px-6">
            <Text className="text-white text-lg font-bold mb-6">Daily Breakdown</Text>
            {challenge.sub_challenges?.map((task: any, index: number) => (
-             <TaskCard key={task.id} task={task} index={index} challengeId={id as string} router={router} />
+             <TaskCard key={task.id} task={task} index={index} />
            ))}
         </View>
       </ScrollView>
+
+      {/* Fixed Edit Plan Button at Bottom Right while scrolling */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => router.push(`/(coach)/challenges/edit/${id}`)}
+        style={{ position: 'absolute', bottom: 32, right: 24, zIndex: 10 }}
+        className="bg-blue-600 px-4 py-2.5 rounded-full flex-row items-center gap-1.5 shadow-2xl shadow-blue-500/30 border border-blue-500/20"
+      >
+        <Text className="text-white text-xs font-semibold">edit plan</Text>
+        <Edit2 size={12} color="white" />
+      </TouchableOpacity>
     </View>
   );
 }
 
-const TaskCard = ({ task, index, challengeId, router }: { task: any, index: number, challengeId: string, router: any }) => {
+const TaskCard = ({ task, index }: { task: any, index: number }) => {
   const getIcon = (type: string) => {
     switch (type?.toLowerCase()) {
       case 'training': return <Dumbbell size={24} color="#3B82F6" />;
@@ -192,13 +243,6 @@ const TaskCard = ({ task, index, challengeId, router }: { task: any, index: numb
                 {new Date(task.assigned_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
               </Text>
            </View>
-           <TouchableOpacity 
-             onPress={() => router.push(`/(coach)/challenges/edit/${challengeId}`)}
-             className="flex-row items-center gap-1"
-           >
-              <Text className="text-blue-500 text-xs font-bold">Edit Plan</Text>
-              <ChevronRight size={14} color="#3B82F6" />
-           </TouchableOpacity>
          </View>
       </View>
     </MotiView>

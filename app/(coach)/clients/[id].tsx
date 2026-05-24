@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   ActivityIndicator,
   TextInput,
   Modal,
@@ -62,8 +63,8 @@ export default function ClientDetailsScreen() {
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
   const [challengeFilter, setChallengeFilter] = useState<'active' | 'history'>('active');
-  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'checkins' | 'sessions' | 'stats'>(
-    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : (tab as string) === 'sessions' ? 'sessions' : (tab as string) === 'stats' ? 'stats' : 'overview'
+  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'challenges' | 'checkins' | 'sessions'>(
+    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : (tab as string) === 'challenges' ? 'challenges' : (tab as string) === 'sessions' ? 'sessions' : 'overview'
   );
   const [checkins, setCheckins] = useState<any[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -260,12 +261,12 @@ export default function ClientDetailsScreen() {
 
       if (error) throw error;
       
-      setHabits(prev => prev.map(h => h.id === selectedHabit.id ? { 
+      setHabits(prev => prev.map(h => h.id === selectedHabit.id ? ({ 
         ...h, 
         name: editingName.trim(), 
         description: editingDescription.trim() || null,
         category: editingCategory
-      } : h));
+      } as Habit) : h));
       
       setEditHabitModalVisible(false);
       setSelectedHabit(null);
@@ -305,6 +306,28 @@ export default function ClientDetailsScreen() {
   const todayStr = `${yyyy}-${mm}-${dd}`;
   const todayLog = stepsLog.find(log => log.date === todayStr);
   const todaySteps = todayLog ? todayLog.steps : 0;
+
+  const validWeights = checkins.filter(c => c.weight_kg !== null && c.weight_kg !== undefined);
+  const latestWeight = validWeights.length > 0 ? Number(validWeights[0].weight_kg) : null;
+  const latestWeightDate = validWeights.length > 0 ? validWeights[0].date : null;
+
+  let weightDaysAgo = 0;
+  if (latestWeightDate) {
+    const checkinDate = new Date(latestWeightDate);
+    const todayDate = new Date();
+    const diffTime = Math.abs(todayDate.getTime() - checkinDate.getTime());
+    weightDaysAgo = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }
+
+  const validSleep = checkins.filter(c => c.sleep_hours !== null && c.sleep_hours !== undefined);
+  const avgSleep = validSleep.length > 0 
+    ? (validSleep.reduce((sum, c) => sum + Number(c.sleep_hours), 0) / validSleep.length).toFixed(1) 
+    : null;
+
+  const validEnergy = checkins.filter(c => c.energy_level !== null && c.energy_level !== undefined);
+  const avgEnergy = validEnergy.length > 0 
+    ? (validEnergy.reduce((sum, c) => sum + Number(c.energy_level), 0) / validEnergy.length).toFixed(1) 
+    : null;
 
   const filteredChallenges = challenges.filter(c => challengeFilter === 'active' ? c.status === 'active' : c.status === 'completed');
 
@@ -370,113 +393,203 @@ export default function ClientDetailsScreen() {
                             <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'daily_tasks' ? 'text-white' : 'text-slate-500'}`}>Daily Tasks</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
+                            className={`mr-8 pb-4 border-b-2 ${mainTab === 'challenges' ? 'border-indigo-500' : 'border-transparent'}`}
+                            onPress={() => setMainTab('challenges')}
+                        >
+                            <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'challenges' ? 'text-white' : 'text-slate-500'}`}>Challenges</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
                             className={`mr-8 pb-4 border-b-2 ${mainTab === 'checkins' ? 'border-blue-500' : 'border-transparent'}`}
                             onPress={() => setMainTab('checkins')}
                         >
                             <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'checkins' ? 'text-white' : 'text-slate-500'}`}>Check-ins</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            className={`mr-8 pb-4 border-b-2 ${mainTab === 'sessions' ? 'border-blue-500' : 'border-transparent'}`}
+                            className={`pb-4 border-b-2 ${mainTab === 'sessions' ? 'border-blue-500' : 'border-transparent'}`}
                             onPress={() => setMainTab('sessions')}
                         >
                             <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'sessions' ? 'text-white' : 'text-slate-500'}`}>Sessions</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            className={`pb-4 border-b-2 ${mainTab === 'stats' ? 'border-indigo-500' : 'border-transparent'}`}
-                            onPress={() => setMainTab('stats')}
-                        >
-                            <Text className={`text-sm font-black uppercase tracking-widest ${mainTab === 'stats' ? 'text-white' : 'text-slate-500'}`}>Stats</Text>
                         </TouchableOpacity>
                     </ScrollView>
                 </View>
 
                 {mainTab === 'overview' ? (
                   <>
-                    {/* Client Information Grid */}
-                <View className="px-6 py-8">
-                    <View className="bg-slate-900/40 rounded-[32px] p-6 border border-white/5">
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-6">Stats</Text>
-                        <View className="flex-row flex-wrap gap-y-6">
-                            <InfoTile icon={<Target size={14} color="#64748B" />} label="Goal" value={client.goal || 'Not set'} fullWidth />
-                            <InfoTile icon={<Mail size={14} color="#64748B" />} label="Email" value={client.profiles?.email || 'Not set'} fullWidth selectable />
-                            <InfoTile icon={<Award size={14} color="#64748B" />} label="Experience" value={client.experience_level || 'Not set'} />
-                            <InfoTile icon={<TrendingUp size={14} color="#3B82F6" />} label="Streak" value={`${streak} Days`} />
-                            <InfoTile icon={<Scale size={14} color="#64748B" />} label="Weight" value={client.latest_weight ? `${client.latest_weight} kg` : 'Not set'} />
-                            <InfoTile icon={<User size={14} color="#64748B" />} label="Height" value={client.height_cm ? `${client.height_cm} cm` : 'Not set'} />
-                            <InfoTile icon={<Clock size={14} color="#64748B" />} label="Age" value={client.date_of_birth ? `${Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 3600 * 24 * 365.25))}` : 'Not set'} />
-                            <InfoTile icon={<Zap size={14} color="#6366F1" />} label="Today's Steps" value={todaySteps ? `${todaySteps.toLocaleString()} steps` : '0 steps'} />
+                    {/* Premium Metrics Grid */}
+                    <View className="px-6 pt-8 pb-4">
+                        <View className="flex-row flex-wrap justify-between gap-4 mb-4">
+                            {/* Today's Steps Card (Full Width) */}
+                            <View className="w-full bg-indigo-500/10 rounded-[32px] p-6 border border-indigo-500/20 flex-row items-center justify-between">
+                                <View className="flex-row items-center gap-4">
+                                    <View className="w-12 h-12 bg-indigo-500/20 rounded-2xl items-center justify-center border border-indigo-500/30">
+                                        <Zap size={22} color="#818CF8" />
+                                    </View>
+                                    <View>
+                                        <Text className="text-indigo-400 text-[10px] font-black uppercase tracking-wider">Today's Steps</Text>
+                                        <Text className="text-white text-2xl font-black mt-1">
+                                            {todaySteps.toLocaleString()}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View className="bg-indigo-500/20 px-3 py-1.5 rounded-xl border border-indigo-500/30">
+                                    <Text className="text-indigo-400 font-black text-[9px] uppercase tracking-wider">Today</Text>
+                                </View>
+                            </View>
+
+                            {/* Streak Card */}
+                            <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
+                                <View className="w-10 h-10 bg-emerald-500/10 rounded-2xl items-center justify-center border border-emerald-500/20 mb-3">
+                                    <Award size={18} color="#10B981" />
+                                </View>
+                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Active Streak</Text>
+                                <Text className="text-white text-lg font-black mt-1">{streak} Days</Text>
+                            </View>
+
+                            {/* Weight Card */}
+                            <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
+                                <View className="w-10 h-10 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20 mb-3">
+                                    <Scale size={18} color="#F59E0B" />
+                                </View>
+                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">
+                                    {weightDaysAgo > 5 ? `Weight (${weightDaysAgo}d ago)` : 'Last Weight'}
+                                </Text>
+                                <Text className="text-white text-lg font-black mt-1">{latestWeight ? `${latestWeight} kg` : '--'}</Text>
+                                {weightDaysAgo > 5 && (
+                                    <View className="mt-1 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                                        <Text className="text-red-400 text-[8px] font-black uppercase">Not Updated</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* Average Sleep Card */}
+                            <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
+                                <View className="w-10 h-10 bg-indigo-500/10 rounded-2xl items-center justify-center border border-indigo-500/20 mb-3">
+                                    <Clock size={18} color="#6366F1" />
+                                </View>
+                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Avg Sleep</Text>
+                                <Text className="text-white text-lg font-black mt-1">{avgSleep ? `${avgSleep} hrs` : '--'}</Text>
+                            </View>
+
+                            {/* Average Energy Card */}
+                            <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
+                                <View className="w-10 h-10 bg-orange-500/10 rounded-2xl items-center justify-center border border-orange-500/20 mb-3">
+                                    <Zap size={18} color="#F97316" />
+                                </View>
+                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Avg Energy</Text>
+                                <Text className="text-white text-lg font-black mt-1">{avgEnergy ? `${avgEnergy}/10` : '--'}</Text>
+                            </View>
                         </View>
                     </View>
-                </View>
 
-                {/* Challenges Section */}
-                <View className="px-6">
-                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-6 ml-1">Challenges</Text>
-                    <View className="flex-row justify-between items-center mb-8">
-                        <View className="flex-row gap-6">
-                            <TouchableOpacity onPress={() => setChallengeFilter('active')}>
-                                <Text className={`text-2xl font-black ${challengeFilter === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setChallengeFilter('history')}>
-                                <Text className={`text-2xl font-black ${challengeFilter === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View className="flex-row gap-2">
-                             <TouchableOpacity onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5 shadow-lg shadow-violet-500/20">
-                                <Sparkles size={18} color="#A78BFA" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)} className="h-10 px-4 bg-blue-600 rounded-full flex-row items-center gap-2 shadow-lg shadow-blue-500/20">
-                                <Plus size={16} color="white" />
-                                <Text className="text-white font-black text-xs uppercase">Create</Text>
-                            </TouchableOpacity>
+                    {/* Client Info Card */}
+                    <View className="px-6 pb-8">
+                        <View className="bg-slate-900/40 rounded-[32px] p-6 border border-white/5">
+                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-6">Client Info</Text>
+                            <View className="flex-row flex-wrap gap-y-6">
+                                <InfoTile icon={<Target size={14} color="#64748B" />} label="Goal" value={client.goal || 'Not set'} fullWidth />
+                                <InfoTile icon={<Mail size={14} color="#64748B" />} label="Email" value={client.profiles?.email || 'Not set'} fullWidth selectable />
+                                <InfoTile icon={<Award size={14} color="#64748B" />} label="Experience" value={client.experience_level || 'Not set'} />
+                                <InfoTile icon={<User size={14} color="#64748B" />} label="Height" value={client.height_cm ? `${client.height_cm} cm` : 'Not set'} />
+                                <InfoTile icon={<Clock size={14} color="#64748B" />} label="Age" value={client.date_of_birth ? `${Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 3600 * 24 * 365.25))}` : 'Not set'} />
+                            </View>
                         </View>
                     </View>
 
-                    {filteredChallenges.length === 0 ? (
-                        <View className="p-12 items-center justify-center bg-slate-900/20 rounded-[40px] border border-slate-900 border-dashed">
-                             <Zap size={32} color="#1E293B" />
-                             <Text className="text-slate-700 font-black text-xs uppercase mt-6">No Challenges Found</Text>
-                             <Text className="text-slate-800 text-[10px] mt-2 text-center px-4 leading-4">This client hasn't started any programs yet.</Text>
-                        </View>
-                    ) : (
-                        filteredChallenges.map((challenge, idx) => (
-                            <ChallengeCard 
-                                key={challenge.id} 
-                                challenge={challenge} 
-                                coachId={id as string} 
-                                index={idx} 
-                                isEditing={isEditingChallenges}
-                                onDelete={() => handleDeleteChallenge(challenge.id)}
-                            />
-                        ))
-                    )}
-
-                    {/* Launch Section */}
-                    <View className="mt-10 p-10 bg-slate-900/40 rounded-[48px] border border-white/5 items-center">
-                        <View className="w-16 h-16 bg-slate-950 rounded-full items-center justify-center border border-white/10 mb-6">
-                            <Plus size={32} color="#64748B" />
-                        </View>
-                        <Text className="text-white text-2xl font-black mb-4 text-center">Launch a New Challenge</Text>
-                        <Text className="text-slate-500 text-xs font-medium text-center mb-10 leading-5">
-                            Create a bespoke fitness journey or use AI to generate a plan based on client goals.
-                        </Text>
-                        <View className="flex-row gap-4 w-full">
-                            <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)}
-                                className="flex-1 h-14 bg-slate-950 rounded-full items-center justify-center border border-white/10"
-                            >
-                                <Text className="text-white font-bold text-xs uppercase">Manual Setup</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)}
-                                className="flex-1 h-14 bg-orange-200 rounded-full items-center justify-center"
-                                style={{ backgroundColor: '#FFD7B5' }}
-                            >
-                                <Text className="text-slate-900 font-bold text-xs uppercase">AI Generator</Text>
-                            </TouchableOpacity>
-                        </View>
+                    {/* Synced Activity (Steps History) */}
+                    <View className="px-6 pb-8">
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1">Synced Activity</Text>
+                        {stepsLog.length === 0 ? (
+                            <View className="p-8 items-center justify-center bg-slate-900/20 rounded-[32px] border border-slate-900 border-dashed">
+                                <Text className="text-slate-500 font-bold text-xs uppercase">No steps synced yet</Text>
+                            </View>
+                        ) : (
+                            <View className="gap-3">
+                                {stepsLog.slice(0, 5).map((logItem, idx) => (
+                                    <MotiView
+                                        key={logItem.id}
+                                        from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
+                                        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
+                                        transition={{ delay: idx * 30 }}
+                                        className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
+                                    >
+                                        <View className="flex-1">
+                                            <Text className="text-white font-black text-sm">
+                                                {new Date(logItem.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                            </Text>
+                                            <Text className="text-slate-400 font-bold text-xs mt-1">
+                                                {logItem.steps ? `${logItem.steps.toLocaleString()} steps` : '0 steps'}
+                                            </Text>
+                                        </View>
+                                        <View className="bg-indigo-500/10 px-3 py-1.5 rounded-xl border border-indigo-500/20">
+                                            <Text className="text-indigo-400 font-black text-[9px] uppercase tracking-wider">Synced</Text>
+                                        </View>
+                                    </MotiView>
+                                ))}
+                            </View>
+                        )}
                     </View>
-                </View>
+
+                    {/* Weigh-in History */}
+                    <View className="px-6 pb-8">
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1">Weigh-in History</Text>
+                        {validWeights.length === 0 ? (
+                            <View className="p-8 items-center justify-center bg-slate-900/20 rounded-[32px] border border-slate-900 border-dashed">
+                                <Text className="text-slate-500 font-bold text-xs uppercase">No weight records yet</Text>
+                            </View>
+                        ) : (
+                            <View className="gap-3">
+                                {validWeights.slice(0, 5).map((checkin, idx) => {
+                                    const currentWeight = Number(checkin.weight_kg);
+                                    const prevCheckin = validWeights[idx + 1];
+                                    const prevWeight = prevCheckin ? Number(prevCheckin.weight_kg) : null;
+                                    const diff = prevWeight !== null ? (currentWeight - prevWeight) : null;
+
+                                    return (
+                                        <MotiView
+                                            key={checkin.id}
+                                            from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
+                                            animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
+                                            transition={{ delay: idx * 30 }}
+                                            className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
+                                        >
+                                            <View className="flex-1">
+                                                <Text className="text-white font-black text-sm">
+                                                    {new Date(checkin.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                                </Text>
+                                                <Text className="text-slate-400 font-bold text-xs mt-1">
+                                                    {currentWeight} kg
+                                                </Text>
+                                            </View>
+                                            {diff !== null && (
+                                                <View className={`px-3 py-1.5 rounded-xl border flex-row items-center gap-1 ${
+                                                    diff < 0 
+                                                        ? 'bg-emerald-500/10 border-emerald-500/20' 
+                                                        : diff > 0 
+                                                            ? 'bg-amber-500/10 border-amber-500/20'
+                                                            : 'bg-slate-800 border-white/5'
+                                                }`}>
+                                                    <TrendingUp 
+                                                        size={10} 
+                                                        color={diff < 0 ? '#10B981' : diff > 0 ? '#F59E0B' : '#64748B'} 
+                                                        style={diff < 0 ? { transform: [{ rotate: '180deg' }] } : undefined}
+                                                    />
+                                                    <Text className={`font-black text-[9px] uppercase tracking-wider ${
+                                                        diff < 0 
+                                                            ? 'text-emerald-400' 
+                                                            : diff > 0 
+                                                                ? 'text-amber-500'
+                                                                : 'text-slate-400'
+                                                    }`}>
+                                                        {diff < 0 ? `${diff.toFixed(1)} kg` : diff > 0 ? `+${diff.toFixed(1)} kg` : 'Stable'}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </MotiView>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </View>
                   </>
                 ) : mainTab === 'daily_tasks' ? (
                   <View className="px-6 py-8">
@@ -505,7 +618,7 @@ export default function ClientDetailsScreen() {
                         habits.map((habit, idx) => (
                             <Swipeable
                                 key={habit.id}
-                                ref={ref => swipeableRefs.current[habit.id] = ref}
+                                ref={ref => { swipeableRefs.current[habit.id] = ref; }}
                                 renderRightActions={() => (
                                     <View className="flex-row mb-4 pl-4">
                                         <TouchableOpacity 
@@ -560,6 +673,73 @@ export default function ClientDetailsScreen() {
                             <Text className="text-white font-black text-sm uppercase tracking-widest">Add or Edit Tasks</Text>
                         </TouchableOpacity>
                     )}
+                  </View>
+                ) : mainTab === 'challenges' ? (
+                  <View className="px-6 py-8">
+                    <View className="flex-row justify-between items-center mb-8">
+                        <View className="flex-row gap-6">
+                            <TouchableOpacity onPress={() => setChallengeFilter('active')}>
+                                <Text className={`text-2xl font-black ${challengeFilter === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setChallengeFilter('history')}>
+                                <Text className={`text-2xl font-black ${challengeFilter === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View className="flex-row gap-2">
+                             <TouchableOpacity onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5 shadow-lg shadow-violet-500/20">
+                                <Sparkles size={18} color="#A78BFA" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)} className="h-10 px-4 bg-blue-600 rounded-full flex-row items-center gap-2 shadow-lg shadow-blue-500/20">
+                                <Plus size={16} color="white" />
+                                <Text className="text-white font-black text-xs uppercase">Create</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {filteredChallenges.length === 0 ? (
+                        <View className="p-12 items-center justify-center bg-slate-900/20 rounded-[40px] border border-slate-900 border-dashed">
+                             <Zap size={32} color="#1E293B" />
+                             <Text className="text-slate-700 font-black text-xs uppercase mt-6">No Challenges</Text>
+                             <Text className="text-slate-800 text-[10px] mt-2 text-center px-4 leading-4">No challenges started yet.</Text>
+                        </View>
+                    ) : (
+                        filteredChallenges.map((challenge, idx) => (
+                            <ChallengeCard 
+                                key={challenge.id} 
+                                challenge={challenge} 
+                                coachId={id as string} 
+                                index={idx} 
+                                isEditing={isEditingChallenges}
+                                onDelete={() => handleDeleteChallenge(challenge.id)}
+                            />
+                        ))
+                    )}
+
+                    {/* Launch Section */}
+                    <View className="mt-10 p-10 bg-slate-900/40 rounded-[48px] border border-white/5 items-center">
+                        <View className="w-16 h-16 bg-slate-950 rounded-full items-center justify-center border border-white/10 mb-6">
+                            <Plus size={32} color="#64748B" />
+                        </View>
+                        <Text className="text-white text-2xl font-black mb-4 text-center">Start a Challenge</Text>
+                        <Text className="text-slate-500 text-xs font-medium text-center mb-10 leading-5">
+                            Create a custom challenge or generate one with AI.
+                        </Text>
+                        <View className="flex-row gap-4 w-full">
+                            <TouchableOpacity 
+                                onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)}
+                                className="flex-1 h-14 bg-slate-950 rounded-full items-center justify-center border border-white/10"
+                            >
+                                <Text className="text-white font-bold text-xs uppercase">Custom</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)}
+                                className="flex-1 h-14 bg-orange-200 rounded-full items-center justify-center"
+                                style={{ backgroundColor: '#FFD7B5' }}
+                            >
+                                <Text className="text-slate-900 font-bold text-xs uppercase">Use AI</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                   </View>
                 ) : mainTab === 'checkins' ? (
                   <View className="px-6 py-8">
@@ -917,208 +1097,7 @@ export default function ClientDetailsScreen() {
                       </View>
                     </View>
                   );
-                })() : (() => {
-                  // Stats tab content for Coach
-                  const validWeights = checkins.filter(c => c.weight_kg !== null && c.weight_kg !== undefined);
-                  const latestWeight = validWeights.length > 0 ? Number(validWeights[0].weight_kg) : null;
-                  const latestWeightDate = validWeights.length > 0 ? validWeights[0].date : null;
-
-                  let weightDaysAgo = 0;
-                  if (latestWeightDate) {
-                    const checkinDate = new Date(latestWeightDate);
-                    const todayDate = new Date();
-                    const diffTime = Math.abs(todayDate.getTime() - checkinDate.getTime());
-                    weightDaysAgo = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                  }
-
-                  const validSleep = checkins.filter(c => c.sleep_hours !== null && c.sleep_hours !== undefined);
-                  const avgSleep = validSleep.length > 0 
-                    ? (validSleep.reduce((sum, c) => sum + Number(c.sleep_hours), 0) / validSleep.length).toFixed(1) 
-                    : null;
-
-                  const validEnergy = checkins.filter(c => c.energy_level !== null && c.energy_level !== undefined);
-                  const avgEnergy = validEnergy.length > 0 
-                    ? (validEnergy.reduce((sum, c) => sum + Number(c.energy_level), 0) / validEnergy.length).toFixed(1) 
-                    : null;
-
-                  return (
-                    <View className="px-6 py-8">
-                      {/* Metric Grid */}
-                      <View className="flex-row flex-wrap justify-between gap-4 mb-8">
-                        {/* Today's Steps Card (Full Width) */}
-                        <View className="w-full bg-indigo-500/10 rounded-[32px] p-6 border border-indigo-500/20 flex-row items-center justify-between">
-                          <View className="flex-row items-center gap-4">
-                            <View className="w-12 h-12 bg-indigo-500/20 rounded-2xl items-center justify-center border border-indigo-500/30">
-                              <Zap size={22} color="#818CF8" />
-                            </View>
-                            <View>
-                              <Text className="text-indigo-400 text-[10px] font-black uppercase tracking-wider">Today's Steps</Text>
-                              <Text className="text-white text-2xl font-black mt-1">
-                                {todaySteps.toLocaleString()}
-                              </Text>
-                            </View>
-                          </View>
-                          <View className="bg-indigo-500/20 px-3 py-1.5 rounded-xl border border-indigo-500/30">
-                            <Text className="text-indigo-400 font-black text-[9px] uppercase tracking-wider">Today</Text>
-                          </View>
-                        </View>
-
-                        {/* Streak Card */}
-                        <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
-                          <View className="w-10 h-10 bg-emerald-500/10 rounded-2xl items-center justify-center border border-emerald-500/20 mb-3">
-                            <Award size={18} color="#10B981" />
-                          </View>
-                          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Active Streak</Text>
-                          <Text className="text-white text-lg font-black mt-1">{streak} Days</Text>
-                        </View>
-
-                        {/* Weight Card */}
-                        <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
-                          <View className="w-10 h-10 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20 mb-3">
-                            <Scale size={18} color="#F59E0B" />
-                          </View>
-                          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">
-                            {weightDaysAgo > 5 ? `Weight (${weightDaysAgo}d ago)` : 'Last Weight'}
-                          </Text>
-                          <Text className="text-white text-lg font-black mt-1">{latestWeight ? `${latestWeight} kg` : '--'}</Text>
-                          {weightDaysAgo > 5 && (
-                            <View className="mt-1 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
-                              <Text className="text-red-400 text-[8px] font-black uppercase">Not Updated</Text>
-                            </View>
-                          )}
-                        </View>
-
-                        {/* Average Sleep Card */}
-                        <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
-                          <View className="w-10 h-10 bg-indigo-500/10 rounded-2xl items-center justify-center border border-indigo-500/20 mb-3">
-                            <Clock size={18} color="#6366F1" />
-                          </View>
-                          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Avg Sleep</Text>
-                          <Text className="text-white text-lg font-black mt-1">{avgSleep ? `${avgSleep} hrs` : '--'}</Text>
-                        </View>
-
-                        {/* Average Energy Card */}
-                        <View className="w-[47%] bg-slate-900/40 rounded-[32px] p-5 border border-white/5 items-center justify-between">
-                          <View className="w-10 h-10 bg-orange-500/10 rounded-2xl items-center justify-center border border-orange-500/20 mb-3">
-                            <Zap size={18} color="#F97316" />
-                          </View>
-                          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-wider text-center">Avg Energy</Text>
-                          <Text className="text-white text-lg font-black mt-1">{avgEnergy ? `${avgEnergy}/10` : '--'}</Text>
-                        </View>
-                      </View>
-
-                      {/* Daily Activity / Synced Steps Section */}
-                      <View className="mb-8">
-                        <View className="flex-row items-center justify-between mb-4">
-                          <View>
-                            <Text className="text-white text-xl font-black">Synced Activity</Text>
-                            <Text className="text-slate-500 text-xs mt-1">Steps automatically synced from client's device</Text>
-                          </View>
-                        </View>
-
-                        {stepsLog.length === 0 ? (
-                          <View className="p-8 items-center justify-center bg-slate-900/20 rounded-[32px] border border-slate-900 border-dashed">
-                            <Text className="text-slate-500 font-bold text-xs uppercase">No steps synced yet</Text>
-                            <Text className="text-slate-600 text-[10px] mt-1 text-center">The client hasn't enabled device sync yet.</Text>
-                          </View>
-                        ) : (
-                          <View className="gap-3">
-                            {stepsLog.slice(0, 10).map((logItem, idx) => (
-                              <MotiView
-                                key={logItem.id}
-                                from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
-                                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
-                                transition={{ delay: idx * 30 }}
-                                className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
-                              >
-                                <View className="flex-1">
-                                  <Text className="text-white font-black text-sm">
-                                    {new Date(logItem.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-                                  </Text>
-                                  <Text className="text-slate-400 font-bold text-xs mt-1">
-                                    {logItem.steps ? `${logItem.steps.toLocaleString()} steps` : '0 steps'}
-                                  </Text>
-                                </View>
-                                <View className="bg-indigo-500/10 px-3 py-1.5 rounded-xl border border-indigo-500/20">
-                                  <Text className="text-indigo-400 font-black text-[9px] uppercase tracking-wider">Synced</Text>
-                                </View>
-                              </MotiView>
-                            ))}
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Weight Logs Section */}
-                      <View className="mb-8">
-                        <View className="flex-row items-center justify-between mb-4">
-                          <View>
-                            <Text className="text-white text-xl font-black">Weigh-in History</Text>
-                            <Text className="text-slate-500 text-xs mt-1">All weight records logged by the client</Text>
-                          </View>
-                        </View>
-
-                        {validWeights.length === 0 ? (
-                          <View className="p-8 items-center justify-center bg-slate-900/20 rounded-[32px] border border-slate-900 border-dashed">
-                            <Text className="text-slate-500 font-bold text-xs uppercase">No weight records yet</Text>
-                            <Text className="text-slate-600 text-[10px] mt-1 text-center">No weight data logged in check-ins.</Text>
-                          </View>
-                        ) : (
-                          <View className="gap-3">
-                            {validWeights.slice(0, 10).map((checkin, idx) => {
-                              const currentWeight = Number(checkin.weight_kg);
-                              const prevCheckin = validWeights[idx + 1];
-                              const prevWeight = prevCheckin ? Number(prevCheckin.weight_kg) : null;
-                              const diff = prevWeight !== null ? (currentWeight - prevWeight) : null;
-
-                              return (
-                                <MotiView
-                                  key={checkin.id}
-                                  from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
-                                  animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
-                                  transition={{ delay: idx * 30 }}
-                                  className="bg-slate-900/40 rounded-[24px] p-5 border border-white/5 flex-row items-center justify-between"
-                                >
-                                  <View className="flex-1">
-                                    <Text className="text-white font-black text-sm">
-                                      {new Date(checkin.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-                                    </Text>
-                                    <Text className="text-slate-400 font-bold text-xs mt-1">
-                                      {currentWeight} kg
-                                    </Text>
-                                  </View>
-                                  {diff !== null && (
-                                    <View className={`px-3 py-1.5 rounded-xl border flex-row items-center gap-1 ${
-                                      diff < 0 
-                                        ? 'bg-emerald-500/10 border-emerald-500/20' 
-                                        : diff > 0 
-                                          ? 'bg-amber-500/10 border-amber-500/20'
-                                          : 'bg-slate-800 border-white/5'
-                                    }`}>
-                                      <TrendingUp 
-                                        size={10} 
-                                        color={diff < 0 ? '#10B981' : diff > 0 ? '#F59E0B' : '#64748B'} 
-                                        style={diff < 0 ? { transform: [{ rotate: '180deg' }] } : undefined}
-                                      />
-                                      <Text className={`font-black text-[9px] uppercase tracking-wider ${
-                                        diff < 0 
-                                          ? 'text-emerald-400' 
-                                          : diff > 0 
-                                            ? 'text-amber-500'
-                                            : 'text-slate-400'
-                                      }`}>
-                                        {diff < 0 ? `${diff.toFixed(1)} kg` : diff > 0 ? `+${diff.toFixed(1)} kg` : 'Stable'}
-                                      </Text>
-                                    </View>
-                                  )}
-                                </MotiView>
-                              );
-                            })}
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })()}
+                })() : null}
             </ScrollView>
         </View>
       </SafeAreaView>
@@ -1268,6 +1247,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
     const totalSubs = Number(challenge.total_subs || 0);
     const completedSubs = Number(challenge.completed_subs || 0);
     const completionRate = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
+    const totalDays = Math.max(1, Math.ceil((new Date(challenge.end_date).getTime() - new Date(challenge.start_date).getTime()) / (1000 * 3600 * 24)));
     
     return (
         <Swipeable
@@ -1297,40 +1277,45 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
             >
                 <View className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl -mr-16 -mt-16" />
                 
-                <View className="flex-row justify-between items-start mb-10">
-                    <View className="flex-row items-center gap-3">
-                        <BrandedAvatar name={challenge.client_name || 'Client'} size={32} imageUrl={challenge.client_avatar} />
-                        <View>
-                            <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Client</Text>
-                            <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+                >
+                    <View className="flex-row justify-between items-start mb-10">
+                        <View className="flex-row items-center gap-3">
+                            <BrandedAvatar name={challenge.client_name || 'Client'} size={32} imageUrl={challenge.client_avatar} />
+                            <View>
+                                <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Client</Text>
+                                <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>
+                            </View>
+                        </View>
+                        <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-blue-600/20">
+                            <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
                         </View>
                     </View>
-                    <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-blue-600/20">
-                        <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
+
+                    <Text className="text-white text-2xl font-black mb-4 tracking-tight">{challenge.name}</Text>
+                    
+                    <View className="flex-row items-center gap-4 mb-10">
+                        <View className="flex-row items-center gap-2">
+                            <CalendarIcon size={14} color="#64748B" />
+                            <Text className="text-slate-400 text-[11px] font-bold">
+                                {new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </Text>
+                        </View>
+                        <View className="w-1 h-1 rounded-full bg-slate-800" />
+                        <Text className="text-slate-400 text-[11px] font-bold">{totalDays} {totalDays === 1 ? 'Day' : 'Days'}</Text>
                     </View>
-                </View>
 
-                <Text className="text-white text-2xl font-black mb-4 tracking-tight">{challenge.name}</Text>
-                
-                <View className="flex-row items-center gap-4 mb-10">
-                    <View className="flex-row items-center gap-2">
-                        <CalendarIcon size={14} color="#64748B" />
-                        <Text className="text-slate-400 text-[11px] font-bold">
-                            {new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </Text>
+                    <View className="flex-row justify-between items-end mb-3">
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Progress</Text>
+                        <Text className="text-white text-xl font-black tracking-tight">{completionRate}%</Text>
                     </View>
-                    <View className="w-1 h-1 rounded-full bg-slate-800" />
-                    <Text className="text-slate-400 text-[11px] font-bold">7 Days</Text>
-                </View>
 
-                <View className="flex-row justify-between items-end mb-3">
-                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Progress</Text>
-                    <Text className="text-white text-xl font-black tracking-tight">{completionRate}%</Text>
-                </View>
-
-                <View className="w-full h-2 bg-slate-950 rounded-full overflow-hidden mb-10">
-                    <View className="h-full bg-blue-600 rounded-full" style={{ width: `${completionRate}%` }} />
-                </View>
+                    <View className="w-full h-2 bg-slate-950 rounded-full overflow-hidden mb-10">
+                        <View className="h-full bg-blue-600 rounded-full" style={{ width: `${completionRate}%` }} />
+                    </View>
+                </TouchableOpacity>
 
                 <View className="flex-row gap-3">
                     <TouchableOpacity 
@@ -1345,40 +1330,87 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                         </TouchableOpacity>
                     ) : (
                     <View>
+                        {/* Full-screen backdrop to close menu on outside tap */}
+                        {showMenu && (
+                            <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
+                                <View
+                                    style={{
+                                        position: 'absolute',
+                                        top: -2000,
+                                        left: -2000,
+                                        right: -2000,
+                                        bottom: -2000,
+                                        zIndex: 40,
+                                    }}
+                                />
+                            </TouchableWithoutFeedback>
+                        )}
+
                         <AnimatePresence>
                             {showMenu && (
                                 <MotiView
-                                    from={{ opacity: 0, translateY: 10, scale: 0.9 }}
+                                    from={{ opacity: 0, translateY: 8, scale: 0.92 }}
                                     animate={{ opacity: 1, translateY: 0, scale: 1 }}
-                                    exit={{ opacity: 0, translateY: 10, scale: 0.9 }}
-                                    className="absolute bottom-20 right-0 bg-slate-900 border border-white/10 rounded-2xl p-2 w-40 z-50 shadow-2xl shadow-black/50"
+                                    exit={{ opacity: 0, translateY: 8, scale: 0.92 }}
+                                    transition={{ type: 'timing', duration: 180 }}
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: 72,
+                                        right: 0,
+                                        backgroundColor: '#0F172A',
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(255,255,255,0.08)',
+                                        borderRadius: 20,
+                                        padding: 8,
+                                        width: 160,
+                                        zIndex: 50,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 8 },
+                                        shadowOpacity: 0.5,
+                                        shadowRadius: 24,
+                                        elevation: 12,
+                                    }}
                                 >
                                     <TouchableOpacity 
                                         onPress={() => {
                                             setShowMenu(false);
                                             router.push(`/(coach)/challenges/edit/${challenge.id}`);
                                         }}
-                                        className="flex-row items-center gap-3 p-3 rounded-xl hover:bg-white/5 active:bg-white/5"
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            padding: 12,
+                                            borderRadius: 12,
+                                        }}
+                                        activeOpacity={0.7}
                                     >
-                                        <View className="w-8 h-8 rounded-lg bg-blue-600/10 items-center justify-center">
+                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(59,130,246,0.1)', alignItems: 'center', justifyContent: 'center' }}>
                                             <Edit2 size={16} color="#3B82F6" />
                                         </View>
-                                        <Text className="text-white font-bold text-xs">Edit</Text>
+                                        <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Edit</Text>
                                     </TouchableOpacity>
                                     
-                                    <View className="h-[1px] bg-white/5 my-1 mx-2" />
+                                    <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginHorizontal: 8, marginVertical: 4 }} />
                                     
                                     <TouchableOpacity 
                                         onPress={() => {
                                             setShowMenu(false);
                                             onDelete?.();
                                         }}
-                                        className="flex-row items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/10"
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            padding: 12,
+                                            borderRadius: 12,
+                                        }}
+                                        activeOpacity={0.7}
                                     >
-                                        <View className="w-8 h-8 rounded-lg bg-red-600/10 items-center justify-center">
+                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center' }}>
                                             <Trash2 size={16} color="#EF4444" />
                                         </View>
-                                        <Text className="text-red-500 font-bold text-xs">Delete</Text>
+                                        <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>Delete</Text>
                                     </TouchableOpacity>
                                 </MotiView>
                             )}
@@ -1386,7 +1418,18 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                         
                         <TouchableOpacity 
                             onPress={() => setShowMenu(!showMenu)}
-                            className={`w-16 h-16 rounded-[24px] items-center justify-center border ${showMenu ? 'bg-slate-800 border-blue-500/50' : 'bg-slate-950 border-white/5'}`}
+                            style={[{
+                                width: 64,
+                                height: 64,
+                                borderRadius: 24,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 1,
+                                zIndex: 51,
+                            }, showMenu
+                                ? { backgroundColor: '#1E293B', borderColor: 'rgba(59,130,246,0.5)' }
+                                : { backgroundColor: '#020617', borderColor: 'rgba(255,255,255,0.05)' }
+                            ]}
                         >
                             <MoreVertical size={20} color={showMenu ? '#3B82F6' : '#64748B'} />
                         </TouchableOpacity>

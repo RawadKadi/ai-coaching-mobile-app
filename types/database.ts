@@ -48,6 +48,7 @@ export interface Client {
     experience_level?: string;
     dietary_restrictions: string[];
     medical_conditions: string[];
+    streak_reset_acknowledged_date?: string | null;
     created_at: string;
     updated_at: string;
 }

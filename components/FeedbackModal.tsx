@@ -89,6 +89,12 @@ interface FeedbackModalProps {
   ctaBg?: string;
   /** Override the CTA text colour (bypasses variant default). */
   ctaTextColor?: string;
+  /** Custom accent color override */
+  accentColor?: string;
+  /** Custom accent bg color override */
+  accentBg?: string;
+  /** Custom accent border color override */
+  accentBorder?: string;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -106,8 +112,14 @@ export default function FeedbackModal({
   ctaLabel = 'Got it',
   ctaBg,
   ctaTextColor,
+  accentColor,
+  accentBg,
+  accentBorder,
 }: FeedbackModalProps) {
   const v = VARIANTS[variant];
+  const resolvedAccent = accentColor ?? v.accent;
+  const resolvedAccentBg = accentBg ?? v.accentBg;
+  const resolvedAccentBorder = accentBorder ?? v.accentBorder;
   const resolvedCtaBg = ctaBg ?? v.ctaBg;
   const resolvedCtaText = ctaTextColor ?? v.ctaText;
 
@@ -141,8 +153,8 @@ export default function FeedbackModal({
             width: '100%',
             alignItems: 'center',
             borderWidth: 1,
-            borderColor: v.accentBorder,
-            shadowColor: v.accent,
+            borderColor: resolvedAccentBorder,
+            shadowColor: resolvedAccent,
             shadowOffset: { width: 0, height: 20 },
             shadowOpacity: 0.18,
             shadowRadius: 40,
@@ -155,7 +167,7 @@ export default function FeedbackModal({
               width: 100,
               height: 100,
               borderRadius: 50,
-              backgroundColor: v.accentBg,
+              backgroundColor: resolvedAccentBg,
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: 24,
@@ -194,7 +206,7 @@ export default function FeedbackModal({
           {stat && (
             <View
               style={{
-                backgroundColor: v.accentBg,
+                backgroundColor: resolvedAccentBg,
                 borderRadius: 24,
                 paddingVertical: 20,
                 paddingHorizontal: 32,
@@ -202,7 +214,7 @@ export default function FeedbackModal({
                 alignItems: 'center',
                 marginBottom: 32,
                 borderWidth: 1,
-                borderColor: v.accentBorder,
+                borderColor: resolvedAccentBorder,
               }}
             >
               {statLabel && (

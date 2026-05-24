@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
@@ -16,7 +16,9 @@ import {
   Award,
   CheckCircle2,
   Utensils,
-  Activity
+  Activity,
+  Video,
+  Clock
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -44,6 +46,16 @@ export default function ClientDashboard() {
   const [weightDaysAgo, setWeightDaysAgo] = useState<number>(0);
   const [todaySteps, setTodaySteps] = useState<number | null>(null);
   const [stepsSyncEnabled, setStepsSyncEnabled] = useState<boolean>(false);
+
+  // Upcoming session state
+  const [upcomingSession, setUpcomingSession] = useState<any>(null);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
+
+  // Tick nowMs every 30s so the Join button re-evaluates without a full reload
+  useEffect(() => {
+    const ticker = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(ticker);
+  }, []);
 
   // Refresh data when screen comes into focus
   useFocusEffect(
@@ -110,6 +122,26 @@ export default function ClientDashboard() {
       const syncEnabledStr = await AsyncStorage.getItem('@steps_sync_enabled');
       const isSyncEnabled = syncEnabledStr === 'true';
       setStepsSyncEnabled(isSyncEnabled);
+
+      // Fetch next upcoming session for this client
+      const { data: sessionData } = await supabase
+        .from('sessions')
+        .select('*, coaches(profiles(full_name, avatar_url))')
+        .eq('client_id', client.id)
+        .eq('status', 'scheduled')
+        .gt('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      // Only surface it if it's today
+      if (sessionData) {
+        const sessionDate = new Date(sessionData.scheduled_at).toDateString();
+        const todayStr = new Date().toDateString();
+        setUpcomingSession(sessionDate === todayStr ? sessionData : null);
+      } else {
+        setUpcomingSession(null);
+      }
 
       const [checkInResult, habitsResult, habitLogsResult, mealsResult, dailyLogResult] = await Promise.all([
         supabase.from('check_ins').select('*').eq('client_id', client.id).eq('date', today).maybeSingle(),
@@ -444,8 +476,18 @@ export default function ClientDashboard() {
 
             {/* Quick Actions Grid */}
             <View className="mt-12">
-                <Text className="text-white text-2xl font-black tracking-tighter mb-8 px-1">Quick Access</Text>
-                <View className="flex-row gap-4">
+                <Text className="text-white text-2xl font-black tracking-tighter mb-6 px-1">Quick Access</Text>
+
+                {/* Upcoming Session Card — today only */}
+                {upcomingSession && (
+                  <UpcomingSessionCard
+                    session={upcomingSession}
+                    nowMs={nowMs}
+                    onJoin={() => router.push('/(client)/chat' as any)}
+                  />
+                )}
+
+                <View className="flex-row gap-4 mt-2">
                     <ActionCard 
                         label="Log Meal" 
                         sub="Photo Analysis"
@@ -481,6 +523,117 @@ const MetricCard = ({ label, value, icon, active, onPress }: any) => {
             <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest mt-1.5">{label}</Text>
         </TouchableOpacity>
     );
+};
+
+// ─── Upcoming Session Card ───────────────────────────────────────────────────
+const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: number; onJoin: () => void }) => {
+  const sessionTime = new Date(session.scheduled_at).getTime();
+  const minutesUntil = (sessionTime - nowMs) / 60_000;
+  const canJoin = minutesUntil <= 5;
+  const coachName = session.coaches?.profiles?.full_name || 'Your Coach';
+
+  const formatTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  const countdownLabel = () => {
+    if (canJoin) return 'Ready to join';
+    if (minutesUntil < 60) return `In ${Math.ceil(minutesUntil)} min`;
+    const hrs = Math.floor(minutesUntil / 60);
+    const mins = Math.round(minutesUntil % 60);
+    return mins > 0 ? `In ${hrs}h ${mins}m` : `In ${hrs}h`;
+  };
+
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 8 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 400 }}
+      className="mb-6 overflow-hidden rounded-[40px]"
+      style={{
+        backgroundColor: canJoin ? '#1D4ED8' : '#0F172A',
+        borderWidth: 1,
+        borderColor: canJoin ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.06)',
+        shadowColor: canJoin ? '#3B82F6' : '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: canJoin ? 0.35 : 0.2,
+        shadowRadius: 20,
+        elevation: 8,
+      }}
+    >
+      {/* Decorative glow blob */}
+      {canJoin && (
+        <View
+          style={{
+            position: 'absolute',
+            top: -40,
+            right: -40,
+            width: 120,
+            height: 120,
+            borderRadius: 60,
+            backgroundColor: 'rgba(99,179,255,0.15)',
+          }}
+        />
+      )}
+
+      <View style={{ padding: 24 }}>
+        {/* Top row — badge + countdown */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{
+              width: 28, height: 28, borderRadius: 8,
+              backgroundColor: canJoin ? 'rgba(255,255,255,0.15)' : 'rgba(59,130,246,0.12)',
+              alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Video size={13} color={canJoin ? '#fff' : '#3B82F6'} />
+            </View>
+            <Text style={{ color: canJoin ? 'rgba(255,255,255,0.75)' : '#64748B', fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
+              Live Session
+            </Text>
+          </View>
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 4,
+            backgroundColor: canJoin ? 'rgba(255,255,255,0.12)' : 'rgba(16,185,129,0.08)',
+            paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+            borderWidth: 1, borderColor: canJoin ? 'rgba(255,255,255,0.15)' : 'rgba(16,185,129,0.15)'
+          }}>
+            <Clock size={11} color={canJoin ? '#fff' : '#10B981'} />
+            <Text style={{ color: canJoin ? '#fff' : '#10B981', fontSize: 11, fontWeight: '800' }}>
+              {countdownLabel()}
+            </Text>
+          </View>
+        </View>
+
+        {/* Session info */}
+        <Text style={{ color: canJoin ? '#fff' : '#F1F5F9', fontSize: 22, fontWeight: '900', letterSpacing: -0.5, marginBottom: 4 }}>
+          Session with {coachName.split(' ')[0]}
+        </Text>
+        <Text style={{ color: canJoin ? 'rgba(255,255,255,0.6)' : '#64748B', fontSize: 13, fontWeight: '600', marginBottom: 20 }}>
+          {formatTime(session.scheduled_at)} · {session.duration_minutes || 60} min
+        </Text>
+
+        {/* Join button */}
+        <TouchableOpacity
+          onPress={canJoin ? onJoin : undefined}
+          activeOpacity={canJoin ? 0.7 : 1}
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+            paddingVertical: 14, borderRadius: 28,
+            backgroundColor: canJoin ? '#fff' : 'rgba(255,255,255,0.05)',
+            borderWidth: canJoin ? 0 : 1,
+            borderColor: 'rgba(255,255,255,0.08)',
+          }}
+        >
+          <Video size={16} color={canJoin ? '#1D4ED8' : '#475569'} />
+          <Text style={{
+            fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1.5,
+            color: canJoin ? '#1D4ED8' : '#475569'
+          }}>
+            {canJoin ? 'Join Now' : 'Join — Opens Soon'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </MotiView>
+  );
 };
 
 const ActionCard = ({ label, sub, icon, onPress }: any) => (

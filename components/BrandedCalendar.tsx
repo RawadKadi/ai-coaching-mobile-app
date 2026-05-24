@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 interface BrandedCalendarProps {
-  selectedDate: Date;
+  selectedDate: Date | null;
   onSelect: (date: Date) => void;
 }
 
@@ -13,113 +13,103 @@ const MONTH_NAMES = [
 ];
 
 export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, onSelect }) => {
-  // Safe selectedDate parser
   const safeSelectedDate = selectedDate instanceof Date && !isNaN(selectedDate.getTime()) 
     ? selectedDate 
     : new Date();
 
-  // Normalize initial currentMonth to the 1st of the month to prevent rollover bugs
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    return new Date(safeSelectedDate.getFullYear(), safeSelectedDate.getMonth(), 1);
-  });
+  const initialMonth = new Date(safeSelectedDate.getFullYear(), safeSelectedDate.getMonth(), 1);
 
-  const daysInMonth = (year: number, month: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
+  // Generate 60 months (2 years back, 3 years forward)
+  const months = useMemo(() => {
+    const list = [];
+    const start = new Date(initialMonth.getFullYear() - 2, initialMonth.getMonth(), 1);
+    for (let i = 0; i < 60; i++) {
+      list.push(new Date(start.getFullYear(), start.getMonth() + i, 1));
+    }
+    return list;
+  }, []);
 
-  const firstDayOfMonth = (year: number, month: number) => {
-    return new Date(year, month, 1).getDay();
-  };
+  const initialIndex = 24; // 2 years back = index 24
+  const flatListRef = useRef<FlatList>(null);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [containerWidth, setContainerWidth] = useState(0);
+  
+  // Update internal index silently if container is ready
+  useEffect(() => {
+    if (containerWidth > 0 && flatListRef.current) {
+        flatListRef.current.scrollToIndex({ index: currentIndex, animated: false });
+    }
+  }, [containerWidth]);
+
+  // Jump to selected date's month if it changes externally
+  useEffect(() => {
+    if (selectedDate && !isNaN(selectedDate.getTime()) && containerWidth > 0) {
+       const targetIndex = months.findIndex(m => m.getMonth() === selectedDate.getMonth() && m.getFullYear() === selectedDate.getFullYear());
+       if (targetIndex !== -1 && targetIndex !== currentIndex) {
+           setCurrentIndex(targetIndex);
+           flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
+       }
+    }
+  }, [selectedDate, containerWidth]);
 
   const handlePrevMonth = () => {
-    try {
-      setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-    } catch (err) {
-      console.error('Error in handlePrevMonth:', err);
+    if (currentIndex > 0) {
+      const nextIdx = currentIndex - 1;
+      setCurrentIndex(nextIdx);
+      flatListRef.current?.scrollToIndex({ index: nextIdx, animated: true });
     }
   };
 
   const handleNextMonth = () => {
-    try {
-      setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-    } catch (err) {
-      console.error('Error in handleNextMonth:', err);
+    if (currentIndex < months.length - 1) {
+      const nextIdx = currentIndex + 1;
+      setCurrentIndex(nextIdx);
+      flatListRef.current?.scrollToIndex({ index: nextIdx, animated: true });
     }
   };
 
-  const renderDays = () => {
-    try {
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth();
-      
-      if (isNaN(year) || isNaN(month)) {
-        return <Text style={{ color: '#EF4444', textAlign: 'center', margin: 10 }}>Invalid Month state</Text>;
-      }
+  const renderMonth = ({ item: monthDate }: { item: Date }) => {
+    if (containerWidth === 0) return <View />;
 
-      const totalDays = daysInMonth(year, month);
-      const startDay = firstDayOfMonth(year, month);
-      
-      // Adjust startDay for Monday start (0=Sun -> 0=Mon, ..., 6=Sun)
-      const adjustedStartDay = startDay === 0 ? 6 : startDay - 1;
-
-      const days = [];
-      
-      // Empty slots for previous month
-      for (let i = 0; i < adjustedStartDay; i++) {
-        days.push(<View key={`empty-${i}`} style={styles.cell} />);
-      }
-
-      // Actual days
-      for (let d = 1; d <= totalDays; d++) {
-        const date = new Date(year, month, d);
-        const isSelected = date.toDateString() === safeSelectedDate.toDateString();
-        const isToday = date.toDateString() === new Date().toDateString();
-
-        days.push(
-          <TouchableOpacity
-            key={d}
-            onPress={() => {
-              try {
-                onSelect(date);
-              } catch (err) {
-                console.error('Error selecting date:', err);
-              }
-            }}
-            style={styles.cell}
-            activeOpacity={0.7}
-          >
-            <View 
-              style={[
-                styles.dayInner,
-                isSelected && styles.daySelected,
-                !isSelected && isToday && styles.dayToday
-              ]}
-            >
-              <Text 
-                style={[
-                  styles.dayText,
-                  isSelected && styles.dayTextSelected,
-                  !isSelected && isToday && styles.dayTextToday
-                ]}
-              >
-                {d}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        );
-      }
-
-      return days;
-    } catch (err) {
-      console.error('Error rendering days:', err);
-      return <Text style={{ color: '#EF4444', textAlign: 'center', margin: 10 }}>Error rendering days</Text>;
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const startDay = new Date(year, month, 1).getDay();
+    const adjustedStartDay = startDay === 0 ? 6 : startDay - 1;
+    
+    const days = [];
+    for (let i = 0; i < adjustedStartDay; i++) {
+      days.push(<View key={`empty-${i}`} style={styles.cell} />);
     }
+
+    for (let d = 1; d <= totalDays; d++) {
+      const date = new Date(year, month, d);
+      const isSelected = selectedDate ? date.toDateString() === selectedDate.toDateString() : false;
+      const isToday = date.toDateString() === new Date().toDateString();
+
+      days.push(
+        <TouchableOpacity
+          key={d}
+          onPress={() => onSelect(date)}
+          style={styles.cell}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.dayInner, isSelected && styles.daySelected, !isSelected && isToday && styles.dayToday]}>
+            <Text style={[styles.dayText, isSelected && styles.dayTextSelected, !isSelected && isToday && styles.dayTextToday]}>{d}</Text>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <View style={{ width: containerWidth, flexDirection: 'row', flexWrap: 'wrap' }}>
+        {days}
+      </View>
+    );
   };
 
   const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-  const displayMonthName = MONTH_NAMES[currentMonth.getMonth()] || 'Calendar';
-  const displayYear = currentMonth.getFullYear();
+  const currentVisibleMonth = months[currentIndex] || initialMonth;
 
   return (
     <View style={styles.container}>
@@ -127,26 +117,18 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
       <View style={styles.header}>
         <View>
           <Text style={styles.monthTitle}>
-            {displayMonthName}
+            {MONTH_NAMES[currentVisibleMonth.getMonth()]}
           </Text>
           <Text style={styles.yearLabel}>
-            {displayYear}
+            {currentVisibleMonth.getFullYear()}
           </Text>
         </View>
         
         <View style={styles.navButtons}>
-          <TouchableOpacity 
-            onPress={handlePrevMonth}
-            style={styles.navBtn}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn} activeOpacity={0.7}>
             <ChevronLeft size={18} color="#94A3B8" />
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={handleNextMonth}
-            style={styles.navBtn}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity onPress={handleNextMonth} style={styles.navBtn} activeOpacity={0.7}>
             <ChevronRight size={18} color="#94A3B8" />
           </TouchableOpacity>
         </View>
@@ -155,15 +137,34 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
       {/* Week Day Labels */}
       <View style={styles.weekRow}>
         {weekDays.map((day, i) => (
-          <Text key={i} style={styles.weekLabel}>
-            {day}
-          </Text>
+          <Text key={i} style={styles.weekLabel}>{day}</Text>
         ))}
       </View>
 
-      {/* Days Grid */}
-      <View style={styles.grid}>
-        {renderDays()}
+      {/* Days Grid - FlatList Carousel */}
+      <View 
+        style={{ flex: 1, minHeight: 320 }}
+        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      >
+        {containerWidth > 0 && (
+          <FlatList
+            ref={flatListRef}
+            data={months}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={initialIndex}
+            getItemLayout={(_, index) => ({ length: containerWidth, offset: containerWidth * index, index })}
+            keyExtractor={item => item.toISOString()}
+            renderItem={renderMonth}
+            onMomentumScrollEnd={(e) => {
+              const newIndex = Math.round(e.nativeEvent.contentOffset.x / containerWidth);
+              if (newIndex !== currentIndex) {
+                setCurrentIndex(newIndex);
+              }
+            }}
+          />
+        )}
       </View>
     </View>
   );

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, A
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Target, CheckCircle, Circle, Lock, ChevronRight, Zap, Info, MessageSquare, ArrowLeft } from 'lucide-react-native';
+import { Target, CheckCircle, Circle, Lock, ChevronRight, Zap, Info, MessageSquare, ArrowLeft, Dumbbell, Apple, Moon } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import type { TodaysSubChallenge } from '@/types/challenges-v3';
 
@@ -190,7 +190,9 @@ export default function ClientChallengesScreen() {
                                         opacity: sub.completed ? 0.6 : 1
                                     }}
                                 >
-                                    <Text style={{ fontSize: 24, marginRight: 16 }}>{getFocusEmoji(sub.focus_type)}</Text>
+                                    <View style={{ marginRight: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+                                        {getFocusIcon(sub.focus_type, sub.completed)}
+                                    </View>
                                     <View style={{ flex: 1, paddingRight: 8 }}>
                                         <Text style={{ fontSize: 16, fontWeight: '900', color: sub.completed ? '#64748b' : 'white', textDecorationLine: sub.completed ? 'line-through' : 'none' }}>{sub.name}</Text>
                                         <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
@@ -247,7 +249,12 @@ export default function ClientChallengesScreen() {
   );
 }
 
-function getFocusEmoji(focusType: string): string {
-  const emojis: Record<string, string> = { training: '💪', nutrition: '🥗', recovery: '😴', consistency: '🎯' };
-  return emojis[focusType] || '🎯';
+function getFocusIcon(type: string, completed: boolean) {
+  const color = completed ? '#3b82f6' : '#94a3b8';
+  switch (type?.toLowerCase()) {
+    case 'training': return <Dumbbell size={24} color={color} />;
+    case 'nutrition': return <Apple size={24} color={color} />;
+    case 'recovery': return <Moon size={24} color={color} />;
+    default: return <Zap size={24} color={color} />;
+  }
 }

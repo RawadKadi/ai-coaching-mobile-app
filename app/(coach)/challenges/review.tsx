@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { MotiView, AnimatePresence } from 'moti';
+import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Check, RefreshCw, Plus, Trash2, Edit3, Sparkles, Calendar, Clock, ChevronRight, Zap, Dumbbell, Apple, Moon } from 'lucide-react-native';
+import { ArrowLeft, Check, Trash2, Edit3, Sparkles, Calendar, Zap, Dumbbell, Apple, Moon } from 'lucide-react-native';
 import { SubChallengeTemplate } from '@/lib/ai-challenge-service';
 
 const formatDateSafe = (dateStr: string) => {
@@ -156,13 +156,14 @@ export default function ReviewChallengesScreen() {
       console.log('handleApprove: supabase.rpc returned:', { data, error });
 
       if (error) throw error;
-      // Navigate to dashboard with success params — modal will show there
+      console.log('handleApprove: success, navigating to dashboard with success params');
+      // Navigate to dashboard first, then dashboard will show the success modal
       router.replace({
         pathname: '/(coach)/(tabs)',
         params: {
-          planSent: '1',
-          clientName: clientName || '',
-          clientAvatar: clientAvatar || '',
+          plan_sent: 'true',
+          sent_client_name: clientName || '',
+          sent_client_id: clientId || '',
         }
       });
     } catch (error: any) {
@@ -289,7 +290,6 @@ export default function ReviewChallengesScreen() {
               )}
           </TouchableOpacity>
       </View>
-
     </View>
   );
 }

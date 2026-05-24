@@ -287,7 +287,6 @@ export default function ClientsScreen() {
                           <View className="flex-1">
                             <View className="flex-row items-center gap-2">
                                 <Text className="text-white font-black text-lg tracking-tight">{client.profiles?.full_name}</Text>
-                                {client.status === 'pending' && <View className="bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full"><Text className="text-amber-500 font-black text-[8px] uppercase">Pending</Text></View>}
                             </View>
                             <Text className="text-slate-600 text-[10px] font-black uppercase tracking-[2px] mt-1" numberOfLines={1}>{client.goal || 'Elite Performance'} • {client.experience_level || 'Pro'}</Text>
                             {client.checkedInToday && <View className="flex-row items-center gap-1 mt-2"><View className="w-1.5 h-1.5 rounded-full bg-emerald-500" /><Text className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Checked In</Text></View>}

@@ -56,15 +56,9 @@ export default function AISuggestChallengeScreen() {
   const loadClients = async () => {
     try {
       setLoading(true);
-      // get_my_clients returns client_avatar (full URL from profiles) — same as rest of the app
-      const { data, error } = await supabase.rpc('get_my_clients');
+      const { data, error } = await supabase.rpc('get_coach_clients', { p_coach_id: coach?.id });
       if (error) throw error;
-      const mapped = (data || []).map((item: any) => ({
-        id: item.client_id,
-        full_name: item.client_name,
-        avatar_url: item.client_avatar,
-      }));
-      setClients(mapped);
+      setClients(data || []);
     } catch (error) {
       console.error('Load error:', error);
     } finally {

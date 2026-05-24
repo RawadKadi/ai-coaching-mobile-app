@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, StatusBar, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
@@ -20,9 +20,11 @@ import {
   Zap,
   Smile,
   Activity,
-  ArrowUpRight
+  ArrowUpRight,
+  Check
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import FeedbackModal from '@/components/FeedbackModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
 import SchedulerModal from '@/components/SchedulerModal';
@@ -82,6 +84,41 @@ export default function CoachDashboard() {
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+
+  // Plan sent success modal
+  const params = useLocalSearchParams();
+  const [showPlanSentModal, setShowPlanSentModal] = useState(false);
+  const [planSentClientName, setPlanSentClientName] = useState('');
+  const [planSentClientAvatar, setPlanSentClientAvatar] = useState('');
+
+  // Show success modal when arriving from AI challenge review screen
+  useEffect(() => {
+    if (params.plan_sent === 'true') {
+      const name = (params.sent_client_name as string) || '';
+      const clientId = (params.sent_client_id as string) || '';
+      setPlanSentClientName(name);
+
+      // Fetch avatar fresh from DB — route params corrupt Supabase storage URLs
+      const fetchAvatar = async () => {
+        if (clientId) {
+          try {
+            const { data } = await supabase
+              .from('clients')
+              .select('profiles!inner(avatar_url)')
+              .eq('id', clientId)
+              .single();
+            const avatarUrl = (data as any)?.profiles?.avatar_url || '';
+            setPlanSentClientAvatar(avatarUrl);
+          } catch (_) {
+            setPlanSentClientAvatar('');
+          }
+        }
+        // Small delay so the dashboard renders before popping the modal
+        setTimeout(() => setShowPlanSentModal(true), 400);
+      };
+      fetchAvatar();
+    }
+  }, [params.plan_sent]);
 
   // Calculate real-time active count based on Presence (excluding the coach themselves)
   const realTimeActiveCount = clientUserIds
@@ -560,6 +597,28 @@ export default function CoachDashboard() {
             onClose={() => setShowAnalyticsModal(false)}
             data={analyticsData}
             currentActive={displayActiveCount}
+          />
+
+          {/* Plan Sent Success Modal */}
+          <FeedbackModal
+            visible={showPlanSentModal}
+            onClose={() => setShowPlanSentModal(false)}
+            variant="success"
+            icon={
+              <View style={{ position: 'relative' }}>
+                <BrandedAvatar
+                  name={planSentClientName || 'Client'}
+                  imageUrl={planSentClientAvatar || null}
+                  size={80}
+                />
+                <View className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#10B981] rounded-full border-[3px] border-[#0F172A] items-center justify-center">
+                  <Check size={14} color="white" strokeWidth={4} />
+                </View>
+              </View>
+            }
+            title="Plan Sent!"
+            body={`Weekly plan sent to ${planSentClientName || 'your client'}.`}
+            ctaLabel="Done"
           />
       </View>
     </View>

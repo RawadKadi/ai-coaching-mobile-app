@@ -7,6 +7,8 @@ import { useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
 import FeedbackModal from '@/components/FeedbackModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import streakQuotes from '@/assets/streak_quotes.json';
 import { 
   Utensils, 
   Dumbbell, 
@@ -23,7 +25,9 @@ import {
   ArrowUpRight,
   ChevronDown,
   X,
-  TrendingUp
+  TrendingUp,
+  Apple,
+  Moon
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
@@ -43,7 +47,7 @@ function getLocalDateString(): string {
 export default function ActivityScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { client, profile } = useAuth();
+  const { client, profile, refreshProfile } = useAuth();
   const theme = useTheme();
   
   const [loading, setLoading] = useState(true);
@@ -63,6 +67,21 @@ export default function ActivityScreen() {
   const [completedChallengeName, setCompletedChallengeName] = useState('');
   const [allChallengesFinished, setAllChallengesFinished] = useState(false);
   const streakLostShownThisSession = useRef(false);
+
+  // Expanded categories state
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
+    'challenges': true,
+  });
+
+  const streakInfo = (() => {
+    if (streak <= 0) return streakQuotes[0];
+    const index = ((streak - 1) % 100) + 1;
+    return streakQuotes[index] || streakQuotes[0];
+  })();
+
+  const toggleCategory = (key: string) => {
+    setExpandedCategories(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Bottom Sheet Animation state
   const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -223,14 +242,21 @@ export default function ActivityScreen() {
 
       // Show streak-lost modal once per session if streak dropped to 0 but client has past history
       if (newStreak === 0 && !streakLostShownThisSession.current) {
-        const { data: pastLogs } = await supabase
-          .from('habit_logs')
-          .select('id')
-          .eq('client_id', client?.id)
-          .lt('date', getLocalDateString())
-          .limit(1);
-        if (pastLogs && pastLogs.length > 0) {
-          setShowStreakLost(true);
+        const todayStr = getLocalDateString();
+        const lastShownDate = client?.streak_reset_acknowledged_date;
+        if (lastShownDate !== todayStr) {
+          const { data: pastLogs } = await supabase
+            .from('habit_logs')
+            .select('id')
+            .eq('client_id', client?.id)
+            .lt('date', todayStr)
+            .limit(1);
+          if (pastLogs && pastLogs.length > 0) {
+            setShowStreakLost(true);
+            streakLostShownThisSession.current = true;
+          }
+        } else {
+          // Already shown and acknowledged today, keep it hidden for this session too
           streakLostShownThisSession.current = true;
         }
       }
@@ -256,6 +282,25 @@ export default function ActivityScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     loadActivityData();
+  };
+
+  const handleDismissStreakLost = async () => {
+    setShowStreakLost(false);
+    streakLostShownThisSession.current = true;
+    try {
+      if (client?.id) {
+        const todayStr = getLocalDateString();
+        const { error } = await supabase
+          .from('clients')
+          .update({ streak_reset_acknowledged_date: todayStr })
+          .eq('id', client.id);
+        
+        if (error) throw error;
+        await refreshProfile();
+      }
+    } catch (e) {
+      console.error('Error saving streak lost modal shown date:', e);
+    }
   };
 
   const handleOpenDetails = (challenge: any) => {
@@ -290,7 +335,7 @@ export default function ActivityScreen() {
 
       // Check for total daily completion
       if (newCompleted) {
-        const allHabitsDone = habits.length > 0 && habits.every(h => habitLogs.find(l => l.habit_id === h.id)?.completed);
+        const allHabitsDone = habits.length === 0 || habits.every(h => habitLogs.find(l => l.habit_id === h.id)?.completed);
         const otherChallengesDone = updatedChallenges.filter(c => c.id !== challenge.id).every(c => c.completed);
         const allChallengesNowDone = updatedChallenges.every(c => c.completed);
         
@@ -617,7 +662,7 @@ export default function ActivityScreen() {
             </View>
             <TouchableOpacity 
               style={{ width: 48, height: 48, backgroundColor: '#0f172a', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b' }}
-              onPress={() => {/* Date Picker functionality */}}
+              onPress={() => router.push('/(client)/schedule-timeline' as any)}
             >
               <CalendarIcon size={20} color="#3B82F6" />
             </TouchableOpacity>
@@ -661,93 +706,150 @@ export default function ActivityScreen() {
           </View>
 
           {/* Activity Logs Section */}
-          <View style={{ paddingHorizontal: 24 }}>
+          <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
             
             {/* Challenges Section */}
-            <SectionHeader title="Active Challenges" count={challenges.length} />
-            {challenges.length === 0 ? (
-              <EmptyState message="No active challenges assigned." />
-            ) : (
-              <View style={{ gap: 12 }}>
-                {challenges.map((challenge, idx) => (
-                  <ActivityCard 
-                    key={challenge.id}
-                    title={challenge.name}
-                    sub={challenge.focus_type}
-                    completed={challenge.completed}
-                    icon={<Target size={20} color={challenge.completed ? '#3B82F6' : '#94A3B8'} />}
-                    onToggle={() => handleToggleChallenge(challenge)}
-                    onPress={() => handleOpenDetails(challenge)}
-                    delay={idx * 50}
-                  />
-                ))}
+            <CategorySummaryCard 
+              title="Active Challenges"
+              icon={<Target size={20} color="#3B82F6" />}
+              totalCount={challenges.length}
+              completedCount={challenges.filter(c => c.completed).length}
+              isExpanded={expandedCategories['challenges']}
+              onPress={() => toggleCategory('challenges')}
+            />
+            {expandedCategories['challenges'] && (
+              <View style={{ marginBottom: 24 }}>
+                {challenges.length === 0 ? (
+                  <EmptyState message="No active challenges assigned." />
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {challenges.map((challenge, idx) => {
+                      const getFocusIcon = (type: string, completed: boolean) => {
+                        const color = completed ? '#3B82F6' : '#94A3B8';
+                        switch (type?.toLowerCase()) {
+                          case 'training': return <Dumbbell size={20} color={color} />;
+                          case 'nutrition': return <Apple size={20} color={color} />;
+                          case 'recovery': return <Moon size={20} color={color} />;
+                          default: return <Zap size={20} color={color} />;
+                        }
+                      };
+
+                      return (
+                        <ActivityCard 
+                          key={challenge.id}
+                          title={challenge.name}
+                          sub={challenge.focus_type}
+                          completed={challenge.completed}
+                          icon={getFocusIcon(challenge.focus_type, challenge.completed)}
+                        onToggle={() => handleToggleChallenge(challenge)}
+                        onPress={() => handleOpenDetails(challenge)}
+                        delay={idx * 50}
+                      />
+                    )})}
+                  </View>
+                )}
               </View>
             )}
 
             {/* Habits Section */}
-            <SectionHeader title="Daily Protocols" count={habits.length} marginTop={32} />
-            {habits.length === 0 ? (
-              <EmptyState message="No habits established for this protocol." />
-            ) : (
-              <View style={{ gap: 12 }}>
-                {habits.map((habit, idx) => {
-                  const log = habitLogs.find(l => l.habit_id === habit.id);
-                  const isCompleted = log?.completed || false;
-                    return (
-                      <ActivityCard 
-                        key={habit.id}
-                        title={habit.name}
-                        sub={
-                          (habit.category ? `${habit.category.toUpperCase()} • ` : '') + 
-                          (habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle')
-                        }
-                        completed={isCompleted}
-                      icon={<CheckCircle size={20} color={isCompleted ? '#3B82F6' : '#94A3B8'} />}
-                      onToggle={() => toggleHabit(habit)}
-                      delay={idx * 50}
-                    />
-                  );
-                })}
+            <CategorySummaryCard 
+              title="Daily Protocols"
+              icon={<CheckCircle size={20} color="#10B981" />}
+              totalCount={habits.length}
+              completedCount={habits.filter(h => habitLogs.find(l => l.habit_id === h.id)?.completed).length}
+              isExpanded={expandedCategories['habits']}
+              onPress={() => toggleCategory('habits')}
+            />
+            {expandedCategories['habits'] && (
+              <View style={{ marginBottom: 24 }}>
+                {habits.length === 0 ? (
+                  <EmptyState message="No habits established for this protocol." />
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {habits.map((habit, idx) => {
+                      const log = habitLogs.find(l => l.habit_id === habit.id);
+                      const isCompleted = log?.completed || false;
+                        return (
+                          <ActivityCard 
+                            key={habit.id}
+                            title={habit.name}
+                            sub={
+                              (habit.category ? `${habit.category.toUpperCase()} • ` : '') + 
+                              (habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle')
+                            }
+                            completed={isCompleted}
+                          icon={<CheckCircle size={20} color={isCompleted ? '#10B981' : '#94A3B8'} />}
+                          onToggle={() => toggleHabit(habit)}
+                          delay={idx * 50}
+                        />
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             )}
 
             {/* Meals Section */}
-            <SectionHeader title="Nutrition Intake" count={meals.length} marginTop={32} />
-            {meals.length === 0 ? (
-              <EmptyState message="No meals tracked for today." />
-            ) : (
-              <View style={{ gap: 12 }}>
-                {meals.map((meal, idx) => (
-                  <ActivityCard 
-                    key={meal.id}
-                    title={meal.name}
-                    sub={`${meal.meal_type.toUpperCase()} • ${formatCompactNumber(meal.calories || 0)} kcal`}
-                    completed={true}
-                    icon={<Utensils size={20} color="#F59E0B" />}
-                    readOnly
-                    delay={idx * 50}
-                  />
-                ))}
+            <CategorySummaryCard 
+              title="Nutrition Intake"
+              icon={<Utensils size={20} color="#F59E0B" />}
+              totalCount={meals.length}
+              completedCount={0}
+              showProgressBar={false}
+              isExpanded={expandedCategories['meals']}
+              onPress={() => toggleCategory('meals')}
+            />
+            {expandedCategories['meals'] && (
+              <View style={{ marginBottom: 24 }}>
+                {meals.length === 0 ? (
+                  <EmptyState message="No meals tracked for today." />
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {meals.map((meal, idx) => (
+                      <ActivityCard 
+                        key={meal.id}
+                        title={meal.name}
+                        sub={`${meal.meal_type.toUpperCase()} • ${formatCompactNumber(meal.calories || 0)} kcal`}
+                        completed={true}
+                        icon={<Utensils size={20} color="#F59E0B" />}
+                        readOnly
+                        delay={idx * 50}
+                      />
+                    ))}
+                  </View>
+                )}
               </View>
             )}
 
             {/* Workouts Section */}
-            <SectionHeader title="Performance Training" count={workouts.length} marginTop={32} />
-            {workouts.length === 0 ? (
-              <EmptyState message="No workouts recorded for today." />
-            ) : (
-              <View style={{ gap: 12 }}>
-                {workouts.map((workout, idx) => (
-                  <ActivityCard 
-                    key={workout.id}
-                    title={workout.name}
-                    sub={`${workout.duration_minutes} MIN • ${workout.exercises?.length || 0} EXERCISES`}
-                    completed={true}
-                    icon={<Dumbbell size={20} color="#10B981" />}
-                    readOnly
-                    delay={idx * 50}
-                  />
-                ))}
+            <CategorySummaryCard 
+              title="Performance Training"
+              icon={<Dumbbell size={20} color="#8B5CF6" />}
+              totalCount={workouts.length}
+              completedCount={0}
+              showProgressBar={false}
+              isExpanded={expandedCategories['workouts']}
+              onPress={() => toggleCategory('workouts')}
+            />
+            {expandedCategories['workouts'] && (
+              <View style={{ marginBottom: 24 }}>
+                {workouts.length === 0 ? (
+                  <EmptyState message="No workouts recorded for today." />
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {workouts.map((workout, idx) => (
+                      <ActivityCard 
+                        key={workout.id}
+                        title={workout.name}
+                        sub={`${workout.duration_minutes} MIN • ${workout.exercises?.length || 0} EXERCISES`}
+                        completed={true}
+                        icon={<Dumbbell size={20} color="#8B5CF6" />}
+                        readOnly
+                        delay={idx * 50}
+                      />
+                    ))}
+                  </View>
+                )}
               </View>
             )}
 
@@ -755,26 +857,29 @@ export default function ActivityScreen() {
         </ScrollView>
       </View>
       
-      {/* All tasks done — Protocol Fulfilled */}
-      <FeedbackModal
-        visible={showCelebration}
-        onClose={() => setShowCelebration(false)}
-        variant="success"
-        icon={<CheckCircle size={60} color="#10B981" />}
-        title="All Done"
-        body="You finished everything for today. Keep showing up like this."
-        statLabel="Current Streak"
-        statIcon={<Zap size={22} color="#F59E0B" fill="#F59E0B" />}
-        stat={`${formatCompactNumber(streak)} Days`}
-        ctaLabel="Keep it up"
-        ctaBg="#3B82F6"
-        ctaTextColor="#ffffff"
-      />
+       {/* All tasks done — Protocol Fulfilled */}
+       <FeedbackModal
+         visible={showCelebration}
+         onClose={() => setShowCelebration(false)}
+         variant="success"
+         accentColor={streakInfo.accent}
+         accentBg={streakInfo.accent + '14'}
+         accentBorder={streakInfo.accent + '33'}
+         icon={<Text style={{ fontSize: 52 }}>{streakInfo.emoji}</Text>}
+         title={streakInfo.title}
+         body={streakInfo.quote}
+         statLabel="Current Streak"
+         statIcon={<Zap size={22} color={streakInfo.accent} fill={streakInfo.accent} />}
+         stat={`${formatCompactNumber(streak)} Days`}
+         ctaLabel="Keep it up"
+         ctaBg={streakInfo.accent}
+         ctaTextColor={['#F59E0B', '#D4AF37', '#F97316'].includes(streakInfo.accent) ? '#0f172a' : '#ffffff'}
+       />
 
       {/* Streak lost */}
       <FeedbackModal
         visible={showStreakLost}
-        onClose={() => setShowStreakLost(false)}
+        onClose={handleDismissStreakLost}
         variant="warning"
         icon={<Zap size={52} color="#F59E0B" />}
         title="Streak Reset"
@@ -901,6 +1006,61 @@ export default function ActivityScreen() {
 }
 
 // Support Components
+const CategorySummaryCard = ({ 
+  title, 
+  icon, 
+  totalCount, 
+  completedCount, 
+  isExpanded, 
+  onPress, 
+  showProgressBar = true 
+}: any) => {
+  const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  
+  return (
+    <TouchableOpacity 
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={{ 
+        backgroundColor: '#0f172a', 
+        borderRadius: 32, 
+        borderWidth: 1, 
+        borderColor: isExpanded ? '#3b82f633' : '#1e293b', 
+        padding: 20,
+        marginBottom: isExpanded ? 16 : 12,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: '#020617', borderColor: '#1e293b' }}>
+          {icon}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 18, fontWeight: '900', color: 'white' }}>{title}</Text>
+          <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
+            {showProgressBar 
+              ? `${completedCount} / ${totalCount} COMPLETED` 
+              : `${totalCount} LOGGED`}
+          </Text>
+        </View>
+        <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#020617', borderWidth: 1, borderColor: '#1e293b' }}>
+          {isExpanded ? <ChevronDown size={16} color="#94A3B8" /> : <ChevronRight size={16} color="#94A3B8" />}
+        </View>
+      </View>
+      
+      {showProgressBar && totalCount > 0 && (
+        <View style={{ marginTop: 24, marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flex: 1, height: 8, backgroundColor: '#1e293b', borderRadius: 4, overflow: 'hidden' }}>
+            <View style={{ height: '100%', width: `${percentage}%`, backgroundColor: '#3b82f6', borderRadius: 4 }} />
+          </View>
+          <Text style={{ color: 'white', fontSize: 12, fontWeight: '900', minWidth: 36, textAlign: 'right' }}>
+            {Math.round(percentage)}%
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
 const MetricCard = ({ label, value, icon, active, onPress }: any) => {
   const displayValue = typeof value === 'number' ? formatCompactNumber(value) : value;
   return (

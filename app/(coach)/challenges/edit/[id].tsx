@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Platform, KeyboardAvoidingView, BackHandler } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
@@ -37,6 +37,12 @@ export default function EditChallengeScreen() {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [durationDays, setDurationDays] = useState('7');
   const [subChallenges, setSubChallenges] = useState<SubChallenge[]>([]);
+  const [deletedSubIds, setDeletedSubIds] = useState<string[]>([]);
+  const [initialData, setInitialData] = useState<{
+    name: string;
+    description: string;
+    subChallenges: SubChallenge[];
+  } | null>(null);
 
   // UI State
   const [loading, setLoading] = useState(true);
@@ -81,6 +87,11 @@ export default function EditChallengeScreen() {
 
       if (subsError) throw subsError;
       setSubChallenges(subs || []);
+      setInitialData({
+        name: mother.name,
+        description: mother.description || '',
+        subChallenges: subs ? JSON.parse(JSON.stringify(subs)) : []
+      });
 
     } catch (e: any) {
       console.error('Error loading challenge:', e);
@@ -92,6 +103,62 @@ export default function EditChallengeScreen() {
   };
 
   useEffect(() => { loadChallengeData(); }, [id, coach]);
+
+  const hasUnsavedChanges = useCallback(() => {
+    if (!initialData) return false;
+    
+    if (name.trim() !== initialData.name.trim()) return true;
+    if (description.trim() !== initialData.description.trim()) return true;
+    if (deletedSubIds.length > 0) return true;
+    if (subChallenges.length !== initialData.subChallenges.length) return true;
+    
+    for (let i = 0; i < subChallenges.length; i++) {
+      const current = subChallenges[i];
+      const initial = initialData.subChallenges[i];
+      if (!initial) return true;
+      if ((current.name || '').trim() !== (initial.name || '').trim()) return true;
+      if ((current.description || '').trim() !== (initial.description || '').trim()) return true;
+      if (current.focus_type !== initial.focus_type) return true;
+      if (current.intensity !== initial.intensity) return true;
+    }
+    
+    return false;
+  }, [initialData, name, description, subChallenges, deletedSubIds]);
+
+  const handleBack = useCallback(() => {
+    if (hasUnsavedChanges()) {
+      Alert.alert(
+        'Discard changes?',
+        'You have unsaved changes. Are you sure you want to go back?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          { text: 'Yes', style: 'destructive', onPress: () => router.back() }
+        ]
+      );
+    } else {
+      router.back();
+    }
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (hasUnsavedChanges()) {
+        Alert.alert(
+          'Discard changes?',
+          'You have unsaved changes. Are you sure you want to go back?',
+          [
+            { text: 'Keep Editing', style: 'cancel' },
+            { text: 'Yes', style: 'destructive', onPress: () => router.back() }
+          ]
+        );
+        return true;
+      }
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [hasUnsavedChanges]);
 
   const updateSubChallenge = (index: number, field: keyof SubChallenge, value: any) => {
     const updated = [...subChallenges];
@@ -108,14 +175,10 @@ export default function EditChallengeScreen() {
         { 
           text: 'Delete', 
           style: 'destructive', 
-          onPress: async () => {
+          onPress: () => {
             const sub = subChallenges[index];
             if (sub.id) {
-              const { error } = await supabase.from('sub_challenges').delete().eq('id', sub.id);
-              if (error) {
-                Alert.alert('Error', 'Failed to delete mission from database');
-                return;
-              }
+              setDeletedSubIds(prev => [...prev, sub.id!]);
             }
             const updated = subChallenges.filter((_, i) => i !== index);
             setSubChallenges(updated);
@@ -149,6 +212,16 @@ export default function EditChallengeScreen() {
 
     try {
       setSaving(true);
+
+      // Delete any removed sub-challenges if any
+      if (deletedSubIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('sub_challenges')
+          .delete()
+          .in('id', deletedSubIds);
+        if (deleteError) throw deleteError;
+      }
+
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + parseInt(durationDays) - 1);
 
@@ -206,7 +279,7 @@ export default function EditChallengeScreen() {
         {/* Header */}
         <View style={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <TouchableOpacity 
-            onPress={() => router.back()} 
+            onPress={handleBack} 
             style={{ padding: 12, backgroundColor: '#0f172a', borderRadius: 16, borderWidth: 1, borderColor: '#1e293b' }}
           >
             <ArrowLeft size={20} color="#94A3B8" />

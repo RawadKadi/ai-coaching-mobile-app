@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import SessionMonitor from '@/components/SessionMonitor';
+import ChallengeMonitor from '@/components/ChallengeMonitor';
 
 export default function ClientLayout() {
   const router = useRouter();
@@ -32,6 +33,7 @@ export default function ClientLayout() {
         <Stack.Screen name="log-meal" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="personal-information" />
+        <Stack.Screen name="schedule-timeline" />
       </Stack>
       
       {(loading || !session || profile?.role !== 'client') && (
@@ -41,6 +43,7 @@ export default function ClientLayout() {
       )}
 
       <SessionMonitor router={router} />
+      <ChallengeMonitor router={router} />
     </View>
   );
 }

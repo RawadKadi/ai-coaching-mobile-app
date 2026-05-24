@@ -1,11 +1,30 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Animated } from 'react-native';
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  RefreshControl, 
+  TouchableWithoutFeedback, 
+  Alert 
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { MotiView, MotiText, AnimatePresence } from 'moti';
+import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Target, Sparkles, Clock, ChevronRight, Activity, TrendingUp, User, ArrowLeft } from 'lucide-react-native';
+import { 
+  Plus, 
+  Target, 
+  Sparkles, 
+  ArrowLeft, 
+  Calendar as CalendarIcon, 
+  MoreVertical, 
+  Trash2, 
+  Edit2 
+} from 'lucide-react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import type { MotherChallengeWithProgress } from '@/types/challenges-v3';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
@@ -18,45 +37,7 @@ export default function CoachChallengesDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeChallenges, setActiveChallenges] = useState<MotherChallengeWithProgress[]>([]);
   const [historyChallenges, setHistoryChallenges] = useState<MotherChallengeWithProgress[]>([]);
-  
-  const [modalVisible, setModalVisible] = useState(false);
-  const slideAnim = useRef(new Animated.Value(600)).current; // Start off-screen (bottom)
-  const fadeAnim = useRef(new Animated.Value(0)).current;   // Start transparent
-
-  const openModal = () => {
-    setModalVisible(true);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 65,
-        friction: 10,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const closeModal = (callback?: () => void) => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 600,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setModalVisible(false);
-      if (callback) callback();
-    });
-  };
+  const [isEditingChallenges, setIsEditingChallenges] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -100,6 +81,31 @@ export default function CoachChallengesDashboard() {
     loadChallenges();
   };
 
+  const handleDeleteChallenge = async (challengeId: string) => {
+    Alert.alert(
+      'Remove Challenge',
+      'Are you sure? This will delete the challenge and all progress.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('mother_challenges').delete().eq('id', challengeId);
+              if (error) throw error;
+              setActiveChallenges(prev => prev.filter(c => c.id !== challengeId));
+              setHistoryChallenges(prev => prev.filter(c => c.id !== challengeId));
+            } catch (error) {
+              console.error('Error deleting challenge:', error);
+              Alert.alert('Error', 'Failed to delete challenge');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading && !refreshing) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
@@ -126,20 +132,31 @@ export default function CoachChallengesDashboard() {
         </View>
       </View>
 
-      {/* Tabs */}
-      <View className="px-6 py-4 flex-row gap-4">
-        <TabButton 
-          title="Active Plans" 
-          active={activeTab === 'active'} 
-          count={activeChallenges.length}
-          onPress={() => setActiveTab('active')} 
-        />
-        <TabButton 
-          title="Past History" 
-          active={activeTab === 'history'} 
-          count={historyChallenges.length}
-          onPress={() => setActiveTab('history')} 
-        />
+      {/* Tabs / Filters (Directly identical to Screenshot 2 layout) */}
+      <View className="px-6 py-4 flex-row justify-between items-center mb-4">
+        <View className="flex-row gap-6">
+          <TouchableOpacity onPress={() => setActiveTab('active')}>
+            <Text className={`text-2xl font-black ${activeTab === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setActiveTab('history')}>
+            <Text className={`text-2xl font-black ${activeTab === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
+          </TouchableOpacity>
+        </View>
+        <View className="flex-row gap-2">
+          <TouchableOpacity 
+            onPress={() => router.push('/(coach)/challenges/suggest')} 
+            className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5 shadow-lg shadow-violet-500/20"
+          >
+            <Sparkles size={18} color="#A78BFA" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => router.push('/(coach)/challenges/create')} 
+            className="h-10 px-4 bg-blue-600 rounded-full flex-row items-center gap-2 shadow-lg shadow-blue-500/20"
+          >
+            <Plus size={16} color="white" />
+            <Text className="text-white font-black text-xs uppercase">Create</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -160,7 +177,7 @@ export default function CoachChallengesDashboard() {
               <Text className="text-white text-xl font-bold mb-2">No {activeTab} challenges</Text>
               <Text className="text-slate-500 text-center px-8 leading-5">
                 {activeTab === 'active' 
-                  ? "Launch an AI-assisted training plan to keep your clients engaged." 
+                  ? "Start an AI-assisted training plan to keep your clients engaged." 
                   : "Completed plans will appear in your history tab."
                 }
               </Text>
@@ -173,197 +190,217 @@ export default function CoachChallengesDashboard() {
             </MotiView>
           ) : (
             challenges.map((challenge, index) => (
-              <ChallengeCard key={challenge.id} challenge={challenge} index={index} />
+              <ChallengeCard 
+                key={challenge.id} 
+                challenge={challenge} 
+                index={index} 
+                isEditing={isEditingChallenges}
+                onDelete={() => handleDeleteChallenge(challenge.id)}
+              />
             ))
           )}
         </AnimatePresence>
       </ScrollView>
-
-      {/* FAB */}
-      <TouchableOpacity 
-        className="absolute bottom-8 right-6 w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-2xl elevation-5"
-        onPress={openModal}
-      >
-        <Plus size={28} color="white" />
-      </TouchableOpacity>
-
-      {/* Creation Mode Modal */}
-      {modalVisible && (
-        <Animated.View
-          style={{ opacity: fadeAnim }}
-          className="absolute inset-0 bg-slate-950/80 z-50 justify-end"
-        >
-          {/* Backdrop Touchable to Close */}
-          <TouchableOpacity 
-            activeOpacity={1} 
-            className="absolute inset-0" 
-            onPress={() => closeModal()} 
-          />
-
-          {/* Modal Content */}
-          <Animated.View
-            style={{ transform: [{ translateY: slideAnim }] }}
-            className="bg-slate-900 rounded-[32px] p-6 border border-slate-800 shadow-2xl m-6 mb-10"
-          >
-            {/* Header inside Modal */}
-            <View className="items-center mb-6">
-              <View className="w-12 h-12 bg-purple-500/10 rounded-2xl items-center justify-center mb-3">
-                <Sparkles size={24} color="#A78BFA" />
-              </View>
-              <Text className="text-white text-xl font-bold">Create Challenge</Text>
-              <Text className="text-slate-400 text-xs mt-1 text-center">
-                How would you like to build this plan?
-              </Text>
-            </View>
-
-            {/* Option 1: AI Creator */}
-            <TouchableOpacity
-              onPress={() => {
-                closeModal(() => {
-                  router.push('/(coach)/challenges/suggest');
-                });
-              }}
-              activeOpacity={0.7}
-              className="bg-slate-950 rounded-3xl p-5 border border-slate-800 flex-row items-center gap-4 mb-4"
-            >
-              <View className="w-12 h-12 rounded-2xl bg-blue-600 items-center justify-center shadow-lg shadow-blue-500/30">
-                <Sparkles size={22} color="white" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white text-base font-bold">Create with AI</Text>
-                <Text className="text-slate-400 text-xs mt-0.5">Generate a progression-based program</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Option 2: Manual Creator */}
-            <TouchableOpacity
-              onPress={() => {
-                closeModal(() => {
-                  router.push('/(coach)/challenges/create');
-                });
-              }}
-              activeOpacity={0.7}
-              className="bg-slate-950 rounded-3xl p-5 border border-slate-800 flex-row items-center gap-4 mb-4"
-            >
-              <View className="w-12 h-12 rounded-2xl bg-emerald-600 items-center justify-center shadow-lg shadow-emerald-500/30">
-                <Plus size={22} color="white" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white text-base font-bold">Create Manually</Text>
-                <Text className="text-slate-400 text-xs mt-0.5">Build a program step-by-step</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Cancel Button */}
-            <TouchableOpacity
-              onPress={() => closeModal()}
-              activeOpacity={0.7}
-              className="py-3 items-center justify-center"
-            >
-              <Text className="text-slate-500 text-sm font-bold">Cancel</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </Animated.View>
-      )}
     </View>
   );
 }
 
-const TabButton = ({ title, active, count, onPress }: any) => (
-  <TouchableOpacity 
-    onPress={onPress}
-    className={`px-6 py-3 rounded-2xl flex-row items-center gap-3 border ${active ? 'bg-blue-600/10 border-blue-500/20' : 'bg-slate-900 border-slate-800'}`}
-  >
-    <Text className={`font-bold ${active ? 'text-blue-400' : 'text-slate-500'}`}>{title}</Text>
-    {count > 0 && (
-      <View className={`px-2 py-0.5 rounded-lg ${active ? 'bg-blue-500' : 'bg-slate-800'}`}>
-         <Text className="text-white text-[10px] font-bold">{count}</Text>
-      </View>
-    )}
-  </TouchableOpacity>
-);
-
-const ChallengeCard = ({ challenge, index }: { challenge: MotherChallengeWithProgress, index: number }) => {
-  const router = useRouter();
-  const totalSubs = Number(challenge.total_subs || 0);
-  const completedSubs = Number(challenge.completed_subs || 0);
-  const completionRate = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
-  
-  return (
-    <MotiView
-      from={{ opacity: 0, translateY: 20 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ delay: index * 100 }}
-      className="mx-6 mt-4 bg-slate-900 rounded-[32px] border border-slate-800 overflow-hidden shadow-xl"
-    >
-      <TouchableOpacity onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}>
-        <View className="p-6">
-          <View className="flex-row items-center gap-3 mb-6">
-            <BrandedAvatar 
-              imageUrl={challenge.client_avatar} 
-              name={challenge.client_name || 'Client'}
-              size={40} 
-            />
-            <View className="flex-1">
-              <View className="flex-row items-center gap-2 mb-0.5">
-                {challenge.created_by === 'ai' && (
-                  <View className="bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md flex-row items-center gap-1">
-                    <Sparkles size={10} color="#818CF8" />
-                    <Text className="text-indigo-400 text-[10px] font-bold uppercase">AI Plan</Text>
-                  </View>
-                )}
-                <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">In Progress</Text>
-              </View>
-              <Text className="text-white text-lg font-bold leading-tight">{challenge.client_name}</Text>
-            </View>
-            <TouchableOpacity 
-              onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-              className="w-10 h-10 bg-slate-950 rounded-full items-center justify-center border border-slate-800"
+const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: any, index: number, isEditing?: boolean, onDelete?: () => void }) => {
+    const router = useRouter();
+    const [showMenu, setShowMenu] = useState(false);
+    const totalSubs = Number(challenge.total_subs || 0);
+    const completedSubs = Number(challenge.completed_subs || 0);
+    const completionRate = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
+    const totalDays = Math.max(1, Math.ceil((new Date(challenge.end_date).getTime() - new Date(challenge.start_date).getTime()) / (1000 * 3600 * 24)));
+    
+    return (
+        <Swipeable
+            renderRightActions={() => (
+                <View className="flex-row mb-6 pl-4 h-[280px]">
+                    <TouchableOpacity 
+                        onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+                        className="w-16 h-full bg-slate-800 rounded-3xl items-center justify-center border border-white/5 mr-2"
+                    >
+                        <Edit2 size={20} color="white" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        onPress={onDelete}
+                        className="w-16 h-full bg-red-500 rounded-3xl items-center justify-center shadow-lg shadow-red-500/20"
+                    >
+                        <Trash2 size={20} color="white" />
+                    </TouchableOpacity>
+                </View>
+            )}
+            enabled={isEditing}
+        >
+            <MotiView 
+                from={{ opacity: 0, scale: 0.95 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                transition={{ delay: index * 100 }}
+                className="mx-6 bg-slate-900 border border-white/5 rounded-[40px] p-8 mb-6 overflow-hidden"
             >
-              <ChevronRight size={20} color="#64748B" />
-            </TouchableOpacity>
-          </View>
+                <View className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl -mr-16 -mt-16" />
+                
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+                >
+                    <View className="flex-row justify-between items-start mb-10">
+                        <View className="flex-row items-center gap-3">
+                            <BrandedAvatar name={challenge.client_name || 'Client'} size={32} imageUrl={challenge.client_avatar} />
+                            <View>
+                                <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Client</Text>
+                                <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>
+                            </View>
+                        </View>
+                        <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-blue-600/20">
+                            <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
+                        </View>
+                    </View>
 
-          <View className="mb-6">
-            <Text className="text-slate-300 text-sm font-bold">{challenge.name}</Text>
-            <Text className="text-slate-500 text-xs mt-0.5">Training Plan</Text>
-          </View>
+                    <Text className="text-white text-2xl font-black mb-4 tracking-tight">{challenge.name}</Text>
+                    
+                    <View className="flex-row items-center gap-4 mb-10">
+                        <View className="flex-row items-center gap-2">
+                            <CalendarIcon size={14} color="#64748B" />
+                            <Text className="text-slate-400 text-[11px] font-bold">
+                                {new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </Text>
+                        </View>
+                        <View className="w-1 h-1 rounded-full bg-slate-800" />
+                        <Text className="text-slate-400 text-[11px] font-bold">{totalDays} {totalDays === 1 ? 'Day' : 'Days'}</Text>
+                    </View>
 
-          {/* Stats Bar */}
-          <View className="flex-row items-center justify-between mb-2">
-            <View className="flex-row items-center gap-2">
-               <Activity size={14} color="#3B82F6" />
-               <Text className="text-slate-500 text-xs font-medium">Completion Rate</Text>
-            </View>
-            <Text className="text-white font-bold text-sm">{completionRate}%</Text>
-          </View>
+                    <View className="flex-row justify-between items-end mb-3">
+                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Progress</Text>
+                        <Text className="text-white text-xl font-black tracking-tight">{completionRate}%</Text>
+                    </View>
 
-          {/* Progress Visualization */}
-          <View className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-             <View 
-                className="h-full bg-blue-500 rounded-full" 
-                style={{ width: `${completionRate}%` }} 
-             />
-          </View>
-          
-          <View className="flex-row justify-between items-center mt-6 pt-6 border-t border-slate-950">
-             <View className="flex-row items-center gap-3">
-                <View className="w-8 h-8 rounded-full bg-slate-800 items-center justify-center border border-slate-700">
-                   <Clock size={16} color="#94A3B8" />
+                    <View className="w-full h-2 bg-slate-950 rounded-full overflow-hidden mb-10">
+                        <View className="h-full bg-blue-600 rounded-full" style={{ width: `${completionRate}%` }} />
+                    </View>
+                </TouchableOpacity>
+
+                <View className="flex-row gap-3">
+                    <TouchableOpacity 
+                        onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
+                        className="flex-1 h-16 bg-blue-600 rounded-[24px] items-center justify-center shadow-2xl shadow-blue-500/20"
+                    >
+                        <Text className="text-white font-black text-base">Manage Plan</Text>
+                    </TouchableOpacity>
+                    {isEditing ? (
+                         <TouchableOpacity onPress={onDelete} className="w-16 h-16 bg-red-500/10 rounded-[24px] items-center justify-center border border-red-500/20">
+                            <Trash2 size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                    ) : (
+                    <View>
+                        {/* Full-screen backdrop to close menu on outside tap */}
+                        {showMenu && (
+                            <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
+                                <View
+                                    style={{
+                                        position: 'absolute',
+                                        top: -2000,
+                                        left: -2000,
+                                        right: -2000,
+                                        bottom: -2000,
+                                        zIndex: 40,
+                                    }}
+                                />
+                            </TouchableWithoutFeedback>
+                        )}
+
+                        <AnimatePresence>
+                            {showMenu && (
+                                <MotiView
+                                    from={{ opacity: 0, translateY: 8, scale: 0.92 }}
+                                    animate={{ opacity: 1, translateY: 0, scale: 1 }}
+                                    exit={{ opacity: 0, translateY: 8, scale: 0.92 }}
+                                    transition={{ type: 'timing', duration: 180 }}
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: 72,
+                                        right: 0,
+                                        backgroundColor: '#0F172A',
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(255,255,255,0.08)',
+                                        borderRadius: 20,
+                                        padding: 8,
+                                        width: 160,
+                                        zIndex: 50,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 8 },
+                                        shadowOpacity: 0.5,
+                                        shadowRadius: 24,
+                                        elevation: 12,
+                                    }}
+                                >
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setShowMenu(false);
+                                            router.push(`/(coach)/challenges/edit/${challenge.id}`);
+                                        }}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            padding: 12,
+                                            borderRadius: 12,
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(59,130,246,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Edit2 size={16} color="#3B82F6" />
+                                        </View>
+                                        <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Edit</Text>
+                                    </TouchableOpacity>
+                                    
+                                    <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginHorizontal: 8, marginVertical: 4 }} />
+                                    
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setShowMenu(false);
+                                            onDelete?.();
+                                        }}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            padding: 12,
+                                            borderRadius: 12,
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Trash2 size={16} color="#EF4444" />
+                                        </View>
+                                        <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>Delete</Text>
+                                    </TouchableOpacity>
+                                </MotiView>
+                            )}
+                        </AnimatePresence>
+                        
+                        <TouchableOpacity 
+                            onPress={() => setShowMenu(!showMenu)}
+                            style={[{
+                                width: 64,
+                                height: 64,
+                                borderRadius: 24,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 1,
+                                zIndex: 51,
+                            }, showMenu
+                                ? { backgroundColor: '#1E293B', borderColor: 'rgba(59,130,246,0.5)' }
+                                : { backgroundColor: '#020617', borderColor: 'rgba(255,255,255,0.05)' }
+                            ]}
+                        >
+                            <MoreVertical size={20} color={showMenu ? '#3B82F6' : '#64748B'} />
+                        </TouchableOpacity>
+                    </View>
+                    )}
                 </View>
-                <View>
-                   <Text className="text-slate-300 text-xs font-bold">Next Deadline</Text>
-                   <Text className="text-slate-500 text-[10px]">Tomorrow at 10:00 AM</Text>
-                </View>
-             </View>
-             <View className="flex-row -space-x-2">
-                {[1, 2, 3].map(i => (
-                  <View key={i} className={`w-6 h-6 rounded-full border-2 border-slate-900 ${i === 1 ? 'bg-blue-500' : 'bg-slate-700'}`} />
-                ))}
-             </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </MotiView>
-  );
+            </MotiView>
+        </Swipeable>
+    );
 };
