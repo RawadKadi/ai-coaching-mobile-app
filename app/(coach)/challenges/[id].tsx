@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, X, Calendar, Clock, Dumbbell, Apple, Moon, Zap, Edit2 } from 'lucide-react-native';
+import { ArrowLeft, X, Calendar, Clock, Dumbbell, Apple, Moon, Zap, Edit2, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 export default function ChallengeDetailScreen() {
@@ -93,6 +93,31 @@ export default function ChallengeDetailScreen() {
   const completedCount = challenge.sub_challenges?.filter((s: any) => s.completed).length || 0;
   const totalCount = challenge.sub_challenges?.length || 0;
   const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  const missedCount = challenge.sub_challenges?.filter((s: any) => !s.completed && new Date(s.assigned_date) < now).length || 0;
+  const remainingCount = Math.max(0, totalCount - completedCount - missedCount);
+
+  const isEnded = challenge.status !== 'active' || new Date(challenge.end_date) < new Date(new Date().setHours(0,0,0,0));
+  const isFailed = isEnded && completedCount === 0;
+  const isCompleted = isEnded && completedCount > 0;
+
+  const groupedTasks: Record<string, any[]> = {};
+  if (challenge?.sub_challenges) {
+    challenge.sub_challenges.forEach((task: any) => {
+      const dateKey = new Date(task.assigned_date).toISOString().split('T')[0];
+      if (!groupedTasks[dateKey]) groupedTasks[dateKey] = [];
+      groupedTasks[dateKey].push(task);
+    });
+  }
+
+  const sortedDates = Object.keys(groupedTasks).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+  const todayKeyGlobal = new Date().toISOString().split('T')[0];
+  const todayDates = sortedDates.filter(d => d === todayKeyGlobal);
+  const upcomingDates = sortedDates.filter(d => d > todayKeyGlobal);
+  const previousDates = sortedDates.filter(d => d < todayKeyGlobal);
 
   return (
     <View className="flex-1 bg-slate-950">
@@ -112,13 +137,23 @@ export default function ChallengeDetailScreen() {
             )}
           </View>
         </View>
-        <TouchableOpacity 
-          onPress={handleCancel} 
-          className="flex-row items-center gap-1.5 px-3 py-1.5 bg-red-500/10 rounded-full border border-red-500/20"
-        >
-          <X size={12} color="#EF4444" />
-          <Text className="text-red-500 text-xs font-semibold">cancel plan</Text>
-        </TouchableOpacity>
+        {isFailed ? (
+          <View className="px-3 py-1.5 bg-red-950/50 rounded-full border border-red-900/50">
+            <Text className="text-red-500 text-xs font-semibold">⚠️ Closed / Unfulfilled</Text>
+          </View>
+        ) : isCompleted ? (
+          <View className="px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+            <Text className="text-emerald-500 text-xs font-semibold">✅ Completed</Text>
+          </View>
+        ) : (
+          <TouchableOpacity 
+            onPress={handleCancel} 
+            className="flex-row items-center gap-1.5 px-3 py-1.5 bg-red-500/10 rounded-full border border-red-500/20"
+          >
+            <X size={12} color="#EF4444" />
+            <Text className="text-red-500 text-xs font-semibold">cancel plan</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
@@ -137,8 +172,10 @@ export default function ChallengeDetailScreen() {
           className="mx-6 mt-6 bg-slate-900 p-6 rounded-[32px] border border-slate-800"
         >
           <View className="flex-row justify-between items-center mb-6">
-            <View className="bg-blue-600/10 border border-blue-500/20 px-3 py-1 rounded-full">
-              <Text className="text-blue-400 text-[10px] font-bold uppercase tracking-widest">Active Phase</Text>
+            <View className={`px-3 py-1 rounded-full border ${isFailed ? 'bg-red-950/30 border-red-900/50' : 'bg-blue-600/10 border-blue-500/20'}`}>
+              <Text className={`${isFailed ? 'text-red-500' : 'text-blue-400'} text-[10px] font-bold uppercase tracking-widest`}>
+                {isFailed ? 'Failed Phase' : 'Active Phase'}
+              </Text>
             </View>
             <View className="flex-row items-center gap-2">
               <Calendar size={14} color="#64748B" />
@@ -147,50 +184,141 @@ export default function ChallengeDetailScreen() {
           </View>
 
           <View className="flex-row items-baseline gap-2 mb-2">
-            <Text className="text-white text-4xl font-bold">{completionRate}%</Text>
-            <Text className="text-slate-500 font-medium">Compliance</Text>
+            <Text className={`text-4xl font-bold ${isFailed ? 'text-red-500' : 'text-white'}`}>{completionRate}%</Text>
+            <Text className="text-slate-500 font-medium">{isFailed ? 'Total Compliance' : 'Compliance'}</Text>
           </View>
 
-          <View className="h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800 mb-6">
-             <View className="h-full bg-blue-500 rounded-full" style={{ width: `${completionRate}%` }} />
+          <View className={`h-2.5 rounded-full overflow-hidden border mb-6 ${isFailed ? 'bg-red-950/30 border-red-900/30' : 'bg-slate-950 border-slate-800'}`}>
+             <View className={`h-full rounded-full ${isFailed ? 'bg-red-900/40' : 'bg-blue-500'}`} style={{ width: isFailed ? '100%' : `${completionRate}%` }} />
           </View>
 
-          <View className="flex-row gap-8">
-             <View>
-                <Text className="text-slate-500 text-[10px] font-bold uppercase">Completed</Text>
-                <Text className="text-white font-bold text-lg">{completedCount}</Text>
-             </View>
-             <View>
-                <Text className="text-slate-500 text-[10px] font-bold uppercase">Remaining</Text>
-                <Text className="text-white font-bold text-lg">{totalCount - completedCount}</Text>
-             </View>
+          <View className="flex-row items-center justify-between bg-slate-950/50 p-4 rounded-3xl border border-white/5">
+              <View className="items-center flex-1 border-r border-white/5">
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Done</Text>
+                  <Text className={`text-xl font-black ${completedCount > 0 ? 'text-emerald-500' : 'text-white'}`}>{completedCount}</Text>
+              </View>
+              <View className="items-center flex-1 border-r border-white/5">
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Missed</Text>
+                  <Text className={`text-xl font-black ${missedCount > 0 ? (isFailed ? 'text-red-500' : 'text-amber-500') : 'text-white'}`}>{missedCount}</Text>
+              </View>
+              <View className="items-center flex-1">
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Left</Text>
+                  <Text className="text-white text-xl font-black">{remainingCount}</Text>
+              </View>
           </View>
         </MotiView>
 
         {/* Task List */}
         <View className="mt-10 px-6">
            <Text className="text-white text-lg font-bold mb-6">Daily Breakdown</Text>
-           {challenge.sub_challenges?.map((task: any, index: number) => (
-             <TaskCard key={task.id} task={task} index={index} />
-           ))}
+           
+           {todayDates.length > 0 && (
+             <View className="mb-8">
+               <Text className="text-blue-400 text-sm font-black uppercase tracking-widest mb-3 ml-2">Today</Text>
+               {todayDates.map((dateStr: string, index: number) => (
+                 <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+               ))}
+             </View>
+           )}
+
+           {upcomingDates.length > 0 && (
+             <View className="mb-8">
+               <Text className="text-slate-500 text-sm font-black uppercase tracking-widest mb-3 ml-2">Upcoming</Text>
+               {upcomingDates.map((dateStr: string, index: number) => (
+                 <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+               ))}
+             </View>
+           )}
+
+           {previousDates.length > 0 && (
+             <View className="mb-8">
+               <Text className="text-slate-500 text-sm font-black uppercase tracking-widest mb-3 ml-2">Previous</Text>
+               {previousDates.map((dateStr: string, index: number) => (
+                 <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+               ))}
+             </View>
+           )}
         </View>
       </ScrollView>
 
       {/* Fixed Edit Plan Button at Bottom Right while scrolling */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => router.push(`/(coach)/challenges/edit/${id}`)}
-        style={{ position: 'absolute', bottom: 32, right: 24, zIndex: 10 }}
-        className="bg-blue-600 px-4 py-2.5 rounded-full flex-row items-center gap-1.5 shadow-2xl shadow-blue-500/30 border border-blue-500/20"
-      >
-        <Text className="text-white text-xs font-semibold">edit plan</Text>
-        <Edit2 size={12} color="white" />
-      </TouchableOpacity>
+      {!isFailed && !isCompleted && (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => router.push(`/(coach)/challenges/edit/${id}`)}
+          style={{ position: 'absolute', bottom: 32, right: 24, zIndex: 10 }}
+          className="bg-blue-600 px-4 py-2.5 rounded-full flex-row items-center gap-1.5 shadow-2xl shadow-blue-500/30 border border-blue-500/20"
+        >
+          <Text className="text-white text-xs font-semibold">edit plan</Text>
+          <Edit2 size={12} color="white" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
-const TaskCard = ({ task, index }: { task: any, index: number }) => {
+const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
+  const [isExpanded, setIsExpanded] = useState(() => {
+    const todayKey = new Date().toISOString().split('T')[0];
+    return dateStr === todayKey;
+  });
+  const completedCount = tasks.filter((t: any) => t.completed).length;
+  const totalCount = tasks.length;
+  
+  // Adding timezone offset to prevent day shifting backwards
+  const dateObj = new Date(dateStr);
+  const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
+  const localDate = new Date(dateObj.getTime() + userTimezoneOffset);
+  const formattedDate = localDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  const todayKey = new Date().toISOString().split('T')[0];
+  const isToday = dateStr === todayKey;
+  const isPastDate = dateStr < todayKey;
+  const isFutureDate = dateStr > todayKey;
+
+  let tagBg = 'bg-slate-950 border-slate-800';
+  let tagText = 'text-slate-300';
+  
+  if (!isFutureDate) {
+    if (completedCount > 0) {
+      tagBg = 'bg-emerald-500/10 border-emerald-500/20';
+      tagText = 'text-emerald-500';
+    } else {
+      tagBg = 'bg-amber-500/10 border-amber-500/20';
+      tagText = 'text-amber-500';
+    }
+  }
+
+  return (
+    <View className="mb-[7px]">
+      <TouchableOpacity 
+        activeOpacity={0.7} 
+        onPress={() => setIsExpanded(!isExpanded)}
+        className={`flex-row items-center p-4 rounded-2xl border ${isToday ? 'bg-blue-950/20 border-blue-500/50' : 'bg-slate-900/50 border-slate-800'} ${isExpanded ? 'mb-4' : ''}`}
+      >
+        <View className="flex-row items-center gap-3">
+          <View className="w-8 h-8 rounded-full bg-slate-800 items-center justify-center">
+            {isExpanded ? <ChevronDown size={16} color="#94A3B8" /> : <ChevronRight size={16} color="#94A3B8" />}
+          </View>
+          <Text className={`font-black text-xl tracking-tight ${isToday ? 'text-blue-400' : 'text-white'}`}>{isToday ? 'Today, ' : ''}{formattedDate}</Text>
+          <View className={`px-3 py-1 rounded-full border ml-1 ${tagBg} ${isPastDate ? 'opacity-50' : ''}`}>
+             <Text className={`text-sm font-bold ${tagText}`}>{completedCount}/{totalCount} Done</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {isExpanded && (
+        <View>
+          {tasks.map((task: any, idx: number) => (
+             <TaskCard key={task.id} task={task} index={idx} isFailed={isFailed} isCompleted={isCompleted} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+const TaskCard = ({ task, index, isFailed, isCompleted }: { task: any, index: number, isFailed?: boolean, isCompleted?: boolean }) => {
   const getIcon = (type: string) => {
     switch (type?.toLowerCase()) {
       case 'training': return <Dumbbell size={24} color="#3B82F6" />;
@@ -207,7 +335,7 @@ const TaskCard = ({ task, index }: { task: any, index: number }) => {
       from={{ opacity: 0, translateX: -20 }}
       animate={{ opacity: 1, translateX: 0 }}
       transition={{ delay: index * 100 }}
-      className="bg-slate-900 mb-4 p-5 rounded-[24px] border border-slate-800"
+      className={`mb-4 p-5 rounded-[24px] border ${isFailed || (isCompleted && !task.completed) || isPast ? 'bg-slate-900/50 border-slate-800/50 opacity-50' : 'bg-slate-900 border-slate-800'}`}
     >
       <View className="flex-row justify-between items-center mb-4">
         <View className="flex-row items-center gap-3">
@@ -219,7 +347,11 @@ const TaskCard = ({ task, index }: { task: any, index: number }) => {
             <Text className="text-slate-500 text-xs font-medium capitalize">{task.focus_type} • {task.intensity}</Text>
           </View>
         </View>
-        {task.completed ? (
+        {isFailed ? (
+          <View className="bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
+             <Text className="text-red-500 text-[10px] font-bold uppercase">Unfulfilled</Text>
+          </View>
+        ) : task.completed ? (
           <View className="bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
              <Text className="text-emerald-500 text-[10px] font-bold uppercase">Success</Text>
           </View>

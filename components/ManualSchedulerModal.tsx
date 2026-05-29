@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, Modal, Pressable, ScrollView, ActivityIndicator, Alert, TextInput, Dimensions, Platform, StatusBar } from 'react-native';
-import { MotiView, AnimatePresence } from 'moti';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { View, Text, Modal, Pressable, ScrollView, ActivityIndicator, Alert, TextInput, Dimensions, Platform, StatusBar, TouchableOpacity } from 'react-native';
+import { MotiView } from 'moti';
 import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat, Sparkles, ArrowLeft, ArrowRight, Zap, Target, Search, Filter, ChevronRight, Info, Lock, Users } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
@@ -97,8 +97,12 @@ export default function ManualSchedulerModal({
     }, [visible]);
 
     useEffect(() => {
-        if (step === 'time' && selectedClient) loadAvailableSlots();
-    }, [step, selectedDates, selectedWeekdays, selectedClient]);
+        if (step === 'time' && selectedClient) {
+            loadAvailableSlots();
+        }
+        // Only re-run when step becomes 'time' or the dates/client change while already on that step
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [step, selectedClient]);
 
     const loadClients = async () => {
         try {
@@ -310,15 +314,7 @@ export default function ManualSchedulerModal({
                     </View>
 
                     <ScrollView ref={scrollRef} className="flex-1 px-0" showsVerticalScrollIndicator={false}>
-                        <AnimatePresence>
-                            <MotiView
-                                key={step}
-                                from={{ opacity: 0, translateY: 10 }}
-                                animate={{ opacity: 1, translateY: 0 }}
-                                exit={{ opacity: 0, translateY: -10 }}
-                                transition={{ type: 'timing', duration: 300 }}
-                                className="px-6 pt-8 pb-12"
-                            >
+                        <View className="px-6 pt-8 pb-12">
                                 {step === 'client' && (
                                     <View>
                                         {/* Banner Hero Section */}
@@ -415,19 +411,21 @@ export default function ManualSchedulerModal({
                                         </View>
                                         {renderHeader("Session Pattern", "Is this a one-time session or a recurring one?")}
                                         
-                                        <View className="flex-row bg-slate-900 p-2 rounded-[32px] border border-white/5 mb-10">
-                                            <Pressable 
+                                        <View style={{ flexDirection: 'row', backgroundColor: '#0F172A', padding: 8, borderRadius: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', marginBottom: 40 }}>
+                                            <TouchableOpacity 
                                                 onPress={() => { setRecurrence('once'); setSelectedWeekdays([]); }} 
-                                                className={`flex-1 py-5 items-center rounded-[24px] ${recurrence === 'once' ? 'bg-blue-600 shadow-lg shadow-blue-600/30' : ''}`}
+                                                style={[{ flex: 1, paddingVertical: 18, alignItems: 'center', borderRadius: 24 }, recurrence === 'once' ? { backgroundColor: '#2563EB' } : {}]}
+                                                activeOpacity={0.7}
                                             >
-                                                <Text className={`font-black tracking-tight ${recurrence === 'once' ? 'text-white' : 'text-slate-600'}`}>One-time</Text>
-                                            </Pressable>
-                                            <Pressable 
+                                                <Text style={{ fontWeight: '900', color: recurrence === 'once' ? '#FFFFFF' : '#475569' }}>One-time</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity 
                                                 onPress={() => { setRecurrence('weekly'); setSelectedDates([]); }} 
-                                                className={`flex-1 py-5 items-center rounded-[24px] ${recurrence === 'weekly' ? 'bg-blue-600 shadow-lg shadow-blue-600/30' : ''}`}
+                                                style={[{ flex: 1, paddingVertical: 18, alignItems: 'center', borderRadius: 24 }, recurrence === 'weekly' ? { backgroundColor: '#2563EB' } : {}]}
+                                                activeOpacity={0.7}
                                             >
-                                                <Text className={`font-black tracking-tight ${recurrence === 'weekly' ? 'text-white' : 'text-slate-600'}`}>Recurrent</Text>
-                                            </Pressable>
+                                                <Text style={{ fontWeight: '900', color: recurrence === 'weekly' ? '#FFFFFF' : '#475569' }}>Recurrent</Text>
+                                            </TouchableOpacity>
                                         </View>
 
                                         {recurrence === 'once' && (
@@ -676,8 +674,7 @@ export default function ManualSchedulerModal({
                                         </View>
                                     </View>
                                 )}
-                            </MotiView>
-                        </AnimatePresence>
+                        </View>
                     </ScrollView>
                     
                     {/* Fixed Circular AI Scheduler Button - Appears after selection */}

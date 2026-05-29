@@ -32,7 +32,7 @@ export default function CoachChallengesDashboard() {
   const router = useRouter();
   const { user, coach } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'history'>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeChallenges, setActiveChallenges] = useState<MotherChallengeWithProgress[]>([]);
@@ -64,8 +64,43 @@ export default function CoachChallengesDashboard() {
         p_coach_id: coach.id,
       });
       if (error) throw error;
-      const active = (data || []).filter((c: any) => c.status === 'active');
-      const history = (data || []).filter((c: any) => c.status !== 'active');
+
+      // Fetch sub_challenges to compute missed_subs and current_day
+      const motherIds = (data || []).map((c: any) => c.id);
+      let subsData: any[] = [];
+      if (motherIds.length > 0) {
+        const { data: subs } = await supabase
+          .from('sub_challenges')
+          .select('mother_challenge_id, assigned_date, completed')
+          .in('mother_challenge_id', motherIds);
+        subsData = subs || [];
+      }
+
+      const enhancedData = (data || []).map((challenge: any) => {
+        const cSubs = subsData.filter(s => s.mother_challenge_id === challenge.id);
+        const total_subs = cSubs.length || challenge.total_subs || 0;
+        const completed_subs = cSubs.filter(s => s.completed).length || challenge.completed_subs || 0;
+        
+        const now = new Date();
+        now.setHours(0,0,0,0);
+        const missed_subs = cSubs.filter(s => !s.completed && new Date(s.assigned_date) < now).length;
+        
+        const startDate = new Date(challenge.start_date);
+        startDate.setHours(0,0,0,0);
+        const dayDiff = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1;
+        const current_day = Math.max(1, dayDiff);
+
+        return {
+          ...challenge,
+          total_subs,
+          completed_subs,
+          missed_subs,
+          current_day
+        };
+      });
+
+      const active = enhancedData.filter((c: any) => c.status === 'active');
+      const history = enhancedData.filter((c: any) => c.status !== 'active');
       setActiveChallenges(active);
       setHistoryChallenges(history);
     } catch (error) {
@@ -114,7 +149,11 @@ export default function CoachChallengesDashboard() {
     );
   }
 
-  const challenges = activeTab === 'active' ? activeChallenges : historyChallenges;
+  const challenges = activeTab === 'all' 
+    ? [...activeChallenges, ...historyChallenges] 
+    : activeTab === 'active' 
+      ? activeChallenges 
+      : historyChallenges;
 
   return (
     <View className="flex-1 bg-slate-950">
@@ -134,14 +173,19 @@ export default function CoachChallengesDashboard() {
 
       {/* Tabs / Filters (Directly identical to Screenshot 2 layout) */}
       <View className="px-6 py-4 flex-row justify-between items-center mb-4">
-        <View className="flex-row gap-6">
-          <TouchableOpacity onPress={() => setActiveTab('active')}>
-            <Text className={`text-2xl font-black ${activeTab === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setActiveTab('history')}>
-            <Text className={`text-2xl font-black ${activeTab === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1 mr-4">
+          <View className="flex-row gap-6">
+            <TouchableOpacity onPress={() => setActiveTab('all')}>
+              <Text className={`text-2xl font-black ${activeTab === 'all' ? 'text-white' : 'text-slate-700'}`}>All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setActiveTab('active')}>
+              <Text className={`text-2xl font-black ${activeTab === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setActiveTab('history')}>
+              <Text className={`text-2xl font-black ${activeTab === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
         <View className="flex-row gap-2">
           <TouchableOpacity 
             onPress={() => router.push('/(coach)/challenges/suggest')} 
@@ -210,8 +254,16 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
     const [showMenu, setShowMenu] = useState(false);
     const totalSubs = Number(challenge.total_subs || 0);
     const completedSubs = Number(challenge.completed_subs || 0);
+    const missedSubs = Number(challenge.missed_subs || 0);
+    const remainingSubs = Math.max(0, totalSubs - completedSubs - missedSubs);
     const completionRate = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
     const totalDays = Math.max(1, Math.ceil((new Date(challenge.end_date).getTime() - new Date(challenge.start_date).getTime()) / (1000 * 3600 * 24)));
+    const currentDay = challenge.current_day || 1;
+
+    const isEnded = challenge.status !== 'active' || new Date(challenge.end_date) < new Date(new Date().setHours(0,0,0,0));
+    const isFailed = isEnded && completedSubs === 0;
+    const isCompleted = isEnded && completedSubs > 0;
+    const isWarning = !isEnded && missedSubs > 0;
     
     return (
         <Swipeable
@@ -237,7 +289,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                 from={{ opacity: 0, scale: 0.95 }} 
                 animate={{ opacity: 1, scale: 1 }} 
                 transition={{ delay: index * 100 }}
-                className="mx-6 bg-slate-900 border border-white/5 rounded-[40px] p-8 mb-6 overflow-hidden"
+                className={`mx-6 ${isFailed || isCompleted ? 'bg-slate-950' : 'bg-slate-900'} border ${isFailed ? 'border-red-500/50' : isCompleted ? 'border-emerald-500/30' : isWarning ? 'border-amber-500/30' : 'border-white/5'} rounded-[40px] p-8 mb-6 overflow-hidden`}
             >
                 <View className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl -mr-16 -mt-16" />
                 
@@ -246,29 +298,51 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                     onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
                 >
                     <View className="flex-row justify-between items-start mb-10">
-                        <View className="flex-row items-center gap-3">
+                        <View className={`flex-row items-center gap-3 ${isFailed || isCompleted ? 'opacity-50' : ''}`}>
                             <BrandedAvatar name={challenge.client_name || 'Client'} size={32} imageUrl={challenge.client_avatar} />
                             <View>
                                 <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Client</Text>
                                 <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>
                             </View>
                         </View>
-                        <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-blue-600/20">
-                            <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
+                        <View className={`px-3 py-1.5 rounded-full border ${isFailed ? 'bg-red-950 border-red-900/50' : isCompleted ? 'bg-emerald-500/10 border-emerald-500/30' : isWarning ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-950 border-blue-600/20'}`}>
+                            {isFailed ? (
+                                <Text className="text-red-500 text-[8px] font-black uppercase tracking-[2px]">❌ Failed Plan</Text>
+                            ) : isCompleted ? (
+                                <Text className="text-emerald-500 text-[8px] font-black uppercase tracking-[2px]">✅ Completed</Text>
+                            ) : isWarning ? (
+                                <Text className="text-amber-500 text-[8px] font-black uppercase tracking-[2px]">⚠️ {missedSubs} Missed</Text>
+                            ) : (
+                                <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
+                            )}
                         </View>
                     </View>
 
-                    <Text className="text-white text-2xl font-black mb-4 tracking-tight">{challenge.name}</Text>
+                    <Text className={`text-white text-2xl font-black mb-4 tracking-tight ${isFailed || isCompleted ? 'opacity-50' : ''}`}>{challenge.name}</Text>
                     
-                    <View className="flex-row items-center gap-4 mb-10">
-                        <View className="flex-row items-center gap-2">
-                            <CalendarIcon size={14} color="#64748B" />
-                            <Text className="text-slate-400 text-[11px] font-bold">
-                                {new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                            </Text>
+                    <View className={`flex-row items-center gap-2 mb-2 ${isFailed || isCompleted ? 'opacity-50' : ''}`}>
+                        <CalendarIcon size={14} color="#64748B" />
+                        <Text className="text-slate-400 text-[11px] font-bold">
+                            {isEnded 
+                                ? `${totalDays}-Day Plan (Completed) • ${new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                                : `Day ${Math.min(currentDay, totalDays)} of ${totalDays} • ${new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                            }
+                        </Text>
+                    </View>
+
+                    <View className={`flex-row items-center justify-between mb-8 bg-slate-950/50 p-4 rounded-3xl border border-white/5 ${isFailed || isCompleted ? 'opacity-50' : ''}`}>
+                        <View className="items-center flex-1 border-r border-white/5">
+                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Done</Text>
+                            <Text className={`text-xl font-black ${completedSubs > 0 ? 'text-emerald-500' : 'text-white'}`}>{completedSubs}</Text>
                         </View>
-                        <View className="w-1 h-1 rounded-full bg-slate-800" />
-                        <Text className="text-slate-400 text-[11px] font-bold">{totalDays} {totalDays === 1 ? 'Day' : 'Days'}</Text>
+                        <View className="items-center flex-1 border-r border-white/5">
+                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Missed</Text>
+                            <Text className={`text-xl font-black ${missedSubs > 0 ? (isFailed ? 'text-red-500' : 'text-amber-500') : 'text-white'}`}>{missedSubs}</Text>
+                        </View>
+                        <View className="items-center flex-1">
+                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Left</Text>
+                            <Text className="text-white text-xl font-black">{remainingSubs}</Text>
+                        </View>
                     </View>
 
                     <View className="flex-row justify-between items-end mb-3">
@@ -276,23 +350,29 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                         <Text className="text-white text-xl font-black tracking-tight">{completionRate}%</Text>
                     </View>
 
-                    <View className="w-full h-2 bg-slate-950 rounded-full overflow-hidden mb-10">
-                        <View className="h-full bg-blue-600 rounded-full" style={{ width: `${completionRate}%` }} />
+                    <View className={`w-full h-2 rounded-full overflow-hidden mb-10 ${isFailed ? 'bg-red-950/30' : 'bg-slate-950'}`}>
+                        <View className={`h-full rounded-full ${isFailed ? 'bg-red-900/40' : isCompleted ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-blue-600'}`} style={{ width: isFailed ? '100%' : `${completionRate}%` }} />
                     </View>
                 </TouchableOpacity>
 
                 <View className="flex-row gap-3">
                     <TouchableOpacity 
                         onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-                        className="flex-1 h-16 bg-blue-600 rounded-[24px] items-center justify-center shadow-2xl shadow-blue-500/20"
+                        className={`flex-1 h-16 rounded-[24px] items-center justify-center shadow-2xl ${
+                            isFailed || isCompleted ? 'bg-slate-800' : 
+                            isWarning ? 'bg-amber-500/10 border border-amber-500/30' : 
+                            'bg-blue-600 shadow-blue-500/20'
+                        }`}
                     >
-                        <Text className="text-white font-black text-base">Manage Plan</Text>
+                        <Text className={`font-black text-base ${isWarning ? 'text-amber-500' : isFailed || isCompleted ? 'text-slate-300' : 'text-white'}`}>
+                            {isFailed ? 'View History' : isCompleted ? 'View Summary' : isWarning ? 'Review Drops' : 'Manage Plan'}
+                        </Text>
                     </TouchableOpacity>
                     {isEditing ? (
                          <TouchableOpacity onPress={onDelete} className="w-16 h-16 bg-red-500/10 rounded-[24px] items-center justify-center border border-red-500/20">
                             <Trash2 size={20} color="#EF4444" />
                         </TouchableOpacity>
-                    ) : (
+                    ) : !isEnded ? (
                     <View>
                         {/* Full-screen backdrop to close menu on outside tap */}
                         {showMenu && (
@@ -398,7 +478,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                             <MoreVertical size={20} color={showMenu ? '#3B82F6' : '#64748B'} />
                         </TouchableOpacity>
                     </View>
-                    )}
+                    ) : null}
                 </View>
             </MotiView>
         </Swipeable>
