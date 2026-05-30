@@ -102,8 +102,27 @@ export default function CoachMessagesScreen() {
             preview = `✅ Task: ${p.taskName || 'Completed'}`;
           } else if (p?.type === 'challenge_completed') {
             preview = `🏆 Protocol: ${p.taskName || 'Achieved'}`;
+          } else if (p?.type === 'meal' || p?.type === 'meal_log') {
+            preview = '🍽️ Meal Log';
+          } else if (p?.type === 'image') {
+            preview = '🖼 Photo';
+          } else if (p?.type === 'video') {
+            preview = '🎥 Video';
+          } else if (p?.type === 'gif') {
+            preview = '🎞 GIF';
+          } else if (p?.type === 'document') {
+            preview = '📄 ' + (p.fileName || 'Document');
+          } else if (p?.type === 'audio') {
+            let durStr = '';
+            if (p.duration) {
+              const d = Math.floor(Number(p.duration));
+              if (!isNaN(d)) durStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+            }
+            preview = `🎤 Voice Message${durStr}`;
+          } else if (p?.type === 'session_invite' || p?.type === 'call_invite') {
+            preview = '📹 Session Invitation';
           } else {
-            preview = p?.text || (p?.type === 'meal_log' ? '🍽️ Meal Log' : p?.type === 'session_invite' ? '🎥 Session Invite' : 'Message'); 
+            preview = p?.text || preview; 
           }
         } catch {}
         return { id: client.id, user_id: client.user_id, full_name: client.profiles.full_name, avatar_url: client.profiles.avatar_url, last_message: preview, last_message_time: lastMsg?.created_at, unread_count: unreadMap[client.user_id] || 0 };
@@ -154,7 +173,35 @@ export default function CoachMessagesScreen() {
       const list = data.map((tm: any) => {
         const lastMsg = lastMsgMap[tm.user_id];
         let preview = lastMsg?.content || 'No messages yet';
-        try { const p = JSON.parse(preview); if (p?.text) preview = p.text; } catch {}
+        try { 
+          const p = JSON.parse(preview); 
+          if (p?.type === 'task_completion') {
+            preview = `✅ Task: ${p.taskName || 'Completed'}`;
+          } else if (p?.type === 'challenge_completed') {
+            preview = `🏆 Protocol: ${p.taskName || 'Achieved'}`;
+          } else if (p?.type === 'meal' || p?.type === 'meal_log') {
+            preview = '🍽️ Meal Log';
+          } else if (p?.type === 'image') {
+            preview = '🖼 Photo';
+          } else if (p?.type === 'video') {
+            preview = '🎥 Video';
+          } else if (p?.type === 'gif') {
+            preview = '🎞 GIF';
+          } else if (p?.type === 'document') {
+            preview = '📄 ' + (p.fileName || 'Document');
+          } else if (p?.type === 'audio') {
+            let durStr = '';
+            if (p.duration) {
+              const d = Math.floor(Number(p.duration));
+              if (!isNaN(d)) durStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+            }
+            preview = `🎤 Voice Message${durStr}`;
+          } else if (p?.type === 'session_invite' || p?.type === 'call_invite') {
+            preview = '📹 Session Invitation';
+          } else {
+            preview = p?.text || preview; 
+          }
+        } catch {}
         return { coach_id: tm.coach_id, user_id: tm.user_id, full_name: tm.full_name, avatar_url: tm.avatar_url, last_message: preview, last_message_time: lastMsg?.created_at, unread_count: unreadMap[tm.user_id] || 0 };
       });
 

@@ -32,13 +32,26 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timeRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   // ── Reanimated shared values ──────────────────────────────────────────────
   const scale = useSharedValue(1);
   const lockProgress = useSharedValue(0);
   const slideX = useSharedValue(0);
 
-  useEffect(() => { Audio.requestPermissionsAsync(); }, []);
+  useEffect(() => { 
+    isMountedRef.current = true;
+    Audio.requestPermissionsAsync(); 
+    return () => {
+      isMountedRef.current = false;
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current = null;
+      }
+    };
+  }, []);
 
   // keep timeRef in sync
   useEffect(() => { timeRef.current = time; }, [time]);
@@ -75,15 +88,23 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
         (s) => {
-          if (s.metering !== undefined) {
+          if (isMountedRef.current && s.metering !== undefined) {
             setMetering(prev => [...prev.slice(1), s.metering ?? -160]);
           }
         },
         50,
       );
+
+      if (!isMountedRef.current) {
+        recording.stopAndUnloadAsync().catch(() => {});
+        return;
+      }
+
       recordingRef.current = recording;
       onStart?.();
-      timerRef.current = setInterval(() => setTime(t => t + 1), 1000);
+      timerRef.current = setInterval(() => {
+        if (isMountedRef.current) setTime(t => t + 1);
+      }, 1000);
     } catch (e) {
       console.error('startRecording error', e);
       reset();
@@ -129,6 +150,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     isRecordingRef.current = false;
     isLockedRef.current = false;
     isInitializingRef.current = false; // never leave this stuck
+    if (!isMountedRef.current) return;
     setIsRecording(false);
     setIsLocked(false);
     scale.value = withSpring(1);

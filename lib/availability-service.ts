@@ -29,6 +29,21 @@ export const availabilityService = {
             .order('start_time', { ascending: true });
 
         if (error) throw error;
+
+        // If coach has no availability settings at all, provide standard defaults (Mon-Sun, 9am - 5pm)
+        if (!data || data.length === 0) {
+            const defaults: AvailabilitySlot[] = [];
+            for (let d = 0; d < 7; d++) {
+                defaults.push({
+                    day_of_week: d as DayOfWeek,
+                    start_time: '09:00:00',
+                    end_time: '17:00:00',
+                    is_active: true
+                });
+            }
+            return defaults;
+        }
+
         return data as AvailabilitySlot[];
     },
 
@@ -142,14 +157,32 @@ export const availabilityService = {
         // Better to fetch slots and check in JS or use proper range query.
 
         // Let's fetch all slots for the day and check in JS for precision
-        const { data: daySlots } = await supabase
+        let { data: daySlots } = await supabase
             .from('coach_availability')
             .select('*')
             .eq('coach_id', coachId)
             .eq('day_of_week', dayOfWeek)
             .eq('is_active', true);
 
-        if (!daySlots || daySlots.length === 0) return false;
+        if (!daySlots || daySlots.length === 0) {
+            // Check if coach has any availability settings configured
+            const { count } = await supabase
+                .from('coach_availability')
+                .select('*', { count: 'exact', head: true })
+                .eq('coach_id', coachId);
+
+            if (count === 0) {
+                // Return default slot if no configuration exists at all
+                daySlots = [{
+                    day_of_week: dayOfWeek,
+                    start_time: '09:00:00',
+                    end_time: '17:00:00',
+                    is_active: true
+                }];
+            } else {
+                return false;
+            }
+        }
 
         return daySlots.some(slot => timeStr >= slot.start_time && timeStr <= slot.end_time);
     }
@@ -182,7 +215,7 @@ export const availabilityService = {
         if (blocked) return [];
 
         // 2. Get working hours for this day
-        const { data: workSlots } = await supabase
+        let { data: workSlots } = await supabase
             .from('coach_availability')
             .select('*')
             .eq('coach_id', coachId)
@@ -190,7 +223,25 @@ export const availabilityService = {
             .eq('is_active', true)
             .order('start_time', { ascending: true });
 
-        if (!workSlots || workSlots.length === 0) return [];
+        if (!workSlots || workSlots.length === 0) {
+            // Check if the coach has configured ANY availability at all
+            const { count } = await supabase
+                .from('coach_availability')
+                .select('*', { count: 'exact', head: true })
+                .eq('coach_id', coachId);
+
+            if (count === 0) {
+                // If they haven't configured anything, default to 9am - 5pm for today
+                workSlots = [{
+                    day_of_week: dayOfWeek,
+                    start_time: '09:00:00',
+                    end_time: '17:00:00',
+                    is_active: true
+                }];
+            } else {
+                return [];
+            }
+        }
 
         // 3. Get existing sessions for this date to avoid conflicts
         // Note: We need to filter by status to ignore cancelled sessions

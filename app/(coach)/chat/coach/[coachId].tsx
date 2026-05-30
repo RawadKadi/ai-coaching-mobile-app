@@ -19,7 +19,7 @@ import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MotiView } from 'moti';
+import { MotiView, AnimatePresence } from 'moti';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { usePresence } from '@/contexts/PresenceContext';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -46,13 +46,15 @@ type Message = {
 
 // Helper to detect if a message content is a media-type or system card
 function isMediaMessage(content: string): boolean {
-  if (!content) return false;
-  try {
-    const p = JSON.parse(content);
-    return ['image', 'video', 'document', 'gif', 'challenge_completed', 'task_completion', 'meal', 'meal_log'].includes(p.type);
-  } catch {
-    return false;
-  }
+  if (!content || typeof content !== 'string') return false;
+  const s = content.trim();
+  // If it starts with { and contains "type" and "url" (or just "type" for meal logs), it's media.
+  const hasType = s.includes('"type"');
+  const hasUrl = s.includes('"url"');
+  const hasTask = s.includes('"taskName"');
+  const isMeal = s.includes('"type":"meal"');
+  
+  return s.startsWith('{') && (hasType && (hasUrl || hasTask || isMeal));
 }
 
 type CoachInfo = {
@@ -87,6 +89,19 @@ export default function CoachToCoachChat() {
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [pressedMessageId, setPressedMessageId] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const showScrollBottomRef = useRef(false);
+  const [newMessagesCount, setNewMessagesCount] = useState(0);
+
+  useEffect(() => {
+    showScrollBottomRef.current = showScrollBottom;
+  }, [showScrollBottom]);
+  
+  const scrollToBottom = () => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setNewMessagesCount(0);
+  };
 
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -131,6 +146,9 @@ export default function CoachToCoachChat() {
                 return [nm, ...prev];
               });
               markAsRead(nm.id);
+              if (showScrollBottomRef.current) {
+                setNewMessagesCount(prev => prev + 1);
+              }
             }
           })
           .on('postgres_changes', { 
@@ -188,6 +206,12 @@ export default function CoachToCoachChat() {
     const key = [user.id, paramUserId].sort().join('-');
     const ch = supabase
       .channel(`chat-reactions-${key}`)
+      .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
+        setMessages(prev => prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m));
+      })
+      .on('broadcast', { event: 'message_edit' }, ({ payload }) => {
+        setMessages(prev => prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m));
+      })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         setIsOtherTyping(payload.isTyping);
       })
@@ -238,6 +262,7 @@ export default function CoachToCoachChat() {
     if (error) Alert.alert('Error', 'Failed to send');
     setSending(false);
     setReplyingTo(null);
+    scrollToBottom();
   };
 
   const handleTyping = (isTyping: boolean) => {
@@ -249,7 +274,7 @@ export default function CoachToCoachChat() {
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
-    if (!profile || !coachId) return;
+    if (!profile || !paramUserId) return;
     
     let parsedContent: any = {};
     try {
@@ -269,7 +294,7 @@ export default function CoachToCoachChat() {
     const optimisticMsg: Message = {
       id: tempId,
       sender_id: user?.id || '',
-      recipient_id: coachId,
+      recipient_id: paramUserId,
       content: contentWithCid,
       created_at: new Date().toISOString(),
       read: false,
@@ -282,6 +307,7 @@ export default function CoachToCoachChat() {
 
     // Add to state immediately
     setMessages(prev => [optimisticMsg, ...prev]);
+    scrollToBottom();
 
     let finalContent = contentWithCid;
     try {
@@ -297,6 +323,17 @@ export default function CoachToCoachChat() {
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, progress: pct } : m));
           }
         );
+
+        // Handle thumbnail upload if present (local URI)
+        if (parsedContent.thumbnailUrl && !parsedContent.thumbnailUrl.startsWith('http')) {
+          try {
+            const thumbUrl = await uploadChatMedia(parsedContent.thumbnailUrl, 'thumbnails');
+            parsedContent.thumbnailUrl = thumbUrl;
+          } catch (e) {
+            console.warn('Failed to upload thumbnail:', e);
+          }
+        }
+
         finalContent = JSON.stringify({ ...parsedContent, url: publicUrl, isOptimistic: false, cid });
         // Pre-warm cache so sender sees own media instantly
         mediaDownloadManager.markRemoteAvailable(publicUrl);
@@ -305,7 +342,7 @@ export default function CoachToCoachChat() {
       // 3. Insert into Supabase
       const { data: insertedData, error } = await supabase.from('messages').insert({ 
         sender_id: user?.id, 
-        recipient_id: coachId, 
+        recipient_id: paramUserId, 
         content: finalContent, 
         read: false, 
         reply_to_id: replyId, 
@@ -329,10 +366,48 @@ export default function CoachToCoachChat() {
     }
   };
 
-  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward') => {
+  const handleConfirmEdit = async (newText: string, messageId: string) => {
+    const currentMsg = messages.find(m => m.id === messageId);
+    let currentContent: any = {};
+    try {
+      currentContent = JSON.parse(currentMsg?.content || '{}');
+    } catch {
+      currentContent = {};
+    }
+    const updatedContent = JSON.stringify({ ...currentContent, text: newText, type: currentContent.type || 'text', is_edited: true });
+
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: updatedContent } : m));
+    setEditingMessage(null);
+
+    const { error } = await supabase.from('messages').update({ content: updatedContent }).eq('id', messageId);
+    if (error) {
+      Alert.alert('Error', 'Failed to edit message: ' + error.message);
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: currentMsg?.content || m.content } : m));
+    } else {
+      typingChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'message_edit',
+        payload: { messageId, content: updatedContent },
+      });
+    }
+  };
+
+  const handleAction = async (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit') => {
     if (!activeMessageForMenu) return;
-    if (action === 'reply') setReplyingTo(activeMessageForMenu);
-    else if (action === 'copy') {
+    
+    if (action === 'edit') {
+      if (activeMessageForMenu.sender_id !== user?.id) return;
+      let currentText = activeMessageForMenu.content;
+      try {
+        const p = JSON.parse(activeMessageForMenu.content);
+        if (p.text) currentText = p.text;
+      } catch {}
+      setEditingMessage({ id: activeMessageForMenu.id, text: currentText });
+      setActiveMessageForMenu(null);
+      return;
+    } else if (action === 'reply') {
+      setReplyingTo(activeMessageForMenu);
+    } else if (action === 'copy') {
       let text = activeMessageForMenu.content;
       try { const p = JSON.parse(text); if (p.text) text = p.text; } catch {}
       await Clipboard.setStringAsync(text);
@@ -356,23 +431,39 @@ export default function CoachToCoachChat() {
   const handleReaction = async (emoji: string) => {
     if (!activeMessageForMenu || !user) return;
     const msgId = activeMessageForMenu.id;
-    let content: any = {};
-    try { content = JSON.parse(activeMessageForMenu.content); } catch { content = { text: activeMessageForMenu.content, type: 'text' }; }
-    const reactions = content.reactions || [];
+    const currentMsg = messages.find(m => m.id === msgId) || activeMessageForMenu;
+    let currentContent: any = {};
+    try { currentContent = JSON.parse(currentMsg.content); } catch { currentContent = { text: currentMsg.content, type: 'text' }; }
+    const reactions = currentContent.reactions || [];
     const idx = reactions.findIndex((r: any) => r.user_id === user.id && r.emoji === emoji);
     let nr = [...reactions];
     if (idx > -1) nr.splice(idx, 1); else nr.push({ emoji, user_id: user.id });
-    const updated = JSON.stringify({ ...content, reactions: nr });
+    const updated = JSON.stringify({ ...currentContent, reactions: nr });
     
-    // Optimistic update
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: updated } : m));
+    setActiveMessageForMenu(null);
+
+    typingChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'reaction_update',
+      payload: { messageId: msgId, content: updated },
+    });
     
     const { error } = await supabase.from('messages').update({ content: updated }).eq('id', msgId);
     if (error) {
-        console.error('[CoachCoachChat] Reaction failed:', error);
-        Alert.alert('Error', 'Failed to react: ' + error.message);
+        const { data: savedContent, error: rpcError } = await supabase.rpc('toggle_message_reaction', { p_message_id: msgId, p_emoji: emoji });
+        if (rpcError) {
+          setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: currentMsg.content } : m));
+          Alert.alert('Error', 'Failed to save reaction: ' + rpcError.message);
+        } else if (savedContent && savedContent !== updated) {
+          setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: savedContent } : m));
+          typingChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'reaction_update',
+            payload: { messageId: msgId, content: savedContent },
+          });
+        }
     }
-    setActiveMessageForMenu(null);
   };
 
   const scrollToMessage = useCallback((mid: string) => {
@@ -409,18 +500,40 @@ export default function CoachToCoachChat() {
              style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
           >
               {isMedia ? (
-                <ChatMediaMessage 
-                  content={item.content} 
-                  isOwn={isMe} 
-                  createdAt={item.created_at} 
-                  isRead={item.read} 
-                  isUploading={item.isUploading}
-                  progress={item.progress}
-                  onLongPress={() => { 
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
-                      setActiveMessageForMenu(item); 
-                  }}
-                />
+                <View>
+                  <ChatMediaMessage 
+                    content={item.content} 
+                    isOwn={isMe} 
+                    createdAt={item.created_at} 
+                    isRead={item.read} 
+                    isUploading={item.isUploading}
+                    progress={item.progress}
+                    onLongPress={() => { 
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+                        setActiveMessageForMenu(item); 
+                    }}
+                    senderAvatarUrl={isMe ? profile?.avatar_url : coachInfo?.avatar_url}
+                    senderName={isMe ? profile?.full_name : coachInfo?.full_name}
+                  />
+                  {(() => {
+                    try {
+                      const p = JSON.parse(item.content);
+                      const reactions = p.reactions || [];
+                      if (reactions.length === 0) return null;
+                      return (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
+                          {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+                            .map(([emoji, count]: any) => (
+                              <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                                {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
+                              </View>
+                            ))}
+                        </View>
+                      );
+                    } catch { return null; }
+                  })()}
+                </View>
               ) : (
                 <MessageBubble 
                   item={item} 
@@ -431,6 +544,9 @@ export default function CoachToCoachChat() {
                   theme={theme}
                   user={user}
                   otherCoachName={coachInfo?.full_name}
+                  otherCoachAvatarUrl={coachInfo?.avatar_url}
+                  myName={profile?.full_name}
+                  myAvatarUrl={profile?.avatar_url}
                   onLongPress={() => { 
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
                       setActiveMessageForMenu(item); 
@@ -471,20 +587,57 @@ export default function CoachToCoachChat() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View> : (
              <FlatList
-                ref={flatListRef} data={messages} renderItem={renderMessage} keyExtractor={item => item.id}
+                ref={flatListRef} data={messages} extraData={messages} renderItem={renderMessage} keyExtractor={item => item.id}
                 inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
                 initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
                 onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
+                onScroll={(e) => {
+                  const offsetY = e.nativeEvent.contentOffset.y;
+                  if (offsetY > 300 && !showScrollBottom) {
+                    setShowScrollBottom(true);
+                  } else if (offsetY <= 300 && showScrollBottom) {
+                    setShowScrollBottom(false);
+                    setNewMessagesCount(0);
+                  }
+                }}
+                scrollEventThrottle={16}
                 ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
                 delaysContentTouches={false} keyboardShouldPersistTaps="handled"
              />
         )}
+        <AnimatePresence>
+          {showScrollBottom && (
+            <MotiView
+              from={{ opacity: 0, scale: 0.8, translateY: 20 }}
+              animate={{ opacity: 1, scale: 1, translateY: 0 }}
+              exit={{ opacity: 0, scale: 0.8, translateY: 20 }}
+              transition={{ type: 'timing', duration: 200 }}
+              style={{ position: 'absolute', bottom: 100, right: 16, zIndex: 50 }}
+            >
+              <TouchableOpacity 
+                onPress={scrollToBottom}
+                activeOpacity={0.8}
+                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#1E293B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}
+              >
+                <ArrowDown size={20} color="#FFFFFF" />
+                {newMessagesCount > 0 && (
+                  <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' }}>
+                    <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{newMessagesCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </MotiView>
+          )}
+        </AnimatePresence>
         <ChatInputBar 
           onSendText={handleSendText} 
           onSendMedia={handleSendMedia} 
           replyingTo={replyingTo} 
           onCancelReply={() => setReplyingTo(null)} 
           onTyping={handleTyping}
+          editingMessage={editingMessage}
+          onConfirmEdit={handleConfirmEdit}
+          onCancelEdit={() => setEditingMessage(null)}
         />
       </KeyboardAvoidingView>
 
@@ -498,6 +651,9 @@ export default function CoachToCoachChat() {
               theme={theme} 
               user={user}
               otherCoachName={coachInfo?.full_name}
+              otherCoachAvatarUrl={coachInfo?.avatar_url}
+              myName={profile?.full_name}
+              myAvatarUrl={profile?.avatar_url}
               repliedMsg={msg.reply_to_id ? messages.find((m: any) => m.id === msg.reply_to_id) : null}
             />
           )}
@@ -506,23 +662,79 @@ export default function CoachToCoachChat() {
   );
 }
 
-const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, otherCoachName, onLongPress }: any) => {
+const MessageBubble = ({ 
+  item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, 
+  otherCoachName, otherCoachAvatarUrl, myName, myAvatarUrl, onLongPress 
+}: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [isPressed, setIsPressed] = React.useState(false);
-  let displayContent = item.content, reactions: any[] = [], isDeleted = false, deletedBy = '';
+  let displayContent = item.content;
+  let reactions: any[] = [];
+  let isDeleted = false;
+  let deletedBy = '';
+  let isEdited = false;
+
   try {
-    const p = JSON.parse(item.content);
-    displayContent = p.text || item.content;
+    const trimmed = item.content.trim();
+    if (!trimmed.startsWith('{')) throw new Error('Not JSON');
+    
+    let p = JSON.parse(trimmed);
+    // Handle double stringification
+    if (typeof p === 'string' && p.startsWith('{')) {
+      p = JSON.parse(p);
+    }
+    
+    // Aggressive type extraction for malformed/nested JSON
+    const type = p.type || 
+                (trimmed.includes('"type":"audio"') ? 'audio' : null) || 
+                (trimmed.includes('"type":"image"') ? 'image' : null) ||
+                (trimmed.includes('"type":"video"') ? 'video' : null) ||
+                (trimmed.includes('"type":"document"') ? 'document' : null) ||
+                (trimmed.includes('"type":"meal"') ? 'meal' : null);
+    
+    const mediaTypes = ['challenge_completed', 'task_completion', 'image', 'video', 'gif', 'document', 'audio', 'session_invite', 'call_invite'];
+    if (type && (mediaTypes.includes(type) || type === 'meal' || type === 'meal_log')) {
+      if (type === 'meal' || type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          senderAvatarUrl={isMe ? myAvatarUrl : otherCoachAvatarUrl}
+          senderName={isMe ? myName : otherCoachName}
+        />
+      );
+    }
+    
+    displayContent = p.text || (type && type !== 'text' ? '' : item.content);
     reactions = p.reactions || [];
+    isEdited = !!p.is_edited;
     if (p.type === 'deleted') { isDeleted = true; deletedBy = p.deleted_by; }
-    if (p.type === 'meal' || p.type === 'meal_log') return <MealMessageCard content={item.content} isOwn={isMe} />;
-  } catch {}
+  } catch {
+    // Final defensive check: if string contains media markers, don't show as text
+    if (item.content.includes('"type"') && (item.content.includes('"url"') || item.content.includes('"taskName"'))) {
+      return (
+        <ChatMediaMessage 
+          content={item.content} 
+          isOwn={isMe} 
+          createdAt={item.created_at} 
+          isRead={item.read} 
+          senderAvatarUrl={isMe ? myAvatarUrl : otherCoachAvatarUrl}
+          senderName={isMe ? myName : otherCoachName}
+        />
+      );
+    }
+  }
 
   if (isDeleted) {
-    const name = deletedBy === user?.id ? 'You' : (otherCoachName || 'Coach');
+    const isDeletedByMe = deletedBy === user?.id;
+    const deleterName = isDeletedByMe ? 'You' : (otherCoachName || 'Coach');
     return (
       <View className="px-5 py-3 rounded-[24px] border border-slate-800 bg-slate-900/40 italic">
-        <Text className="text-slate-500 text-sm">{name} deleted this message</Text>
+        <Text className="text-slate-500 text-sm">
+          {isDeletedByMe ? 'You deleted this message' : `${deleterName} deleted this message`}
+        </Text>
       </View>
     );
   }
@@ -541,14 +753,14 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
       >
         <MotiView 
             from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
-          animate={{ 
-              scale: isPressed ? 0.9 : (isHighlighted ? 1.05 : 1),
-              backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
-          }}
-          transition={{ type: 'timing', duration: 100 }}
-          className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-          style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
-      >
+            animate={{ 
+                scale: isPressed ? 0.9 : (isHighlighted ? 1.05 : 1),
+                backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
+            }}
+            transition={{ type: 'timing', duration: 100 }}
+            className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
+            style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
+        >
         {repliedMsg && (
            <TouchableOpacity 
               activeOpacity={0.8}
@@ -561,12 +773,21 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
                   try { 
                     const p = JSON.parse(repliedMsg.content); 
                     if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
-                    if (p.type === 'challenge_completed') return '🏆 Protocol Achieved: ' + (p.taskName || '');
+                    if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
                     if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
                     if (p.type === 'image') return '🖼 Photo';
                     if (p.type === 'video') return '🎥 Video';
                     if (p.type === 'gif') return '🎞 GIF';
                     if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                    if (p.type === 'audio') {
+                      let dStr = '';
+                      if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
+                        const d = Math.floor(Number(p.duration));
+                        dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+                      }
+                      return `🎤 Voice Message${dStr}`;
+                    }
+                    if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
                     return p.text || repliedMsg.content; 
                   } catch { return repliedMsg.content; }
                 })()}
@@ -584,6 +805,9 @@ const MessageBubble = ({ item, isMe, repliedMsg, isHighlighted, onReplyPress, th
           </TouchableOpacity>
         )}
         <View className="flex-row items-center justify-end gap-1.5 mt-2">
+           {isEdited && (
+             <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>
+           )}
            <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
            {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
         </View>

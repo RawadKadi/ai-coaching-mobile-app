@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Check, ChevronRight, ChevronLeft, Target, Shield, Zap, Flame, User, Activity, Bot } from 'lucide-react-native';
+import { Check, ChevronRight, ChevronLeft, Shield, Zap, Flame, User, Activity, Bot } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -21,8 +22,26 @@ export default function OnboardingScreen() {
     dietary_restrictions: [] as string[],
   });
 
+  useEffect(() => {
+    const loadPersistedOnboarding = async () => {
+      try {
+        const savedStep = await AsyncStorage.getItem('@client_onboarding_step');
+        const savedForm = await AsyncStorage.getItem('@client_onboarding_form');
+        if (savedStep) setStep(parseInt(savedStep, 10));
+        if (savedForm) setFormData(JSON.parse(savedForm));
+      } catch (e) {
+        console.error('Failed to load onboarding progress:', e);
+      }
+    };
+    loadPersistedOnboarding();
+  }, []);
+
   const updateForm = (key: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [key]: value };
+      AsyncStorage.setItem('@client_onboarding_form', JSON.stringify(updated)).catch(e => console.error(e));
+      return updated;
+    });
   };
 
   const handleNext = () => {
@@ -34,15 +53,26 @@ export default function OnboardingScreen() {
     };
 
     if (!isStepValid()) {
-        Alert.alert('Protocol Incomplete', 'Please provide all required synchronization data.');
+        Alert.alert('Incomplete', 'Please fill in all the details for this step.');
         return;
     }
 
-    if (step < 4) setStep(step + 1);
-    else handleSubmit();
+    if (step < 4) {
+      const nextStep = step + 1;
+      setStep(nextStep);
+      AsyncStorage.setItem('@client_onboarding_step', nextStep.toString()).catch(e => console.error(e));
+    } else {
+      handleSubmit();
+    }
   };
 
-  const handleBack = () => { if (step > 1) setStep(step - 1); };
+  const handleBack = () => {
+    if (step > 1) {
+      const prevStep = step - 1;
+      setStep(prevStep);
+      AsyncStorage.setItem('@client_onboarding_step', prevStep.toString()).catch(e => console.error(e));
+    }
+  };
 
   const handleSubmit = async () => {
     if (!user) return;
@@ -61,13 +91,18 @@ export default function OnboardingScreen() {
       const { data: clientData } = await supabase.from('clients').select('id').eq('user_id', user.id).single();
       if (clientData) {
         const habits = [
-            { name: 'Hydration Protocol', description: 'Maintain optimal hydration', target_value: 2000, unit: 'ml', verification_type: 'none', client_id: clientData.id, is_active: true },
-            { name: 'Motion Metric', description: 'Daily step threshold', target_value: 8000, unit: 'steps', verification_type: 'none', client_id: clientData.id, is_active: true }
+            { name: 'Hydration', description: 'Drink enough water daily', target_value: 2000, unit: 'ml', verification_type: 'none', client_id: clientData.id, is_active: true },
+            { name: 'Daily Steps', description: 'Walk at least 8,000 steps', target_value: 8000, unit: 'steps', verification_type: 'none', client_id: clientData.id, is_active: true }
         ];
         await supabase.from('habits').insert(habits);
       }
 
       await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', user.id);
+      
+      // Clean up local cache
+      await AsyncStorage.removeItem('@client_onboarding_step');
+      await AsyncStorage.removeItem('@client_onboarding_form');
+
       await refreshProfile();
       router.replace('/(client)/(tabs)');
     } catch (error: any) { Alert.alert('Error', error.message); } finally { setLoading(false); }
@@ -78,8 +113,8 @@ export default function OnboardingScreen() {
       <SafeAreaView className="flex-1">
         <View className="px-6 pt-10 pb-6 flex-row items-center justify-between">
             <View>
-                <Text className="text-white text-3xl font-black">Sync Protocol</Text>
-                <Text className="text-slate-500 font-bold text-xs uppercase tracking-[4px] mt-1">Initialize Identity</Text>
+                <Text className="text-white text-3xl font-black">About You</Text>
+                <Text className="text-slate-500 font-bold text-xs uppercase tracking-[4px] mt-1">Let's get set up</Text>
             </View>
             <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center border border-blue-600/20">
                 <Bot size={24} color="#3B82F6" />
@@ -104,55 +139,60 @@ export default function OnboardingScreen() {
             >
                 {step === 1 && (
                     <View className="gap-8">
-                        <SectionLabel label="01. Foundation" desc="Establishing your biological baseline." />
+                        <SectionLabel label="Step 1" desc="Basic Info" />
                         <View className="gap-6">
-                            <InputGroup label="Solar Cycle Origin" value={formData.date_of_birth} onChange={(v: string) => updateForm('date_of_birth', v)} placeholder="YYYY-MM-DD" />
+                            <InputGroup label="Birthday" value={formData.date_of_birth} onChange={(v: string) => updateForm('date_of_birth', v)} placeholder="YYYY-MM-DD" />
                             <View>
-                                <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-4 px-1">Biological Identity</Text>
+                                <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-4 px-1">Gender</Text>
                                 <View className="flex-row gap-3">
-                                    {['Male', 'Female', 'Neutral'].map(g => (
+                                    {['Male', 'Female', 'Other'].map(g => (
                                         <TouchableOpacity key={g} onPress={() => updateForm('gender', g)} className={`flex-1 py-5 items-center rounded-[24px] border-2 ${formData.gender === g ? 'bg-blue-600 border-blue-400' : 'bg-slate-900/50 border-slate-900'}`}>
                                             <Text className={`font-black ${formData.gender === g ? 'text-white' : 'text-slate-500'}`}>{g}</Text>
                                         </TouchableOpacity>
                                     ))}
                                 </View>
                             </View>
-                            <InputGroup label="Altitude (CM)" value={formData.height_cm} onChange={(v: string) => updateForm('height_cm', v)} placeholder="E.g. 180" keyboardType="numeric" />
+                            <InputGroup label="Height (CM)" value={formData.height_cm} onChange={(v: string) => updateForm('height_cm', v)} placeholder="e.g. 180" keyboardType="numeric" />
                         </View>
                     </View>
                 )}
 
                 {step === 2 && (
                     <View className="gap-8">
-                        <SectionLabel label="02. Core Objective" desc="Selecting your primary performance target." />
+                        <SectionLabel label="Step 2" desc="What is your main goal?" />
                         <View className="gap-4">
-                            <CardOption label="Metabolic Optimization" desc="Fat loss & caloric efficiency" icon={<Flame size={20} color="#E11D48" />} selected={formData.goal === 'Weight Loss'} onSelect={() => updateForm('goal', 'Weight Loss')} activeColor="#E11D48" />
-                            <CardOption label="Hypertrophy Induction" desc="Muscle density & power density" icon={<Zap size={20} color="#F59E0B" />} selected={formData.goal === 'Muscle Gain'} onSelect={() => updateForm('goal', 'Muscle Gain')} activeColor="#F59E0B" />
-                            <CardOption label="Elite Consistency" desc="Daily performance maintenance" icon={<Activity size={20} color="#10B981" />} selected={formData.goal === 'Maintenance'} onSelect={() => updateForm('goal', 'Maintenance')} activeColor="#10B981" />
+                            <CardOption label="Lose Weight" desc="Burn fat and get leaner" icon={<Flame size={20} color="#E11D48" />} selected={formData.goal === 'Weight Loss'} onSelect={() => updateForm('goal', 'Weight Loss')} activeColor="#E11D48" />
+                            <CardOption label="Build Muscle" desc="Gain strength and size" icon={<Zap size={20} color="#F59E0B" />} selected={formData.goal === 'Muscle Gain'} onSelect={() => updateForm('goal', 'Muscle Gain')} activeColor="#F59E0B" />
+                            <CardOption label="Stay Fit" desc="Maintain weight and feel healthy" icon={<Activity size={20} color="#10B981" />} selected={formData.goal === 'Maintenance'} onSelect={() => updateForm('goal', 'Maintenance')} activeColor="#10B981" />
                         </View>
                     </View>
                 )}
 
                 {step === 3 && (
                     <View className="gap-8">
-                        <SectionLabel label="03. Neural Load" desc="Calibrating for current expertise levels." />
+                        <SectionLabel label="Step 3" desc="What is your experience level?" />
                         <View className="gap-4">
-                            <CardOption label="Initiate" desc="Entry level protocol loading" icon={<Shield size={20} color="#94A3B8" />} selected={formData.experience_level === 'Beginner'} onSelect={() => updateForm('experience_level', 'Beginner')} />
-                            <CardOption label="Operative" desc="Standard operational capacity" icon={<Target size={20} color="#94A3B8" />} selected={formData.experience_level === 'Intermediate'} onSelect={() => updateForm('experience_level', 'Intermediate')} />
-                            <CardOption label="Vanguard" desc="Advanced performance architecture" icon={<Zap size={20} color="#3B82F6" />} selected={formData.experience_level === 'Advanced'} onSelect={() => updateForm('experience_level', 'Advanced')} activeColor="#3B82F6" />
+                            <CardOption label="Beginner" desc="New to fitness or starting out" icon={<Shield size={20} color="#94A3B8" />} selected={formData.experience_level === 'Beginner'} onSelect={() => updateForm('experience_level', 'Beginner')} />
+                            <CardOption label="Intermediate" desc="Active and have some experience" icon={<Activity size={20} color="#94A3B8" />} selected={formData.experience_level === 'Intermediate'} onSelect={() => updateForm('experience_level', 'Intermediate')} />
+                            <CardOption label="Advanced" desc="Very active and experienced" icon={<Zap size={20} color="#3B82F6" />} selected={formData.experience_level === 'Advanced'} onSelect={() => updateForm('experience_level', 'Advanced')} activeColor="#3B82F6" />
                         </View>
                     </View>
                 )}
 
                 {step === 4 && (
                     <View className="gap-8">
-                        <SectionLabel label="04. Bio-Fueling" desc="Configuring dietary restriction parameters." />
+                        <SectionLabel label="Step 4" desc="Any dietary preferences?" />
                         <View className="gap-4">
-                            {['Standard', 'Vegetarian', 'Vegan', 'Ketogenic'].map(d => {
-                                const active = formData.dietary_restrictions.includes(d);
-                                return <CardOption key={d} label={d} desc={`Run ${d} fueling logic`} selected={active} onSelect={() => {
+                            {[
+                                { key: 'Standard', label: 'No Restrictions', desc: 'Eat everything' },
+                                { key: 'Vegetarian', label: 'Vegetarian', desc: 'No meat or fish' },
+                                { key: 'Vegan', label: 'Vegan', desc: 'Plant-based only' },
+                                { key: 'Ketogenic', label: 'Keto', desc: 'Low carb, high fat' }
+                            ].map(item => {
+                                const active = formData.dietary_restrictions.includes(item.key);
+                                return <CardOption key={item.key} label={item.label} desc={item.desc} selected={active} onSelect={() => {
                                     const cur = formData.dietary_restrictions;
-                                    updateForm('dietary_restrictions', active ? cur.filter(i => i !== d) : [...cur, d]);
+                                    updateForm('dietary_restrictions', active ? cur.filter(i => i !== item.key) : [...cur, item.key]);
                                 }} activeColor="#3B82F6" />;
                             })}
                         </View>
@@ -174,7 +214,7 @@ export default function OnboardingScreen() {
             >
                 {loading ? <ActivityIndicator color="white" /> : (
                     <>
-                        <Text className="text-white font-black text-lg">{step === 4 ? 'Deploy Agent' : 'Advance Stage'}</Text>
+                        <Text className="text-white font-black text-lg">{step === 4 ? 'Finish' : 'Next'}</Text>
                         <ChevronRight size={20} color="white" />
                     </>
                 )}

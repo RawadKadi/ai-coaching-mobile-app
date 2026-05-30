@@ -33,7 +33,7 @@ const ProfileMenuItem = ({ icon, label, onPress }: { icon: React.ReactNode; labe
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile, signOut, refreshProfile, loading: authLoading } = useAuth();
+  const { profile, signOut, refreshProfile, loading: authLoading, user } = useAuth();
   const theme = useTheme();
   const [uploading, setUploading] = useState(false);
   const [stepsSyncEnabled, setStepsSyncEnabled] = useState(false);
@@ -211,7 +211,10 @@ export default function ProfileScreen() {
                 <Text className="text-white text-3xl font-black mt-8 leading-tight tracking-tighter">
                   {profile?.full_name || 'Member'}
                 </Text>
-                <View className="mt-2 bg-blue-600/10 px-4 py-1.5 rounded-full border border-blue-600/20">
+                {user?.email && (
+                  <Text className="text-slate-400 text-sm font-medium mt-1">{user.email}</Text>
+                )}
+                <View className="mt-3 bg-blue-600/10 px-4 py-1.5 rounded-full border border-blue-600/20">
                     <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Protocol Sync Active</Text>
                 </View>
             </View>

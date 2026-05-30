@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -17,6 +17,14 @@ export default function ClientChallengesScreen() {
   const [todaysChallenges, setTodaysChallenges] = useState<TodaysSubChallenge[]>([]);
   const [upcomingChallenges, setUpcomingChallenges] = useState<any[]>([]);
   const [coachName, setCoachName] = useState('');
+
+  const timeoutRefs = useRef<{ [key: string]: any }>({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(timeoutRefs.current).forEach((timeout) => clearTimeout(timeout));
+    };
+  }, []);
 
   useEffect(() => { loadChallenges(); }, []);
 
@@ -75,6 +83,45 @@ export default function ClientChallengesScreen() {
 
   const handleRefresh = () => { setRefreshing(true); loadChallenges(); };
 
+  const sendCompletionMessage = async (task: any) => {
+    try {
+      const { data: link } = await supabase
+        .from('coach_client_links')
+        .select('coach_id')
+        .eq('client_id', (await supabase.from('clients').select('id').eq('user_id', user!.id).single()).data?.id)
+        .eq('status', 'active')
+        .single();
+      
+      if (!link) return;
+
+      const { data: coachProfile } = await supabase
+        .from('coaches')
+        .select('user_id')
+        .eq('id', link.coach_id)
+        .single();
+
+      if (!coachProfile) return;
+
+      await supabase.from('messages').insert({
+        sender_id: user!.id,
+        recipient_id: coachProfile.user_id,
+        content: JSON.stringify({
+          type: 'challenge_completed',
+          title: 'Client finished this task',
+          taskName: task.name,
+          completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          taskDescription: task.description || '',
+          focusType: task.focus_type || '',
+          intensity: task.intensity || '',
+        }),
+        read: false,
+        ai_generated: false,
+      });
+    } catch (error) {
+      console.error('Error sending automated message:', error);
+    }
+  };
+
   const toggleSubChallenge = async (sub: TodaysSubChallenge) => {
     try {
       const newCompleted = !sub.completed;
@@ -82,6 +129,9 @@ export default function ClientChallengesScreen() {
       const { data: cData } = await supabase.from('clients').select('id').eq('user_id', user!.id).single();
       if (!cData) return;
       await supabase.rpc('mark_sub_challenge', { p_sub_challenge_id: sub.id, p_client_id: cData.id, p_completed: newCompleted });
+      if (newCompleted) {
+        sendCompletionMessage(sub);
+      }
     } catch (e) { loadChallenges(); }
   };
 

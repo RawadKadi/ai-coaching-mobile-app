@@ -455,20 +455,6 @@ export default function ManualSchedulerModal({
                                                         );
                                                     })}
                                                 </View>
-
-                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Termination</Text>
-                                                <Pressable 
-                                                    onPress={() => Alert.alert("Coming Soon", "Setting a termination date will be available in a future update.")}
-                                                    className="flex-row items-center justify-between p-8 bg-slate-900 rounded-[40px] border border-white/5"
-                                                >
-                                                    <View>
-                                                        <Text className="text-slate-500 text-[10px] font-bold">Repeat until:</Text>
-                                                        <Text className="text-white text-xl font-black mt-1">Dec 31, 2026</Text>
-                                                    </View>
-                                                    <View className="w-14 h-14 bg-slate-950 rounded-2xl items-center justify-center border border-white/10">
-                                                        <Calendar size={24} color="#3B82F6" />
-                                                    </View>
-                                                </Pressable>
                                             </View>
                                         )}
                                     </View>

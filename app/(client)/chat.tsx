@@ -72,14 +72,37 @@ export default function ClientMessagesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isUserOnline } = usePresence();
-  const { user, coach } = useAuth();
+  const { user } = useAuth();
+  const [activeCoach, setActiveCoach] = useState<any>(null);
   
   useEffect(() => {
-    if (user) {
-      console.log('[ClientChat] Component mounted. User ID:', user.id);
-      console.log('[ClientChat] Coach ID:', coach?.user_id || 'Not loaded');
-    }
-  }, [user?.id, coach?.user_id]);
+    const fetchCoachData = async () => {
+      if (!user) return;
+      try {
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('coach_id')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (clientData?.coach_id) {
+          const { data: coachData } = await supabase
+            .from('coaches')
+            .select('*')
+            .eq('id', clientData.coach_id)
+            .single();
+            
+          if (coachData) {
+            setActiveCoach(coachData);
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching coach details:', e);
+      }
+    };
+    
+    fetchCoachData();
+  }, [user?.id]);
 
   const { refreshUnreadCount } = useUnread();
   const theme = useTheme();
@@ -111,18 +134,18 @@ export default function ClientMessagesScreen() {
   const reactionChannelRef = useRef<any>(null);
 
   useEffect(() => {
-    coachUserIdRef.current = coach?.user_id || null;
-  }, [coach?.user_id]);
+    coachUserIdRef.current = activeCoach?.user_id || null;
+  }, [activeCoach?.user_id]);
 
   useEffect(() => {
-    if (user && coach) {
+    if (user && activeCoach) {
       loadChatData();
     }
-  }, [user?.id, coach?.user_id]);
+  }, [user?.id, activeCoach?.id]);
 
   // Stable real-time channel — no coachUserId dependency
   useEffect(() => {
-    if (!user || !coach) return;
+    if (!user || !activeCoach) return;
 
     const channelId = `client-chat-rt-${user.id}`;
     const channel = supabase.channel(channelId)
@@ -150,13 +173,13 @@ export default function ClientMessagesScreen() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id, coach?.user_id]);
+  }, [user?.id, activeCoach?.id]);
 
   // Broadcast channel — shared with coach for guaranteed reaction delivery.
   // Keyed identically to the coach side (sorted join of both user IDs).
   useEffect(() => {
-    if (!user || !coach) return;
-    const key = [user.id, coach.user_id].sort().join('-');
+    if (!user || !activeCoach) return;
+    const key = [user.id, activeCoach.user_id].sort().join('-');
     const ch = supabase
       .channel(`chat-reactions-${key}`)
       .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
@@ -175,7 +198,7 @@ export default function ClientMessagesScreen() {
       .subscribe();
     reactionChannelRef.current = ch;
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id, coach?.user_id]);
+  }, [user?.id, activeCoach?.id]);
 
   const processIncoming = (nm: Message) => {
     setMessages(prev => {
@@ -205,15 +228,16 @@ export default function ClientMessagesScreen() {
   };
 
   const loadChatData = async () => {
+    if (!activeCoach) return;
     try {
       setLoading(true);
-      const { data: cData } = await supabase.from('profiles').select('*').eq('id', coach?.user_id).single();
+      const { data: cData } = await supabase.from('profiles').select('*').eq('id', activeCoach.user_id).single();
       setCoachProfile(cData);
-      coachUserIdRef.current = coach?.user_id || null;
+      coachUserIdRef.current = activeCoach.user_id || null;
 
       const { data: mData } = await supabase.from('messages')
         .select('*')
-        .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${coach?.user_id}),and(sender_id.eq.${coach?.user_id},recipient_id.eq.${user?.id})`)
+        .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${activeCoach.user_id}),and(sender_id.eq.${activeCoach.user_id},recipient_id.eq.${user?.id})`)
         .order('created_at', { ascending: false })
         .limit(100);
       
@@ -227,9 +251,9 @@ export default function ClientMessagesScreen() {
   };
 
   const sendMessage = async (text: string, replyId?: string) => {
-    if (!user || !coach || !text.trim()) return;
+    if (!user || !activeCoach || !text.trim()) return;
     setSending(true);
-    const msg = { sender_id: user.id, recipient_id: coach.user_id, content: text, read: false, reply_to_id: replyId };
+    const msg = { sender_id: user.id, recipient_id: activeCoach.user_id, content: text, read: false, reply_to_id: replyId };
     const { error } = await supabase.from('messages').insert(msg);
     if (error) Alert.alert('Error', 'Failed to send message');
     setSending(false);
@@ -245,7 +269,7 @@ export default function ClientMessagesScreen() {
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
-    if (!user || !coach) return;
+    if (!user || !activeCoach) return;
 
     let parsedContent: any = {};
     try { parsedContent = JSON.parse(jsonContent); } catch { return; }
@@ -257,7 +281,7 @@ export default function ClientMessagesScreen() {
     const optimisticMsg: Message = {
       id: tempId,
       sender_id: user.id,
-      recipient_id: coach.user_id,
+      recipient_id: activeCoach.user_id,
       content: contentWithCid,
       created_at: new Date().toISOString(),
       read: false,
@@ -296,7 +320,7 @@ export default function ClientMessagesScreen() {
 
       const { data: insertedData, error } = await supabase.from('messages').insert({
         sender_id: user.id,
-        recipient_id: coach.user_id,
+        recipient_id: activeCoach.user_id,
         content: finalContent,
         read: false,
         reply_to_id: replyId,
@@ -598,18 +622,24 @@ export default function ClientMessagesScreen() {
                 <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
                     <ArrowLeft size={18} color="white" />
                 </TouchableOpacity>
-                <View className="flex-row items-center gap-3">
-               <BrandedAvatar imageUrl={coach?.avatar_url} name={coach?.full_name || 'Coach'} size={40} />
-               <View>
-                 <Text className="text-white font-black text-lg tracking-tight">{coach?.full_name || 'Your Coach'}</Text>
-                 <View className="flex-row items-center gap-1.5">
-                   <View className={`w-2 h-2 rounded-full ${coach?.user_id && isUserOnline(coach.user_id) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
-                   <Text className="text-slate-400 text-[10px] font-medium tracking-widest uppercase">
-                     {coach?.user_id && isUserOnline(coach.user_id) ? 'Online' : 'Offline'}
-                   </Text>
-                 </View>
-               </View>
-             </View>
+                <TouchableOpacity 
+                  onPress={() => activeCoach && router.push({
+                    pathname: '/(client)/coach-details',
+                    params: { coachId: activeCoach.id }
+                  })}
+                  className="flex-row items-center gap-3"
+                >
+                  <BrandedAvatar imageUrl={coachProfile?.avatar_url} name={coachProfile?.full_name || 'Coach'} size={40} />
+                  <View>
+                    <Text className="text-white font-black text-lg tracking-tight">{coachProfile?.full_name || 'Your Coach'}</Text>
+                    <View className="flex-row items-center gap-1.5">
+                      <View className={`w-2 h-2 rounded-full ${activeCoach?.user_id && isUserOnline(activeCoach.user_id) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
+                      <Text className="text-slate-400 text-[10px] font-medium tracking-widest uppercase">
+                        {activeCoach?.user_id && isUserOnline(activeCoach.user_id) ? 'Online' : 'Offline'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
             </View>
             <TouchableOpacity className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
                 <Shield size={18} color="#64748B" />
@@ -806,12 +836,21 @@ const ClientMessageBubble = ({
                 try { 
                   const p = JSON.parse(repliedMsg.content); 
                   if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
-                  if (p.type === 'challenge_completed') return '🏆 Protocol Achieved: ' + (p.taskName || '');
+                  if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
                   if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
                   if (p.type === 'image') return '🖼 Photo';
                   if (p.type === 'video') return '🎥 Video';
                   if (p.type === 'gif') return '🎞 GIF';
                   if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                  if (p.type === 'audio') {
+                    let dStr = '';
+                    if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
+                      const d = Math.floor(Number(p.duration));
+                      dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+                    }
+                    return `🎤 Voice Message${dStr}`;
+                  }
+                  if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
                   return p.text || repliedMsg.content; 
                 } catch { return repliedMsg.content; }
               })()}

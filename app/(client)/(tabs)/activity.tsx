@@ -62,7 +62,8 @@ export default function ActivityScreen() {
   const [sessionsTotal, setSessionsTotal] = useState(0);
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
-  const [activeMotherChallenges, setActiveMotherChallenges] = useState<any[]>([]);
+  const [motherChallenges, setMotherChallenges] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'history'>('all');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [streak, setStreak] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -190,7 +191,7 @@ export default function ActivityScreen() {
   const loadActivityData = async () => {
     try {
       if (!refreshing) setLoading(true);
-      const [mealsResult, workoutsResult, habitsResult, logsResult, sessionsResult, motherChallengeResult] = await Promise.all([
+      const [mealsResult, workoutsResult, habitsResult, logsResult, sessionsResult, activeResult, completedResult, failedResult] = await Promise.all([
         supabase
           .from('meals')
           .select('*')
@@ -218,7 +219,9 @@ export default function ActivityScreen() {
           .select('id, status, scheduled_at')
           .eq('client_id', client?.id)
           .lte('scheduled_at', new Date().toISOString()),
-        supabase.rpc('get_client_mother_challenges', { p_client_id: client?.id, p_status: 'active' })
+        supabase.rpc('get_client_mother_challenges', { p_client_id: client?.id, p_status: 'active' }),
+        supabase.rpc('get_client_mother_challenges', { p_client_id: client?.id, p_status: 'completed' }),
+        supabase.rpc('get_client_mother_challenges', { p_client_id: client?.id, p_status: 'failed' })
       ]);
 
       if (mealsResult.error) throw mealsResult.error;
@@ -226,7 +229,6 @@ export default function ActivityScreen() {
       if (habitsResult.error) throw habitsResult.error;
       if (logsResult.error) throw logsResult.error;
       if (sessionsResult.error) throw sessionsResult.error;
-      if (motherChallengeResult.error) console.error('Error loading mother challenge:', motherChallengeResult.error);
 
       setMeals(mealsResult.data || []);
       setWorkouts(workoutsResult.data || []);
@@ -239,11 +241,13 @@ export default function ActivityScreen() {
       setSessionsTotal(validSessions.length);
       setSessionsTaken(validSessions.filter((s: any) => s.status === 'completed').length);
 
-      if (motherChallengeResult.data && motherChallengeResult.data.length > 0) {
-        setActiveMotherChallenges(motherChallengeResult.data);
-      } else {
-        setActiveMotherChallenges([]);
-      }
+      const combinedMotherChallenges = [
+        ...(activeResult?.data || []),
+        ...(completedResult?.data || []),
+        ...(failedResult?.data || [])
+      ].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+      
+      setMotherChallenges(combinedMotherChallenges);
 
       // Get sub-challenges via RPC
       const { data: subsData, error: subsError } = await supabase.rpc('get_todays_sub_challenges', {
@@ -733,34 +737,84 @@ export default function ActivityScreen() {
 
             {/* Challenges Section */}
             
-            <View style={{ marginBottom: 16, marginTop: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, marginTop: 8 }}>
               <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Challenges</Text>
+              
+              <View style={{ flexDirection: 'row', gap: 16 }}>
+                <TouchableOpacity onPress={() => setActiveTab('all')}>
+                  <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'all' ? 'white' : '#475569' }}>All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setActiveTab('active')}>
+                  <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'active' ? 'white' : '#475569' }}>Active</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setActiveTab('history')}>
+                  <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'history' ? 'white' : '#475569' }}>History</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            {activeMotherChallenges && activeMotherChallenges.length > 0 ? (
-              <View style={{ marginBottom: 24 }}>
-                {activeMotherChallenges.map((motherChallenge: any) => {
-                  const motherSubs = challenges.filter(c => c.mother_challenge_id === motherChallenge.id);
-                  const currentDay = Math.max(1, Math.floor((new Date(selectedDate).getTime() - new Date(motherChallenge.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1);
 
-                  return (
-                    <View key={motherChallenge.id} style={{ marginBottom: 32 }}>
-                      <TouchableOpacity
-                        onPress={() => router.push('/(client)/challenges')}
-                        style={{
-                          backgroundColor: '#0f172a',
-                          borderRadius: 32,
-                          padding: 24,
-                          borderWidth: 1,
-                          borderColor: '#1e293b'
-                        }}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Target size={16} color="#3B82F6" />
-                            <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
-                              Active Challenge
-                            </Text>
-                          </View>
+            {(() => {
+              const filteredChallenges = motherChallenges.filter(c => {
+                const isEnded = c.status !== 'active' || new Date(c.end_date) < new Date(new Date().setHours(0,0,0,0));
+                if (activeTab === 'active') return !isEnded;
+                if (activeTab === 'history') return isEnded;
+                return true;
+              });
+
+              if (filteredChallenges.length === 0) {
+                return (
+                  <View style={{ marginBottom: 24 }}>
+                    <EmptyState message="No challenges found." />
+                  </View>
+                );
+              }
+
+              return (
+                <View style={{ marginBottom: 24 }}>
+                  {filteredChallenges.map((motherChallenge: any) => {
+                    const currentDay = Math.max(1, Math.floor((new Date(selectedDate).getTime() - new Date(motherChallenge.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                    const isEnded = motherChallenge.status !== 'active' || new Date(motherChallenge.end_date) < new Date(new Date().setHours(0,0,0,0));
+                    const isFailed = isEnded && motherChallenge.completed_subs === 0;
+                    const isCompleted = isEnded && motherChallenge.completed_subs > 0;
+
+                    return (
+                      <View key={motherChallenge.id} style={{ marginBottom: 16 }}>
+                        <TouchableOpacity
+                          onPress={() => router.push(`/(client)/challenges/${motherChallenge.id}` as any)}
+                          style={{
+                            backgroundColor: '#0f172a',
+                            borderRadius: 32,
+                            padding: 24,
+                            borderWidth: 1,
+                            borderColor: isFailed ? '#ef444450' : isCompleted ? '#10b98150' : '#1e293b',
+                            opacity: (isFailed || isCompleted) ? 0.6 : 1
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              {isFailed ? (
+                                <>
+                                  <X size={16} color="#EF4444" />
+                                  <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
+                                    Failed Plan
+                                  </Text>
+                                </>
+                              ) : isCompleted ? (
+                                <>
+                                  <CheckCircle size={16} color="#10B981" />
+                                  <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
+                                    Completed Plan
+                                  </Text>
+                                </>
+                              ) : (
+                                <>
+                                  <Target size={16} color="#3B82F6" />
+                                  <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
+                                    Active Challenge
+                                  </Text>
+                                </>
+                              )}
+                            </View>
                           <ChevronRight size={16} color="#475569" />
                         </View>
 
@@ -791,19 +845,12 @@ export default function ActivityScreen() {
                           </Text>
                         </View>
                       </TouchableOpacity>
-
-
-
-
                     </View>
                   );
-                })}
-              </View>
-            ) : (
-              <View style={{ marginBottom: 24 }}>
-                <EmptyState message="No active challenges assigned." />
-              </View>
-            )}
+                  })}
+                </View>
+              );
+            })()}
 
 
             {/* Habits Section */}

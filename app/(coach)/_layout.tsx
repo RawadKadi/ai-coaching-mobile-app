@@ -1,5 +1,5 @@
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -10,7 +10,9 @@ import { NewAssignmentCelebration } from '@/components/NewAssignmentCelebration'
 
 export default function CoachLayout() {
   const router = useRouter();
+  const segments = useSegments() as string[];
   const { session, profile, coach, loading } = useAuth();
+  const inOnboarding = segments.includes('onboarding');
   
   const [celebration, setCelebration] = useState<{ visible: boolean; isFirst: boolean; name: string }>({
     visible: false,
@@ -24,9 +26,11 @@ export default function CoachLayout() {
         router.replace('/(auth)/login');
       } else if (profile?.role === 'client') {
         router.replace('/(client)/(tabs)');
+      } else if (profile?.role === 'coach' && profile.onboarding_completed !== true && !inOnboarding) {
+        router.replace('/(coach)/onboarding');
       }
     }
-  }, [session, profile, loading]);
+  }, [session, profile, loading, inOnboarding]);
 
   useEffect(() => {
     if (coach?.id) {
@@ -66,6 +70,7 @@ export default function CoachLayout() {
     <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" />
         <Stack.Screen name="team-welcome" options={{ presentation: 'modal' }} />
         <Stack.Screen name="challenges" />
         <Stack.Screen name="clients/[id]" />

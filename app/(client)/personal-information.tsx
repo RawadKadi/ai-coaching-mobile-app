@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StatusBar } from 'react-nativ
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { ChevronLeft, User, Phone, Globe, Calendar, Activity, Ruler, Target, Trophy, Info, AlertTriangle } from 'lucide-react-native';
+import { ChevronLeft, User, Mail, Phone, Globe, Calendar, Activity, Ruler, Target, Trophy, Info, AlertTriangle } from 'lucide-react-native';
 
 const InfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | undefined | null }) => (
     <View className="flex-row items-center py-4 border-b border-white/5">
@@ -42,7 +42,7 @@ const TagList = ({ icon, label, tags, isLast }: { icon: React.ReactNode, label: 
 export default function PersonalInformationScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { profile, client } = useAuth();
+    const { profile, client, user } = useAuth();
 
     return (
         <View className="flex-1 bg-slate-950">
@@ -75,6 +75,7 @@ export default function PersonalInformationScreen() {
                     <View className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 mb-6">
                         <Text className="text-white font-black text-lg mb-4 ml-1">Account</Text>
                         <InfoRow icon={<User size={16} color="#3B82F6" />} label="Full Name" value={profile?.full_name} />
+                        <InfoRow icon={<Mail size={16} color="#3B82F6" />} label="Email" value={user?.email} />
                         <InfoRow icon={<Phone size={16} color="#3B82F6" />} label="Phone" value={profile?.phone} />
                         <View className="flex-row items-center py-4">
                             <View className="w-8 h-8 rounded-full bg-blue-600/10 items-center justify-center mr-4">

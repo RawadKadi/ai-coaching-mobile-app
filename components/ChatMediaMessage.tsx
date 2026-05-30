@@ -13,7 +13,7 @@ import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/contexts/BrandContext';
-import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, Pause, X, Trophy, Zap, Target, Loader2, Clock, Video as LucideVideo } from 'lucide-react-native';
+import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, ChevronDown, Pause, X, Trophy, Zap, Target, Loader2, Clock, Video as LucideVideo } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { useRouter } from 'expo-router';
 import { ChatReplyContext } from './ChatReplyContext';
@@ -527,7 +527,7 @@ function CustomImagePlayer({
 }
 
 // ── Challenge Card Components ────────────────────────────────────────────────
-function ChallengeCompletedCard({ media, onPressImage }: { media: MediaContent, onPressImage?: () => void }) {
+function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media: MediaContent, onPressImage?: () => void, onPressDetails?: () => void }) {
   const theme = useTheme();
   const intensityColor = (intensity?: string) => {
     switch(intensity?.toLowerCase()) {
@@ -556,7 +556,7 @@ function ChallengeCompletedCard({ media, onPressImage }: { media: MediaContent, 
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
           <View style={styles.challengeIconBox}><Trophy size={18} color="#10B981" /></View>
-          <Text style={[styles.challengeTitle, { fontFamily: theme.typography.fontFamily }]}>Protocol Achieved</Text>
+          <Text style={[styles.challengeTitle, { fontFamily: theme.typography.fontFamily }]}>Challenge Completed</Text>
         </View>
         <View style={styles.challengeBody}>
           <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Daily Mission'}</Text>
@@ -566,6 +566,26 @@ function ChallengeCompletedCard({ media, onPressImage }: { media: MediaContent, 
           </View>
         </View>
         <View style={styles.challengeFooter}><Text style={styles.challengeFooterText}>Completed at {media.completedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
+        
+        {onPressDetails && (
+          <TouchableOpacity 
+            onPress={onPressDetails} 
+            activeOpacity={0.7}
+            style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              marginTop: 12, 
+              paddingTop: 12, 
+              borderTopWidth: 1, 
+              borderTopColor: 'rgba(255, 255, 255, 0.08)',
+              gap: 4
+            }}
+          >
+            <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '600', fontFamily: theme.typography.fontFamily }}>View details</Text>
+            <ChevronDown size={14} color="#10B981" />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -1057,6 +1077,7 @@ const ChatMediaMessage: React.FC<Props> = ({
   const highlightAnim = useRef(new Animated.Value(0)).current;
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
   const [isChallengeExpanded, setIsChallengeExpanded] = useState(false);
+  const [isDetailsVisible, setIsDetailsVisible] = useState(false);
   const [isLocalPressed, setIsLocalPressed] = useState(false);
   const [documentModalVisible, setDocumentModalVisible] = useState(false);
   const [documentModalUrl, setDocumentModalUrl] = useState<string | null>(null);
@@ -1524,7 +1545,11 @@ const ChatMediaMessage: React.FC<Props> = ({
           onLongPress={onLongPress} 
           style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}
         >
-          <ChallengeCompletedCard media={media} onPressImage={() => media.imageUrl && setIsChallengeExpanded(true)} />
+          <ChallengeCompletedCard 
+            media={media} 
+            onPressImage={() => media.imageUrl && setIsChallengeExpanded(true)} 
+            onPressDetails={() => setIsDetailsVisible(true)}
+          />
         </TouchableOpacity>
 
         {media.imageUrl && (
@@ -1536,6 +1561,98 @@ const ChatMediaMessage: React.FC<Props> = ({
             />
           </Modal>
         )}
+
+        <Modal 
+          visible={isDetailsVisible} 
+          transparent 
+          animationType="slide" 
+          onRequestClose={() => setIsDetailsVisible(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ 
+              backgroundColor: '#0F172A', 
+              borderTopLeftRadius: 20, 
+              borderTopRightRadius: 20, 
+              borderWidth: 1, 
+              borderColor: 'rgba(255,255,255,0.08)', 
+              paddingBottom: 40,
+              maxHeight: '60%' 
+            }}>
+              {/* Header */}
+              <View style={{ 
+                flexDirection: 'row', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                padding: 20, 
+                borderBottomWidth: 1, 
+                borderBottomColor: 'rgba(255, 255, 255, 0.08)' 
+              }}>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: 'white', fontFamily: theme.typography.fontFamily }}>
+                  Challenge Details
+                </Text>
+                <TouchableOpacity onPress={() => setIsDetailsVisible(false)} style={{ padding: 4 }}>
+                  <X size={24} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Content */}
+              <View style={{ padding: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                    <Trophy size={20} color="#10B981" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, color: '#94A3B8', fontFamily: theme.typography.fontFamily }}>Task Name</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: 'white', fontFamily: theme.typography.fontFamily }}>
+                      {media.taskName || 'Daily Mission'}
+                    </Text>
+                  </View>
+                </View>
+
+                {media.taskDescription ? (
+                  <View style={{ marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                    <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Description</Text>
+                    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 20, fontFamily: theme.typography.fontFamily }}>
+                      {media.taskDescription}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                    <Text style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Focus</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Target size={14} color="#3B82F6" />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: 'white', fontFamily: theme.typography.fontFamily }}>
+                        {media.focusType || 'Training'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                    <Text style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Intensity</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Zap size={14} color={media.intensity?.toLowerCase() === 'high' ? '#EF4444' : media.intensity?.toLowerCase() === 'medium' ? '#F59E0B' : '#10B981'} />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: 'white', fontFamily: theme.typography.fontFamily }}>
+                        {media.intensity || 'Normal'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                  <Text style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Completed At</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Clock size={14} color="#10B981" />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: 'white', fontFamily: theme.typography.fontFamily }}>
+                      {media.completedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </>
     );
   } else if (media.type === 'meal' || media.type === 'meal_log') {

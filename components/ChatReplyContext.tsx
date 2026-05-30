@@ -42,7 +42,7 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
     } else if (content.type === 'task_completion') {
       snippet = '✅ Task Completed: ' + (content.taskName || '');
     } else if (content.type === 'challenge_completed') {
-      snippet = '🏆 Protocol Achieved: ' + (content.taskName || '');
+      snippet = '🏆 Challenge Completed: ' + (content.taskName || '');
     } else if (content.type === 'meal' || content.type === 'meal_log') {
       snippet = '🍽️ Meal Log';
     } else if (content.type === 'audio') {

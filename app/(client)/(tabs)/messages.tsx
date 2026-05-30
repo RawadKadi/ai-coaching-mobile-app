@@ -85,6 +85,7 @@ function isMediaMessage(content: string): boolean {
   return s.startsWith('{') && (hasType && (hasUrl || hasTask || isMeal));
 }    
 
+
 export default function ClientMessagesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -817,7 +818,7 @@ const MessageBubble = ({
                   try { 
                     const p = JSON.parse(repliedMsg.content); 
                     if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
-                    if (p.type === 'challenge_completed') return '🏆 Protocol Achieved: ' + (p.taskName || '');
+                    if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
                     if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
                     if (p.type === 'image') return '🖼 Photo';
                     if (p.type === 'video') return '🎥 Video';

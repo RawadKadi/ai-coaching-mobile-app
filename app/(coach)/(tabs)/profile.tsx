@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand, useTheme } from '@/contexts/BrandContext';
-import { LogOut, Settings, Camera, Users, UserPlus, ChevronRight, BrainCircuit, Palette, Shield, Bell, Heart, CreditCard } from 'lucide-react-native';
+import { LogOut, User, Settings, Camera, Users, UserPlus, ChevronRight, BrainCircuit, Palette, Shield, Bell, Heart, CreditCard } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function CoachProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile, signOut, coach, refreshProfile } = useAuth();
+  const { profile, signOut, coach, refreshProfile, user } = useAuth();
   const { brand, canManageBrand } = useBrand();
   const [uploading, setUploading] = useState(false);
 
@@ -110,7 +110,10 @@ export default function CoachProfileScreen() {
               </View>
 
               <Text className="text-white text-3xl font-black mt-8 tracking-tight">{profile?.full_name}</Text>
-              <View className="mt-2 bg-slate-900 px-4 py-1.5 rounded-full border border-white/5">
+              {user?.email && (
+                <Text className="text-slate-400 text-sm font-medium mt-1">{user.email}</Text>
+              )}
+              <View className="mt-3 bg-slate-900 px-4 py-1.5 rounded-full border border-white/5">
                 <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Professional Coach</Text>
               </View>
 
@@ -134,6 +137,9 @@ export default function CoachProfileScreen() {
 
             {/* Menu Sections */}
             <View className="px-6 space-y-4">
+              <SectionLabel label="Account" />
+              <ProfileMenuItem icon={<User size={20} color="#3B82F6" />} label="Personal Information" onPress={() => router.push('/(coach)/personal-information')} />
+
               <SectionLabel label="Application" />
               <ProfileMenuItem icon={<Settings size={20} color="#94A3B8" />} label="App Settings" onPress={() => router.push('/(coach)/settings')} />
               <ProfileMenuItem icon={<BrainCircuit size={20} color="#8B5CF6" />} label="AI Features" sub="Smart scheduling & insights" onPress={() => router.push('/(coach)/(tabs)/ai-brain')} highlighted />

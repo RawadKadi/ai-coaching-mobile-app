@@ -84,6 +84,7 @@ function isMediaMessage(content: string): boolean {
   return s.startsWith('{') && (hasType && (hasUrl || hasTask || isMeal));
 }
 
+
 export default function CoachChatScreen() {
   const { id } = useLocalSearchParams(); 
   const router = useRouter();
@@ -1320,12 +1321,20 @@ const MessageBubble = ({
                   try { 
                     const p = JSON.parse(repliedMsg.content); 
                     if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
-                    if (p.type === 'challenge_completed') return '🏆 Protocol Achieved: ' + (p.taskName || '');
+                    if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
                     if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
                     if (p.type === 'image') return '🖼 Photo';
                     if (p.type === 'video') return '🎥 Video';
                     if (p.type === 'gif') return '🎞 GIF';
                     if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                    if (p.type === 'audio') {
+                      let dStr = '';
+                      if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
+                        const d = Math.floor(Number(p.duration));
+                        dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+                      }
+                      return `🎤 Voice Message${dStr}`;
+                    }
                     if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
                     return p.text || repliedMsg.content; 
                   } catch { return repliedMsg.content; }

@@ -557,7 +557,7 @@ export function ChatInputBar({
                 try {
                   const content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
                   if (content.type === 'task_completion') return '✅ Task Completed: ' + (content.taskName || '');
-                  if (content.type === 'challenge_completed') return '🏆 Protocol Achieved: ' + (content.taskName || '');
+                  if (content.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (content.taskName || '');
                   if (content.type === 'meal' || content.type === 'meal_log') return '🍽️ Meal Log';
                   if (content.type === 'image') return '🖼 Photo';
                   if (content.type === 'video') return '🎥 Video';

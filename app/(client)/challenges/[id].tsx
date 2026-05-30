@@ -1,241 +1,504 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { X, Check, TrendingUp, Calendar, ChevronLeft, Zap, Info, Clock, AlertCircle } from 'lucide-react-native';
-import FeedbackModal from '@/components/FeedbackModal';
+import { ArrowLeft, Calendar, Clock, Dumbbell, Apple, Moon, Zap, ChevronDown, ChevronRight, CheckCircle, Info } from 'lucide-react-native';
 
-interface ProgressEntry {
-  id: string;
-  date: string;
-  completed: boolean;
-  notes: string | null;
-}
-
-interface Challenge {
-  id: string;
-  name: string;
-  description: string;
-  focus_type: string;
-  duration_days: number;
-  start_date: string;
-  end_date: string;
-}
-
-export default function ChallengeProgressScreen() {
+export default function ChallengeDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [challenge, setChallenge] = useState<Challenge | null>(null);
-  const [progress, setProgress] = useState<ProgressEntry[]>([]);
-  const [todayProgress, setTodayProgress] = useState<ProgressEntry | null>(null);
-  const [notes, setNotes] = useState('');
-  const [showChallengeSuccess, setShowChallengeSuccess] = useState(false);
+  const [challenge, setChallenge] = useState<any>(null);
+  
+  const timeoutRefs = useRef<{ [key: string]: any }>({});
 
-  useEffect(() => { loadChallengeAndProgress(); }, [id]);
+  useEffect(() => {
+    return () => {
+      Object.values(timeoutRefs.current).forEach((timeout) => clearTimeout(timeout));
+    };
+  }, []);
 
-  const loadChallengeAndProgress = async () => {
+  useEffect(() => {
+    loadChallengeDetails();
+    if (!id) return;
+    const subscription = supabase
+      .channel(`challenge-${id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sub_challenges', filter: `mother_challenge_id=eq.${id}` }, (payload) => {
+          setChallenge((current: any) => {
+            if (!current) return current;
+            const updatedSubChallenges = current.sub_challenges.map((sub: any) => sub.id === payload.new.id ? { ...sub, completed: payload.new.completed, completed_at: payload.new.completed_at } : sub);
+            return { ...current, sub_challenges: updatedSubChallenges };
+          });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(subscription); };
+  }, [id]);
+
+  const loadChallengeDetails = async () => {
     if (!id || !user) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_challenge_with_progress', { p_challenge_id: id });
+      const { data, error } = await supabase.rpc('get_mother_challenge_details', { p_mother_challenge_id: id });
       if (error) throw error;
-      if (data) {
-        setChallenge(data.challenge);
-        setProgress(data.progress || []);
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayEntry = data.progress?.find((p: any) => p.date === todayStr);
-        if (todayEntry) { setTodayProgress(todayEntry); setNotes(todayEntry.notes || ''); }
-      }
-    } catch (e) { Alert.alert('Error'); } finally { setLoading(false); }
-  };
-
-  const handleMarkProgress = async (completed: boolean) => {
-    if (!challenge || !user) return;
-    try {
-      setSubmitting(true);
-      const { data: cData } = await supabase.from('clients').select('id').eq('user_id', user.id).single();
-      if (!cData) return;
+      if (!data || data.length === 0) { router.back(); return; }
       
-      const { error } = await supabase.rpc('mark_challenge_progress', {
-        p_challenge_id: id,
-        p_client_id: cData.id,
-        p_date: new Date().toISOString().split('T')[0],
-        p_completed: completed,
-        p_notes: notes.trim() || null,
-        p_proof_url: null,
-      });
-      if (error) throw error;
-      loadChallengeAndProgress();
-      if (completed) setShowChallengeSuccess(true);
-    } catch (e) { Alert.alert('Error saving'); } finally { setSubmitting(false); }
+      const challengeObj = data[0];
+
+      
+      setChallenge(challengeObj);
+    } catch (error) {
+      console.error('Error loading challenge:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (loading) return <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color="#3B82F6" /></View>;
-  if (!challenge) return <View style={{ flex: 1, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: 'white' }}>Mission protocol not found</Text></View>;
+  const sendCompletionMessage = async (task: any) => {
+    try {
+      console.log('[sendCompletionMessage] Starting for task:', task?.name);
+      
+      // Step 1: get the client record
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('id, user_id')
+        .eq('user_id', user!.id)
+        .single();
+      
+      if (clientError || !clientData) {
+        console.error('[sendCompletionMessage] Client lookup failed:', clientError);
+        return;
+      }
+      console.log('[sendCompletionMessage] client id:', clientData.id);
 
-  const completedDays = progress.filter(p => p.completed).length;
-  const progressPercent = Math.round((completedDays / challenge.duration_days) * 100);
-  const todayStr = new Date().toISOString().split('T')[0];
+      // Step 2: get active coach link
+      const { data: linkData, error: linkError } = await supabase
+        .from('coach_client_links')
+        .select('coach_id')
+        .eq('client_id', clientData.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+      
+      if (linkError || !linkData) {
+        console.error('[sendCompletionMessage] Link lookup failed:', linkError, 'data:', linkData);
+        return;
+      }
+      console.log('[sendCompletionMessage] coach_id:', linkData.coach_id);
+
+      // Step 3: get coach user_id
+      const { data: coachData, error: coachError } = await supabase
+        .from('coaches')
+        .select('user_id')
+        .eq('id', linkData.coach_id)
+        .single();
+      
+      if (coachError || !coachData) {
+        console.error('[sendCompletionMessage] Coach lookup failed:', coachError);
+        return;
+      }
+      console.log('[sendCompletionMessage] coach user_id:', coachData.user_id);
+
+      // Step 4: send the message
+      const payload = {
+        sender_id: clientData.user_id,
+        recipient_id: coachData.user_id,
+        content: JSON.stringify({
+          type: 'challenge_completed',
+          title: 'Client finished this task',
+          taskName: task.name || 'Task',
+          completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          taskDescription: task.description || '',
+          focusType: task.focus_type || '',
+          intensity: task.intensity || '',
+        }),
+        read: false,
+        ai_generated: false,
+      };
+
+      const { error: insertError } = await supabase.from('messages').insert(payload);
+      
+      if (insertError) {
+        console.error('[sendCompletionMessage] Insert FAILED:', insertError);
+      } else {
+        console.log('[sendCompletionMessage] ✅ Message sent successfully!');
+      }
+    } catch (error) {
+      console.error('[sendCompletionMessage] Exception:', error);
+    }
+  };
+
+  const toggleSubChallenge = async (sub: any) => {
+    try {
+      const newCompleted = !sub.completed;
+
+      if (timeoutRefs.current[sub.id]) {
+        clearTimeout(timeoutRefs.current[sub.id]);
+        delete timeoutRefs.current[sub.id];
+      }
+
+      setChallenge((prev: any) => {
+        if (!prev) return prev;
+        const updatedSubChallenges = prev.sub_challenges.map((s: any) => 
+          s.id === sub.id ? { ...s, completed: newCompleted } : s
+        );
+        return { ...prev, sub_challenges: updatedSubChallenges };
+      });
+      
+      const { data: cData } = await supabase.from('clients').select('id').eq('user_id', user!.id).single();
+      if (!cData) return;
+      await supabase.rpc('mark_sub_challenge', { p_sub_challenge_id: sub.id, p_client_id: cData.id, p_completed: newCompleted });
+
+      if (newCompleted) {
+        // Send immediately - no timer
+        sendCompletionMessage(sub);
+      }
+    } catch (e) { 
+      loadChallengeDetails(); 
+    }
+  };
+
+
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-slate-950 justify-center items-center">
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
+  if (!challenge) return null;
+
+  const completedCount = challenge.sub_challenges?.filter((s: any) => s.completed).length || 0;
+  const totalCount = challenge.sub_challenges?.length || 0;
+  const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  const missedCount = challenge.sub_challenges?.filter((s: any) => !s.completed && new Date(s.assigned_date) < now).length || 0;
+  const remainingCount = Math.max(0, totalCount - completedCount - missedCount);
+
+  const isEnded = challenge.status !== 'active' || new Date(challenge.end_date) < new Date(new Date().setHours(0,0,0,0));
+  const isFailed = isEnded && completedCount === 0;
+  const isCompleted = isEnded && completedCount > 0;
+
+  const groupedTasks: Record<string, any[]> = {};
+  if (challenge?.sub_challenges) {
+    challenge.sub_challenges.forEach((task: any) => {
+      const dateKey = new Date(task.assigned_date).toISOString().split('T')[0];
+      if (!groupedTasks[dateKey]) groupedTasks[dateKey] = [];
+      groupedTasks[dateKey].push(task);
+    });
+  }
+
+  const sortedDates = Object.keys(groupedTasks).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+  const todayKeyGlobal = new Date().toISOString().split('T')[0];
+  const todayDates = sortedDates.filter(d => d === todayKeyGlobal);
+  const upcomingDates = sortedDates.filter(d => d > todayKeyGlobal);
+  const previousDates = sortedDates.filter(d => d < todayKeyGlobal);
+
+  const todayTasks = groupedTasks[todayKeyGlobal] || [];
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
-        <SafeAreaView style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16 }}>
-                <TouchableOpacity 
-                    onPress={() => router.back()} 
-                    style={{ width: 40, height: 40, backgroundColor: '#0f172a', borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b' }}
-                >
-                    <ChevronLeft size={20} color="white" />
-                </TouchableOpacity>
-                <Text style={{ color: 'white', fontWeight: '900', fontSize: 18 }}>Protocol Tracker</Text>
-                <View style={{ width: 40 }} />
+    <View className="flex-1 bg-slate-950">
+      {/* Header with Title */}
+      <View className="px-6 pt-16 pb-6 flex-row items-center justify-between bg-slate-950 border-b border-slate-900">
+        <View className="flex-row items-center gap-4">
+          <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
+            <ArrowLeft size={20} color="white" />
+          </TouchableOpacity>
+          <View>
+            <Text className="text-slate-500 text-xs font-black uppercase tracking-widest">Protocol Tracker</Text>
+            <Text className="text-white text-lg font-black">{challenge.name}</Text>
+          </View>
+        </View>
+        {isFailed ? (
+          <View className="px-3 py-1.5 bg-red-950/50 rounded-full border border-red-900/50">
+            <Text className="text-red-500 text-xs font-semibold">⚠️ Failed Plan</Text>
+          </View>
+        ) : isCompleted ? (
+          <View className="px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+            <Text className="text-emerald-500 text-xs font-semibold">✅ Completed Plan</Text>
+          </View>
+        ) : (
+          <View className="px-3 py-1.5 bg-blue-500/10 rounded-full border border-blue-500/20">
+            <Text className="text-blue-500 text-xs font-semibold">Active Challenge</Text>
+          </View>
+        )}
+      </View>
+
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        {challenge.description && (
+          <View className="mx-6 mt-6">
+            <Text className="text-slate-500 text-sm font-medium leading-5">{challenge.description}</Text>
+          </View>
+        )}
+
+        {/* Performance Overview */}
+        <MotiView 
+          from={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mx-6 mt-6 bg-slate-900 p-6 rounded-[32px] border border-slate-800"
+        >
+          <View className="flex-row justify-between items-center mb-6">
+            <View className={`px-3 py-1 rounded-full border ${isFailed ? 'bg-red-950/30 border-red-900/50' : 'bg-blue-600/10 border-blue-500/20'}`}>
+              <Text className={`${isFailed ? 'text-red-500' : 'text-blue-400'} text-[10px] font-bold uppercase tracking-widest`}>
+                {isFailed ? 'Failed Phase' : 'Active Phase'}
+              </Text>
             </View>
+            <View className="flex-row items-center gap-2">
+              <Calendar size={14} color="#64748B" />
+              <Text className="text-slate-500 text-xs font-medium">Until {new Date(challenge.end_date).toLocaleDateString()}</Text>
+            </View>
+          </View>
 
-            <ScrollView 
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-              showsVerticalScrollIndicator={false}
-            >
-                {/* Status Dashboard */}
-                <View style={{ backgroundColor: '#2563eb', borderRadius: 32, padding: 24, marginBottom: 32, marginTop: 16 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ color: '#ffffff99', fontWeight: '900', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 }}>Active Mission</Text>
-                            <Text style={{ color: 'white', fontSize: 20, fontWeight: '900' }}>{challenge.name}</Text>
-                        </View>
-                        <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: '#ffffff33', alignItems: 'center', justifyContent: 'center' }}>
-                            <Zap size={20} color="white" />
-                        </View>
-                    </View>
-                    
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                        <View>
-                            <Text style={{ color: 'white', fontSize: 32, fontWeight: '900' }}>{progressPercent}%</Text>
-                            <Text style={{ color: '#ffffffb3', fontWeight: 'bold', fontSize: 12 }}>Completion Rate</Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>{completedDays}/{challenge.duration_days}</Text>
-                            <Text style={{ color: '#ffffffb3', fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Days Secured</Text>
-                        </View>
-                    </View>
+          <View className="flex-row items-baseline gap-2 mb-2">
+            <Text className={`text-4xl font-bold ${isFailed ? 'text-red-500' : 'text-white'}`}>{completionRate}%</Text>
+            <Text className="text-slate-500 font-medium">{isFailed ? 'Total Compliance' : 'Compliance'}</Text>
+          </View>
+
+          <View className={`h-2.5 rounded-full overflow-hidden border mb-6 ${isFailed ? 'bg-red-950/30 border-red-900/30' : 'bg-slate-950 border-slate-800'}`}>
+             <View className={`h-full rounded-full ${isFailed ? 'bg-red-900/40' : 'bg-blue-500'}`} style={{ width: isFailed ? '100%' : `${completionRate}%` }} />
+          </View>
+
+          <View className="flex-row items-center justify-between bg-slate-950/50 p-4 rounded-3xl border border-white/5">
+              <View className="items-center flex-1 border-r border-white/5">
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Done</Text>
+                  <Text className={`text-xl font-black ${completedCount > 0 ? 'text-emerald-500' : 'text-white'}`}>{completedCount}</Text>
+              </View>
+              <View className="items-center flex-1 border-r border-white/5">
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Missed</Text>
+                  <Text className={`text-xl font-black ${missedCount > 0 ? (isFailed ? 'text-red-500' : 'text-amber-500') : 'text-white'}`}>{missedCount}</Text>
+              </View>
+              <View className="items-center flex-1">
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Left</Text>
+                  <Text className="text-white text-xl font-black">{remainingCount}</Text>
+              </View>
+          </View>
+        </MotiView>
+
+        {/* Task List / Daily Breakdown */}
+        {(!isFailed && !isCompleted) ? (
+          <View className="mt-10 px-6">
+            <Text className="text-white text-lg font-bold mb-6">Today's Tasks</Text>
+            {todayTasks.length === 0 ? (
+                <View className="p-6 bg-slate-900/50 border border-slate-800 rounded-3xl items-center">
+                    <Text className="text-slate-500 font-medium">No tasks assigned for today.</Text>
                 </View>
-
-                {/* Today's Sync */}
-                <View style={{ marginBottom: 32 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                        <View style={{ width: 4, height: 16, backgroundColor: '#2563eb', borderRadius: 999 }} />
-                        <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Daily Synchronization</Text>
-                    </View>
-
-                    <View style={{ backgroundColor: '#0f172a66', borderWidth: 1, borderColor: '#1e293b', borderRadius: 32, padding: 24 }}>
-                        <Text style={{ color: '#64748b', fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>
-                            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                        </Text>
-
-                        {todayProgress ? (
-                            <View style={{ backgroundColor: '#10b9811a', borderWidth: 1, borderColor: '#10b98133', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
-                                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#10b981', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                                    <Check size={16} color="white" />
-                                </View>
-                                <Text style={{ color: '#10b981', fontWeight: '900', fontSize: 14 }}>Protocol synchronized for this cycle.</Text>
+            ) : (
+                <View className="gap-3">
+                    {todayTasks.map((sub: any) => (
+                        <TouchableOpacity 
+                            key={sub.id}
+                            onPress={() => toggleSubChallenge(sub)}
+                            style={{ 
+                                flexDirection: 'row', 
+                                alignItems: 'flex-start', 
+                                padding: 20, 
+                                borderRadius: 32, 
+                                borderWidth: 2, 
+                                backgroundColor: sub.completed ? '#0f172a' : '#0f172a4d',
+                                borderColor: sub.completed ? '#1e293b' : '#0f172a',
+                                opacity: sub.completed ? 0.6 : 1
+                            }}
+                        >
+                            <View style={{ marginRight: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+                                {getFocusIcon(sub.focus_type, sub.completed)}
                             </View>
-                        ) : (
-                            <View style={{ backgroundColor: '#f59e0b1a', borderWidth: 1, borderColor: '#f59e0b33', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
-                                <Clock size={16} color="#F59E0B" style={{ marginRight: 12 }} />
-                                <Text style={{ color: '#f59e0b', fontWeight: '900', fontSize: 14 }}>Awaiting daily log transmission.</Text>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '900', color: sub.completed ? '#64748b' : 'white', textDecorationLine: sub.completed ? 'line-through' : 'none' }}>{sub.name}</Text>
+                                <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
+                                    {sub.focus_type} • {sub.intensity}
+                                </Text>
                             </View>
-                        )}
-
-                        <Text style={{ color: '#475569', fontWeight: '900', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, paddingHorizontal: 4 }}>Mission Notes</Text>
-                        <TextInput 
-                            style={{ backgroundColor: '#020617', padding: 16, borderRadius: 16, color: 'white', fontWeight: '500', borderWidth: 1, borderColor: '#1e293b', marginBottom: 24, minHeight: 100, textAlignVertical: 'top' }}
-                            multiline
-                            placeholder="Add mission context..."
-                            placeholderTextColor="#1e293b"
-                            value={notes}
-                            onChangeText={setNotes}
-                        />
-
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <TouchableOpacity 
-                                onPress={() => handleMarkProgress(false)}
-                                style={{ flex: 1, padding: 16, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#1e293b', borderRadius: 16, alignItems: 'center' }}
-                            >
-                                <Text style={{ color: '#94a3b8', fontWeight: 'bold' }}>Inhibit</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={() => handleMarkProgress(true)}
-                                style={{ flex: 2, padding: 16, backgroundColor: '#2563eb', borderRadius: 16, alignItems: 'center' }}
-                            >
-                                <Text style={{ color: 'white', fontWeight: '900' }}>Synchronize</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                            <View style={{ paddingTop: 4 }}>
+                                {sub.completed ? (
+                                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
+                                        <CheckCircle size={16} color="white" />
+                                    </View>
+                                ) : (
+                                    <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Info size={12} color="#1E293B" />
+                                    </View>
+                                )}
+                            </View>
+                        </TouchableOpacity>
+                    ))}
                 </View>
+            )}
+          </View>
+        ) : (
+          <View className="mt-10 px-6">
+             <Text className="text-white text-lg font-bold mb-6">Daily Breakdown</Text>
+             
+             {todayDates.length > 0 && (
+               <View className="mb-8">
+                 <Text className="text-blue-400 text-sm font-black uppercase tracking-widest mb-3 ml-2">Today</Text>
+                 {todayDates.map((dateStr: string, index: number) => (
+                   <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                 ))}
+               </View>
+             )}
 
-                {/* Performance History */}
-                <View style={{ marginBottom: 48 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                        <View style={{ width: 4, height: 16, backgroundColor: '#2563eb', borderRadius: 999 }} />
-                        <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Memory Matrix</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                        {Array.from({ length: challenge.duration_days }, (_, i) => {
-                            const date = new Date(challenge.start_date);
-                            date.setDate(date.getDate() + i);
-                            const ds = date.toISOString().split('T')[0];
-                            const done = progress.find(p => p.date === ds)?.completed;
-                            const isT = ds === todayStr;
-                            
-                            return (
-                                <View 
-                                    key={i} 
-                                    style={{ 
-                                        width: 44, 
-                                        height: 44, 
-                                        borderRadius: 12, 
-                                        alignItems: 'center', 
-                                        justifyContent: 'center', 
-                                        borderWidth: isT ? 2 : 1,
-                                        borderColor: isT ? '#3b82f6' : (done ? '#10b981' : '#1e293b'),
-                                        backgroundColor: done ? '#10b981' : '#0f172a',
-                                        opacity: (done || isT) ? 1 : 0.4
-                                    }}
-                                >
-                                    <Text style={{ fontSize: 10, fontWeight: '900', color: done ? 'white' : '#64748b' }}>{i + 1}</Text>
-                                    {done && (
-                                        <View style={{ position: 'absolute', bottom: 4, right: 4 }}>
-                                            <Check size={8} color="white" />
-                                        </View>
-                                    )}
-                                </View>
-                            );
-                        })}
-                    </View>
-                </View>
-            </ScrollView>
-        </SafeAreaView>
+             {upcomingDates.length > 0 && (
+               <View className="mb-8">
+                 <Text className="text-slate-500 text-sm font-black uppercase tracking-widest mb-3 ml-2">Upcoming</Text>
+                 {upcomingDates.map((dateStr: string, index: number) => (
+                   <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                 ))}
+               </View>
+             )}
 
-        <FeedbackModal
-          visible={showChallengeSuccess}
-          onClose={() => {
-            setShowChallengeSuccess(false);
-            router.back();
-          }}
-          variant="success"
-          icon={<Zap size={60} color="#10B981" />}
-          title="Objective Secured"
-          body={`Your progress for "${challenge?.name}" has been synchronized.`}
-          statLabel="Mission Progress"
-          statIcon={<TrendingUp size={22} color="#10B981" />}
-          stat={`${progressPercent}%`}
-          ctaLabel="Continue Mission"
-        />
+             {previousDates.length > 0 && (
+               <View className="mb-8">
+                 <Text className="text-slate-500 text-sm font-black uppercase tracking-widest mb-3 ml-2">Previous</Text>
+                 {previousDates.map((dateStr: string, index: number) => (
+                   <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                 ))}
+               </View>
+             )}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
+}
+
+const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
+  const [isExpanded, setIsExpanded] = useState(() => {
+    const todayKey = new Date().toISOString().split('T')[0];
+    return dateStr === todayKey;
+  });
+  const completedCount = tasks.filter((t: any) => t.completed).length;
+  const totalCount = tasks.length;
+  
+  // Adding timezone offset to prevent day shifting backwards
+  const dateObj = new Date(dateStr);
+  const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
+  const localDate = new Date(dateObj.getTime() + userTimezoneOffset);
+  const formattedDate = localDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  const todayKey = new Date().toISOString().split('T')[0];
+  const isToday = dateStr === todayKey;
+  const isPastDate = dateStr < todayKey;
+  const isFutureDate = dateStr > todayKey;
+
+  let tagBg = 'bg-slate-950 border-slate-800';
+  let tagText = 'text-slate-300';
+  
+  if (!isFutureDate) {
+    if (completedCount > 0) {
+      tagBg = 'bg-emerald-500/10 border-emerald-500/20';
+      tagText = 'text-emerald-500';
+    } else {
+      tagBg = 'bg-amber-500/10 border-amber-500/20';
+      tagText = 'text-amber-500';
+    }
+  }
+
+  return (
+    <View className="mb-[7px]">
+      <TouchableOpacity 
+        activeOpacity={0.7} 
+        onPress={() => setIsExpanded(!isExpanded)}
+        className={`flex-row items-center p-4 rounded-2xl border ${isToday ? 'bg-blue-950/20 border-blue-500/50' : 'bg-slate-900/50 border-slate-800'} ${isExpanded ? 'mb-4' : ''}`}
+      >
+        <View className="flex-row items-center gap-3">
+          <View className="w-8 h-8 rounded-full bg-slate-800 items-center justify-center">
+            {isExpanded ? <ChevronDown size={16} color="#94A3B8" /> : <ChevronRight size={16} color="#94A3B8" />}
+          </View>
+          <Text className={`font-black text-xl tracking-tight ${isToday ? 'text-blue-400' : 'text-white'}`}>{isToday ? 'Today, ' : ''}{formattedDate}</Text>
+          <View className={`px-3 py-1 rounded-full border ml-1 ${tagBg} ${isPastDate ? 'opacity-50' : ''}`}>
+             <Text className={`text-sm font-bold ${tagText}`}>{completedCount}/{totalCount} Done</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {isExpanded && (
+        <View>
+          {tasks.map((task: any, idx: number) => (
+             <TaskCard key={task.id} task={task} index={idx} isFailed={isFailed} isCompleted={isCompleted} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+const TaskCard = ({ task, index, isFailed, isCompleted }: { task: any, index: number, isFailed?: boolean, isCompleted?: boolean }) => {
+  const getIcon = (type: string) => {
+    switch (type?.toLowerCase()) {
+      case 'training': return <Dumbbell size={24} color="#3B82F6" />;
+      case 'nutrition': return <Apple size={24} color="#10B981" />;
+      case 'recovery': return <Moon size={24} color="#8B5CF6" />;
+      default: return <Zap size={24} color="#F59E0B" />;
+    }
+  };
+
+  const isPast = new Date(task.assigned_date) < new Date(new Date().setHours(0,0,0,0));
+
+  return (
+    <MotiView
+      from={{ opacity: 0, translateX: -20 }}
+      animate={{ opacity: 1, translateX: 0 }}
+      transition={{ delay: index * 100 }}
+      className={`mb-4 p-5 rounded-[24px] border ${isFailed || (isCompleted && !task.completed) || isPast ? 'bg-slate-900/50 border-slate-800/50 opacity-50' : 'bg-slate-900 border-slate-800'}`}
+    >
+      <View className="flex-row justify-between items-center mb-4">
+        <View className="flex-row items-center gap-3">
+          <View className="w-10 h-10 bg-slate-950 rounded-xl items-center justify-center border border-slate-800">
+             {getIcon(task.focus_type)}
+          </View>
+          <View>
+            <Text className="text-white font-bold text-base">{task.name}</Text>
+            <Text className="text-slate-500 text-xs font-medium capitalize">{task.focus_type} • {task.intensity}</Text>
+          </View>
+        </View>
+        {isFailed ? (
+          <View className="bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
+             <Text className="text-red-500 text-[10px] font-bold uppercase">Unfulfilled</Text>
+          </View>
+        ) : task.completed ? (
+          <View className="bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+             <Text className="text-emerald-500 text-[10px] font-bold uppercase">Success</Text>
+          </View>
+        ) : isPast ? (
+            <View className="bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
+                <Text className="text-red-500 text-[10px] font-bold uppercase">Missed</Text>
+            </View>
+        ) : (
+          <View className="bg-slate-800 px-3 py-1 rounded-full">
+             <Text className="text-slate-400 text-[10px] font-bold uppercase">Pending</Text>
+          </View>
+        )}
+      </View>
+
+      <View className="pl-[52px]">
+         <Text className="text-slate-400 text-sm leading-5 mb-4" numberOfLines={2}>{task.description}</Text>
+         <View className="flex-row justify-between items-center pt-4 border-t border-slate-950/50">
+           <View className="flex-row items-center gap-2">
+              <Clock size={12} color="#475569" />
+              <Text className="text-slate-500 text-[10px] font-bold uppercase">
+                {new Date(task.assigned_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              </Text>
+           </View>
+         </View>
+      </View>
+    </MotiView>
+  );
+};
+
+function getFocusIcon(type: string, completed: boolean) {
+  const color = completed ? '#3b82f6' : '#94a3b8';
+  switch (type?.toLowerCase()) {
+    case 'training': return <Dumbbell size={24} color={color} />;
+    case 'nutrition': return <Apple size={24} color={color} />;
+    case 'recovery': return <Moon size={24} color={color} />;
+    default: return <Zap size={24} color={color} />;
+  }
 }

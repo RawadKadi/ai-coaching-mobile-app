@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Check, Trash2, Edit3, Sparkles, Calendar, Zap, Dumbbell, Apple, Moon } from 'lucide-react-native';
+import { ArrowLeft, Check, Trash2, Edit3, Sparkles, Calendar, Zap, Dumbbell, Apple, Moon, X } from 'lucide-react-native';
 import { SubChallengeTemplate } from '@/lib/ai-challenge-service';
 
 const formatDateSafe = (dateStr: string) => {
@@ -249,20 +249,18 @@ export default function ReviewChallengesScreen() {
                                               </View>
                                               <Text className="text-white font-bold text-base">{task.name}</Text>
                                           </View>
-                                          <View className="flex-row gap-3">
-                                              <TouchableOpacity onPress={() => setEditingId(task.index)}>
-                                                  <Edit3 size={18} color="#64748B" />
-                                              </TouchableOpacity>
-                                              <TouchableOpacity onPress={() => handleDelete(task.index)}>
-                                                  <Trash2 size={18} color="#EF4444" />
-                                              </TouchableOpacity>
-                                          </View>
+                                          <TouchableOpacity onPress={() => handleDelete(task.index)}>
+                                              <Trash2 size={18} color="#EF4444" />
+                                          </TouchableOpacity>
                                       </View>
                                       <Text className="text-slate-400 text-sm leading-5" numberOfLines={2}>{task.description}</Text>
-                                      <View className="flex-row gap-2 mt-4">
-                                          <View className="bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
+                                      <View className="flex-row justify-between items-end mt-4">
+                                          <View className="bg-slate-950 px-2 py-1 rounded-md border border-slate-800 self-start">
                                               <Text className="text-slate-500 text-[10px] font-bold uppercase">{task.intensity}</Text>
                                           </View>
+                                          <TouchableOpacity onPress={() => setEditingId(task.index)}>
+                                              <Edit3 size={18} color="#64748B" />
+                                          </TouchableOpacity>
                                       </View>
                                   </MotiView>
                               ))}
@@ -290,6 +288,71 @@ export default function ReviewChallengesScreen() {
               )}
           </TouchableOpacity>
       </View>
+      {/* Edit Modal */}
+      <Modal visible={editingId !== null} transparent animationType="slide">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 bg-black/80 justify-end">
+          <View className="bg-slate-900 rounded-t-3xl border-t border-slate-800 max-h-[80%]">
+            {editingId !== null && challenges[editingId] && (
+              <>
+                <View className="p-6 border-b border-slate-800 flex-row justify-between items-center">
+                  <Text className="text-white text-xl font-bold">Edit Task</Text>
+                  <TouchableOpacity onPress={() => setEditingId(null)} className="p-2 bg-slate-800 rounded-full">
+                    <X size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView className="p-6" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                  <View className="mb-6">
+                    <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Task Name</Text>
+                    <TextInput
+                      className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white font-bold"
+                      value={challenges[editingId].name}
+                      onChangeText={(val) => handleEdit(editingId, 'name', val)}
+                      placeholder="Task Name"
+                      placeholderTextColor="#475569"
+                    />
+                  </View>
+
+                  <View className="mb-6">
+                    <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Description</Text>
+                    <TextInput
+                      className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white min-h-[100px]"
+                      value={challenges[editingId].description}
+                      onChangeText={(val) => handleEdit(editingId, 'description', val)}
+                      placeholder="Task Details"
+                      placeholderTextColor="#475569"
+                      multiline
+                      textAlignVertical="top"
+                    />
+                  </View>
+
+                  <View className="mb-6">
+                    <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Intensity</Text>
+                    <View className="flex-row gap-3">
+                      {(['low', 'medium', 'high'] as const).map(int => (
+                        <TouchableOpacity
+                          key={int}
+                          onPress={() => handleEdit(editingId, 'intensity', int)}
+                          className={`flex-1 py-3 rounded-xl border items-center ${challenges[editingId].intensity === int ? 'bg-blue-600 border-blue-500' : 'bg-slate-950 border-slate-800'}`}
+                        >
+                          <Text className={`font-bold capitalize ${challenges[editingId].intensity === int ? 'text-white' : 'text-slate-400'}`}>{int}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => setEditingId(null)}
+                    className="bg-blue-600 rounded-2xl py-4 items-center mt-2 mb-10"
+                  >
+                    <Text className="text-white font-bold text-lg">Save Changes</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
