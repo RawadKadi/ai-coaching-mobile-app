@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   SafeAreaView,
+  Pressable,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -119,13 +120,21 @@ export default function SignUpScreen() {
               <View>
                 {/* User Type Selection */}
                 {!inviteParam && (
-                  <View className="flex-row bg-slate-900/50 p-1.5 rounded-[24px] border border-slate-900 mb-10">
-                    <TouchableOpacity onPress={() => setRole('client')} className={`flex-1 py-3 items-center rounded-[18px] ${role === 'client' ? 'bg-blue-600 shadow-lg' : ''}`}>
-                      <Text className={`font-black text-[10px] uppercase tracking-widest ${role === 'client' ? 'text-white' : 'text-slate-500'}`}>Client</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setRole('coach')} className={`flex-1 py-3 items-center rounded-[18px] ${role === 'coach' ? 'bg-blue-600 shadow-lg' : ''}`}>
-                      <Text className={`font-black text-[10px] uppercase tracking-widest ${role === 'coach' ? 'text-white' : 'text-slate-500'}`}>Coach</Text>
-                    </TouchableOpacity>
+                  <View className="flex-row bg-slate-900/50 rounded-[28px] p-1.5 border border-white/5 mb-10">
+                    <Pressable
+                      onPress={() => setRole('client')}
+                      className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${role === 'client' ? 'bg-slate-800' : ''}`}
+                      style={role === 'client' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
+                    >
+                      <Text className={`font-black text-sm uppercase tracking-widest ${role === 'client' ? 'text-white' : 'text-slate-500'}`}>Client</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setRole('coach')}
+                      className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${role === 'coach' ? 'bg-slate-800' : ''}`}
+                      style={role === 'coach' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
+                    >
+                      <Text className={`font-black text-sm uppercase tracking-widest ${role === 'coach' ? 'text-white' : 'text-slate-500'}`}>Coach</Text>
+                    </Pressable>
                   </View>
                 )}
 
@@ -134,11 +143,13 @@ export default function SignUpScreen() {
                 <InputField icon={<Lock size={20} color="#64748B" />} placeholder="Password" value={password} onChange={setPassword} secure />
                 <InputField icon={<Lock size={20} color="#64748B" />} placeholder="Confirm Password" value={confirmPassword} onChange={setConfirmPassword} secure />
 
-                {role === 'client' && !inviteCode && (
-                  <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <InputField icon={<Shield size={20} color="#64748B" />} placeholder="Invite Code (Optional)" value={inviteCode} onChange={(t: string) => { setInviteCode(t); if (t.length >= 8) validateInvite(t); }} />
-                  </MotiView>
-                )}
+                <AnimatePresence>
+                  {role === 'client' && !inviteCode && (
+                    <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <InputField icon={<Shield size={20} color="#64748B" />} placeholder="Invite Code (Optional)" value={inviteCode} onChange={(t: string) => { setInviteCode(t); if (t.length >= 8) validateInvite(t); }} />
+                    </MotiView>
+                  )}
+                </AnimatePresence>
 
                 <TouchableOpacity 
                    className="mt-8 bg-blue-600 h-20 rounded-[36px] items-center justify-center flex-row gap-3 shadow-2xl shadow-blue-500/20 border-b-4 border-blue-700"

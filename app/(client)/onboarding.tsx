@@ -1,266 +1,315 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
+  Animated,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Check, ChevronRight, ChevronLeft, Shield, Zap, Flame, User, Activity, Bot } from 'lucide-react-native';
+import { ChevronRight, ChevronLeft, Bot } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Formik, useFormikContext } from 'formik';
+
+// Modular Step Components
+import Step1 from '@/components/onboarding/client/Step1';
+import Step2 from '@/components/onboarding/client/Step2';
+import Step3 from '@/components/onboarding/client/Step3';
+import Step4 from '@/components/onboarding/client/Step4';
+
+// Auto-persist Formik values to AsyncStorage
+const PersistFormikValues = () => {
+  const { values } = useFormikContext<any>();
+  useEffect(() => {
+    if (values) {
+      AsyncStorage.setItem('@client_onboarding_form', JSON.stringify(values)).catch(() => {});
+    }
+  }, [values]);
+  return null;
+};
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { user, refreshProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [initialValues, setInitialValues] = useState<any>(null);
 
-  const [formData, setFormData] = useState({
-    date_of_birth: '',
-    gender: '',
-    height_cm: '',
-    goal: '',
-    experience_level: '',
-    dietary_restrictions: [] as string[],
-  });
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loadPersistedOnboarding = async () => {
+    Animated.timing(progressAnim, {
+      toValue: step / 4,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [step]);
+
+  useEffect(() => {
+    const load = async () => {
       try {
         const savedStep = await AsyncStorage.getItem('@client_onboarding_step');
         const savedForm = await AsyncStorage.getItem('@client_onboarding_form');
-        if (savedStep) setStep(parseInt(savedStep, 10));
-        if (savedForm) setFormData(JSON.parse(savedForm));
-      } catch (e) {
-        console.error('Failed to load onboarding progress:', e);
+
+        const defaults = {
+          date_of_birth: '',
+          gender: '',
+          height_cm: '',
+          goal: '',
+          experience_level: '',
+          dietary_restrictions: [] as string[],
+        };
+
+        if (savedStep) {
+          const p = parseInt(savedStep, 10);
+          setStep(p >= 1 && p <= 4 ? p : 1);
+        }
+
+        if (savedForm) {
+          try {
+            const parsed = JSON.parse(savedForm);
+            setInitialValues({
+              date_of_birth: parsed.date_of_birth || '',
+              gender: parsed.gender || '',
+              height_cm: parsed.height_cm || '',
+              goal: parsed.goal || '',
+              experience_level: parsed.experience_level || '',
+              dietary_restrictions: Array.isArray(parsed.dietary_restrictions)
+                ? parsed.dietary_restrictions
+                : [],
+            });
+          } catch {
+            setInitialValues(defaults);
+          }
+        } else {
+          setInitialValues(defaults);
+        }
+      } catch {
+        setInitialValues({
+          date_of_birth: '',
+          gender: '',
+          height_cm: '',
+          goal: '',
+          experience_level: '',
+          dietary_restrictions: [] as string[],
+        });
       }
     };
-    loadPersistedOnboarding();
+    load();
   }, []);
 
-  const updateForm = (key: string, value: any) => {
-    setFormData((prev) => {
-      const updated = { ...prev, [key]: value };
-      AsyncStorage.setItem('@client_onboarding_form', JSON.stringify(updated)).catch(e => console.error(e));
-      return updated;
-    });
-  };
-
-  const handleNext = () => {
-    const isStepValid = () => {
-        if (step === 1) return formData.date_of_birth && formData.gender && formData.height_cm;
-        if (step === 2) return formData.goal;
-        if (step === 3) return formData.experience_level;
-        return true;
-    };
-
-    if (!isStepValid()) {
-        Alert.alert('Incomplete', 'Please fill in all the details for this step.');
-        return;
-    }
-
+  const goNext = (isDisabled: boolean, submitForm: () => void) => {
+    if (isDisabled) return;
     if (step < 4) {
-      const nextStep = step + 1;
-      setStep(nextStep);
-      AsyncStorage.setItem('@client_onboarding_step', nextStep.toString()).catch(e => console.error(e));
+      const next = step + 1;
+      setStep(next);
+      AsyncStorage.setItem('@client_onboarding_step', String(next)).catch(() => {});
     } else {
-      handleSubmit();
+      submitForm();
     }
   };
 
-  const handleBack = () => {
+  const goBack = () => {
     if (step > 1) {
-      const prevStep = step - 1;
-      setStep(prevStep);
-      AsyncStorage.setItem('@client_onboarding_step', prevStep.toString()).catch(e => console.error(e));
+      const prev = step - 1;
+      setStep(prev);
+      AsyncStorage.setItem('@client_onboarding_step', String(prev)).catch(() => {});
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any) => {
     if (!user) return;
     setLoading(true);
     try {
-      const { error: clientError } = await supabase.from('clients').update({
-        date_of_birth: formData.date_of_birth || null,
-        gender: formData.gender,
-        height_cm: parseFloat(formData.height_cm) || null,
-        goal: formData.goal,
-        experience_level: formData.experience_level,
-        dietary_restrictions: formData.dietary_restrictions,
-      }).eq('user_id', user.id);
+      const { error: clientError } = await supabase
+        .from('clients')
+        .update({
+          date_of_birth: values.date_of_birth || null,
+          gender: values.gender,
+          height_cm: parseFloat(values.height_cm) || null,
+          goal: values.goal,
+          experience_level: values.experience_level,
+          dietary_restrictions: values.dietary_restrictions,
+        })
+        .eq('user_id', user.id);
       if (clientError) throw clientError;
 
-      const { data: clientData } = await supabase.from('clients').select('id').eq('user_id', user.id).single();
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
       if (clientData) {
         const habits = [
-            { name: 'Hydration', description: 'Drink enough water daily', target_value: 2000, unit: 'ml', verification_type: 'none', client_id: clientData.id, is_active: true },
-            { name: 'Daily Steps', description: 'Walk at least 8,000 steps', target_value: 8000, unit: 'steps', verification_type: 'none', client_id: clientData.id, is_active: true }
+          { name: 'Hydration', description: 'Drink enough water daily', target_value: 2000, unit: 'ml', verification_type: 'none', client_id: clientData.id, is_active: true },
+          { name: 'Daily Steps', description: 'Walk at least 8,000 steps', target_value: 8000, unit: 'steps', verification_type: 'none', client_id: clientData.id, is_active: true },
         ];
         await supabase.from('habits').insert(habits);
       }
 
       await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', user.id);
-      
-      // Clean up local cache
-      await AsyncStorage.removeItem('@client_onboarding_step');
-      await AsyncStorage.removeItem('@client_onboarding_form');
-
+      await AsyncStorage.multiRemove(['@client_onboarding_step', '@client_onboarding_form']);
       await refreshProfile();
       router.replace('/(client)/(tabs)');
-    } catch (error: any) { Alert.alert('Error', error.message); } finally { setLoading(false); }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  if (!initialValues) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
   return (
-    <View className="flex-1 bg-slate-950">
-      <SafeAreaView className="flex-1">
-        <View className="px-6 pt-10 pb-6 flex-row items-center justify-between">
-            <View>
-                <Text className="text-white text-3xl font-black">About You</Text>
-                <Text className="text-slate-500 font-bold text-xs uppercase tracking-[4px] mt-1">Let's get set up</Text>
-            </View>
-            <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center border border-blue-600/20">
-                <Bot size={24} color="#3B82F6" />
-            </View>
-        </View>
+    <Formik initialValues={initialValues} onSubmit={handleSubmit}>
+      {({ values, setFieldValue, submitForm }) => {
+        const isDisabled =
+          loading ||
+          (step === 1 && (!values.date_of_birth || !values.gender || !values.height_cm)) ||
+          (step === 2 && !values.goal) ||
+          (step === 3 && !values.experience_level);
 
-        <View className="h-1 bg-slate-900 mx-6 rounded-full overflow-hidden mb-8">
-            <MotiView 
-                animate={{ width: `${(step / 4) * 100}%` }}
-                className="h-full bg-blue-600 shadow-sm shadow-blue-500"
-            />
-        </View>
+        const clearDraft = () => {
+          Alert.alert('Reset Draft', 'Clear all progress and start fresh?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Clear',
+              style: 'destructive',
+              onPress: async () => {
+                await AsyncStorage.multiRemove(['@client_onboarding_step', '@client_onboarding_form']);
+                setStep(1);
+                setFieldValue('date_of_birth', '');
+                setFieldValue('gender', '');
+                setFieldValue('height_cm', '');
+                setFieldValue('goal', '');
+                setFieldValue('experience_level', '');
+                setFieldValue('dietary_restrictions', []);
+              },
+            },
+          ]);
+        };
 
-        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140 }}>
-          <AnimatePresence mode="wait">
-            <MotiView
-                key={step}
-                from={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ type: 'timing', duration: 400 }}
-            >
-                {step === 1 && (
-                    <View className="gap-8">
-                        <SectionLabel label="Step 1" desc="Basic Info" />
-                        <View className="gap-6">
-                            <InputGroup label="Birthday" value={formData.date_of_birth} onChange={(v: string) => updateForm('date_of_birth', v)} placeholder="YYYY-MM-DD" />
-                            <View>
-                                <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-4 px-1">Gender</Text>
-                                <View className="flex-row gap-3">
-                                    {['Male', 'Female', 'Other'].map(g => (
-                                        <TouchableOpacity key={g} onPress={() => updateForm('gender', g)} className={`flex-1 py-5 items-center rounded-[24px] border-2 ${formData.gender === g ? 'bg-blue-600 border-blue-400' : 'bg-slate-900/50 border-slate-900'}`}>
-                                            <Text className={`font-black ${formData.gender === g ? 'text-white' : 'text-slate-500'}`}>{g}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-                            <InputGroup label="Height (CM)" value={formData.height_cm} onChange={(v: string) => updateForm('height_cm', v)} placeholder="e.g. 180" keyboardType="numeric" />
-                        </View>
-                    </View>
-                )}
+        return (
+          <View style={{ flex: 1, backgroundColor: '#020617' }}>
+            <SafeAreaView style={{ flex: 1 }}>
+              <PersistFormikValues />
 
-                {step === 2 && (
-                    <View className="gap-8">
-                        <SectionLabel label="Step 2" desc="What is your main goal?" />
-                        <View className="gap-4">
-                            <CardOption label="Lose Weight" desc="Burn fat and get leaner" icon={<Flame size={20} color="#E11D48" />} selected={formData.goal === 'Weight Loss'} onSelect={() => updateForm('goal', 'Weight Loss')} activeColor="#E11D48" />
-                            <CardOption label="Build Muscle" desc="Gain strength and size" icon={<Zap size={20} color="#F59E0B" />} selected={formData.goal === 'Muscle Gain'} onSelect={() => updateForm('goal', 'Muscle Gain')} activeColor="#F59E0B" />
-                            <CardOption label="Stay Fit" desc="Maintain weight and feel healthy" icon={<Activity size={20} color="#10B981" />} selected={formData.goal === 'Maintenance'} onSelect={() => updateForm('goal', 'Maintenance')} activeColor="#10B981" />
-                        </View>
-                    </View>
-                )}
-
-                {step === 3 && (
-                    <View className="gap-8">
-                        <SectionLabel label="Step 3" desc="What is your experience level?" />
-                        <View className="gap-4">
-                            <CardOption label="Beginner" desc="New to fitness or starting out" icon={<Shield size={20} color="#94A3B8" />} selected={formData.experience_level === 'Beginner'} onSelect={() => updateForm('experience_level', 'Beginner')} />
-                            <CardOption label="Intermediate" desc="Active and have some experience" icon={<Activity size={20} color="#94A3B8" />} selected={formData.experience_level === 'Intermediate'} onSelect={() => updateForm('experience_level', 'Intermediate')} />
-                            <CardOption label="Advanced" desc="Very active and experienced" icon={<Zap size={20} color="#3B82F6" />} selected={formData.experience_level === 'Advanced'} onSelect={() => updateForm('experience_level', 'Advanced')} activeColor="#3B82F6" />
-                        </View>
-                    </View>
-                )}
-
-                {step === 4 && (
-                    <View className="gap-8">
-                        <SectionLabel label="Step 4" desc="Any dietary preferences?" />
-                        <View className="gap-4">
-                            {[
-                                { key: 'Standard', label: 'No Restrictions', desc: 'Eat everything' },
-                                { key: 'Vegetarian', label: 'Vegetarian', desc: 'No meat or fish' },
-                                { key: 'Vegan', label: 'Vegan', desc: 'Plant-based only' },
-                                { key: 'Ketogenic', label: 'Keto', desc: 'Low carb, high fat' }
-                            ].map(item => {
-                                const active = formData.dietary_restrictions.includes(item.key);
-                                return <CardOption key={item.key} label={item.label} desc={item.desc} selected={active} onSelect={() => {
-                                    const cur = formData.dietary_restrictions;
-                                    updateForm('dietary_restrictions', active ? cur.filter(i => i !== item.key) : [...cur, item.key]);
-                                }} activeColor="#3B82F6" />;
-                            })}
-                        </View>
-                    </View>
-                )}
-            </MotiView>
-          </AnimatePresence>
-        </ScrollView>
-
-        <View className="absolute bottom-0 left-0 right-0 p-6 bg-slate-950/80 border-t border-slate-900/50 backdrop-blur-xl flex-row gap-4 items-center">
-            {step > 1 && (
-                <TouchableOpacity onPress={handleBack} className="w-16 h-16 bg-slate-900/50 rounded-[28px] items-center justify-center border border-slate-800">
-                    <ChevronLeft size={24} color="#475569" />
+              {/* Header */}
+              <View style={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View>
+                  <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '900' }}>About You</Text>
+                  <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 4, marginTop: 4 }}>
+                    Step {step} of 4
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={clearDraft}
+                  style={{ width: 48, height: 48, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)' }}
+                >
+                  <Bot size={22} color="#3B82F6" />
                 </TouchableOpacity>
-            )}
-            <TouchableOpacity 
-                onPress={handleNext} disabled={loading}
-                className={`flex-1 h-16 rounded-[28px] items-center justify-center flex-row gap-3 ${loading ? 'bg-slate-800' : 'bg-blue-600 shadow-2xl shadow-blue-500/40'}`}
-            >
-                {loading ? <ActivityIndicator color="white" /> : (
-                    <>
-                        <Text className="text-white font-black text-lg">{step === 4 ? 'Finish' : 'Next'}</Text>
-                        <ChevronRight size={20} color="white" />
-                    </>
+              </View>
+
+              {/* Progress bar */}
+              <View style={{ height: 4, backgroundColor: '#0F172A', marginHorizontal: 24, borderRadius: 4, overflow: 'hidden', marginBottom: 24 }}>
+                <Animated.View
+                  style={{
+                    height: '100%',
+                    backgroundColor: '#3B82F6',
+                    borderRadius: 4,
+                    width: progressAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%'],
+                    }),
+                  }}
+                />
+              </View>
+
+              {/* Step content */}
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 24, paddingBottom: 32 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {step === 1 && (
+                  <Step1
+                    formData={values}
+                    updateForm={(key, val) => setFieldValue(key, val)}
+                  />
                 )}
-            </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    </View>
+                {step === 2 && (
+                  <Step2
+                    formData={values}
+                    updateForm={(key, val) => setFieldValue(key, val)}
+                  />
+                )}
+                {step === 3 && (
+                  <Step3
+                    formData={values}
+                    updateForm={(key, val) => setFieldValue(key, val)}
+                  />
+                )}
+                {step === 4 && (
+                  <Step4
+                    formData={values}
+                    updateForm={(key, val) => setFieldValue(key, val)}
+                  />
+                )}
+              </ScrollView>
+
+              {/* Footer buttons */}
+              <View style={{ padding: 24, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                {step > 1 && (
+                  <TouchableOpacity
+                    onPress={goBack}
+                    style={{ width: 64, height: 64, backgroundColor: 'rgba(15,23,42,0.8)', borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B' }}
+                  >
+                    <ChevronLeft size={24} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={() => goNext(isDisabled, submitForm)}
+                  disabled={isDisabled}
+                  style={{
+                    flex: 1,
+                    height: 64,
+                    borderRadius: 28,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 12,
+                    backgroundColor: isDisabled ? '#1E293B' : '#2563EB',
+                  }}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <>
+                      <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 17 }}>
+                        {step === 4 ? 'Finish' : 'Next'}
+                      </Text>
+                      <ChevronRight size={20} color="white" />
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+          </View>
+        );
+      }}
+    </Formik>
   );
 }
-
-const SectionLabel = ({ label, desc }: any) => (
-    <View className="mb-2">
-        <Text className="text-white text-3xl font-black">{label}</Text>
-        <Text className="text-slate-500 font-bold mt-1 text-base">{desc}</Text>
-    </View>
-);
-
-const InputGroup = ({ label, value, onChange, placeholder, ...rest }: any) => (
-    <View>
-        <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-3 px-1">{label}</Text>
-        <TextInput 
-            className="bg-slate-900/50 p-6 rounded-[24px] border-2 border-slate-900 text-white font-black text-base"
-            placeholder={placeholder} placeholderTextColor="#1E293B"
-            value={value} onChangeText={onChange} {...rest}
-        />
-    </View>
-);
-
-const CardOption = ({ label, desc, icon, selected, onSelect, activeColor = '#3B82F6' }: any) => (
-    <TouchableOpacity 
-        onPress={onSelect}
-        className={`p-6 rounded-[32px] border-2 flex-row items-center justify-between transition-all ${selected ? 'bg-slate-900 border-blue-600/50' : 'bg-slate-900/30 border-slate-900'}`}
-    >
-        <View className="flex-row items-center gap-5 flex-1">
-            <View style={selected ? { backgroundColor: activeColor + '20' } : {}} className={`w-14 h-14 rounded-2xl items-center justify-center ${selected ? '' : 'bg-slate-950 border border-slate-800'}`}>
-                {icon || <Shield size={20} color={selected ? activeColor : '#475569'} />}
-            </View>
-            <View className="flex-1">
-                <Text className={`text-lg font-black ${selected ? 'text-white' : 'text-slate-400'}`}>{label}</Text>
-                <Text className={`text-xs font-bold ${selected ? 'text-slate-500' : 'text-slate-600'}`}>{desc}</Text>
-            </View>
-        </View>
-        {selected && (
-            <MotiView from={{ scale: 0 }} animate={{ scale: 1 }} className="w-6 h-6 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-500/50">
-                <Check size={14} color="white" strokeWidth={4} />
-            </MotiView>
-        )}
-    </TouchableOpacity>
-);

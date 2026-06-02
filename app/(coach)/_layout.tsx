@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SessionMonitor from '@/components/SessionMonitor';
 import TeamInvitationMonitor from '@/components/TeamInvitationMonitor';
 import { UnassignedClientsBanner } from '@/components/UnassignedClientsBanner';
@@ -11,9 +12,11 @@ import { NewAssignmentCelebration } from '@/components/NewAssignmentCelebration'
 export default function CoachLayout() {
   const router = useRouter();
   const segments = useSegments() as string[];
-  const { session, profile, coach, loading } = useAuth();
+  const { session, profile, coach, loading, refreshProfile } = useAuth();
   const inOnboarding = segments.includes('onboarding');
-  
+
+
+
   const [celebration, setCelebration] = useState<{ visible: boolean; isFirst: boolean; name: string }>({
     visible: false,
     isFirst: false,

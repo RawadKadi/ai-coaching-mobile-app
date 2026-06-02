@@ -1,250 +1,429 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
+  Animated,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Check, ChevronRight, ChevronLeft, Briefcase, Award, Calendar, Clock } from 'lucide-react-native';
+import { ChevronRight, ChevronLeft, Briefcase } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import { Formik, useFormikContext } from 'formik';
 import { availabilityService, DayOfWeek } from '@/lib/availability-service';
+
+// Modular Step Components
+import Step1 from '@/components/onboarding/coach/Step1';
+import Slide1b from '@/components/onboarding/coach/Slide1b';
+import Slide1c from '@/components/onboarding/coach/Slide1c';
+import Step2 from '@/components/onboarding/coach/Step2';
+import Slide2b from '@/components/onboarding/coach/Slide2b';
+import Step3 from '@/components/onboarding/coach/Step3';
+import Step4 from '@/components/onboarding/coach/Step4';
+
+// Auto-persist Formik values to AsyncStorage
+const PersistFormikValues = () => {
+  const { values } = useFormikContext<any>();
+  useEffect(() => {
+    if (values) {
+      AsyncStorage.setItem('@coach_onboarding_form', JSON.stringify(values)).catch(() => {});
+    }
+  }, [values]);
+  return null;
+};
+
+const TOTAL_FORM_STEPS = 6; // Form inputs and informational slides; step 7 is success
 
 export default function CoachOnboardingScreen() {
   const router = useRouter();
-  const { user, coach, refreshProfile } = useAuth();
+  const { user, coach, profile, refreshProfile } = useAuth();
   const [step, setStep] = useState(1);
+  const [success, setSuccess] = useState(false); // True after successful submit → show Step 4
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [initialValues, setInitialValues] = useState<any>(null);
 
-  const [formData, setFormData] = useState({
-    business_name: '',
-    specialty: '',
-    bio: '',
-    selectedWeekdays: [1, 2, 3, 4, 5] as number[], // Monday-Friday default
-    start_time: '09:00',
-    end_time: '17:00',
-  });
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loadPersistedOnboarding = async () => {
+    Animated.timing(progressAnim, {
+      toValue: success ? 1 : step / TOTAL_FORM_STEPS,
+      duration: 350,
+      useNativeDriver: false,
+    }).start();
+  }, [step, success]);
+
+  // Load persisted form + step
+  useEffect(() => {
+    const load = async () => {
       try {
         const savedStep = await AsyncStorage.getItem('@coach_onboarding_step');
         const savedForm = await AsyncStorage.getItem('@coach_onboarding_form');
-        if (savedStep) setStep(parseInt(savedStep, 10));
-        if (savedForm) setFormData(JSON.parse(savedForm));
-      } catch (e) {
-        console.error('Failed to load coach onboarding progress:', e);
+
+        const defaults = {
+          business_name: '',
+          logo_url: '',
+          specialty: [] as string[],
+          otherSpecialty: '',
+          selectedWeekdays: [] as number[],
+          start_time: '09:00',
+          end_time: '17:00',
+        };
+
+        if (savedStep) {
+          const p = parseInt(savedStep, 10);
+          setStep(p >= 1 && p <= TOTAL_FORM_STEPS ? p : 1);
+        }
+
+        if (savedForm) {
+          try {
+            const parsed = JSON.parse(savedForm);
+            setInitialValues({
+              business_name: parsed.business_name || '',
+              logo_url: parsed.logo_url || '',
+              specialty: Array.isArray(parsed.specialty)
+                ? parsed.specialty
+                : parsed.specialty
+                ? [parsed.specialty]
+                : [],
+              otherSpecialty: parsed.otherSpecialty || '',
+              selectedWeekdays: Array.isArray(parsed.selectedWeekdays) ? parsed.selectedWeekdays : [],
+              start_time: parsed.start_time || '09:00',
+              end_time: parsed.end_time || '17:00',
+            });
+          } catch {
+            setInitialValues(defaults);
+          }
+        } else {
+          setInitialValues(defaults);
+        }
+      } catch {
+        setInitialValues({
+          business_name: '',
+          logo_url: '',
+          specialty: [] as string[],
+          otherSpecialty: '',
+          selectedWeekdays: [] as number[],
+          start_time: '09:00',
+          end_time: '17:00',
+        });
       }
     };
-    loadPersistedOnboarding();
+    load();
   }, []);
 
-  const updateForm = (key: string, value: any) => {
-    setFormData((prev) => {
-      const updated = { ...prev, [key]: value };
-      AsyncStorage.setItem('@coach_onboarding_form', JSON.stringify(updated)).catch(e => console.error(e));
-      return updated;
-    });
-  };
-
-  const toggleWeekday = (dayIdx: number) => {
-    const active = formData.selectedWeekdays.includes(dayIdx);
-    const updatedWeekdays = active 
-      ? formData.selectedWeekdays.filter(w => w !== dayIdx)
-      : [...formData.selectedWeekdays, dayIdx];
-    updateForm('selectedWeekdays', updatedWeekdays);
-  };
-
-  const handleNext = () => {
-    const isStepValid = () => {
-        if (step === 1) return formData.business_name && formData.specialty && formData.bio;
-        if (step === 2) return formData.selectedWeekdays.length > 0 && formData.start_time && formData.end_time;
-        return true;
-    };
-
-    if (!isStepValid()) {
-        Alert.alert('Incomplete', 'Please fill in all the details for this step.');
-        return;
-    }
-
-    if (step < 2) {
-      const nextStep = step + 1;
-      setStep(nextStep);
-      AsyncStorage.setItem('@coach_onboarding_step', nextStep.toString()).catch(e => console.error(e));
+  const goNext = (isDisabled: boolean, submitForm: () => void) => {
+    if (isDisabled) return;
+    if (step < TOTAL_FORM_STEPS) {
+      const next = step + 1;
+      setStep(next);
+      AsyncStorage.setItem('@coach_onboarding_step', String(next)).catch(() => {});
     } else {
-      handleSubmit();
+      submitForm();
     }
   };
 
-  const handleBack = () => {
+  const goBack = () => {
     if (step > 1) {
-      const prevStep = step - 1;
-      setStep(prevStep);
-      AsyncStorage.setItem('@coach_onboarding_step', prevStep.toString()).catch(e => console.error(e));
+      const prev = step - 1;
+      setStep(prev);
+      AsyncStorage.setItem('@coach_onboarding_step', String(prev)).catch(() => {});
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any) => {
     if (!user || !coach) return;
     setLoading(true);
     try {
-      // 1. Update coach profile details
-      const { error: coachError } = await supabase.from('coaches').update({
-        business_name: formData.business_name,
-        specialty: formData.specialty,
-        bio: formData.bio,
-      }).eq('id', coach.id);
+      // Resolve specialty: replace "Other" with the custom text if provided
+      const resolvedSpecialties = values.specialty.map((s: string) =>
+        s === 'Other' ? (values.otherSpecialty?.trim() || 'Other') : s
+      );
+
+      const { error: coachError } = await supabase
+        .from('coaches')
+        .update({
+          business_name: values.business_name,
+          logo_url: values.logo_url || null,
+          specialty: resolvedSpecialties.join(', '),
+        })
+        .eq('id', coach.id);
       if (coachError) throw coachError;
 
-      // 2. Set up working hours availability
-      // Format start and end times to HH:MM:SS
-      const formattedStart = `${formData.start_time}:00`;
-      const formattedEnd = `${formData.end_time}:00`;
+      const formattedStart = `${values.start_time}:00`;
+      const formattedEnd = `${values.end_time}:00`;
 
-      // Clear existing availability and insert for each selected day
-      const availabilityPromises = [0, 1, 2, 3, 4, 5, 6].map(async (dayIndex) => {
-        const isActive = formData.selectedWeekdays.includes(dayIndex);
-        if (isActive) {
-          await availabilityService.updateDayAvailability(coach.id, dayIndex as DayOfWeek, [
-            { start_time: formattedStart, end_time: formattedEnd, is_active: true }
-          ]);
-        } else {
-          await availabilityService.updateDayAvailability(coach.id, dayIndex as DayOfWeek, []);
-        }
-      });
-      await Promise.all(availabilityPromises);
+      await Promise.all(
+        [0, 1, 2, 3, 4, 5, 6].map((dayIndex) => {
+          const isActive = values.selectedWeekdays.includes(dayIndex);
+          return isActive
+            ? availabilityService.updateDayAvailability(coach.id, dayIndex as DayOfWeek, [
+                { start_time: formattedStart, end_time: formattedEnd, is_active: true },
+              ])
+            : availabilityService.updateDayAvailability(coach.id, dayIndex as DayOfWeek, []);
+        })
+      );
 
-      // 3. Mark profile onboarding complete
-      await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', user.id);
-      
-      // Clean up local cache
-      await AsyncStorage.removeItem('@coach_onboarding_step');
-      await AsyncStorage.removeItem('@coach_onboarding_form');
+      await supabase
+        .from('profiles')
+        .update({ onboarding_completed: true })
+        .eq('id', user.id);
 
+      await AsyncStorage.multiRemove(['@coach_onboarding_step', '@coach_onboarding_form']);
       await refreshProfile();
-      router.replace('/(coach)/(tabs)');
-    } catch (error: any) { Alert.alert('Error', error.message); } finally { setLoading(false); }
+
+      // Show the success screen (Step 4) instead of navigating away immediately
+      setSuccess(true);
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  if (!initialValues) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
   return (
-    <View className="flex-1 bg-slate-950">
-      <SafeAreaView className="flex-1">
-        <View className="px-6 pt-10 pb-6 flex-row items-center justify-between">
-            <View>
-                <Text className="text-white text-3xl font-black">Coaching Setup</Text>
-                <Text className="text-slate-500 font-bold text-xs uppercase tracking-[4px] mt-1">Configure your workspace</Text>
-            </View>
-            <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center border border-blue-600/20">
-                <Briefcase size={24} color="#3B82F6" />
-            </View>
-        </View>
+    <Formik initialValues={initialValues} onSubmit={handleSubmit}>
+      {({ values, setFieldValue, submitForm }) => {
+        const toggleSpecialty = (spec: string) => {
+          const updated = values.specialty.includes(spec)
+            ? values.specialty.filter((s: string) => s !== spec)
+            : [...values.specialty, spec];
+          setFieldValue('specialty', updated);
+        };
 
-        <View className="h-1 bg-slate-900 mx-6 rounded-full overflow-hidden mb-8">
-            <MotiView 
-                animate={{ width: `${(step / 2) * 100}%` }}
-                className="h-full bg-blue-600 shadow-sm shadow-blue-500"
-            />
-        </View>
+        const toggleWeekday = (dayIdx: number) => {
+          const updated = values.selectedWeekdays.includes(dayIdx)
+            ? values.selectedWeekdays.filter((w: number) => w !== dayIdx)
+            : [...values.selectedWeekdays, dayIdx];
+          setFieldValue('selectedWeekdays', updated);
+        };
 
-        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140 }}>
-          <AnimatePresence mode="wait">
-            <MotiView
-                key={step}
-                from={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ type: 'timing', duration: 400 }}
-            >
-                {step === 1 && (
-                    <View className="gap-8">
-                        <SectionLabel label="Step 1" desc="Professional Profile" />
-                        <View className="gap-6">
-                            <InputGroup label="Business Name" value={formData.business_name} onChange={(v: string) => updateForm('business_name', v)} placeholder="e.g. Apex Performance" />
-                            <InputGroup label="Specialty Focus" value={formData.specialty} onChange={(v: string) => updateForm('specialty', v)} placeholder="e.g. Strength Training, Fat Loss" />
-                            
-                            <View>
-                              <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-3 px-1">Biography / About</Text>
-                              <TextInput 
-                                  className="bg-slate-900/50 p-6 rounded-[24px] border-2 border-slate-900 text-white font-semibold text-base min-h-[120px]"
-                                  placeholder="Briefly describe your coaching style and philosophy..." placeholderTextColor="#1E293B"
-                                  value={formData.bio} onChangeText={(v: string) => updateForm('bio', v)} multiline textAlignVertical="top"
-                              />
-                            </View>
-                        </View>
-                    </View>
+        const pickImage = async () => {
+          try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission Required', 'Please allow access to your photos.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets[0]) {
+              await uploadLogo(result.assets[0].uri);
+            }
+          } catch (err: any) {
+            Alert.alert('Error', err.message || 'Could not open photos');
+          }
+        };
+
+        const uploadLogo = async (uri: string) => {
+          try {
+            setUploading(true);
+            const ext = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+            const safeExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) ? ext : 'jpg';
+            const filePath = `brands/brand-logo-${Date.now()}.${safeExt}`;
+
+            const response = await fetch(uri);
+            if (!response.ok) throw new Error('Failed to fetch image');
+            const arrayBuffer = await response.arrayBuffer();
+
+            const mimeMap: Record<string, string> = {
+              jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+              gif: 'image/gif', webp: 'image/webp',
+            };
+
+            const { error: uploadError } = await supabase.storage
+              .from('meal-photos')
+              .upload(filePath, arrayBuffer, {
+                contentType: mimeMap[safeExt] || 'image/jpeg',
+                upsert: true,
+              });
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+              .from('meal-photos')
+              .getPublicUrl(filePath);
+
+            setFieldValue('logo_url', publicUrl);
+          } catch (error: any) {
+            Alert.alert('Upload Failed', error.message);
+          } finally {
+            setUploading(false);
+          }
+        };
+
+        const isDisabled =
+          loading ||
+          uploading ||
+          (step === 1 && (values.business_name || '').trim().length === 0) ||
+          (step === 4 && (!values.specialty || values.specialty.length === 0)) ||
+          (step === 6 && (!values.selectedWeekdays?.length || !values.start_time || !values.end_time));
+
+        const clearDraft = () => {
+          Alert.alert('Reset Draft', 'Clear all progress and start fresh?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Clear',
+              style: 'destructive',
+              onPress: async () => {
+                await AsyncStorage.multiRemove(['@coach_onboarding_step', '@coach_onboarding_form']);
+                setStep(1);
+                setSuccess(false);
+                setFieldValue('business_name', '');
+                setFieldValue('logo_url', '');
+                setFieldValue('specialty', []);
+                setFieldValue('otherSpecialty', '');
+                setFieldValue('selectedWeekdays', []);
+                setFieldValue('start_time', '09:00');
+                setFieldValue('end_time', '17:00');
+              },
+            },
+          ]);
+        };
+
+        return (
+          <View style={{ flex: 1, backgroundColor: '#020617' }}>
+            <SafeAreaView style={{ flex: 1 }}>
+              {!success && <PersistFormikValues />}
+
+              {/* Header — hidden on success screen */}
+              {!success && (
+                <View style={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View>
+                    <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '900' }}>Coaching Setup</Text>
+                    <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 4, marginTop: 4 }}>
+                      Step {step} of {TOTAL_FORM_STEPS}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={clearDraft}
+                    style={{ width: 48, height: 48, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)' }}
+                  >
+                    <Briefcase size={22} color="#3B82F6" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Progress bar — shows full on success */}
+              {!success && (
+                <View style={{ height: 4, backgroundColor: '#0F172A', marginHorizontal: 24, borderRadius: 4, overflow: 'hidden', marginBottom: 24 }}>
+                  <Animated.View
+                    style={{
+                      height: '100%',
+                      backgroundColor: '#3B82F6',
+                      borderRadius: 4,
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0%', '100%'],
+                      }),
+                    }}
+                  />
+                </View>
+              )}
+
+              {/* Step content */}
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 24, paddingBottom: 40, paddingTop: success ? 32 : 0 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {!success && step === 1 && (
+                  <Step1
+                    formData={values}
+                    updateForm={(key, val) => setFieldValue(key, val)}
+                    pickImage={pickImage}
+                    removeLogo={() => setFieldValue('logo_url', '')}
+                    uploading={uploading}
+                  />
                 )}
-
-                {step === 2 && (
-                    <View className="gap-8">
-                        <SectionLabel label="Step 2" desc="Set Working Hours" />
-                        <View className="gap-6">
-                            <Text className="text-slate-500 font-bold text-sm">Select the days you are available for client bookings:</Text>
-                            
-                            <View className="flex-row justify-between my-2">
-                                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
-                                    const dayIdx = (i + 1) % 7; // Convert to 0=Sunday, 1=Monday...
-                                    const isSelected = formData.selectedWeekdays.includes(dayIdx);
-                                    return (
-                                        <TouchableOpacity 
-                                            key={i} onPress={() => toggleWeekday(dayIdx)}
-                                            className={`w-12 h-12 rounded-2xl items-center justify-center border ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-slate-900 border-white/5'}`}
-                                        >
-                                            <Text className={`font-black text-base ${isSelected ? 'text-white' : 'text-slate-500'}`}>{day}</Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-
-                            <View className="flex-row gap-4 mt-4">
-                                <View className="flex-1">
-                                    <InputGroup label="Start Time" value={formData.start_time} onChange={(v: string) => updateForm('start_time', v)} placeholder="09:00" />
-                                </View>
-                                <View className="flex-1">
-                                    <InputGroup label="End Time" value={formData.end_time} onChange={(v: string) => updateForm('end_time', v)} placeholder="17:00" />
-                                </View>
-                            </View>
-                        </View>
-                    </View>
+                {!success && step === 2 && (
+                  <Slide1b formData={values} />
                 )}
-            </MotiView>
-          </AnimatePresence>
-        </ScrollView>
+                {!success && step === 3 && (
+                  <Slide1c />
+                )}
+                {!success && step === 4 && (
+                  <Step2
+                    formData={values}
+                    toggleSpecialty={toggleSpecialty}
+                    updateForm={(key, val) => setFieldValue(key, val)}
+                  />
+                )}
+                {!success && step === 5 && (
+                  <Slide2b formData={values} />
+                )}
+                {!success && step === 6 && (
+                  <Step3
+                    formData={values}
+                    updateForm={(key, val) => setFieldValue(key, val)}
+                    toggleWeekday={toggleWeekday}
+                  />
+                )}
+                {success && (
+                  <Step4 coachName={profile?.full_name?.split(' ')[0]} />
+                )}
+              </ScrollView>
 
-        <View className="absolute bottom-0 left-0 right-0 p-6 bg-slate-950/80 border-t border-slate-900/50 backdrop-blur-xl flex-row gap-4 items-center">
-            {step > 1 && (
-                <TouchableOpacity onPress={handleBack} className="w-16 h-16 bg-slate-900/50 rounded-[28px] items-center justify-center border border-slate-800">
-                    <ChevronLeft size={24} color="#475569" />
-                </TouchableOpacity>
-            )}
-            <TouchableOpacity 
-                onPress={handleNext} disabled={loading}
-                className={`flex-1 h-16 rounded-[28px] items-center justify-center flex-row gap-3 ${loading ? 'bg-slate-800' : 'bg-blue-600 shadow-2xl shadow-blue-500/40'}`}
-            >
-                {loading ? <ActivityIndicator color="white" /> : (
-                    <>
-                        <Text className="text-white font-black text-lg">{step === 2 ? 'Complete Setup' : 'Next'}</Text>
+              {/* Footer — only shown during form steps */}
+              {!success && (
+                <View style={{ padding: 24, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                  {step > 1 && (
+                    <TouchableOpacity
+                      onPress={goBack}
+                      style={{ width: 64, height: 64, backgroundColor: 'rgba(15,23,42,0.8)', borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B' }}
+                    >
+                      <ChevronLeft size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    onPress={() => goNext(isDisabled, submitForm)}
+                    disabled={isDisabled}
+                    style={{
+                      flex: 1,
+                      height: 64,
+                      borderRadius: 28,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 12,
+                      backgroundColor: isDisabled ? '#1E293B' : '#2563EB',
+                    }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 17 }}>
+                          {step === 6 ? 'Activate Workspace' : 'Next'}
+                        </Text>
                         <ChevronRight size={20} color="white" />
-                    </>
-                )}
-            </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    </View>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </SafeAreaView>
+          </View>
+        );
+      }}
+    </Formik>
   );
 }
-
-const SectionLabel = ({ label, desc }: any) => (
-    <View className="mb-2">
-        <Text className="text-white text-3xl font-black">{label}</Text>
-        <Text className="text-slate-500 font-bold mt-1 text-base">{desc}</Text>
-    </View>
-);
-
-const InputGroup = ({ label, value, onChange, placeholder, ...rest }: any) => (
-    <View>
-        <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-3 px-1">{label}</Text>
-        <TextInput 
-            className="bg-slate-900/50 p-6 rounded-[24px] border-2 border-slate-900 text-white font-black text-base"
-            placeholder={placeholder} placeholderTextColor="#1E293B"
-            value={value} onChangeText={onChange} {...rest}
-        />
-    </View>
-);
