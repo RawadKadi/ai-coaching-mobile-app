@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { validateInviteCode } from '@/lib/brand-service';
 import { supabase } from '@/lib/supabase';
 import { MotiView, AnimatePresence } from 'moti';
-import { User, Mail, Lock, UserPlus, AlertCircle, ChevronLeft, Sparkles, Shield } from 'lucide-react-native';
+import { User, Mail, Lock, UserPlus, AlertCircle, ChevronLeft, Sparkles, Shield, CheckCircle2 } from 'lucide-react-native';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -32,6 +32,9 @@ export default function SignUpScreen() {
   const [error, setError] = useState('');
   const [inviteCode, setInviteCode] = useState(inviteParam || '');
   const [validatingInvite, setValidatingInvite] = useState(false);
+  const [inviteValid, setInviteValid] = useState(false);
+  
+  const inviteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (inviteParam) {
@@ -60,12 +63,35 @@ export default function SignUpScreen() {
   const validateInvite = async (code: string) => {
     if (!code) return;
     setValidatingInvite(true);
+    setError('');
     try {
-      await validateInviteCode(code);
-    } catch (error) {
-      console.error('Invite validation failed:', error);
+      const result = await validateInviteCode(code);
+      if (result?.valid) {
+        setInviteValid(true);
+      } else {
+        setInviteValid(false);
+        setError('Invalid invite code. Please try again.');
+      }
+    } catch (err) {
+      console.error('Invite validation failed:', err);
+      setInviteValid(false);
+      setError('Failed to validate code.');
     } finally {
       setValidatingInvite(false);
+    }
+  };
+
+  const handleInviteChange = (text: string) => {
+    setInviteCode(text);
+    setInviteValid(false);
+    setError('');
+    
+    if (inviteTimeoutRef.current) clearTimeout(inviteTimeoutRef.current);
+    
+    if (text.length >= 6) {
+      inviteTimeoutRef.current = setTimeout(() => {
+        validateInvite(text);
+      }, 500);
     }
   };
 
@@ -92,6 +118,8 @@ export default function SignUpScreen() {
       setLoading(false);
     }
   };
+
+  const showRegistrationFields = role === 'coach' || (role === 'client' && inviteValid);
 
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
@@ -122,14 +150,14 @@ export default function SignUpScreen() {
                 {!inviteParam && (
                   <View className="flex-row bg-slate-900/50 rounded-[28px] p-1.5 border border-white/5 mb-10">
                     <Pressable
-                      onPress={() => setRole('client')}
+                      onPress={() => { setRole('client'); setInviteValid(false); setInviteCode(''); setError(''); }}
                       className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${role === 'client' ? 'bg-slate-800' : ''}`}
                       style={role === 'client' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
                     >
                       <Text className={`font-black text-sm uppercase tracking-widest ${role === 'client' ? 'text-white' : 'text-slate-500'}`}>Client</Text>
                     </Pressable>
                     <Pressable
-                      onPress={() => setRole('coach')}
+                      onPress={() => { setRole('coach'); setError(''); }}
                       className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${role === 'coach' ? 'bg-slate-800' : ''}`}
                       style={role === 'coach' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
                     >
@@ -138,23 +166,50 @@ export default function SignUpScreen() {
                   </View>
                 )}
 
-                <InputField icon={<User size={20} color="#64748B" />} placeholder="Full Name" value={fullName} onChange={setFullName} />
-                <InputField icon={<Mail size={20} color="#64748B" />} placeholder="Email Address" value={email} onChange={setEmail} keyboardType="email-address" />
-                <InputField icon={<Lock size={20} color="#64748B" />} placeholder="Password" value={password} onChange={setPassword} secure />
-                <InputField icon={<Lock size={20} color="#64748B" />} placeholder="Confirm Password" value={confirmPassword} onChange={setConfirmPassword} secure />
+                {/* Progressive Disclosure: Invite Code */}
+                {role === 'client' && (
+                  <MotiView animate={{ opacity: 1 }} className="mb-6">
+                    <View className={`bg-slate-900/50 border rounded-[28px] px-6 py-2 flex-row items-center gap-4 ${inviteValid ? 'border-green-500' : 'border-slate-900'}`}>
+                      {inviteValid ? <CheckCircle2 size={20} color="#10B981" /> : <Shield size={20} color="#64748B" />}
+                      <TextInput
+                        className="flex-1 text-white text-2xl h-14"
+                        placeholder="Enter Invite Code"
+                        placeholderTextColor="#64748B"
+                        value={inviteCode}
+                        onChangeText={handleInviteChange}
+                        autoCapitalize="characters"
+                        editable={!inviteValid}
+                        selectionColor="#3B82F6"
+                      />
+                      {validatingInvite && <ActivityIndicator size="small" color="#3B82F6" />}
+                    </View>
+                  </MotiView>
+                )}
 
                 <AnimatePresence>
-                  {role === 'client' && !inviteCode && (
-                    <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <InputField icon={<Shield size={20} color="#64748B" />} placeholder="Invite Code (Optional)" value={inviteCode} onChange={(t: string) => { setInviteCode(t); if (t.length >= 8) validateInvite(t); }} />
+                  {showRegistrationFields && (
+                    <MotiView
+                      from={{ opacity: 0, height: 0, translateY: -20 }}
+                      animate={{ opacity: 1, height: 'auto', translateY: 0 }}
+                      exit={{ opacity: 0, height: 0, translateY: -20 }}
+                      transition={{ type: 'timing', duration: 300 }}
+                    >
+                      <InputField icon={<User size={20} color="#64748B" />} placeholder="Full Name" value={fullName} onChange={setFullName} />
+                      <InputField icon={<Mail size={20} color="#64748B" />} placeholder="Email Address" value={email} onChange={setEmail} keyboardType="email-address" />
+                      <InputField icon={<Lock size={20} color="#64748B" />} placeholder="Password" value={password} onChange={setPassword} secure />
+                      <InputField icon={<Lock size={20} color="#64748B" />} placeholder="Confirm Password" value={confirmPassword} onChange={setConfirmPassword} secure />
                     </MotiView>
                   )}
                 </AnimatePresence>
 
                 <TouchableOpacity 
-                   className="mt-8 bg-blue-600 h-20 rounded-[36px] items-center justify-center flex-row gap-3 shadow-2xl shadow-blue-500/20 border-b-4 border-blue-700"
+                   className={`mt-8 h-20 rounded-[36px] items-center justify-center flex-row gap-3 shadow-2xl border-b-4 ${
+                     showRegistrationFields && !loading && !validatingInvite
+                       ? 'bg-blue-600 shadow-blue-500/20 border-blue-700'
+                       : 'bg-slate-800 border-slate-700 opacity-50'
+                   }`}
                    onPress={handleSignUp}
-                   disabled={loading || validatingInvite}
+                   disabled={!showRegistrationFields || loading || validatingInvite}
                 >
                   {loading ? <ActivityIndicator color="white" /> : (
                     <>
