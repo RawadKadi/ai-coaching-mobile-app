@@ -30,6 +30,8 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isHealthSyncAvailable, requestHealthPermissions, getTodaySteps } from '@/lib/health-service';
 
+import { FirstTimeHeroCards } from '@/components/client/FirstTimeHeroCards';
+
 export default function ClientDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -347,6 +349,9 @@ export default function ClientDashboard() {
             contentContainerStyle={{ paddingBottom: 140 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" progressViewOffset={insets.top} />}
           >
+            {/* First Time Hero Cards */}
+            <FirstTimeHeroCards clientName={profile?.full_name?.split(' ')[0] || ''} />
+
             {/* Status Grid */}
             <View className="flex-row flex-wrap justify-between gap-4 mb-4">
                 <MetricCard 

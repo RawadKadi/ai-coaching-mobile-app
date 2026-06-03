@@ -105,17 +105,17 @@ export default function OnboardingScreen() {
 
   const goNext = (isDisabled: boolean, submitForm: () => void) => {
     if (isDisabled) return;
-    if (step < 4) {
+    if (step < 3) {
       const next = step + 1;
       setStep(next);
       AsyncStorage.setItem('@client_onboarding_step', String(next)).catch(() => {});
-    } else {
+    } else if (step === 3) {
       submitForm();
     }
   };
 
   const goBack = () => {
-    if (step > 1) {
+    if (step > 1 && step < 4) {
       const prev = step - 1;
       setStep(prev);
       AsyncStorage.setItem('@client_onboarding_step', String(prev)).catch(() => {});
@@ -126,6 +126,28 @@ export default function OnboardingScreen() {
     if (!user) return;
     setLoading(true);
     try {
+      let finalMedicalConditions = [...(values.medical_conditions || [])];
+      
+      if (finalMedicalConditions.includes('Other +') && values.medical_conditions_other?.trim()) {
+        try {
+          const { generateText } = await import('@/lib/google-ai');
+          const prompt = `Extract exactly 1 to 3 short medical keywords or tags (e.g. 'Tennis Elbow', 'High Blood Pressure', 'Anxiety') from this user input. Return ONLY the keywords separated by commas. No conversational text. Input: "${values.medical_conditions_other}"`;
+          const aiResponse = await generateText(prompt);
+          
+          if (aiResponse) {
+            finalMedicalConditions = finalMedicalConditions.filter(c => c !== 'Other +');
+            const tags = aiResponse.split(',').map(t => t.trim()).filter(Boolean);
+            finalMedicalConditions = [...finalMedicalConditions, ...tags];
+          }
+        } catch (err) {
+          console.error('AI Extraction failed:', err);
+          finalMedicalConditions = finalMedicalConditions.filter(c => c !== 'Other +');
+          finalMedicalConditions.push('Other (Noted)');
+        }
+      } else {
+        finalMedicalConditions = finalMedicalConditions.filter(c => c !== 'Other +');
+      }
+
       const { error: clientError } = await supabase
         .from('clients')
         .update({
@@ -135,6 +157,7 @@ export default function OnboardingScreen() {
           goal: values.goal,
           experience_level: values.experience_level,
           dietary_restrictions: values.dietary_restrictions,
+          medical_conditions: finalMedicalConditions,
         })
         .eq('user_id', user.id);
       if (clientError) throw clientError;
@@ -146,6 +169,16 @@ export default function OnboardingScreen() {
         .single();
 
       if (clientData) {
+        // Log initial starting weight into check_ins
+        if (values.starting_weight_kg) {
+          await supabase.from('check_ins').insert({
+            client_id: clientData.id,
+            date: new Date().toISOString().split('T')[0],
+            weight_kg: parseFloat(values.starting_weight_kg),
+            notes: 'Initial Onboarding Baseline',
+          });
+        }
+
         const habits = [
           { name: 'Hydration', description: 'Drink enough water daily', target_value: 2000, unit: 'ml', verification_type: 'none', client_id: clientData.id, is_active: true },
           { name: 'Daily Steps', description: 'Walk at least 8,000 steps', target_value: 8000, unit: 'steps', verification_type: 'none', client_id: clientData.id, is_active: true },
@@ -156,7 +189,9 @@ export default function OnboardingScreen() {
       await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', user.id);
       await AsyncStorage.multiRemove(['@client_onboarding_step', '@client_onboarding_form']);
       await refreshProfile();
-      router.replace('/(client)/(tabs)');
+      
+      // Move to Step 4 (Animated Activation Sequence)
+      setStep(4);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -177,9 +212,8 @@ export default function OnboardingScreen() {
       {({ values, setFieldValue, submitForm }) => {
         const isDisabled =
           loading ||
-          (step === 1 && (!values.date_of_birth || !values.gender || !values.height_cm)) ||
-          (step === 2 && !values.goal) ||
-          (step === 3 && !values.experience_level);
+          (step === 1 && (!values.date_of_birth || !values.gender || !values.height_cm || !values.starting_weight_kg)) ||
+          (step === 2 && (!values.goal || !values.experience_level));
 
         const clearDraft = () => {
           Alert.alert('Reset Draft', 'Clear all progress and start fresh?', [
@@ -271,41 +305,43 @@ export default function OnboardingScreen() {
               </ScrollView>
 
               {/* Footer buttons */}
-              <View style={{ padding: 24, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                {step > 1 && (
-                  <TouchableOpacity
-                    onPress={goBack}
-                    style={{ width: 64, height: 64, backgroundColor: 'rgba(15,23,42,0.8)', borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B' }}
-                  >
-                    <ChevronLeft size={24} color="#FFFFFF" />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  onPress={() => goNext(isDisabled, submitForm)}
-                  disabled={isDisabled}
-                  style={{
-                    flex: 1,
-                    height: 64,
-                    borderRadius: 28,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                    gap: 12,
-                    backgroundColor: isDisabled ? '#1E293B' : '#2563EB',
-                  }}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <>
-                      <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 17 }}>
-                        {step === 4 ? 'Finish' : 'Next'}
-                      </Text>
-                      <ChevronRight size={20} color="white" />
-                    </>
+              {step < 4 && (
+                <View style={{ padding: 24, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                  {step > 1 && (
+                    <TouchableOpacity
+                      onPress={goBack}
+                      style={{ width: 64, height: 64, backgroundColor: 'rgba(15,23,42,0.8)', borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B' }}
+                    >
+                      <ChevronLeft size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
                   )}
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    onPress={() => goNext(isDisabled, submitForm)}
+                    disabled={isDisabled}
+                    style={{
+                      flex: 1,
+                      height: 64,
+                      borderRadius: 28,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 12,
+                      backgroundColor: isDisabled ? '#1E293B' : '#2563EB',
+                    }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 17 }}>
+                          {step === 3 ? 'Generate My Program' : 'Next'}
+                        </Text>
+                        <ChevronRight size={20} color="white" />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
             </SafeAreaView>
           </View>
         );

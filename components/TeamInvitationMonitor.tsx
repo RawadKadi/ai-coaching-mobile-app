@@ -45,7 +45,7 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
       // 1. First check by ID (already linked)
       const { data: idData, error: idError } = await supabase
         .from('coach_hierarchy')
-        .select('id, parent_coach_name, acknowledged_at, created_at')
+        .select('id, parent_coach_id, parent_coach_name, acknowledged_at, created_at')
         .eq('child_coach_id', coach.id)
         .is('acknowledged_at', null)
         .order('created_at', { ascending: false })
@@ -62,6 +62,21 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
       }
 
       if (idData && isMounted.current) {
+        // Prevent showing modal if somehow they are linked to themselves
+        if (idData.parent_coach_id === coach.id) {
+          console.warn('[TeamInvitationMonitor] ⚠️ Ignored self-link hierarchy record.');
+          setHasChecked(true);
+          return;
+        }
+
+        // Final verification: ensure they are actually marked as a sub-coach
+        const { data: verifyCoach } = await supabase.from('coaches').select('is_parent_coach').eq('id', coach.id).single();
+        if (verifyCoach?.is_parent_coach === true) {
+           console.warn('[TeamInvitationMonitor] ⚠️ Ignored hierarchy record because coach is marked as parent.');
+           setHasChecked(true);
+           return;
+        }
+
         handleFoundInvitation(idData);
         return;
       }
