@@ -313,7 +313,7 @@ export default function ManualSchedulerModal({
                         </View>
                     </View>
 
-                    <ScrollView ref={scrollRef} className="flex-1 px-0" showsVerticalScrollIndicator={false}>
+                    <ScrollView ref={scrollRef} className="flex-1 px-0" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                         <View className="px-6 pt-8 pb-12">
                                 {step === 'client' && (
                                     <View>
@@ -440,21 +440,29 @@ export default function ManualSchedulerModal({
                                         
                                         {recurrence === 'weekly' && (
                                             <View>
-                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Weekly Frequency</Text>
-                                                <View className="flex-row justify-between mb-12">
-                                                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
-                                                        const dayIdx = (i + 1) % 7;
-                                                        const isSelected = selectedWeekdays.includes(dayIdx);
-                                                        return (
-                                                            <Pressable 
-                                                                key={i} onPress={() => toggleWeekday(dayIdx, isSelected)}
-                                                                className={`w-12 h-12 rounded-2xl items-center justify-center ${isSelected ? 'bg-blue-600 border border-blue-500' : 'bg-slate-900 border border-white/5'}`}
-                                                            >
-                                                                <Text className={`font-black text-base ${isSelected ? 'text-white' : 'text-slate-500'}`}>{day}</Text>
-                                                            </Pressable>
-                                                        );
-                                                    })}
+                                                <View className="flex-row items-center justify-between mb-6 ml-1 pr-1">
+                                                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Weekly Frequency</Text>
+                                                    <View className="flex-row items-center gap-1.5 opacity-60 bg-slate-900/50 px-2 py-1 rounded-full border border-white/5">
+                                                        <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Swipe</Text>
+                                                        <ArrowRight size={10} color="#64748B" />
+                                                    </View>
                                                 </View>
+                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6 mb-12 px-6">
+                                                    <View className="flex-row gap-3 pr-12">
+                                                        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
+                                                            const dayIdx = (i + 1) % 7;
+                                                            const isSelected = selectedWeekdays.includes(dayIdx);
+                                                            return (
+                                                                <Pressable 
+                                                                    key={i} onPress={() => toggleWeekday(dayIdx, isSelected)}
+                                                                    className={`w-20 h-20 rounded-[28px] items-center justify-center ${isSelected ? 'bg-blue-600 border border-blue-500' : 'bg-slate-900 border border-white/5'}`}
+                                                                >
+                                                                    <Text className={`font-black text-2xl ${isSelected ? 'text-white' : 'text-slate-500'}`}>{day}</Text>
+                                                                </Pressable>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                </ScrollView>
                                             </View>
                                         )}
                                     </View>
@@ -476,9 +484,23 @@ export default function ManualSchedulerModal({
                                                     <View className="gap-3">
                                                         {availableSlots.filter(s => s.time.getHours() < 12).map((slot, i) => (
                                                             <Pressable 
-                                                                key={i} onPress={() => slot.available && setSelectedTime(slot.time)}
-                                                                disabled={!slot.available}
-                                                                className={`p-6 rounded-[32px] border flex-row justify-between items-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-blue-600 border-blue-500 shadow-xl shadow-blue-600/20' : 'bg-slate-900 border-white/5'} ${!slot.available ? 'opacity-20' : ''}`}
+                                                                key={slot.time.toISOString()} 
+                                                                onPress={() => {
+                                                                    if (slot.available) {
+                                                                        if (selectedTime?.getTime() === slot.time.getTime()) {
+                                                                            setSelectedTime(null);
+                                                                        } else {
+                                                                            setSelectedTime(slot.time);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                style={({ pressed }) => [
+                                                                    { opacity: !slot.available ? 0.2 : pressed ? 0.7 : 1 },
+                                                                    selectedTime?.getTime() === slot.time.getTime() 
+                                                                        ? { backgroundColor: '#2563EB', borderColor: '#3B82F6', borderWidth: 2 } 
+                                                                        : { backgroundColor: '#0F172A', borderColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1 }
+                                                                ]}
+                                                                className="p-6 rounded-[32px] flex-row justify-between items-center shadow-2xl"
                                                             >
                                                                 <View className="flex-row items-center gap-4">
                                                                     <View className={`w-12 h-12 rounded-2xl items-center justify-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-white/20' : 'bg-slate-950/50'}`}>
@@ -491,13 +513,28 @@ export default function ManualSchedulerModal({
                                                                         <Text className="text-slate-500 text-[10px] font-bold">60 min session</Text>
                                                                     </View>
                                                                 </View>
-                                                                {selectedTime?.getTime() === slot.time.getTime() ? (
-                                                                    <View className="w-7 h-7 bg-white rounded-full items-center justify-center">
+                                                                <View className="relative w-7 h-7">
+                                                                    <MotiView
+                                                                        animate={{
+                                                                            opacity: selectedTime?.getTime() === slot.time.getTime() ? 1 : 0,
+                                                                            scale: selectedTime?.getTime() === slot.time.getTime() ? 1 : 0.5,
+                                                                        }}
+                                                                        transition={{ type: 'timing', duration: 250 }}
+                                                                        className="absolute inset-0 bg-white rounded-full items-center justify-center"
+                                                                    >
                                                                         <Check size={16} color="#3B82F6" strokeWidth={4} />
-                                                                    </View>
-                                                                ) : (
-                                                                    <ChevronRight size={18} color="#475569" />
-                                                                )}
+                                                                    </MotiView>
+                                                                    <MotiView
+                                                                        animate={{
+                                                                            opacity: selectedTime?.getTime() === slot.time.getTime() ? 0 : 1,
+                                                                            scale: selectedTime?.getTime() === slot.time.getTime() ? 0.5 : 1,
+                                                                        }}
+                                                                        transition={{ type: 'timing', duration: 250 }}
+                                                                        className="absolute inset-0 items-center justify-center"
+                                                                    >
+                                                                        <ChevronRight size={18} color="#475569" />
+                                                                    </MotiView>
+                                                                </View>
                                                             </Pressable>
                                                         ))}
                                                     </View>
@@ -512,9 +549,23 @@ export default function ManualSchedulerModal({
                                                     <View className="gap-3">
                                                         {availableSlots.filter(s => s.time.getHours() >= 12).map((slot, i) => (
                                                             <Pressable 
-                                                                key={i} onPress={() => slot.available && setSelectedTime(slot.time)}
-                                                                disabled={!slot.available}
-                                                                className={`p-6 rounded-[32px] border flex-row justify-between items-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-blue-600 border-blue-500 shadow-xl shadow-blue-600/20' : 'bg-slate-900 border-white/5'} ${!slot.available ? 'opacity-20' : ''}`}
+                                                                key={slot.time.toISOString()} 
+                                                                onPress={() => {
+                                                                    if (slot.available) {
+                                                                        if (selectedTime?.getTime() === slot.time.getTime()) {
+                                                                            setSelectedTime(null);
+                                                                        } else {
+                                                                            setSelectedTime(slot.time);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                style={({ pressed }) => [
+                                                                    { opacity: !slot.available ? 0.2 : pressed ? 0.7 : 1 },
+                                                                    selectedTime?.getTime() === slot.time.getTime() 
+                                                                        ? { backgroundColor: '#2563EB', borderColor: '#3B82F6', borderWidth: 2 } 
+                                                                        : { backgroundColor: '#0F172A', borderColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1 }
+                                                                ]}
+                                                                className="p-6 rounded-[32px] flex-row justify-between items-center shadow-2xl"
                                                             >
                                                                 <View className="flex-row items-center gap-4">
                                                                     <View className={`w-12 h-12 rounded-2xl items-center justify-center ${selectedTime?.getTime() === slot.time.getTime() ? 'bg-white/20' : 'bg-slate-950/50'}`}>
@@ -527,13 +578,28 @@ export default function ManualSchedulerModal({
                                                                         <Text className="text-slate-500 text-[10px] font-bold">60 min session</Text>
                                                                     </View>
                                                                 </View>
-                                                                {selectedTime?.getTime() === slot.time.getTime() ? (
-                                                                    <View className="w-7 h-7 bg-white rounded-full items-center justify-center">
+                                                                <View className="relative w-7 h-7">
+                                                                    <MotiView
+                                                                        animate={{
+                                                                            opacity: selectedTime?.getTime() === slot.time.getTime() ? 1 : 0,
+                                                                            scale: selectedTime?.getTime() === slot.time.getTime() ? 1 : 0.5,
+                                                                        }}
+                                                                        transition={{ type: 'timing', duration: 250 }}
+                                                                        className="absolute inset-0 bg-white rounded-full items-center justify-center"
+                                                                    >
                                                                         <Check size={16} color="#3B82F6" strokeWidth={4} />
-                                                                    </View>
-                                                                ) : (
-                                                                    <ChevronRight size={18} color="#475569" />
-                                                                )}
+                                                                    </MotiView>
+                                                                    <MotiView
+                                                                        animate={{
+                                                                            opacity: selectedTime?.getTime() === slot.time.getTime() ? 0 : 1,
+                                                                            scale: selectedTime?.getTime() === slot.time.getTime() ? 0.5 : 1,
+                                                                        }}
+                                                                        transition={{ type: 'timing', duration: 250 }}
+                                                                        className="absolute inset-0 items-center justify-center"
+                                                                    >
+                                                                        <ChevronRight size={18} color="#475569" />
+                                                                    </MotiView>
+                                                                </View>
                                                             </Pressable>
                                                         ))}
                                                     </View>
@@ -585,10 +651,16 @@ export default function ManualSchedulerModal({
                                             ].map(({ type, icon: Icon }) => (
                                                 <Pressable 
                                                     key={type} onPress={() => setSessionType(type as any)}
-                                                    className={`px-8 py-5 rounded-[22px] border flex-row items-center gap-3 ${sessionType === type ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-600/20' : 'bg-slate-900 border-white/5'}`}
+                                                    style={({ pressed }) => [
+                                                        { opacity: pressed ? 0.7 : 1 },
+                                                        sessionType === type 
+                                                            ? { backgroundColor: '#2563EB', borderColor: '#3B82F6', borderWidth: 1 } 
+                                                            : { backgroundColor: '#0F172A', borderColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1 }
+                                                    ]}
+                                                    className="px-8 py-5 rounded-[22px] flex-row items-center gap-3 shadow-lg"
                                                 >
                                                     <Icon size={16} color={sessionType === type ? 'white' : '#475569'} />
-                                                    <Text className={`font-black text-[12px] uppercase tracking-widest ${sessionType === type ? 'text-white' : 'text-slate-500'}`}>{type.replace('_', ' ')}</Text>
+                                                    <Text style={{ fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: sessionType === type ? '#FFFFFF' : '#64748B' }}>{type.replace('_', ' ')}</Text>
                                                 </Pressable>
                                             ))}
                                         </View>

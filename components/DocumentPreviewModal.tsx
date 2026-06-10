@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, Linking } from 'react-native';
 import { X, Send, FileText, FileAudio, Play, Pause, FileSpreadsheet, File } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { Video, ResizeMode, Audio } from 'expo-av';
@@ -130,7 +130,7 @@ export default function DocumentPreviewModal({ visible, uri, type, fileName, onC
       );
     }
 
-    if (isPdf && Platform.OS === 'ios') {
+    if ((isPdf || isExcel) && Platform.OS === 'ios') {
       return (
         <WebView 
           source={{ uri }} 
@@ -148,6 +148,12 @@ export default function DocumentPreviewModal({ visible, uri, type, fileName, onC
         {isExcel ? <FileSpreadsheet size={80} color="#34D399" /> : <FileText size={80} color="#3B82F6" />}
         <Text style={styles.genericText}>Preview not available for this file type</Text>
         <Text style={styles.genericSubText}>{fileName}</Text>
+        <TouchableOpacity 
+          style={{ marginTop: 24, backgroundColor: '#3B82F6', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }} 
+          onPress={() => Linking.openURL(uri)}
+        >
+          <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>Open File</Text>
+        </TouchableOpacity>
       </View>
     );
   };

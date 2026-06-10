@@ -648,7 +648,7 @@ export function ChatInputBar({
       <View style={[
         styles.inputRow,
         { backgroundColor: '#020617' },
-        Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 0 : 24 } : { paddingBottom: 12 },
+        Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 0 : 24 } : { paddingBottom: 24 },
       ]}>
 
         {/* Left: Cancel Edit (X) in edit mode, Plus otherwise — hidden while recording */}

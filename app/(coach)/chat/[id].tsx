@@ -1279,7 +1279,7 @@ const MessageBubble = ({
     const isDeletedByMe = deletedBy === user?.id;
     const deleterName = isDeletedByMe ? 'You' : (clientName || 'User');
     return (
-      <View className="px-5 py-3 rounded-[24px] border border-slate-800 bg-slate-900/40 italic">
+      <View className="px-5 py-3 rounded-[14px] border border-slate-800 bg-slate-900/40 italic">
         <Text className="text-slate-500 text-sm">
           {isDeletedByMe ? 'You deleted this message' : `${deleterName} deleted this message`}
         </Text>

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Linking, Modal, SafeAreaView, Animated, Dimensions, Pressable,
-  ActivityIndicator
+  ActivityIndicator, PanResponder
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
@@ -802,7 +802,7 @@ function VoiceNotePlayer({
         setIsLoading(true);
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri },
-          { shouldPlay: false, volume: 1.0, isMuted: false },
+          { shouldPlay: false, volume: 1.0, isMuted: false, isLooping: false },
           (status) => {
             if (status.isLoaded && mounted) {
               if (!isDragging) {
@@ -813,7 +813,8 @@ function VoiceNotePlayer({
               if (status.didJustFinish) {
                 setIsPlaying(false);
                 setPosition(0);
-                soundRef.current?.setPositionAsync(0);
+                soundRef.current?.pauseAsync().catch(() => {});
+                soundRef.current?.setPositionAsync(0).catch(() => {});
               }
             }
           }
@@ -1461,7 +1462,7 @@ const ChatMediaMessage: React.FC<Props> = ({
           alignItems: 'center', 
           justifyContent: 'flex-end', 
           marginTop: 8,
-          paddingRight: 2 
+          alignSelf: 'stretch'
         }}>
           {isEdited && (
             <Text style={{ 

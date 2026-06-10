@@ -121,6 +121,8 @@ export default function CoachMessagesScreen() {
             preview = `🎤 Voice Message${durStr}`;
           } else if (p?.type === 'session_invite' || p?.type === 'call_invite') {
             preview = '📹 Session Invitation';
+          } else if (p?.type === 'deleted') {
+            preview = p.deleted_by === user?.id ? 'You deleted a message' : 'Message deleted';
           } else {
             preview = p?.text || preview; 
           }
@@ -198,6 +200,8 @@ export default function CoachMessagesScreen() {
             preview = `🎤 Voice Message${durStr}`;
           } else if (p?.type === 'session_invite' || p?.type === 'call_invite') {
             preview = '📹 Session Invitation';
+          } else if (p?.type === 'deleted') {
+            preview = p.deleted_by === user?.id ? 'You deleted a message' : 'Message deleted';
           } else {
             preview = p?.text || preview; 
           }

@@ -18,9 +18,9 @@ export default function ClientTabLayout() {
         tabBarStyle: {
           backgroundColor: '#020617',
           borderTopWidth: 0,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 24,
           paddingTop: 12,
-          height: Platform.OS === 'ios' ? 88 : 72,
+          height: Platform.OS === 'ios' ? 88 : 84,
           elevation: 0,
           shadowOpacity: 0
         },
