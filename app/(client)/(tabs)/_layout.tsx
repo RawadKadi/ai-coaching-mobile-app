@@ -3,6 +3,7 @@ import { Home, Activity, MessageCircle, User, Camera } from 'lucide-react-native
 import { View, TouchableOpacity, Platform } from 'react-native';
 import { useUnread } from '@/contexts/UnreadContext';
 import { useTheme } from '@/contexts/BrandContext';
+import { FuturisticTabBar } from '@/components/FuturisticTabBar';
 
 export default function ClientTabLayout() {
   const router = useRouter();
@@ -11,24 +12,9 @@ export default function ClientTabLayout() {
 
   return (
     <Tabs
+      tabBar={props => <FuturisticTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#3B82F6',
-        tabBarInactiveTintColor: '#64748B',
-        tabBarStyle: {
-          backgroundColor: '#020617',
-          borderTopWidth: 0,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 24,
-          paddingTop: 12,
-          height: Platform.OS === 'ios' ? 88 : 84,
-          elevation: 0,
-          shadowOpacity: 0
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '700',
-          marginTop: 4
-        }
       }}
     >
       <Tabs.Screen

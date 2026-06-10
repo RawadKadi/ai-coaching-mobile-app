@@ -2,41 +2,16 @@ import { Tabs } from 'expo-router';
 import { Platform, View } from 'react-native';
 import { Home, Users, User, Calendar, MessageSquare } from 'lucide-react-native';
 import { useUnread } from '@/contexts/UnreadContext';
+import { FuturisticTabBar } from '@/components/FuturisticTabBar';
 
 export default function CoachTabLayout() {
   const { unreadCount } = useUnread();
   
   return (
       <Tabs
+        tabBar={props => <FuturisticTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: '#3B82F6', 
-          tabBarInactiveTintColor: '#475569', 
-          tabBarStyle: {
-            backgroundColor: '#020617',
-            borderTopWidth: 1,
-            borderTopColor: '#0F172A',
-            paddingBottom: Platform.OS === 'ios' ? 32 : 24,
-            paddingTop: 12,
-            height: Platform.OS === 'ios' ? 96 : 84,
-            elevation: 0,
-            shadowOpacity: 0,
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-          },
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontFamily: 'Outfit_700Bold', 
-            fontWeight: 'black',
-            marginTop: 4,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          },
-          tabBarBackground: () => (
-            <View style={{ flex: 1, backgroundColor: '#020617' }} />
-          ),
         }}
       >
         <Tabs.Screen
