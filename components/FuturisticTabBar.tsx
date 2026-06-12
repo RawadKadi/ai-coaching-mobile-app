@@ -4,7 +4,7 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
 
 const { width } = Dimensions.get('window');
-const TAB_BAR_MARGIN = 24;
+const TAB_BAR_MARGIN = 16; // Decreased margin to make navbar wider
 const TAB_BAR_WIDTH = width - (TAB_BAR_MARGIN * 2);
 
 export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -60,26 +60,34 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
 
   return (
     <View style={styles.container}>
-      {/* Background with rounded corners */}
+      {/* Background with rounded corners and clipped glow */}
       <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }]}>
         <BlurView intensity={60} tint="dark" style={styles.blurContainer} />
+        
+        {/* Glow Indicator (Simulating CSS blur with concentric fading circles) */}
+        <Animated.View
+          style={[
+            styles.glowIndicatorWrapper,
+            { width: tabWidth },
+            { transform: [{ translateX: indicatorPosition }] }
+          ]}
+        >
+          <View style={styles.glowIndicatorShadow}>
+            {[...Array(8)].map((_, i) => (
+              <View 
+                key={i} 
+                style={[
+                  styles.glowOrb, 
+                  { 
+                    transform: [{ scale: 1.6 - (i * 0.12) }], 
+                    opacity: 0.05 + (i * 0.05) 
+                  }
+                ]} 
+              />
+            ))}
+          </View>
+        </Animated.View>
       </View>
-
-      {/* Glow Indicator (Simulating CSS blur with concentric fading circles) */}
-      <Animated.View
-        style={[
-          styles.glowIndicatorWrapper,
-          { width: tabWidth },
-          { transform: [{ translateX: indicatorPosition }] }
-        ]}
-      >
-        <View style={styles.glowIndicatorShadow}>
-          <View style={[styles.glowOrb, { transform: [{ scale: 1.5 }], opacity: 0.15 }]} />
-          <View style={[styles.glowOrb, { transform: [{ scale: 1.2 }], opacity: 0.25 }]} />
-          <View style={[styles.glowOrb, { transform: [{ scale: 0.9 }], opacity: 0.4 }]} />
-          <View style={[styles.glowOrb, { transform: [{ scale: 0.6 }], opacity: 0.6 }]} />
-        </View>
-      </Animated.View>
 
       {/* Tab Items */}
       <View style={styles.tabsWrapper}>
@@ -203,7 +211,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#2563EB', // Darkened blue (blue-600)
   },
   tabButton: {
     flex: 1, // Let flexbox distribute space perfectly
