@@ -8,6 +8,7 @@ import { Search, ChevronRight, Users, MessageSquare, Activity, UserPlus, Zap, Fi
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
+import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import { Pressable, Alert } from 'react-native';
 
 interface ClientWithProfile {
@@ -229,7 +230,7 @@ export default function ClientsScreen() {
           </View>
         </View>
 
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           {activeTab === 'clients' ? (
             <MotiView key="clients-tab" from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} exit={{ opacity: 0, translateY: -10 }}>
               {/* Athletes Hero */}
