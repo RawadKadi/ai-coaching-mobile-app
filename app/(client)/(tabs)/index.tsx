@@ -29,13 +29,15 @@ import { formatCompactNumber } from '@/lib/format-utils';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isHealthSyncAvailable, requestHealthPermissions, getTodaySteps } from '@/lib/health-service';
-
 import { FirstTimeHeroCards } from '@/components/client/FirstTimeHeroCards';
+import { GlassNavbar } from '@/components/GlassNavbar';
+import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 
 export default function ClientDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, client, loading: authLoading } = useAuth();
+  const { handleScroll } = useTabBarScroll();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [todayCheckIn, setTodayCheckIn] = useState<CheckIn | null>(null);
@@ -323,12 +325,19 @@ export default function ClientDashboard() {
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
       <StatusBar barStyle="light-content" translucent />
-      <View style={{ flex: 1, paddingTop: insets.top }}>
-          {/* Refined Client Header */}
+      <ScrollView 
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: insets.top + 80, paddingBottom: 140 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" progressViewOffset={insets.top + 60} />}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+          {/* Refined Client Header (Now scrolls under the glass navbar) */}
           <MotiView 
               from={{ opacity: 0, translateY: -10 }}
               animate={{ opacity: 1, translateY: 0 }}
-              className="px-6 py-10 flex-row items-center justify-between"
+              className="px-6 pb-6 flex-row items-center justify-between"
           >
               <View>
                   <Text className="text-white text-3xl font-black tracking-tighter">Good morning,</Text>
@@ -343,12 +352,7 @@ export default function ClientDashboard() {
               </TouchableOpacity>
           </MotiView>
 
-          <ScrollView 
-            className="flex-1 px-3" 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 140 }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" progressViewOffset={insets.top} />}
-          >
+          <View className="px-3">
             {/* First Time Hero Cards */}
             <FirstTimeHeroCards clientName={profile?.full_name?.split(' ')[0] || ''} />
 
@@ -507,8 +511,10 @@ export default function ClientDashboard() {
                     />
                 </View>
             </View>
-          </ScrollView>
-      </View>
+          </View>
+        </ScrollView>
+
+        <GlassNavbar title="Home" />
     </View>
   );
 }

@@ -39,6 +39,7 @@ export default function ClientsScreen() {
   const { brand } = useBrand();
   const { primary, secondary } = useBrandColors();
   const theme = useTheme();
+  const { handleScroll } = useTabBarScroll();
 
   const [activeTab, setActiveTab] = useState<Tab>('clients');
   const [loading, setLoading] = useState(true);
@@ -202,6 +203,8 @@ export default function ClientsScreen() {
         className="flex-1" 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
       >
         {/* Tab Switch */}

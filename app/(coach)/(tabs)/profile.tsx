@@ -9,13 +9,16 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 
 export default function CoachProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, signOut, coach, refreshProfile, user } = useAuth();
+  const { handleScroll } = useTabBarScroll();
   const { brand, canManageBrand } = useBrand();
   const [uploading, setUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleSignOut = async () => {
     console.log('[Coach Logout] Initiate');
@@ -93,6 +96,9 @@ export default function CoachProfileScreen() {
               style={{ flex: 1 }}
               showsVerticalScrollIndicator={false} 
               contentContainerStyle={{ paddingBottom: 140 }}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await refreshProfile(); setRefreshing(false); }} tintColor="#3B82F6" />}
           >
             {/* Profile Overview */}
             <MotiView from={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="items-center pt-10 pb-10 px-6">

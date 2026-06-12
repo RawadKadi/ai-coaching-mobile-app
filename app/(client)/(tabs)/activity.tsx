@@ -1,6 +1,7 @@
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Modal, StatusBar, RefreshControl, Image, Animated, Dimensions, PanResponder, StyleSheet } from 'react-native';
+import { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Modal, StatusBar, RefreshControl, Image, Animated, Dimensions, PanResponder, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing, runOnJS } from 'react-native-reanimated';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
@@ -30,10 +31,13 @@ import {
   Moon,
   Video
 } from 'lucide-react-native';
+
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { formatCompactNumber } from '@/lib/format-utils';
+import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 
 /** Returns today's date as YYYY-MM-DD in the device's local timezone, not UTC. */
 function getLocalDateString(): string {
@@ -49,6 +53,7 @@ export default function ActivityScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { client, profile, refreshProfile } = useAuth();
+  const { handleScroll } = useTabBarScroll();
   const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
@@ -75,7 +80,10 @@ export default function ActivityScreen() {
 
   // Expanded categories state
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
-    'challenges': true,
+    challenges: true,
+    dailyTasks: true,
+    nutrition: true,
+    performance: true,
   });
 
   const streakInfo = (() => {
@@ -87,6 +95,23 @@ export default function ActivityScreen() {
   const toggleCategory = (key: string) => {
     setExpandedCategories(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+
+  // Challenge subtab cross-fade: displayActiveTab lags behind activeTab during fade
+  const [displayActiveTab, setDisplayActiveTab] = useState<'all' | 'active' | 'history'>('all');
+  const tabFadeOpacity = useSharedValue(1);
+  const tabFadeStyle = useAnimatedStyle(() => ({ opacity: tabFadeOpacity.value }));
+
+  useEffect(() => {
+    if (displayActiveTab === activeTab) return;
+    tabFadeOpacity.value = withTiming(0, { duration: 130, easing: Easing.out(Easing.ease) }, (done) => {
+      if (done) {
+        runOnJS(setDisplayActiveTab)(activeTab);
+        tabFadeOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.ease) });
+      }
+    });
+  }, [activeTab]);
+
 
   // Bottom Sheet Animation state
   const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -700,6 +725,8 @@ export default function ActivityScreen() {
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -738,203 +765,242 @@ export default function ActivityScreen() {
             {/* Challenges Section */}
             
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, marginTop: 8 }}>
-              <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Challenges</Text>
-              
-              <View style={{ flexDirection: 'row', gap: 16 }}>
-                <TouchableOpacity onPress={() => setActiveTab('all')}>
-                  <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'all' ? 'white' : '#475569' }}>All</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setActiveTab('active')}>
-                  <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'active' ? 'white' : '#475569' }}>Active</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setActiveTab('history')}>
-                  <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'history' ? 'white' : '#475569' }}>History</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                onPress={() => toggleCategory('challenges')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                activeOpacity={0.7}
+              >
+                <AnimatedChevron expanded={expandedCategories.challenges} />
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Challenges</Text>
+              </TouchableOpacity>
             </View>
 
-            {(() => {
-              const filteredChallenges = motherChallenges.filter(c => {
-                const isEnded = c.status !== 'active' || new Date(c.end_date) < new Date(new Date().setHours(0,0,0,0));
-                if (activeTab === 'active') return !isEnded;
-                if (activeTab === 'history') return isEnded;
-                return true;
-              });
+            {/* Challenges collapsible content */}
+            <CollapsibleContent expanded={expandedCategories.challenges}>
+              <View>
+                {/* Tab filters */}
+                <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
+                  <TouchableOpacity onPress={() => setActiveTab('all')}>
+                    <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'all' ? 'white' : '#475569' }}>All</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setActiveTab('active')}>
+                    <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'active' ? 'white' : '#475569' }}>Active</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setActiveTab('history')}>
+                    <Text style={{ fontSize: 12, fontWeight: '900', textTransform: 'uppercase', color: activeTab === 'history' ? 'white' : '#475569' }}>History</Text>
+                  </TouchableOpacity>
+                </View>
 
-              if (filteredChallenges.length === 0) {
-                return (
-                  <View style={{ marginBottom: 24 }}>
-                    <EmptyState message="No challenges found." />
-                  </View>
-                );
-              }
+                {/* Challenge list fades on tab switch */}
+                <Reanimated.View style={tabFadeStyle}>
+                  {(() => {
+                    const filteredChallenges = motherChallenges.filter(c => {
+                      const isEnded = c.status !== 'active' || new Date(c.end_date) < new Date(new Date().setHours(0,0,0,0));
+                      if (displayActiveTab === 'active') return !isEnded;
+                      if (displayActiveTab === 'history') return isEnded;
+                      return true;
+                    });
 
-              return (
-                <View style={{ marginBottom: 24 }}>
-                  {filteredChallenges.map((motherChallenge: any) => {
-                    const currentDay = Math.max(1, Math.floor((new Date(selectedDate).getTime() - new Date(motherChallenge.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1);
-                    const isEnded = motherChallenge.status !== 'active' || new Date(motherChallenge.end_date) < new Date(new Date().setHours(0,0,0,0));
-                    const isFailed = isEnded && motherChallenge.completed_subs === 0;
-                    const isCompleted = isEnded && motherChallenge.completed_subs > 0;
+                    if (filteredChallenges.length === 0) {
+                      return (
+                        <View style={{ marginBottom: 24 }}>
+                          <EmptyState message="No challenges found." />
+                        </View>
+                      );
+                    }
 
                     return (
-                      <View key={motherChallenge.id} style={{ marginBottom: 16 }}>
-                        <TouchableOpacity
-                          onPress={() => router.push(`/(client)/challenges/${motherChallenge.id}` as any)}
-                          style={{
-                            backgroundColor: '#0f172a',
-                            borderRadius: 32,
-                            padding: 24,
-                            borderWidth: 1,
-                            borderColor: isFailed ? '#ef444450' : isCompleted ? '#10b98150' : '#1e293b',
-                            opacity: (isFailed || isCompleted) ? 0.6 : 1
-                          }}
-                        >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              {isFailed ? (
-                                <>
-                                  <X size={16} color="#EF4444" />
-                                  <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
-                                    Failed Plan
-                                  </Text>
-                                </>
-                              ) : isCompleted ? (
-                                <>
-                                  <CheckCircle size={16} color="#10B981" />
-                                  <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
-                                    Completed Plan
-                                  </Text>
-                                </>
-                              ) : (
-                                <>
-                                  <Target size={16} color="#3B82F6" />
-                                  <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
-                                    Active Challenge
-                                  </Text>
-                                </>
-                              )}
-                            </View>
-                          <ChevronRight size={16} color="#475569" />
-                        </View>
+                      <View style={{ marginBottom: 24 }}>
+                        {filteredChallenges.map((motherChallenge: any, idx: number) => {
+                          const currentDay = Math.max(1, Math.floor((new Date(selectedDate).getTime() - new Date(motherChallenge.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                          const isEnded = motherChallenge.status !== 'active' || new Date(motherChallenge.end_date) < new Date(new Date().setHours(0,0,0,0));
+                          const isFailed = isEnded && motherChallenge.completed_subs === 0;
+                          const isCompleted = isEnded && motherChallenge.completed_subs > 0;
 
-                        <Text style={{ color: 'white', fontSize: 20, fontWeight: '900', marginBottom: 12 }}>
-                          🔥 {motherChallenge.name}
-                        </Text>
+                          return (
+                            <ScaleFadeIn key={motherChallenge.id} delay={idx * 60}>
+                              <View style={{ marginBottom: 16 }}>
+                                <TouchableOpacity
+                                  onPress={() => router.push(`/(client)/challenges/${motherChallenge.id}` as any)}
+                                  style={{
+                                    backgroundColor: '#0f172a',
+                                    borderRadius: 32,
+                                    padding: 24,
+                                    borderWidth: 1,
+                                    borderColor: isFailed ? '#ef444450' : isCompleted ? '#10b98150' : '#1e293b',
+                                    opacity: (isFailed || isCompleted) ? 0.6 : 1
+                                  }}
+                                >
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                      {isFailed ? (
+                                        <>
+                                          <X size={16} color="#EF4444" />
+                                          <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>Failed Plan</Text>
+                                        </>
+                                      ) : isCompleted ? (
+                                        <>
+                                          <CheckCircle size={16} color="#10B981" />
+                                          <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>Finished</Text>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Target size={16} color="#3B82F6" />
+                                          <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>Active Challenge</Text>
+                                        </>
+                                      )}
+                                    </View>
+                                    <ChevronRight size={16} color="#475569" />
+                                  </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 6 }}>
-                          <CalendarIcon size={14} color="#94A3B8" />
-                          <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '700' }}>
-                            Day {currentDay} of {motherChallenge.duration_days} • {motherChallenge.total_subs} Total Protocols
-                          </Text>
-                        </View>
+                                  <Text style={{ color: 'white', fontSize: 20, fontWeight: '900', marginBottom: 12 }}>
+                                    🔥 {motherChallenge.name}
+                                  </Text>
 
-                        <View style={{ height: 12, backgroundColor: '#1e293b', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
-                          <View
-                            style={{
-                              height: '100%',
-                              width: `${Math.min(100, (motherChallenge.completed_subs / Math.max(1, motherChallenge.total_subs)) * 100)}%`,
-                              backgroundColor: '#3B82F6',
-                              borderRadius: 6
-                            }}
-                          />
-                        </View>
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-                          <Text style={{ color: 'white', fontSize: 12, fontWeight: '900' }}>
-                            {Math.round((motherChallenge.completed_subs / Math.max(1, motherChallenge.total_subs)) * 100)}%
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                  })}
-                </View>
-              );
-            })()}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 6 }}>
+                                    <CalendarIcon size={14} color="#94A3B8" />
+                                    <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '700' }}>
+                                      Day {currentDay} of {motherChallenge.duration_days} • {motherChallenge.total_subs} Total Tasks
+                                    </Text>
+                                  </View>
+
+                                  <View style={{ height: 12, backgroundColor: '#1e293b', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
+                                    <View
+                                      style={{
+                                        height: '100%',
+                                        width: `${Math.min(100, (motherChallenge.completed_subs / Math.max(1, motherChallenge.total_subs)) * 100)}%`,
+                                        backgroundColor: '#3B82F6',
+                                        borderRadius: 6
+                                      }}
+                                    />
+                                  </View>
+                                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                                    <Text style={{ color: 'white', fontSize: 12, fontWeight: '900' }}>
+                                      {Math.round((motherChallenge.completed_subs / Math.max(1, motherChallenge.total_subs)) * 100)}%
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              </View>
+                            </ScaleFadeIn>
+                          );
+                        })}
+                      </View>
+                    );
+                  })()}
+                </Reanimated.View>
+              </View>
+            </CollapsibleContent>
 
 
             {/* Habits Section */}
             <View style={{ marginBottom: 16, marginTop: 8 }}>
-              <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Daily Tasks</Text>
+              <TouchableOpacity
+                onPress={() => toggleCategory('dailyTasks')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                activeOpacity={0.7}
+              >
+                <AnimatedChevron expanded={expandedCategories.dailyTasks} />
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Daily Tasks</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ marginBottom: 24 }}>
-              {habits.length === 0 ? (
-                <EmptyState message="No daily tasks established." />
-              ) : (
-                <View style={{ gap: 12 }}>
-                  {habits.map((habit, idx) => {
-                    const log = habitLogs.find(l => l.habit_id === habit.id);
-                    const isCompleted = log?.completed || false;
-                    return (
-                      <ActivityCard
-                        key={habit.id}
-                        title={habit.name}
-                        sub={
-                          (habit.category ? `${habit.category.toUpperCase()} • ` : '') +
-                          (habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle')
-                        }
-                        completed={isCompleted}
-                        icon={<CheckCircle size={20} color={isCompleted ? '#10B981' : '#94A3B8'} />}
-                        onToggle={() => toggleHabit(habit)}
-                        delay={idx * 50}
-                      />
-                    );
-                  })}
-                </View>
-              )}
-            </View>
+            <CollapsibleContent expanded={expandedCategories.dailyTasks}>
+              <View style={{ marginBottom: 24 }}>
+                {habits.length === 0 ? (
+                  <EmptyState message="No daily tasks established." />
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {habits.map((habit, idx) => {
+                      const log = habitLogs.find(l => l.habit_id === habit.id);
+                      const isCompleted = log?.completed || false;
+                      return (
+                        <ActivityCard
+                          key={habit.id}
+                          title={habit.name}
+                          sub={
+                            (habit.category ? `${habit.category.toUpperCase()} • ` : '') +
+                            (habit.verification_type === 'camera' ? 'Camera Verification Required' : 'Manual Toggle')
+                          }
+                          completed={isCompleted}
+                          icon={<CheckCircle size={20} color={isCompleted ? '#10B981' : '#94A3B8'} />}
+                          onToggle={() => toggleHabit(habit)}
+                          delay={idx * 60}
+                        />
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            </CollapsibleContent>
     
 
 
             {/* Meals Section */}
             <View style={{ marginBottom: 16, marginTop: 8 }}>
-              <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Nutrition</Text>
+              <TouchableOpacity
+                onPress={() => toggleCategory('nutrition')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                activeOpacity={0.7}
+              >
+                <AnimatedChevron expanded={expandedCategories.nutrition} />
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Nutrition</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ marginBottom: 24 }}>
-              {meals.length === 0 ? (
-                <EmptyState message="No meals tracked for today." />
-              ) : (
-                <View style={{ gap: 12 }}>
-                  {meals.map((meal, idx) => (
-                    <ActivityCard
-                      key={meal.id}
-                      title={meal.name}
-                      sub={`${meal.meal_type.toUpperCase()} • ${formatCompactNumber(meal.calories || 0)} kcal`}
-                      completed={true}
-                      icon={<Utensils size={20} color="#F59E0B" />}
-                      readOnly
-                      delay={idx * 50}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
+            <CollapsibleContent expanded={expandedCategories.nutrition}>
+              <View style={{ marginBottom: 24 }}>
+                {meals.length === 0 ? (
+                  <EmptyState message="No meals tracked for today." />
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {meals.map((meal, idx) => (
+                      <ActivityCard
+                        key={meal.id}
+                        title={meal.name}
+                        sub={`${meal.meal_type.toUpperCase()} • ${formatCompactNumber(meal.calories || 0)} kcal`}
+                        completed={true}
+                        icon={<Utensils size={20} color="#F59E0B" />}
+                        readOnly
+                        delay={idx * 60}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            </CollapsibleContent>
     
 
 
             {/* Workouts Section */}
             <View style={{ marginBottom: 16, marginTop: 8 }}>
-              <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Performance</Text>
+              <TouchableOpacity
+                onPress={() => toggleCategory('performance')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                activeOpacity={0.7}
+              >
+                <AnimatedChevron expanded={expandedCategories.performance} />
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: '900' }}>Performance</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ marginBottom: 24 }}>
-              {workouts.length === 0 ? (
-                <EmptyState message="No workouts recorded for today." />
-              ) : (
-                <View style={{ gap: 12 }}>
-                  {workouts.map((workout, idx) => (
-                    <ActivityCard
-                      key={workout.id}
-                      title={workout.name}
-                      sub={`${workout.duration_minutes} MIN • ${workout.exercises?.length || 0} EXERCISES`}
-                      completed={true}
-                      icon={<Dumbbell size={20} color="#8B5CF6" />}
-                      readOnly
-                      delay={idx * 50}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
+            <CollapsibleContent expanded={expandedCategories.performance}>
+              <View style={{ marginBottom: 24 }}>
+                {workouts.length === 0 ? (
+                  <EmptyState message="No workouts recorded for today." />
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {workouts.map((workout, idx) => (
+                      <ActivityCard
+                        key={workout.id}
+                        title={workout.name}
+                        sub={`${workout.duration_minutes} MIN • ${workout.exercises?.length || 0} EXERCISES`}
+                        completed={true}
+                        icon={<Dumbbell size={20} color="#8B5CF6" />}
+                        readOnly
+                        delay={idx * 60}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            </CollapsibleContent>
     
 
           </View>
@@ -1181,45 +1247,130 @@ const SectionHeader = ({ title, count, marginTop = 0 }: any) => (
   </View>
 );
 
+
+// Smooth collapsible wrapper:
+//  - Open: Expands height via LayoutAnimation, then fades/scales content in
+//  - Close: Fades/scales content out (190ms), THEN collapses height via LayoutAnimation
+const CollapsibleContent = ({ expanded, children }: { expanded: boolean; children: ReactNode }) => {
+  const [shouldRender, setShouldRender] = useState(expanded);
+  const opacity = useSharedValue(expanded ? 1 : 0);
+  const scale = useSharedValue(expanded ? 1 : 0.96);
+  const isFirstRender = useRef(true);
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    // Skip animation on initial mount — everything starts expanded
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    const easeCfg = { easing: Easing.out(Easing.ease) };
+
+    if (expanded) {
+      // Mount content, expand height via LayoutAnimation, fade in via Reanimated
+      setShouldRender(true);
+      LayoutAnimation.configureNext({
+        duration: 320,
+        create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.scaleXY },
+        update: { type: LayoutAnimation.Types.easeInEaseOut },
+      });
+      opacity.value = withTiming(1, { duration: 280, ...easeCfg });
+      scale.value = withTiming(1, { duration: 280, ...easeCfg });
+    } else {
+      // Fade/scale out content first (190ms), then collapse height via LayoutAnimation
+      opacity.value = withTiming(0, { duration: 190, ...easeCfg });
+      scale.value = withTiming(0.96, { duration: 190, ...easeCfg });
+      
+      timeoutRef.current = setTimeout(() => {
+        LayoutAnimation.configureNext({
+          duration: 260,
+          update: { type: LayoutAnimation.Types.easeInEaseOut },
+        });
+        setShouldRender(false);
+      }, 190);
+    }
+  }, [expanded]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  if (!shouldRender) return null;
+  return <Reanimated.View style={style}>{children}</Reanimated.View>;
+};
+
+// Mirrors the AnimatedList pattern: scale 0.7→1 + opacity 0→1, pure timing, no bounce
+
+const ScaleFadeIn = ({ children, delay = 0 }: { children: ReactNode; delay?: number }) => {
+  const scale = useSharedValue(0.7);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    const config = { duration: 220, easing: Easing.out(Easing.ease) };
+    if (delay > 0) {
+      const t = setTimeout(() => {
+        scale.value = withTiming(1, config);
+        opacity.value = withTiming(1, config);
+      }, delay);
+      return () => clearTimeout(t);
+    } else {
+      scale.value = withTiming(1, config);
+      opacity.value = withTiming(1, config);
+    }
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return <Reanimated.View style={style}>{children}</Reanimated.View>;
+};
+
 const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly, delay = 0 }: any) => (
-  <View style={{ marginBottom: 12 }}>
-    <TouchableOpacity
-      activeOpacity={0.7}
-      disabled={!onPress}
-      onPress={onPress}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#0f172a66',
-        borderRadius: 32,
-        borderWidth: 1,
-        borderColor: completed ? '#3b82f633' : '#1e293b'
-      }}
-    >
-      <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: completed ? '#3b82f61a' : '#020617', borderColor: completed ? '#3b82f633' : '#1e293b' }}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 16, fontWeight: 'bold', color: completed ? 'white' : '#cbd5e1' }}>{title}</Text>
-        <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>{sub}</Text>
-      </View>
-      {!readOnly && (
-        <TouchableOpacity
-          onPress={() => {
-            onToggle && onToggle();
-          }}
-          style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, backgroundColor: completed ? '#2563eb' : '#020617', borderColor: completed ? '#3b82f6' : '#1e293b' }}
-        >
-          {completed ? <CheckCircle size={20} color="white" /> : <Circle size={20} color="#475569" />}
-        </TouchableOpacity>
-      )}
-      {readOnly && (
-        <ArrowUpRight size={18} color="#475569" />
-      )}
-    </TouchableOpacity>
-  </View>
+  <ScaleFadeIn delay={delay}>
+    <View style={{ marginBottom: 12 }}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        disabled={!onPress}
+        onPress={onPress}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          padding: 20,
+          backgroundColor: '#0f172a66',
+          borderRadius: 32,
+          borderWidth: 1,
+          borderColor: completed ? '#3b82f633' : '#1e293b'
+        }}
+      >
+        <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: completed ? '#3b82f61a' : '#020617', borderColor: completed ? '#3b82f633' : '#1e293b' }}>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: completed ? 'white' : '#cbd5e1' }}>{title}</Text>
+          <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>{sub}</Text>
+        </View>
+        {!readOnly && (
+          <TouchableOpacity
+            onPress={() => { onToggle && onToggle(); }}
+            style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, backgroundColor: completed ? '#2563eb' : '#020617', borderColor: completed ? '#3b82f6' : '#1e293b' }}
+          >
+            {completed ? <CheckCircle size={20} color="white" /> : <Circle size={20} color="#475569" />}
+          </TouchableOpacity>
+        )}
+        {readOnly && (
+          <ArrowUpRight size={18} color="#475569" />
+        )}
+      </TouchableOpacity>
+    </View>
+  </ScaleFadeIn>
 );
+
 
 const EmptyState = ({ message }: { message: string }) => (
   <View style={{ padding: 32, backgroundColor: '#0f172a33', borderRadius: 32, borderWidth: 1, borderColor: '#1e293b', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}>
@@ -1240,5 +1391,24 @@ const Badge = ({ label, color = "#3b82f6" }: any) => {
     }}>
       <Text style={{ color: isCustom ? '#f97316' : '#3b82f6', fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>{label}</Text>
     </View>
+  );
+};
+
+// Chevron that rotates smoothly when a section collapses/expands
+const AnimatedChevron = ({ expanded }: { expanded: boolean }) => {
+  const rotation = useSharedValue(expanded ? 0 : -90);
+
+  useEffect(() => {
+    rotation.value = withTiming(expanded ? 0 : -90, { duration: 280, easing: Easing.out(Easing.cubic) });
+  }, [expanded]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  return (
+    <Reanimated.View style={animatedStyle}>
+      <ChevronDown size={18} color="white" />
+    </Reanimated.View>
   );
 };

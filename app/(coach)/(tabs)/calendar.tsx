@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, StatusBar, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, Animated, StatusBar, Dimensions } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -11,17 +11,160 @@ import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBrandColors } from '@/contexts/BrandContext';
+import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CALENDAR_BOX_MARGIN = 24;
 const CALENDAR_BOX_PADDING = 24;
 const PAGE_WIDTH = SCREEN_WIDTH - (CALENDAR_BOX_MARGIN * 2) - (CALENDAR_BOX_PADDING * 2);
 
+interface AnimatedDayButtonProps {
+    item: Date;
+    isSelected: boolean;
+    isToday: boolean;
+    hasSessions: boolean;
+    isOtherMonth: boolean;
+    onPress: () => void;
+}
+
+const AnimatedDayButton = React.memo(({ item, isSelected, isToday, hasSessions, isOtherMonth, onPress }: AnimatedDayButtonProps) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 0.9,
+            useNativeDriver: true,
+            speed: 50,
+            bounciness: 4
+        }).start();
+    };
+
+    const handlePressOut = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 1.0,
+            useNativeDriver: true,
+            speed: 50,
+            bounciness: 4
+        }).start();
+    };
+
+    return (
+        <Pressable 
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            onPress={onPress}
+            className="items-center justify-center flex-1 py-1"
+        >
+            <Animated.View 
+                style={[{ transform: [{ scale: scaleAnim }] }]}
+                className={`w-9 h-9 rounded-full items-center justify-center ${isSelected ? 'bg-blue-600 shadow-xl shadow-blue-500/50' : ''}`}
+            >
+                <Text className={`text-base font-black ${isSelected ? 'text-white' : isOtherMonth ? 'text-slate-800' : isToday ? 'text-blue-500' : 'text-slate-400'}`}>
+                    {item.getDate()}
+                </Text>
+                {hasSessions && (
+                    <View className={`absolute -bottom-1 w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-blue-600'}`} />
+                )}
+            </Animated.View>
+        </Pressable>
+    );
+}, (prevProps, nextProps) => {
+    return prevProps.isSelected === nextProps.isSelected &&
+           prevProps.isToday === nextProps.isToday &&
+           prevProps.hasSessions === nextProps.hasSessions &&
+           prevProps.isOtherMonth === nextProps.isOtherMonth &&
+           prevProps.item.toDateString() === nextProps.item.toDateString();
+});
+
+AnimatedDayButton.displayName = 'AnimatedDayButton';
+
+interface AnimatedSessionCardProps {
+    session: any;
+    onPress: () => void;
+}
+
+const AnimatedSessionCard = React.memo(({ session, onPress }: AnimatedSessionCardProps) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 0.96,
+            useNativeDriver: true,
+            speed: 50,
+            bounciness: 4
+        }).start();
+    };
+
+    const handlePressOut = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 1.0,
+            useNativeDriver: true,
+            speed: 50,
+            bounciness: 4
+        }).start();
+    };
+
+    return (
+        <Pressable 
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            onPress={onPress}
+        >
+            {({ pressed }) => (
+                <Animated.View 
+                    style={[{ transform: [{ scale: scaleAnim }] }]}
+                    className={`border border-white/5 rounded-[36px] p-6 flex-row items-center ${pressed ? 'bg-slate-900/60' : 'bg-slate-900/40'}`}
+                >
+                    {/* Left: Time */}
+                    <View className="items-center mr-4 w-16">
+                        <Text className="text-blue-500 font-black text-lg">
+                            {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                        </Text>
+                        <Text className="text-blue-400/60 font-black text-[10px] uppercase">
+                            {new Date(session.scheduled_at).getHours() >= 12 ? 'PM' : 'AM'}
+                        </Text>
+                    </View>
+
+                    {/* Vertical Line */}
+                    <View className="w-[2px] h-12 bg-blue-600/30 rounded-full mr-6" />
+
+                    {/* Middle: Info */}
+                    <View className="flex-1">
+                        <Text className="text-white font-black text-lg tracking-tight leading-tight mb-1">
+                            {session.session_type === 'video' ? 'Performance Video Call' : 'Strategic Coaching'}
+                        </Text>
+                        <Text className="text-slate-500 font-bold text-xs">
+                            {session.client?.profiles?.full_name} • 60 min
+                        </Text>
+                    </View>
+
+                    {/* Right: Avatar & Icon */}
+                    <View className="flex-row items-center gap-2">
+                        <BrandedAvatar 
+                            name={session.client?.profiles?.full_name} 
+                            imageUrl={session.client?.profiles?.avatar_url} 
+                            size={32} 
+                        />
+                        <View className="w-8 h-8 rounded-full bg-cyan-400/20 items-center justify-center">
+                            <Video size={14} color="#22D3EE" />
+                        </View>
+                    </View>
+                </Animated.View>
+            )}
+        </Pressable>
+    );
+});
+
+AnimatedSessionCard.displayName = 'AnimatedSessionCard';
+
 export default function CalendarScreen() {
   const { profile, coach } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
+  const { primary, secondary } = useBrandColors();
+  const { handleScroll } = useTabBarScroll();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,6 +175,28 @@ export default function CalendarScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [initialClientData, setInitialClientData] = useState<any>(null);
+  
+  // Animation scales for buttons
+  const calendarBtnScale = useRef(new Animated.Value(1)).current;
+  const plusBtnScale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = (scaleAnim: Animated.Value) => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4
+    }).start();
+  };
+
+  const handlePressOut = (scaleAnim: Animated.Value) => {
+    Animated.spring(scaleAnim, {
+      toValue: 1.0,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4
+    }).start();
+  };
   
   const PAGE_INDICES = Array.from({ length: 101 }, (_, i) => i - 50); // -50 to 50 pages (approx 2 years)
   const INITIAL_PAGE_INDEX = 50;
@@ -142,10 +307,18 @@ export default function CalendarScreen() {
                 </Text>
                 {/* Date picker trigger */}
                 <Pressable
+                  onPressIn={() => handlePressIn(calendarBtnScale)}
+                  onPressOut={() => handlePressOut(calendarBtnScale)}
                   onPress={() => setShowDatePicker(true)}
-                  className="w-10 h-10 bg-slate-800/60 rounded-2xl items-center justify-center border border-white/8 mb-2"
                 >
-                  <CalendarDays size={18} color="#60A5FA" />
+                  {({ pressed }) => (
+                      <Animated.View 
+                          style={[{ transform: [{ scale: calendarBtnScale }] }]}
+                          className={`w-10 h-10 rounded-2xl items-center justify-center border ${pressed ? 'bg-slate-700/80 border-white/10' : 'bg-slate-800/60 border-white/8'} mb-2`}
+                      >
+                          <CalendarDays size={18} color="#60A5FA" />
+                      </Animated.View>
+                  )}
                 </Pressable>
               </View>
               <Text className="text-slate-400 font-medium">
@@ -193,27 +366,22 @@ export default function CalendarScreen() {
                       const pageDays = getDaysForPage(pageIndex);
                       const week1 = pageDays.slice(0, 7);
                       const week2 = pageDays.slice(7, 14);
-
+ 
                       const renderDay = (item: Date) => {
                           const isS = item.toDateString() === selectedDate.toDateString();
                           const isToday = item.toDateString() === new Date().toDateString();
                           const has = getSessionsForDate(item).length > 0;
+                          const isOtherMonth = item.getMonth() !== viewingMonth.getMonth();
                           return (
-                              <View key={item.toISOString()} className="flex-1 items-center justify-center">
-                                  <Pressable 
-                                      onPress={() => setSelectedDate(item)}
-                                      className="items-center justify-center"
-                                  >
-                                      <View className={`w-9 h-9 rounded-full items-center justify-center ${isS ? 'bg-blue-600 shadow-xl shadow-blue-500/50' : ''}`}>
-                                          <Text className={`text-base font-black ${isS ? 'text-white' : item.getMonth() !== viewingMonth.getMonth() ? 'text-slate-800' : isToday ? 'text-blue-500' : 'text-slate-400'}`}>
-                                              {item.getDate()}
-                                          </Text>
-                                          {has && (
-                                              <View className={`absolute -bottom-1 w-1 h-1 rounded-full ${isS ? 'bg-white' : 'bg-blue-600'}`} />
-                                          )}
-                                      </View>
-                                  </Pressable>
-                              </View>
+                              <AnimatedDayButton
+                                  key={item.toISOString()}
+                                  item={item}
+                                  isSelected={isS}
+                                  isToday={isToday}
+                                  hasSessions={has}
+                                  isOtherMonth={isOtherMonth}
+                                  onPress={() => setSelectedDate(item)}
+                              />
                           );
                       };
 
@@ -232,9 +400,11 @@ export default function CalendarScreen() {
           </View>
 
           <ScrollView 
-              className="flex-1 px-6"
+              className="flex-1 px-4 mt-6"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 160 }}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadSessions(); }} tintColor="#3B82F6" />}
           >
               <View className="mb-6 mt-4">
@@ -253,58 +423,36 @@ export default function CalendarScreen() {
                   ) : (
                       getSessionsForDate(selectedDate).map((session, idx) => (
                           <MotiView key={session.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: idx * 50 }} className="mb-4">
-                                <Pressable 
-                                    className="bg-slate-900/40 border border-white/5 rounded-[36px] p-6 flex-row items-center"
+                                <AnimatedSessionCard 
+                                    session={session}
                                     onPress={() => router.push({ pathname: '/(coach)/chat/[id]', params: { id: session.client_id } })}
-                                >
-                                    {/* Left: Time */}
-                                    <View className="items-center mr-4 w-16">
-                                        <Text className="text-blue-500 font-black text-lg">
-                                            {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                                        </Text>
-                                        <Text className="text-blue-400/60 font-black text-[10px] uppercase">
-                                            {new Date(session.scheduled_at).getHours() >= 12 ? 'PM' : 'AM'}
-                                        </Text>
-                                    </View>
-
-                                    {/* Vertical Line */}
-                                    <View className="w-[2px] h-12 bg-blue-600/30 rounded-full mr-6" />
-
-                                    {/* Middle: Info */}
-                                    <View className="flex-1">
-                                        <Text className="text-white font-black text-lg tracking-tight leading-tight mb-1">
-                                            {session.session_type === 'video' ? 'Performance Video Call' : 'Strategic Coaching'}
-                                        </Text>
-                                        <Text className="text-slate-500 font-bold text-xs">
-                                            {session.client?.profiles?.full_name} • 60 min
-                                        </Text>
-                                    </View>
-
-                                    {/* Right: Avatar & Icon */}
-                                    <View className="flex-row items-center gap-2">
-                                        <BrandedAvatar 
-                                            name={session.client?.profiles?.full_name} 
-                                            imageUrl={session.client?.profiles?.avatar_url} 
-                                            size={32} 
-                                        />
-                                        <View className="w-8 h-8 rounded-full bg-cyan-400/20 items-center justify-center">
-                                            <Video size={14} color="#22D3EE" />
-                                        </View>
-                                    </View>
-                                </Pressable>
+                                />
                           </MotiView>
                       ))
                   )}
               </View>
           </ScrollView>
 
-          <Pressable 
-              onPress={() => setShowManualScheduler(true)}
-              style={{ bottom: insets.bottom + 90 }}
-              className="absolute right-6 w-16 h-16 bg-blue-600 rounded-full items-center justify-center shadow-2xl shadow-blue-500/50 border-2 border-white/10 z-50"
-          >
-              <Plus size={32} color="white" />
-          </Pressable>
+           <Pressable 
+               onPressIn={() => handlePressIn(plusBtnScale)}
+               onPressOut={() => handlePressOut(plusBtnScale)}
+               onPress={() => setShowManualScheduler(true)}
+               style={{ 
+                   bottom: insets.bottom + 90, 
+                   position: 'absolute',
+                   right: 24,
+                   zIndex: 50
+               }}
+           >
+               {({ pressed }) => (
+                   <Animated.View 
+                       style={[{ transform: [{ scale: plusBtnScale }] }]}
+                       className={`w-16 h-16 rounded-full items-center justify-center shadow-2xl border border-white/10 ${pressed ? 'bg-blue-700 shadow-blue-500/30' : 'bg-blue-600 shadow-blue-500/50'}`}
+                   >
+                       <Plus size={32} color="white" />
+                   </Animated.View>
+               )}
+           </Pressable>
 
 
           {coach && (

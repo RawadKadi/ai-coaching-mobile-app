@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { BrandProvider } from '@/contexts/BrandContext';
 import { UnreadProvider } from '@/contexts/UnreadContext';
 import { NotificationProvider, useNotification } from '@/contexts/NotificationContext';
+import { TabBarScrollProvider } from '@/contexts/TabBarScrollContext';
 import NotificationToast from '@/components/NotificationToast';
 import { loadNotificationSound, unloadNotificationSound } from '@/lib/notification-sound';
 import SessionMonitor from '@/components/SessionMonitor';
@@ -79,7 +80,9 @@ export default function RootLayout() {
             <UnreadProvider>
               <NotificationProvider>
                 <PresenceProvider>
-                  <RootLayoutNav />
+                  <TabBarScrollProvider>
+                    <RootLayoutNav />
+                  </TabBarScrollProvider>
                 </PresenceProvider>
               </NotificationProvider>
             </UnreadProvider>
@@ -89,5 +92,3 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
-
-

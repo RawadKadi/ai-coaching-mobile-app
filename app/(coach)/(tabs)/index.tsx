@@ -30,6 +30,8 @@ import { usePresence } from '@/contexts/PresenceContext';
 import SchedulerModal from '@/components/SchedulerModal';
 import { AnalyticsSparkline } from '@/components/AnalyticsSparkline';
 import { AnalyticsDetailedModal } from '@/components/AnalyticsDetailedModal';
+import { GlassNavbar } from '@/components/GlassNavbar';
+import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import { AnimatePresence } from 'moti';
 import { X, Search } from 'lucide-react-native';
 import { Modal, TextInput } from 'react-native';
@@ -57,6 +59,7 @@ export default function CoachDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, coach } = useAuth();
+  const { handleScroll } = useTabBarScroll();
   const { unreadCount } = useUnread();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -324,21 +327,22 @@ export default function CoachDashboard() {
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
       <StatusBar barStyle="light-content" translucent />
-      <View style={{ flex: 1, paddingTop: insets.top }}>
-          <SectionList
-            style={{ flex: 1 }}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 140 }}
-            sections={groupedCheckins}
-            keyExtractor={(item, index) => item.checkin_id + index}
-            refreshControl={
-              <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={() => { setRefreshing(true); loadDashboardData(); }} 
-                tintColor="#3B82F6" 
-                progressViewOffset={insets.top}
-              />
-            }
+      <SectionList
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: insets.top + 80, paddingBottom: 140 }}
+        sections={groupedCheckins}
+        keyExtractor={(item, index) => item.checkin_id + index}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={() => { setRefreshing(true); loadDashboardData(); }} 
+            tintColor="#3B82F6" 
+            progressViewOffset={insets.top + 60}
+          />
+        }
             onEndReached={loadMoreCheckins}
             onEndReachedThreshold={0.5}
             ListHeaderComponent={
@@ -678,7 +682,6 @@ export default function CoachDashboard() {
             currentActive={displayActiveCount}
           />
 
-          {/* Plan Sent Success Modal */}
           <FeedbackModal
             visible={showPlanSentModal}
             onClose={() => setShowPlanSentModal(false)}
@@ -699,7 +702,8 @@ export default function CoachDashboard() {
             body={`Weekly plan sent to ${planSentClientName || 'your client'}.`}
             ctaLabel="Done"
           />
-      </View>
+
+      <GlassNavbar title="Dashboard" />
     </View>
   );
 }

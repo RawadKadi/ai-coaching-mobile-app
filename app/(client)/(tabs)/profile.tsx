@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, StatusBar, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
+import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import { LogOut, User, Settings, Camera, Shield, Bell, CreditCard, ChevronRight, Activity } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -34,13 +35,21 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, signOut, refreshProfile, loading: authLoading, user } = useAuth();
+  const { handleScroll } = useTabBarScroll();
   const theme = useTheme();
   const [uploading, setUploading] = useState(false);
   const [stepsSyncEnabled, setStepsSyncEnabled] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadSyncStatus();
   }, []);
+
+  const loadProfileData = async () => {
+    setRefreshing(true);
+    await refreshProfile();
+    setRefreshing(false);
+  };
 
   const loadSyncStatus = async () => {
     try {
@@ -184,9 +193,14 @@ export default function ProfileScreen() {
       <StatusBar barStyle="light-content" translucent />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <ScrollView 
-          className="flex-1 px-6" 
+          style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 140 }}
+          contentContainerStyle={{ paddingBottom: 140, paddingTop: 20 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={loadProfileData} tintColor="#3B82F6" />
+          }
         >
             {/* Header Identity */}
             <View className="items-center mt-12 mb-10">
