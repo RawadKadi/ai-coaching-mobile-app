@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Alert, Animated as RNAnimated, Easing } from 'react-native';
+import StrandsBackground from '@/components/ui/StrandsBackground';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { 
@@ -380,39 +381,17 @@ export default function ClientDashboard() {
                 />
                 <MetricCard 
                   label={stepsSyncEnabled ? "Steps" : "Sync Steps"} 
-                  value={todaySteps !== null ? `${todaySteps.toLocaleString()}` : 'Sync'} 
-                  icon={<Activity size={20} color={stepsSyncEnabled ? "#6366F1" : "#64748B"} />} 
+                  value={todaySteps !== null ? `${todaySteps.toLocaleString()}` : 'Click to Sync'} 
+                  icon={<Activity size={20} color={stepsSyncEnabled ? "#3B82F6" : "#64748B"} />} 
                   active={stepsSyncEnabled}
                   onPress={handleStepsSyncPress}
+                  showGlow={!stepsSyncEnabled}
                 />
             </View>
 
             {/* Daily Call to Action / Status */}
             {!todayCheckIn ? (
-                <MotiView 
-                  key="checkin-cta"
-                  from={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="mt-6 overflow-hidden rounded-[40px] bg-blue-600 shadow-2xl shadow-blue-500/30 border border-white/10"
-                >
-                    <TouchableOpacity 
-                      className="p-8"
-                      onPress={() => router.push('/(client)/check-in')}
-                    >
-                        <View className="flex-row items-center gap-2 mb-3">
-                          <Zap size={14} color="white" />
-                          <Text className="text-white/80 text-[10px] font-black uppercase tracking-[3px]">Daily Goal</Text>
-                        </View>
-                        <Text className="text-white text-3xl font-black tracking-tight leading-8">Complete Your Check-in</Text>
-                        <Text className="text-white/80 mt-3 font-medium text-sm leading-6">Update your coach on your energy, weight, and meal progress today.</Text>
-                        <View className="mt-8 flex-row items-center justify-between">
-                            <View className="bg-white px-5 py-2.5 rounded-full">
-                                <Text className="text-blue-600 font-black text-xs uppercase tracking-widest">Start Now</Text>
-                            </View>
-                            <ChevronRight size={24} color="white" opacity={0.5} />
-                        </View>
-                    </TouchableOpacity>
-                </MotiView>
+                <CheckInCTACard onPress={() => router.push('/(client)/check-in')} />
             ) : !todayCheckIn.ai_analysis ? (
                 <MotiView 
                   key="checkin-done"
@@ -519,14 +498,111 @@ export default function ClientDashboard() {
   );
 }
 
-const MetricCard = ({ label, value, icon, active, onPress }: any) => {
+// ─── Check-In CTA Card ───────────────────────────────────────────────────────
+// Wraps the "Complete Your Check-in" card and injects the native Strands
+// animation as an absolute background layer, faded and using brand colours.
+const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
+  const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
+
+  return (
+    <MotiView
+      key="checkin-cta"
+      from={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      style={{ marginTop: 24, borderRadius: 40, overflow: 'hidden' }}
+      className="bg-blue-600 shadow-2xl shadow-blue-500/30 border border-white/10"
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setCardSize({ width, height });
+      }}
+    >
+      {/* Faded strands animation in the background */}
+      <StrandsBackground
+        width={cardSize.width}
+        height={cardSize.height}
+        opacity={0.28}
+      />
+
+      <TouchableOpacity className="p-8" onPress={onPress}>
+        <View className="flex-row items-center gap-2 mb-3">
+          <Zap size={14} color="white" />
+          <Text className="text-white/80 text-[10px] font-black uppercase tracking-[3px]">Daily Goal</Text>
+        </View>
+        <Text className="text-white text-3xl font-black tracking-tight leading-8">Complete Your Check-in</Text>
+        <Text className="text-white/80 mt-3 font-medium text-sm leading-6">Update your coach on your energy, weight, and meal progress today.</Text>
+        <View className="mt-8 flex-row items-center justify-between">
+          <View className="bg-white px-5 py-2.5 rounded-full">
+            <Text className="text-blue-600 font-black text-xs uppercase tracking-widest">Start Now</Text>
+          </View>
+          <ChevronRight size={24} color="white" opacity={0.5} />
+        </View>
+      </TouchableOpacity>
+    </MotiView>
+  );
+};
+
+const MetricCard = ({ label, value, icon, active, onPress, showGlow = false }: any) => {
     const displayValue = typeof value === 'number' ? formatCompactNumber(value) : value;
+
+    // Auto-pulsing glow: breathes between dim and bright
+    const glowAnim = useRef(new RNAnimated.Value(0)).current;
+
+    useEffect(() => {
+        if (!showGlow) {
+            glowAnim.setValue(0);
+            return;
+        }
+        const pulse = RNAnimated.loop(
+            RNAnimated.sequence([
+                RNAnimated.timing(glowAnim, {
+                    toValue: 1,
+                    duration: 1800,
+                    easing: Easing.inOut(Easing.sin),
+                    useNativeDriver: true,
+                }),
+                RNAnimated.timing(glowAnim, {
+                    toValue: 0,
+                    duration: 1800,
+                    easing: Easing.inOut(Easing.sin),
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        pulse.start();
+        return () => pulse.stop();
+    }, [showGlow]);
+
+    const glowOpacity = glowAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.08, 0.55],
+    });
+
     return (
         <TouchableOpacity 
             onPress={onPress}
             disabled={!onPress}
-            className={`w-[47%] p-6 rounded-[36px] border-2 transition-all shadow-lg ${active ? 'bg-slate-900/50 border-white/10' : 'bg-slate-900/20 border-white/5 border-dashed'}`}
+            className={`w-[47%] p-6 rounded-[36px] border-2 transition-all shadow-lg overflow-hidden ${active ? 'bg-slate-900/50 border-white/10' : 'bg-slate-900/20 border-white/5 border-dashed'}`}
+            style={{ position: 'relative' }}
         >
+            {/* Auto-pulsing ambient glow when unsynced */}
+            {showGlow && (
+                <RNAnimated.View
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        borderRadius: 36,
+                        opacity: glowOpacity,
+                        backgroundColor: '#3B82F6',
+                        shadowColor: '#3B82F6',
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 1,
+                        shadowRadius: 32,
+                        elevation: 12,
+                    }}
+                    pointerEvents="none"
+                />
+            )}
             <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/5 mb-6 shadow-sm">
                 {icon}
             </View>

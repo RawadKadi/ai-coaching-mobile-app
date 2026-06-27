@@ -219,15 +219,15 @@ export default function ChallengeDetailScreen() {
         </View>
         {isFailed ? (
           <View className="px-3 py-1.5 bg-red-950/50 rounded-full border border-red-900/50">
-            <Text className="text-red-500 text-xs font-semibold">⚠️ Failed Plan</Text>
+            <Text className="text-red-500 text-xs font-semibold">Failed</Text>
           </View>
         ) : isCompleted ? (
           <View className="px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-            <Text className="text-emerald-500 text-xs font-semibold">✅ Completed Plan</Text>
+            <Text className="text-emerald-500 text-xs font-semibold">Completed</Text>
           </View>
         ) : (
           <View className="px-3 py-1.5 bg-blue-500/10 rounded-full border border-blue-500/20">
-            <Text className="text-blue-500 text-xs font-semibold">Active Challenge</Text>
+            <Text className="text-blue-500 text-xs font-semibold">Active</Text>
           </View>
         )}
       </View>
@@ -241,8 +241,10 @@ export default function ChallengeDetailScreen() {
 
         {/* Performance Overview */}
         <MotiView 
-          from={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
+          key={`stats-${challenge.id}`}
+          from={{ opacity: 0, translateY: 40 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'spring', damping: 18, stiffness: 120 }}
           className="mx-6 mt-6 bg-slate-900 p-6 rounded-[32px] border border-slate-800"
         >
           <View className="flex-row justify-between items-center mb-6">
@@ -340,7 +342,14 @@ export default function ChallengeDetailScreen() {
                <View className="mb-8">
                  <Text className="text-blue-400 text-sm font-black uppercase tracking-widest mb-3 ml-2">Today</Text>
                  {todayDates.map((dateStr: string, index: number) => (
-                   <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                   <MotiView
+                     key={dateStr}
+                     from={{ opacity: 0, translateY: 20 }}
+                     animate={{ opacity: 1, translateY: 0 }}
+                     transition={{ delay: index * 80 }}
+                   >
+                     <DateSection dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                   </MotiView>
                  ))}
                </View>
              )}
@@ -349,7 +358,14 @@ export default function ChallengeDetailScreen() {
                <View className="mb-8">
                  <Text className="text-slate-500 text-sm font-black uppercase tracking-widest mb-3 ml-2">Upcoming</Text>
                  {upcomingDates.map((dateStr: string, index: number) => (
-                   <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                   <MotiView
+                     key={dateStr}
+                     from={{ opacity: 0, translateY: 20 }}
+                     animate={{ opacity: 1, translateY: 0 }}
+                     transition={{ delay: index * 80 }}
+                   >
+                     <DateSection dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                   </MotiView>
                  ))}
                </View>
              )}
@@ -358,7 +374,14 @@ export default function ChallengeDetailScreen() {
                <View className="mb-8">
                  <Text className="text-slate-500 text-sm font-black uppercase tracking-widest mb-3 ml-2">Previous</Text>
                  {previousDates.map((dateStr: string, index: number) => (
-                   <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                   <MotiView
+                     key={dateStr}
+                     from={{ opacity: 0, translateY: 20 }}
+                     animate={{ opacity: 1, translateY: 0 }}
+                     transition={{ delay: index * 80 }}
+                   >
+                     <DateSection dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
+                   </MotiView>
                  ))}
                </View>
              )}
