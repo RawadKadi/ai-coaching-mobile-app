@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Target, CheckCircle, Circle, Lock, ChevronRight, Zap, Info, MessageSquare, ArrowLeft, Dumbbell, Apple, Moon } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import type { TodaysSubChallenge } from '@/types/challenges-v3';
+import { NestedTaskCard } from '@/components/NestedTaskCard';
 
 export default function ClientChallengesScreen() {
   const router = useRouter();
@@ -211,7 +212,7 @@ export default function ClientChallengesScreen() {
             {motherChallenges.length === 0 ? (
                 <View style={{ marginHorizontal: 24, padding: 48, backgroundColor: '#0f172a4d', borderRadius: 32, borderWidth: 1, borderColor: '#0f172a', alignItems: 'center' }}>
                     <Target size={48} color="#1E293B" />
-                    <Text style={{ color: '#475569', fontWeight: 'bold', marginTop: 16, fontStyle: 'italic' }}>No protocols active for local sector</Text>
+                    <Text style={{ color: '#475569', fontWeight: 'bold', marginTop: 16, fontStyle: 'italic' }}>No tasks active today</Text>
                 </View>
             ) : (
                 motherChallenges.map((mother, mIdx) => (
@@ -226,48 +227,20 @@ export default function ClientChallengesScreen() {
                         </TouchableOpacity>
                         <View style={{ paddingHorizontal: 24, gap: 12 }}>
                             {mother.subs.map((sub, sIdx) => (
-                                <TouchableOpacity 
+                                <NestedTaskCard 
                                     key={sub.id}
-                                    onPress={() => toggleSubChallenge(sub)}
-                                    style={{ 
-                                        flexDirection: 'row', 
-                                        alignItems: 'flex-start', 
-                                        padding: 20, 
-                                        borderRadius: 32, 
-                                        borderWidth: 2, 
-                                        backgroundColor: sub.completed ? '#0f172a' : '#0f172a4d',
-                                        borderColor: sub.completed ? '#1e293b' : '#0f172a',
-                                        opacity: sub.completed ? 0.6 : 1
-                                    }}
-                                >
-                                    <View style={{ marginRight: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
-                                        {getFocusIcon(sub.focus_type, sub.completed)}
-                                    </View>
-                                    <View style={{ flex: 1, paddingRight: 8 }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '900', color: sub.completed ? '#64748b' : 'white', textDecorationLine: sub.completed ? 'line-through' : 'none' }}>{sub.name}</Text>
-                                        <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
-                                            {sub.focus_type} • {sub.intensity}
-                                        </Text>
-                                    </View>
-                                    <View style={{ paddingTop: 4 }}>
-                                        {sub.completed ? (
-                                            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
-                                                <CheckCircle size={16} color="white" />
-                                            </View>
-                                        ) : (
-                                            <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Info size={12} color="#1E293B" />
-                                            </View>
-                                        )}
-                                    </View>
-                                </TouchableOpacity>
+                                    task={sub}
+                                    index={sIdx}
+                                    onToggleParent={toggleSubChallenge}
+                                    layoutType="feed"
+                                />
                             ))}
                         </View>
                     </View>
                 ))
             )}
 
-            {/* Upcoming protocols */}
+            {/* Upcoming tasks */}
             {upcomingChallenges.length > 0 && (
                 <View style={{ paddingHorizontal: 24, marginTop: 16 }}>
                     <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16, paddingHorizontal: 4 }}>Upcoming Sequences</Text>
@@ -289,7 +262,7 @@ export default function ClientChallengesScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={{ color: '#3B82F6', fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>Signal from {coachName}</Text>
-                        <Text style={{ color: '#94a3b8', fontWeight: 'bold', marginTop: 4, fontSize: 14, fontStyle: 'italic' }}>"Complete today's protocols to advance to the next stage."</Text>
+                        <Text style={{ color: '#94a3b8', fontWeight: 'bold', marginTop: 4, fontSize: 14, fontStyle: 'italic' }}>"Complete today's tasks to advance to the next stage."</Text>
                     </View>
                 </View>
             ) : null}

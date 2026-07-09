@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Linking, Modal, SafeAreaView, Animated, Dimensions, Pressable,
-  ActivityIndicator, PanResponder
+  ActivityIndicator, PanResponder, ScrollView
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
@@ -69,7 +69,7 @@ type MediaContent = {
   completedAt?: string;
   focusType?: string;
   intensity?: string;
-  // Protocol Task fields
+  // Daily Task fields
   isCompletion?: boolean;
   clientName?: string;
   description?: string;
@@ -614,7 +614,7 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
           <Text style={[styles.challengeTitle, { color: '#3B82F6', fontFamily: theme.typography.fontFamily }]}>Task Completed</Text>
         </View>
         <View style={styles.challengeBody}>
-          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Protocol Task'}</Text>
+          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Daily Task'}</Text>
         </View>
         <View style={styles.challengeFooter}><Text style={styles.challengeFooterText}>Completed at {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
       </View>
@@ -1597,7 +1597,7 @@ const ChatMediaMessage: React.FC<Props> = ({
               </View>
 
               {/* Content */}
-              <View style={{ padding: 20 }}>
+              <ScrollView contentContainerStyle={{ padding: 20 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                   <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center' }}>
                     <Trophy size={20} color="#10B981" />
@@ -1612,10 +1612,43 @@ const ChatMediaMessage: React.FC<Props> = ({
 
                 {media.taskDescription ? (
                   <View style={{ marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                    <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Description</Text>
-                    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 20, fontFamily: theme.typography.fontFamily }}>
-                      {media.taskDescription}
-                    </Text>
+                    {(() => {
+                        try {
+                            const parsed = JSON.parse(media.taskDescription);
+                            if (parsed.sub_tasks) {
+                                return (
+                                    <View>
+                                        <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 8, fontFamily: theme.typography.fontFamily }}>Daily Plan</Text>
+                                        {parsed.global_rule ? (
+                                            <View style={{ marginBottom: 12, padding: 10, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
+                                                <Text style={{ color: '#E2E8F0', fontSize: 13, fontFamily: theme.typography.fontFamily, fontStyle: 'italic' }}>"{parsed.global_rule}"</Text>
+                                            </View>
+                                        ) : null}
+                                        {parsed.sub_tasks.map((task: any, idx: number) => (
+                                            <View key={task.id || idx} style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start' }}>
+                                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3B82F6', marginTop: 6, marginRight: 8 }} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={{ color: 'white', fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily }}>{task.exercise}</Text>
+                                                    <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 2, fontFamily: theme.typography.fontFamily }}>{task.sets} {task.sets === 1 ? 'SET' : 'SETS'} • {task.notes}</Text>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </View>
+                                );
+                            }
+                        } catch (e) {
+                            // Fallback to normal text rendering
+                        }
+                        
+                        return (
+                            <View>
+                                <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Description</Text>
+                                <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 20, fontFamily: theme.typography.fontFamily }}>
+                                  {media.taskDescription}
+                                </Text>
+                            </View>
+                        );
+                    })()}
                   </View>
                 ) : null}
 
@@ -1650,7 +1683,7 @@ const ChatMediaMessage: React.FC<Props> = ({
                     </Text>
                   </View>
                 </View>
-              </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>

@@ -68,7 +68,7 @@ export default function PersonalInformationScreen() {
                 >
                     <View className="mb-8">
                         <Text className="text-white text-2xl font-black mb-2 tracking-tight">Your Details</Text>
-                        <Text className="text-slate-400 text-sm font-medium">This information helps your coach tailor your protocol.</Text>
+                        <Text className="text-slate-400 text-sm font-medium">This information helps your coach tailor your plan.</Text>
                     </View>
 
                     {/* Account Info */}

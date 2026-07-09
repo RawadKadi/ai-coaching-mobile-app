@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
@@ -184,17 +184,42 @@ export default function ReviewChallengesScreen() {
     }
   };
 
+  const renderDescription = (description: string) => {
+    try {
+        const parsed = JSON.parse(description);
+        if (parsed && parsed.sub_tasks && Array.isArray(parsed.sub_tasks)) {
+            return (
+                <View className="mt-2">
+                    {parsed.sub_tasks.map((st: any, i: number) => (
+                        <View key={i} className="flex-row items-start gap-3 mb-3">
+                            <View className="w-4 h-4 mt-0.5 rounded border border-slate-700 bg-slate-800/50" />
+                            <View className="flex-1">
+                                <Text className="text-slate-200 text-sm font-bold">{st.exercise} <Text className="text-blue-400">({st.sets} {st.sets === 1 ? 'Set' : 'Sets'})</Text></Text>
+                                {st.notes && <Text className="text-slate-400 text-xs mt-0.5">{st.notes}</Text>}
+                            </View>
+                        </View>
+                    ))}
+                    {parsed.global_rule && (
+                        <Text className="text-slate-500 text-xs mt-3 italic">Rule: {parsed.global_rule}</Text>
+                    )}
+                </View>
+            );
+        }
+    } catch (e) {
+        // Fallback removed per instructions, but kept try/catch to prevent crashes if malformed
+    }
+    return <Text className="text-slate-400 text-sm leading-5" numberOfLines={2}>{description}</Text>;
+  };
+
   return (
-    <View className="flex-1 bg-slate-950">
-      {/* Header */}
-      <View className="px-6 pt-16 pb-6 flex-row items-center gap-4 border-b border-slate-900 bg-slate-950">
-        <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full">
-          <ArrowLeft size={20} color="#94A3B8" />
-        </TouchableOpacity>
-        <View className="flex-1">
-            <Text className="text-white text-xl font-bold">Review Plan</Text>
-            <Text className="text-slate-500 text-xs font-medium">Assigned to {clientName}</Text>
-        </View>
+      <View className="flex-1 bg-slate-950">
+      <SafeAreaView style={{ flex: 1 }}>
+      <View className="flex-row items-center justify-between px-6 pt-4 pb-2">
+          <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-slate-800">
+              <ArrowLeft size={20} color="#94A3B8" />
+          </TouchableOpacity>
+          <Text className="text-white text-lg font-bold">Review Plan</Text>
+          <View className="w-10" />
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }}>
@@ -253,7 +278,7 @@ export default function ReviewChallengesScreen() {
                                               <Trash2 size={18} color="#EF4444" />
                                           </TouchableOpacity>
                                       </View>
-                                      <Text className="text-slate-400 text-sm leading-5" numberOfLines={2}>{task.description}</Text>
+                                      {renderDescription(task.description)}
                                       <View className="flex-row justify-between items-end mt-4">
                                           <View className="bg-slate-950 px-2 py-1 rounded-md border border-slate-800 self-start">
                                               <Text className="text-slate-500 text-[10px] font-bold uppercase">{task.intensity}</Text>
@@ -317,7 +342,16 @@ export default function ReviewChallengesScreen() {
                     <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Description</Text>
                     <TextInput
                       className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white min-h-[100px]"
-                      value={challenges[editingId].description}
+                      value={
+                        (function() {
+                          try {
+                            const parsed = JSON.parse(challenges[editingId].description);
+                            return JSON.stringify(parsed, null, 2);
+                          } catch {
+                            return challenges[editingId].description;
+                          }
+                        })()
+                      }
                       onChangeText={(val) => handleEdit(editingId, 'description', val)}
                       placeholder="Task Details"
                       placeholderTextColor="#475569"
@@ -353,6 +387,7 @@ export default function ReviewChallengesScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      </SafeAreaView>
     </View>
   );
 }

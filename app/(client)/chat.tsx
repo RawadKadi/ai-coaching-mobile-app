@@ -14,6 +14,7 @@ import {
   Animated,
   StatusBar
 } from 'react-native';
+import GrainientBackground from '@/components/ui/GrainientBackground';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
@@ -612,11 +613,16 @@ export default function ClientMessagesScreen() {
     );
   };
 
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
+      {/* Animated Grainient background — sits behind everything */}
+      <GrainientBackground width={screenWidth} height={screenHeight} />
+
       <StatusBar barStyle="light-content" translucent />
       
-      <View style={{ paddingTop: insets.top, backgroundColor: '#020617' }} className="border-b border-white/5">
+      <View style={{ paddingTop: insets.top, backgroundColor: 'transparent' }} className="border-b border-white/5">
         <View className="flex-row items-center justify-between px-6 py-4">
             <View className="flex-row items-center gap-4">
                 <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
@@ -673,7 +679,7 @@ export default function ClientMessagesScreen() {
           )}
         </View>
 
-        <View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }} className="bg-slate-950 border-t border-white/5">
+        <View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 12, backgroundColor: 'rgba(2,6,23,0.75)', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' }}>
             <ChatInputBar 
               onSendText={sendMessage}
               onSendMedia={handleSendMedia}

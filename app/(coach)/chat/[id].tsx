@@ -17,6 +17,7 @@ import {
   StatusBar,
   TextInput
 } from 'react-native';
+import GrainientBackground from '@/components/ui/GrainientBackground';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
@@ -902,10 +903,15 @@ export default function CoachChatScreen() {
     );
   };
 
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
+      {/* Animated Grainient background — sits behind everything */}
+      <GrainientBackground width={screenWidth} height={screenHeight} />
+
       <StatusBar barStyle="light-content" />
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]} className="border-b border-white/5 bg-[#020617]/80">
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]} className="border-b border-white/5 bg-[#020617]/60">
         <View className="flex-row items-center justify-between px-4 pb-4">
           <View className="flex-row items-center gap-3">
              <TouchableOpacity onPress={() => safeBack()} className="w-10 h-10 items-center justify-center rounded-full bg-white/5">

@@ -75,7 +75,6 @@ export default function CoachLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="team-welcome" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="challenges" />
         <Stack.Screen name="clients/[id]" />
         <Stack.Screen name="clients/create-selection" options={{ presentation: 'modal' }} />
         <Stack.Screen name="clients/create-protocol" />

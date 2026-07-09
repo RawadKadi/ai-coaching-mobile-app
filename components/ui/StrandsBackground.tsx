@@ -1,43 +1,45 @@
 /**
- * StrandsBackground
+ * StrandsBackground — v4 (Smooth + Performant)
  *
- * Native React Native recreation of the WebGL Strands glow animation.
+ * KEY FIXES from previous versions:
+ *  • Removed ALL feGaussianBlur filters — they force software rendering
+ *    and are the #1 cause of dropped frames in RN SVG.
+ *  • Removed the rAF + setState loop — calling setState 60×/sec triggers
+ *    60 React reconciliation passes per second which lags the entire app.
+ *  • Back to Reanimated UI-thread worklets (zero JS thread involvement).
+ *  • Path computed ONCE per strand per frame via useDerivedValue, then
+ *    shared across all glow-pass AnimatedPaths via useAnimatedProps.
  *
- * Animation strategy:
- *   Uses a plain requestAnimationFrame loop + React state to update SVG path
- *   strings at 60 fps. Reanimated is NOT used for path animation because its
- *   worklet path for string props is not frame-continuous — it causes the
- *   "moves-stops-moves" jitter seen when animating SVG `d` strings.
- *
- * Glow strategy (3-pass per strand):
- *   1. Wide blurred halo   — feGaussianBlur stdDeviation=8, thick stroke
- *   2. Tighter mid-bloom   — feGaussianBlur stdDeviation=3, medium stroke
- *   3. Crisp bright core   — no filter, thin stroke
- *
- * Brand colours: Blue-500 (#3B82F6) · Indigo-400 (#818CF8) · Purple-600 (#7C3AED)
+ * GLOW (no filters):
+ *  Simulated with 4 concentric strokes per strand, from wide+faint → thin+bright.
+ *  This replicates the light fall-off of a blur at near-zero GPU cost.
  */
 
-import React, { useEffect, useRef, useState, memo } from 'react';
+import React, { useEffect, memo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Svg, {
-  Path,
-  Defs,
-  LinearGradient,
-  Stop,
-  Filter,
-  FeGaussianBlur,
-} from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useDerivedValue,
+  useAnimatedProps,
+  withRepeat,
+  withTiming,
+  Easing,
+  interpolate,
+} from 'react-native-reanimated';
 
-// ─── Strand definitions ────────────────────────────────────────────────────
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+
+// ─── Strand definitions ───────────────────────────────────────────────────
 interface StrandConfig {
   id: string;
-  yFraction: number;  // 0–1 vertical centre as fraction of height
-  amplitude: number;  // wave height as fraction of height
-  wavelength: number; // wave width as fraction of width
-  phase: number;      // radians phase offset
-  speed: number;      // radians/second
-  colorMid: string;
-  colorEdge: string;
+  yFraction: number;   // 0–1 vertical centre as fraction of height
+  amplitude: number;   // wave height as fraction of height
+  wavelength: number;  // wave width as fraction of width
+  phase: number;       // radians phase offset
+  speed: number;       // animation multiplier (affects full-cycle pacing)
+  colorA: string;
+  colorB: string;
 }
 
 const STRANDS: StrandConfig[] = [
@@ -47,9 +49,9 @@ const STRANDS: StrandConfig[] = [
     amplitude: 0.14,
     wavelength: 0.70,
     phase: 0,
-    speed: 0.55,
-    colorMid: '#3B82F6',
-    colorEdge: '#6366F1',
+    speed: 0.9,
+    colorA: '#3B82F6',
+    colorB: '#6366F1',
   },
   {
     id: 's1',
@@ -57,9 +59,9 @@ const STRANDS: StrandConfig[] = [
     amplitude: 0.11,
     wavelength: 0.85,
     phase: 1.5,
-    speed: 0.38,
-    colorMid: '#818CF8',
-    colorEdge: '#7C3AED',
+    speed: 0.6,
+    colorA: '#818CF8',
+    colorB: '#7C3AED',
   },
   {
     id: 's2',
@@ -67,29 +69,28 @@ const STRANDS: StrandConfig[] = [
     amplitude: 0.10,
     wavelength: 0.60,
     phase: 2.9,
-    speed: 0.68,
-    colorMid: '#60A5FA',
-    colorEdge: '#3B82F6',
+    speed: 1.1,
+    colorA: '#60A5FA',
+    colorB: '#3B82F6',
   },
 ];
 
-// ─── Wave path builder (plain JS — runs on JS thread in rAF loop) ──────────
+// ─── Wave path math (UI-thread worklet) ──────────────────────────────────
 function buildWavePath(
   width: number,
   height: number,
   strand: StrandConfig,
-  elapsedSec: number,
+  t: number,
 ): string {
+  'worklet';
   const baseY = strand.yFraction * height;
   const amp   = strand.amplitude  * height;
   const wl    = strand.wavelength * width;
-  const SEGS  = 12; // more segments = smoother curve
+  const SEGS  = 10;
   const segW  = width / SEGS;
 
-  const evalY = (x: number) =>
-    baseY + amp * Math.sin(
-      (2 * Math.PI * x) / wl + strand.phase + elapsedSec * strand.speed,
-    );
+  const evalY = (x: number): number =>
+    baseY + amp * Math.sin((2 * Math.PI * x) / wl + strand.phase + t * strand.speed);
 
   let d = `M 0 ${evalY(0).toFixed(3)}`;
   for (let i = 0; i < SEGS; i++) {
@@ -105,73 +106,93 @@ function buildWavePath(
   return d;
 }
 
-// ─── Static SVG defs (gradients + filters) ────────────────────────────────
-// Extracted into its own memo component so it never re-renders.
+// ─── Per-strand animated renderer ────────────────────────────────────────
+// Computes the path ONCE per frame via useDerivedValue,
+// then 4 AnimatedPaths share that same derived value — no repeated math.
+interface StrandGlowProps {
+  config: StrandConfig;
+  width: number;
+  height: number;
+  progress: Animated.SharedValue<number>;
+}
+
+function StrandGlow({ config, width, height, progress }: StrandGlowProps) {
+  // Compute path string once on the UI thread
+  const pathD = useDerivedValue(() => {
+    'worklet';
+    const t = interpolate(progress.value, [0, 1], [0, 2 * Math.PI]);
+    return buildWavePath(width, height, config, t);
+  });
+
+  // 4 passes share the same derived path — only read, no extra computation
+  const outerHalo  = useAnimatedProps(() => ({ d: pathD.value }));
+  const midGlow    = useAnimatedProps(() => ({ d: pathD.value }));
+  const innerGlow  = useAnimatedProps(() => ({ d: pathD.value }));
+  const core       = useAnimatedProps(() => ({ d: pathD.value }));
+
+  const gradId = `lg-${config.id}`;
+
+  return (
+    <>
+      {/* Pass 1 — outermost halo (wide + very faint) */}
+      <AnimatedPath
+        animatedProps={outerHalo}
+        stroke={`url(#${gradId})`}
+        strokeWidth={18}
+        strokeOpacity={0.12}
+        fill="none"
+        strokeLinecap="round"
+      />
+      {/* Pass 2 — mid glow */}
+      <AnimatedPath
+        animatedProps={midGlow}
+        stroke={`url(#${gradId})`}
+        strokeWidth={9}
+        strokeOpacity={0.28}
+        fill="none"
+        strokeLinecap="round"
+      />
+      {/* Pass 3 — inner bright ring */}
+      <AnimatedPath
+        animatedProps={innerGlow}
+        stroke={`url(#${gradId})`}
+        strokeWidth={4}
+        strokeOpacity={0.60}
+        fill="none"
+        strokeLinecap="round"
+      />
+      {/* Pass 4 — crisp luminous core */}
+      <AnimatedPath
+        animatedProps={core}
+        stroke={`url(#${gradId})`}
+        strokeWidth={1.5}
+        strokeOpacity={1}
+        fill="none"
+        strokeLinecap="round"
+      />
+    </>
+  );
+}
+
+// Memoised so it never re-renders (purely animated via Reanimated)
+const MemoStrandGlow = memo(StrandGlow);
+
+// ─── Static SVG defs — memoised, never re-renders ────────────────────────
 const SvgDefs = memo(() => (
   <Defs>
     {STRANDS.map((s) => (
-      <LinearGradient key={`lg-${s.id}`} id={`lg-${s.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-        <Stop offset="0%"   stopColor={s.colorMid}  stopOpacity={0}   />
-        <Stop offset="15%"  stopColor={s.colorMid}  stopOpacity={1}   />
-        <Stop offset="50%"  stopColor={s.colorEdge} stopOpacity={1}   />
-        <Stop offset="85%"  stopColor={s.colorMid}  stopOpacity={1}   />
-        <Stop offset="100%" stopColor={s.colorMid}  stopOpacity={0}   />
+      <LinearGradient key={s.id} id={`lg-${s.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+        <Stop offset="0%"   stopColor={s.colorA} stopOpacity={0}   />
+        <Stop offset="15%"  stopColor={s.colorA} stopOpacity={1}   />
+        <Stop offset="50%"  stopColor={s.colorB} stopOpacity={1}   />
+        <Stop offset="85%"  stopColor={s.colorA} stopOpacity={1}   />
+        <Stop offset="100%" stopColor={s.colorA} stopOpacity={0}   />
       </LinearGradient>
     ))}
-
-    {/* Outer halo — wide soft bloom */}
-    <Filter id="glow-outer" x="-50%" y="-500%" width="200%" height="1100%">
-      <FeGaussianBlur stdDeviation="9" result="blur" />
-    </Filter>
-
-    {/* Mid bloom — tighter bright ring */}
-    <Filter id="glow-mid" x="-25%" y="-250%" width="150%" height="600%">
-      <FeGaussianBlur stdDeviation="3.5" result="blur" />
-    </Filter>
   </Defs>
 ));
 
-// ─── Strand renderer (pure — only re-renders when its paths change) ────────
-interface StrandRowProps {
-  strand: StrandConfig;
-  d: string;
-}
-
-const StrandRow = memo(({ strand, d }: StrandRowProps) => (
-  <React.Fragment>
-    {/* Pass 1: outer halo */}
-    <Path
-      d={d}
-      stroke={`url(#lg-${strand.id})`}
-      strokeWidth={20}
-      strokeOpacity={0.65}
-      fill="none"
-      strokeLinecap="round"
-      filter="url(#glow-outer)"
-    />
-    {/* Pass 2: mid bloom */}
-    <Path
-      d={d}
-      stroke={`url(#lg-${strand.id})`}
-      strokeWidth={8}
-      strokeOpacity={0.88}
-      fill="none"
-      strokeLinecap="round"
-      filter="url(#glow-mid)"
-    />
-    {/* Pass 3: crisp core */}
-    <Path
-      d={d}
-      stroke={`url(#lg-${strand.id})`}
-      strokeWidth={1.8}
-      strokeOpacity={1}
-      fill="none"
-      strokeLinecap="round"
-    />
-  </React.Fragment>
-));
-
-// ─── Main export ───────────────────────────────────────────────────────────
+// ─── Main export ──────────────────────────────────────────────────────────
 interface StrandsBackgroundProps {
   width: number;
   height: number;
@@ -181,35 +202,21 @@ interface StrandsBackgroundProps {
 export default function StrandsBackground({
   width,
   height,
-  opacity = 0.38,
+  opacity = 0.35,
 }: StrandsBackgroundProps) {
-  // One path string per strand, updated at 60 fps via rAF
-  const [paths, setPaths] = useState<string[]>(() => STRANDS.map(() => ''));
-  const startTimeRef = useRef<number | null>(null);
-  const rafIdRef     = useRef<number>(0);
+  // Single shared clock for all strands — only ONE Reanimated animation total
+  const progress = useSharedValue(0);
 
   useEffect(() => {
-    if (width === 0 || height === 0) return;
-
-    // Seed initial paths immediately (avoids one blank frame)
-    setPaths(STRANDS.map((s) => buildWavePath(width, height, s, 0)));
-
-    const tick = (now: number) => {
-      if (startTimeRef.current === null) startTimeRef.current = now;
-      const elapsed = (now - startTimeRef.current) / 1000; // seconds
-
-      setPaths(STRANDS.map((s) => buildWavePath(width, height, s, elapsed)));
-
-      rafIdRef.current = requestAnimationFrame(tick);
-    };
-
-    rafIdRef.current = requestAnimationFrame(tick);
-
+    progress.value = withRepeat(
+      withTiming(1, { duration: 10000, easing: Easing.linear }),
+      -1,
+      false,
+    );
     return () => {
-      cancelAnimationFrame(rafIdRef.current);
-      startTimeRef.current = null;
+      progress.value = 0;
     };
-  }, [width, height]);
+  }, []);
 
   if (width === 0 || height === 0) return null;
 
@@ -220,11 +227,13 @@ export default function StrandsBackground({
     >
       <Svg width={width} height={height}>
         <SvgDefs />
-        {STRANDS.map((strand, i) => (
-          <StrandRow
+        {STRANDS.map((strand) => (
+          <MemoStrandGlow
             key={strand.id}
-            strand={strand}
-            d={paths[i] || ''}
+            config={strand}
+            width={width}
+            height={height}
+            progress={progress}
           />
         ))}
       </Svg>

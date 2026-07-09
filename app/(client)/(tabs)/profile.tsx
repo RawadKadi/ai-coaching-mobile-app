@@ -229,7 +229,7 @@ export default function ProfileScreen() {
                   <Text className="text-slate-400 text-sm font-medium mt-1">{user.email}</Text>
                 )}
                 <View className="mt-3 bg-blue-600/10 px-4 py-1.5 rounded-full border border-blue-600/20">
-                    <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Protocol Sync Active</Text>
+                    <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Plan Active</Text>
                 </View>
             </View>
 

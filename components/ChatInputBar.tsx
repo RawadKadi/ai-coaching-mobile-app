@@ -550,7 +550,7 @@ export function ChatInputBar({
           <View style={[styles.replySideBar, { backgroundColor: theme.colors.primary }]} />
           <View style={styles.replyContent}>
             <Text style={[styles.replySender, { color: theme.colors.primary }]}>
-              {replyingTo.isOwn ? 'You' : (replyingTo.sender_name || 'Protocol Hub')}
+              {replyingTo.isOwn ? 'You' : (replyingTo.sender_name || 'Coach')}
             </Text>
             <Text style={[styles.replySnippet, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={1}>
               {(() => {

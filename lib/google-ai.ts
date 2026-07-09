@@ -34,7 +34,8 @@ export const textModel = genAI.getGenerativeModel({
         temperature: 0.7,  // Higher for creative challenge generation
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',
     }
 });
 
@@ -98,7 +99,7 @@ export const generateText = async (prompt: string): Promise<string> => {
         const response = await result.response;
         return response.text();
     } catch (error) {
-        console.error('Error generating text:', error);
+        console.warn('Error generating text (AI Engine busy or rate limited):', error);
         throw new Error('Failed to generate text');
     }
 };

@@ -406,7 +406,7 @@ export default function ClientDashboard() {
                         <View className="w-6 h-6 bg-blue-500/20 rounded-full items-center justify-center border border-blue-500/30">
                           <CheckCircle2 size={12} color="#3B82F6" />
                         </View>
-                        <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Protocol Synced</Text>
+                        <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Plan Synced</Text>
                       </View>
                       
                       <Text className="text-white text-3xl font-black tracking-tight leading-8 mb-2">Metrics Logged</Text>

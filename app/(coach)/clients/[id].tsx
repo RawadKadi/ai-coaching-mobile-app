@@ -329,7 +329,19 @@ export default function ClientDetailsScreen() {
     ? (validEnergy.reduce((sum, c) => sum + Number(c.energy_level), 0) / validEnergy.length).toFixed(1) 
     : null;
 
-  const filteredChallenges = challenges.filter(c => challengeFilter === 'active' ? c.status === 'active' : c.status === 'completed');
+  const computedChallenges = challenges.map(c => {
+    const endDate = new Date(c.end_date);
+    // Set to end of day to not mark as completed on the last day until it's over
+    endDate.setHours(23, 59, 59, 999);
+    const isPast = endDate < new Date();
+    
+    if (c.status === 'active' && isPast) {
+      return { ...c, status: 'completed' };
+    }
+    return c;
+  });
+
+  const filteredChallenges = computedChallenges.filter(c => challengeFilter === 'active' ? c.status === 'active' : c.status === 'completed');
 
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
@@ -1248,6 +1260,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
     const completedSubs = Number(challenge.completed_subs || 0);
     const completionRate = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
     const totalDays = Math.max(1, Math.ceil((new Date(challenge.end_date).getTime() - new Date(challenge.start_date).getTime()) / (1000 * 3600 * 24)));
+    const isCompleted = challenge.status === 'completed';
     
     return (
         <Swipeable
@@ -1267,7 +1280,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                     </TouchableOpacity>
                 </View>
             )}
-            enabled={isEditing}
+            enabled={isEditing && !isCompleted}
         >
             <MotiView 
                 from={{ opacity: 0, scale: 0.95 }} 
@@ -1289,8 +1302,10 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                 <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>
                             </View>
                         </View>
-                        <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-blue-600/20">
-                            <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
+                        <View className={`bg-slate-950 px-3 py-1.5 rounded-full border ${isCompleted ? 'border-emerald-500/20' : 'border-blue-600/20'}`}>
+                            <Text className={`${isCompleted ? 'text-emerald-500' : 'text-blue-500'} text-[8px] font-black uppercase tracking-[2px]`}>
+                                {isCompleted ? 'Finished' : 'High Intensity'}
+                            </Text>
                         </View>
                     </View>
 
@@ -1320,16 +1335,17 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                 <View className="flex-row gap-3">
                     <TouchableOpacity 
                         onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-                        className="flex-1 h-16 bg-blue-600 rounded-[24px] items-center justify-center shadow-2xl shadow-blue-500/20"
+                        className={`flex-1 h-16 rounded-[24px] items-center justify-center ${isCompleted ? 'bg-slate-800 border border-white/10' : 'bg-blue-600 shadow-2xl shadow-blue-500/20'}`}
                     >
-                        <Text className="text-white font-black text-base">Manage Plan</Text>
+                        <Text className="text-white font-black text-base">{isCompleted ? 'View Results' : 'Manage Plan'}</Text>
                     </TouchableOpacity>
-                    {isEditing ? (
-                         <TouchableOpacity onPress={onDelete} className="w-16 h-16 bg-red-500/10 rounded-[24px] items-center justify-center border border-red-500/20">
-                            <Trash2 size={20} color="#EF4444" />
-                        </TouchableOpacity>
-                    ) : (
-                    <View>
+                    {!isCompleted && (
+                        isEditing ? (
+                             <TouchableOpacity onPress={onDelete} className="w-16 h-16 bg-red-500/10 rounded-[24px] items-center justify-center border border-red-500/20">
+                                <Trash2 size={20} color="#EF4444" />
+                            </TouchableOpacity>
+                        ) : (
+                        <View>
                         {/* Full-screen backdrop to close menu on outside tap */}
                         {showMenu && (
                             <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
@@ -1433,7 +1449,8 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                         >
                             <MoreVertical size={20} color={showMenu ? '#3B82F6' : '#64748B'} />
                         </TouchableOpacity>
-                    </View>
+                        </View>
+                        )
                     )}
                 </View>
             </MotiView>

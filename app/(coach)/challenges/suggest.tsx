@@ -8,12 +8,104 @@ import { generateWeeklyChallenges } from '@/lib/ai-challenge-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { BrandedCalendar } from '@/components/BrandedCalendar';
 import { BrandedDurationPicker } from '@/components/BrandedDurationPicker';
+import { BrandedAIInput } from '@/components/BrandedAIInput';
 import { ChallengeFocusType } from '@/types/database';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence, FadeInDown, FadeOutUp, LinearTransition } from 'react-native-reanimated';
 
 interface Client {
   id: string;
   full_name: string;
   avatar_url?: string;
+}
+
+const GENERATION_STATES = [
+  'Gathering requirements...',
+  'Analyzing client profile...',
+  'Personalizing experience...',
+  'Locking in tasks...',
+  'Finalizing challenge...'
+];
+
+function GenerationLoader() {
+  const [activeStateIdx, setActiveStateIdx] = useState(0);
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1.2, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+
+    const interval = setInterval(() => {
+      setActiveStateIdx(prev => {
+        if (prev < GENERATION_STATES.length - 1) {
+            return prev + 1;
+        }
+        return prev;
+      });
+    }, 1200);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }]
+  }));
+
+  const startIndex = Math.max(0, Math.min(activeStateIdx - 1, GENERATION_STATES.length - 3));
+  const visibleStates = GENERATION_STATES.map((state, idx) => ({ state, idx }))
+                        .slice(startIndex, startIndex + 3);
+
+  return (
+    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(2, 6, 23, 0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}>
+      <Animated.View style={[{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(59, 130, 246, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 32 }, animatedStyle]}>
+        <Zap size={32} color="#3B82F6" />
+      </Animated.View>
+      
+      <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 24 }}>
+        Building Your Challenge...
+      </Text>
+      
+      <View style={{ height: 120, width: '100%', alignItems: 'center' }}>
+        {visibleStates.map(({ state, idx }) => {
+            const isPassed = idx < activeStateIdx;
+            const isActive = idx === activeStateIdx;
+
+            return (
+                <Animated.View 
+                    key={state}
+                    layout={LinearTransition.springify()}
+                    entering={FadeInDown}
+                    exiting={FadeOutUp}
+                    style={{ 
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        height: 30,
+                        opacity: isPassed ? 0.3 : isActive ? 1 : 0.5,
+                        marginBottom: 12
+                    }}
+                >
+                    {isActive && (
+                        <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3B82F6', marginRight: 12 }, animatedStyle]} />
+                    )}
+                    <Text style={{ 
+                        color: 'white', 
+                        fontSize: isActive ? 16 : 14, 
+                        fontWeight: isActive ? 'bold' : '500',
+                        textDecorationLine: isPassed ? 'line-through' : 'none'
+                    }}>
+                        {state}
+                    </Text>
+                </Animated.View>
+            );
+        })}
+      </View>
+    </View>
+  );
 }
 
 export default function AISuggestChallengeScreen() {
@@ -30,8 +122,7 @@ export default function AISuggestChallengeScreen() {
   const [clients, setClients] = useState<Client[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [focusType, setFocusType] = useState<ChallengeFocusType>('training');
-  const [intensity, setIntensity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [coachCustomDirectives, setCoachCustomDirectives] = useState('');
   const [durationDays, setDurationDays] = useState(7);
   const [scheduleMode, setScheduleMode] = useState<'now' | 'later'>('now');
   const [customStartDate, setCustomStartDate] = useState(new Date());
@@ -76,7 +167,7 @@ export default function AISuggestChallengeScreen() {
         selectedClient.id, 
         selectedClient.full_name, 
         startDate,
-        { focusType, intensity, durationDays }
+        { durationDays, coachCustomDirectives }
       );
 
       if (!challenges || challenges.length === 0) {
@@ -231,70 +322,19 @@ export default function AISuggestChallengeScreen() {
 
             {step === 2 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Focus Area</Text>
-                <Text style={{ color: '#64748B', marginBottom: 24 }}>Choose what they should focus on.</Text>
-
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                    {(['training', 'nutrition', 'recovery', 'consistency'] as ChallengeFocusType[]).map((f) => {
-                        const isActive = focusType === f;
-                        const emojis: Record<string, string> = { training: '💪', nutrition: '🥗', recovery: '😴', consistency: '🎯' };
-                        return (
-                            <TouchableOpacity 
-                                key={f}
-                                onPress={() => setFocusType(f)}
-                                style={{
-                                    width: '48%',
-                                    marginBottom: 16,
-                                    padding: 20,
-                                    borderRadius: 24,
-                                    borderWidth: 2,
-                                    alignItems: 'center',
-                                    backgroundColor: isActive ? 'rgba(37, 99, 235, 0.1)' : '#0F172A',
-                                    borderColor: isActive ? '#3B82F6' : '#1E293B'
-                                }}
-                            >
-                                <Text style={{ fontSize: 24, marginBottom: 8 }}>{emojis[f]}</Text>
-                                <Text style={{ fontWeight: 'bold', textTransform: 'capitalize', color: isActive ? 'white' : '#64748B' }}>{f}</Text>
-                            </TouchableOpacity>
-                        );
-                    })}
+                <View style={{ marginBottom: 24 }}>
+                  <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Challenge Directives</Text>
+                  <Text style={{ color: '#64748B', lineHeight: 20 }}>
+                    Describe the precise focus or daily routine rules for this client's program.
+                  </Text>
                 </View>
 
-                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 24, marginBottom: 16 }}>Difficulty</Text>
-                <View style={{ flexDirection: 'row' }}>
-                    {(['low', 'medium', 'high'] as const).map((int) => {
-                        const isActive = intensity === int;
-                        let color = '#475569';
-                        if (isActive) {
-                            if (int === 'low') color = '#10B981';
-                            if (int === 'medium') color = '#F59E0B';
-                            if (int === 'high') color = '#EF4444';
-                        }
-                        return (
-                            <TouchableOpacity
-                                key={int}
-                                onPress={() => setIntensity(int)}
-                                style={{
-                                    flex: 1,
-                                    marginHorizontal: 4,
-                                    height: 52,
-                                    borderRadius: 16,
-                                    borderWidth: 2,
-                                    alignItems: 'center',
-                                    flexDirection: 'row',
-                                    justifyContent: 'center',
-                                    backgroundColor: '#0F172A',
-                                    borderColor: isActive ? color : '#1E293B'
-                                }}
-                            >
-                                <Flame size={14} color={isActive ? color : '#475569'} style={{ marginRight: 6 }} />
-                                <Text style={{ fontWeight: '900', textTransform: 'uppercase', fontSize: 10, color: isActive ? 'white' : '#64748B' }}>
-                                    {int}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                <BrandedAIInput 
+                  value={coachCustomDirectives}
+                  onChangeText={setCoachCustomDirectives}
+                  onSubmit={() => setStep(3)}
+                  placeholder="Type your instructions here..."
+                />
               </View>
             )}
 
@@ -364,7 +404,7 @@ export default function AISuggestChallengeScreen() {
                     </View>
                     <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>Ready to create</Text>
                     <Text style={{ color: '#94A3B8', textAlign: 'center', marginTop: 12, lineHeight: 20, paddingHorizontal: 16, fontSize: 14 }}>
-                        We will create a {durationDays}-day {focusType} plan for {selectedClient?.full_name}.
+                        We will create a custom {durationDays}-day plan for {selectedClient?.full_name}.
                     </Text>
                 </View>
 
@@ -434,43 +474,48 @@ export default function AISuggestChallengeScreen() {
                   </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  onPress={() => {
-                    if (step < 4) setStep(step + 1);
-                    else handleGenerate();
-                  }}
-                  disabled={generating}
-                  style={{
-                    flex: 2,
-                    height: 60,
-                    borderRadius: 20,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#2563EB',
-                    opacity: generating ? 0.7 : 1
-                  }}
-                >
-                  {generating ? (
-                      <ActivityIndicator color="white" />
-                  ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {step === 4 ? (
-                          <>
-                             <Sparkles size={20} color="white" style={{ marginRight: 10 }} />
-                             <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Create Plan</Text>
-                          </>
-                        ) : (
-                          <>
-                             <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: 'white', marginRight: 8 }}>
-                               Next
-                             </Text>
-                             <ChevronRight size={18} color="white" />
-                          </>
-                        )}
-                      </View>
-                  )}
-                </TouchableOpacity>
+                {step !== 2 && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      if (step < 4) setStep(step + 1);
+                      else handleGenerate();
+                    }}
+                    disabled={generating}
+                    style={{
+                      flex: 2,
+                      height: 60,
+                      borderRadius: 20,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#2563EB',
+                      opacity: generating ? 0.7 : 1
+                    }}
+                  >
+                    {generating ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                           <ActivityIndicator color="white" style={{ marginRight: 12 }} />
+                           <Text style={{ color: 'white', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 }}>Compiling...</Text>
+                        </View>
+                    ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          {step === 4 ? (
+                            <>
+                               <Sparkles size={20} color="white" style={{ marginRight: 10 }} />
+                               <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Create Plan</Text>
+                            </>
+                          ) : (
+                            <>
+                               <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: 'white', marginRight: 8 }}>
+                                 Next
+                               </Text>
+                               <ChevronRight size={18} color="white" />
+                            </>
+                          )}
+                        </View>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             ) : (
               <TouchableOpacity 
@@ -478,30 +523,28 @@ export default function AISuggestChallengeScreen() {
                   if (step < 4) setStep(step + 1);
                   else handleGenerate();
                 }}
-                disabled={(step === 1 && !selectedClient) || generating}
+                disabled={generating}
                 style={{
+                  flex: 2,
                   height: 60,
                   borderRadius: 20,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: (step === 1 && !selectedClient) ? '#0F172A' : '#2563EB',
+                  backgroundColor: '#2563EB',
                   opacity: generating ? 0.7 : 1
                 }}
               >
-                {generating ? (
-                    <ActivityIndicator color="white" />
-                ) : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                         <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: step === 1 && !selectedClient ? '#475569' : 'white', marginRight: 8 }}>
-                           Next
-                         </Text>
-                         <ChevronRight size={18} color={step === 1 && !selectedClient ? '#1E293B' : 'white'} />
-                    </View>
-                )}
+                <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase', marginRight: 4 }}>
+                  {step === 4 ? 'Create Plan' : 'Next'}
+                </Text>
+                {step !== 4 && <ChevronRight size={18} color="white" />}
               </TouchableOpacity>
             )}
         </View>
+
+        {/* Full-screen Loading Overlay */}
+        {generating && <GenerationLoader />}
       </SafeAreaView>
     </View>
   );

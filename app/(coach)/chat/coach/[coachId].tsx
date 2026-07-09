@@ -23,6 +23,7 @@ import { MotiView, AnimatePresence } from 'moti';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { usePresence } from '@/contexts/PresenceContext';
 import { Swipeable } from 'react-native-gesture-handler';
+import GrainientBackground from '@/components/ui/GrainientBackground';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -558,10 +559,13 @@ export default function CoachToCoachChat() {
     );
   };
 
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
+      <GrainientBackground width={screenWidth} height={screenHeight} />
       <StatusBar barStyle="light-content" translucent />
-      <View style={{ paddingTop: insets.top, backgroundColor: '#020617' }} className="border-b border-white/5">
+      <View style={{ paddingTop: insets.top, backgroundColor: 'transparent' }} className="border-b border-white/5">
         <View className="flex-row items-center justify-between px-6 py-4">
             <View className="flex-row items-center gap-4">
                 <TouchableOpacity onPress={() => safeBack()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">

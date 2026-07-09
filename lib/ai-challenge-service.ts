@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { generateText } from './google-ai';
 
 export interface SubChallengeTemplate {
     name: string;
@@ -73,6 +74,7 @@ export async function generateWeeklyChallenges(
         focusType?: 'training' | 'nutrition' | 'recovery' | 'consistency' | 'all';
         intensity?: 'low' | 'medium' | 'high' | 'all';
         durationDays?: number;
+        coachCustomDirectives?: string;
     }
 ): Promise<SubChallengeTemplate[]> {
     try {
@@ -94,8 +96,87 @@ export async function generateWeeklyChallenges(
         const daysToGenerate = options?.durationDays || 7;
         const focus = options?.focusType || 'training';
         const targetIntensity = options?.intensity || 'medium';
+        const customDirectives = options?.coachCustomDirectives;
 
-        // 2. Generate challenges for each day
+        if (customDirectives && customDirectives.trim().length > 0) {
+            console.log(`[AI] Using custom directives from coach via Gemini API...`);
+            const prompt = `You are a strict task matrix generator.
+
+CRITICAL CONSTRAINT RULE: 
+You must generate tasks for EXACTLY the number of days specified or implied by the duration parameter. If the user or coach requests a ${daysToGenerate}-day challenge, you must return an array of exactly ${daysToGenerate} objects inside \`daily_blocks\`. Do NOT append bonus recovery days, post-challenge days, or introductory placeholders outside the explicit duration bounds.
+
+Target Duration ceiling for this request: ${daysToGenerate} Days.
+
+CRITICAL TASK GRANULARITY RULE:
+- You are forbidden from consolidating multiple exercises or movements into a single string sentence.
+- Break out every single exercise target, set instruction, or measurable goal into its own discrete string object inside the \`sub_tasks\` array.
+
+Your coach has given you the following specific instructions for their client ${clientName}: 
+"${customDirectives}"
+
+Create a custom ${daysToGenerate}-day challenge plan starting on ${startDate.toISOString().split('T')[0]}.
+Avoid these previously used challenge names if possible: ${Array.from(usedNames).join(', ')}.
+
+IMPORTANT: You MUST respond ONLY with a raw JSON object matching the exact schema below. Do not include markdown code blocks, formatting, or any extra text.
+
+{
+  "daily_blocks": [
+    {
+      "title": "Short, motivating title, max 50 chars",
+      "global_rule": "A general instruction for the day (e.g. 'Complete immediately upon waking before breakfast.')",
+      "focus_type": "training | nutrition | recovery | consistency",
+      "intensity": "low | medium | high",
+      "sub_tasks": [
+        { "id": "ex_1", "exercise": "Specific movement name", "sets": 3, "notes": "Form cues or tempo" },
+        { "id": "ex_2", "exercise": "Specific movement name", "sets": 1, "notes": "Continuous duration or focus" }
+      ]
+    }
+  ]
+}
+`;
+            
+            try {
+                const responseText = await generateText(prompt);
+                let cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+                
+                // Extract just the JSON object
+                const startIndex = cleanJson.indexOf('{');
+                const endIndex = cleanJson.lastIndexOf('}');
+                if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                    cleanJson = cleanJson.substring(startIndex, endIndex + 1);
+                }
+
+                const parsedData = JSON.parse(cleanJson);
+                const dailyBlocks = parsedData.daily_blocks;
+                
+                if (Array.isArray(dailyBlocks)) {
+                    console.log(`[AI] Successfully generated ${dailyBlocks.length} nested challenge blocks via Gemini`);
+                    
+                    const mappedChallenges: SubChallengeTemplate[] = dailyBlocks.map((block: any, index: number) => {
+                        const date = new Date(startDate);
+                        date.setDate(date.getDate() + index);
+                        
+                        return {
+                            name: block.title,
+                            description: JSON.stringify({
+                                global_rule: block.global_rule,
+                                sub_tasks: block.sub_tasks
+                            }),
+                            assigned_date: date.toISOString().split('T')[0],
+                            focus_type: block.focus_type,
+                            intensity: block.intensity
+                        };
+                    });
+                    
+                    return mappedChallenges;
+                }
+            } catch (err) {
+                console.warn('[AI] Failed to parse custom directives via Gemini. Falling back to templates.', err);
+                // Fall back to templates if Gemini fails
+            }
+        }
+
+        // 2. Generate challenges for each day (Template fallback)
         for (let day = 0; day < daysToGenerate; day++) {
             const date = new Date(startDate);
             date.setDate(date.getDate() + day);
@@ -167,9 +248,21 @@ export async function generateWeeklyChallenges(
             }
 
             for (const { template, category } of dayTemplates) {
+                const fallbackDescription = JSON.stringify({
+                    global_rule: "Template Selection",
+                    sub_tasks: [
+                        {
+                            id: `tmpl_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                            exercise: template.name,
+                            sets: 1,
+                            notes: template.desc || template.description
+                        }
+                    ]
+                });
+
                 challenges.push({
                     name: template.name,
-                    description: template.desc || template.description,
+                    description: fallbackDescription,
                     assigned_date: dateStr,
                     focus_type: category,
                     intensity: (template.intensity || targetIntensity) as any

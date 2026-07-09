@@ -66,7 +66,7 @@ export default function MealMessageCard({ content, isOwn, onLongPress }: Props) 
         )}
         
         <View style={styles.details}>
-          <Text style={styles.mealName} numberOfLines={2}>{data.mealName || 'Unknown Protocol'}</Text>
+          <Text style={styles.mealName} numberOfLines={2}>{data.mealName || 'Unknown Meal'}</Text>
           <View style={styles.macrosRow}>
             <View style={styles.macroItem}>
                 <Zap size={10} color="#3B82F6" fill="#3B82F6" />

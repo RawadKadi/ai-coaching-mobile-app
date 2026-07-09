@@ -5,6 +5,7 @@ import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Calendar, Clock, Dumbbell, Apple, Moon, Zap, ChevronDown, ChevronRight, CheckCircle, Info } from 'lucide-react-native';
+import { NestedTaskCard } from '@/components/NestedTaskCard';
 
 export default function ChallengeDetailScreen() {
   const router = useRouter();
@@ -213,7 +214,7 @@ export default function ChallengeDetailScreen() {
             <ArrowLeft size={20} color="white" />
           </TouchableOpacity>
           <View>
-            <Text className="text-slate-500 text-xs font-black uppercase tracking-widest">Protocol Tracker</Text>
+            <Text className="text-slate-500 text-xs font-black uppercase tracking-widest">Daily Tasks</Text>
             <Text className="text-white text-lg font-black">{challenge.name}</Text>
           </View>
         </View>
@@ -294,42 +295,14 @@ export default function ChallengeDetailScreen() {
                 </View>
             ) : (
                 <View className="gap-3">
-                    {todayTasks.map((sub: any) => (
-                        <TouchableOpacity 
+                    {todayTasks.map((sub: any, idx: number) => (
+                        <NestedTaskCard 
                             key={sub.id}
-                            onPress={() => toggleSubChallenge(sub)}
-                            style={{ 
-                                flexDirection: 'row', 
-                                alignItems: 'flex-start', 
-                                padding: 20, 
-                                borderRadius: 32, 
-                                borderWidth: 2, 
-                                backgroundColor: sub.completed ? '#0f172a' : '#0f172a4d',
-                                borderColor: sub.completed ? '#1e293b' : '#0f172a',
-                                opacity: sub.completed ? 0.6 : 1
-                            }}
-                        >
-                            <View style={{ marginRight: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
-                                {getFocusIcon(sub.focus_type, sub.completed)}
-                            </View>
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                                <Text style={{ fontSize: 16, fontWeight: '900', color: sub.completed ? '#64748b' : 'white', textDecorationLine: sub.completed ? 'line-through' : 'none' }}>{sub.name}</Text>
-                                <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
-                                    {sub.focus_type} • {sub.intensity}
-                                </Text>
-                            </View>
-                            <View style={{ paddingTop: 4 }}>
-                                {sub.completed ? (
-                                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
-                                        <CheckCircle size={16} color="white" />
-                                    </View>
-                                ) : (
-                                    <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Info size={12} color="#1E293B" />
-                                    </View>
-                                )}
-                            </View>
-                        </TouchableOpacity>
+                            task={sub}
+                            index={idx}
+                            onToggleParent={toggleSubChallenge}
+                            layoutType="feed"
+                        />
                     ))}
                 </View>
             )}
@@ -445,7 +418,15 @@ const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
       {isExpanded && (
         <View>
           {tasks.map((task: any, idx: number) => (
-             <TaskCard key={task.id} task={task} index={idx} isFailed={isFailed} isCompleted={isCompleted} />
+             <NestedTaskCard 
+                 key={task.id} 
+                 task={task} 
+                 index={idx} 
+                 isFailed={isFailed} 
+                 isCompleted={isCompleted} 
+                 onToggleParent={() => {}} 
+                 layoutType="detail" 
+             />
           ))}
         </View>
       )}
@@ -453,75 +434,4 @@ const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
   );
 };
 
-const TaskCard = ({ task, index, isFailed, isCompleted }: { task: any, index: number, isFailed?: boolean, isCompleted?: boolean }) => {
-  const getIcon = (type: string) => {
-    switch (type?.toLowerCase()) {
-      case 'training': return <Dumbbell size={24} color="#3B82F6" />;
-      case 'nutrition': return <Apple size={24} color="#10B981" />;
-      case 'recovery': return <Moon size={24} color="#8B5CF6" />;
-      default: return <Zap size={24} color="#F59E0B" />;
-    }
-  };
 
-  const isPast = new Date(task.assigned_date) < new Date(new Date().setHours(0,0,0,0));
-
-  return (
-    <MotiView
-      from={{ opacity: 0, translateX: -20 }}
-      animate={{ opacity: 1, translateX: 0 }}
-      transition={{ delay: index * 100 }}
-      className={`mb-4 p-5 rounded-[24px] border ${isFailed || (isCompleted && !task.completed) || isPast ? 'bg-slate-900/50 border-slate-800/50 opacity-50' : 'bg-slate-900 border-slate-800'}`}
-    >
-      <View className="flex-row justify-between items-center mb-4">
-        <View className="flex-row items-center gap-3">
-          <View className="w-10 h-10 bg-slate-950 rounded-xl items-center justify-center border border-slate-800">
-             {getIcon(task.focus_type)}
-          </View>
-          <View>
-            <Text className="text-white font-bold text-base">{task.name}</Text>
-            <Text className="text-slate-500 text-xs font-medium capitalize">{task.focus_type} • {task.intensity}</Text>
-          </View>
-        </View>
-        {isFailed ? (
-          <View className="bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
-             <Text className="text-red-500 text-[10px] font-bold uppercase">Unfulfilled</Text>
-          </View>
-        ) : task.completed ? (
-          <View className="bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-             <Text className="text-emerald-500 text-[10px] font-bold uppercase">Success</Text>
-          </View>
-        ) : isPast ? (
-            <View className="bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
-                <Text className="text-red-500 text-[10px] font-bold uppercase">Missed</Text>
-            </View>
-        ) : (
-          <View className="bg-slate-800 px-3 py-1 rounded-full">
-             <Text className="text-slate-400 text-[10px] font-bold uppercase">Pending</Text>
-          </View>
-        )}
-      </View>
-
-      <View className="pl-[52px]">
-         <Text className="text-slate-400 text-sm leading-5 mb-4" numberOfLines={2}>{task.description}</Text>
-         <View className="flex-row justify-between items-center pt-4 border-t border-slate-950/50">
-           <View className="flex-row items-center gap-2">
-              <Clock size={12} color="#475569" />
-              <Text className="text-slate-500 text-[10px] font-bold uppercase">
-                {new Date(task.assigned_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-              </Text>
-           </View>
-         </View>
-      </View>
-    </MotiView>
-  );
-};
-
-function getFocusIcon(type: string, completed: boolean) {
-  const color = completed ? '#3b82f6' : '#94a3b8';
-  switch (type?.toLowerCase()) {
-    case 'training': return <Dumbbell size={24} color={color} />;
-    case 'nutrition': return <Apple size={24} color={color} />;
-    case 'recovery': return <Moon size={24} color={color} />;
-    default: return <Zap size={24} color={color} />;
-  }
-}

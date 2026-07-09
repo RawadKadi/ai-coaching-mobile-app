@@ -1007,7 +1007,7 @@ export default function ActivityScreen() {
         </ScrollView>
       </View>
 
-      {/* All tasks done — Protocol Fulfilled */}
+      {/* All tasks done — Plan Fulfilled */}
       <FeedbackModal
         visible={showCelebration}
         onClose={() => setShowCelebration(false)}
@@ -1101,7 +1101,7 @@ export default function ActivityScreen() {
                 </View>
                 <View>
                   <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{selectedChallenge?.name}</Text>
-                  <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Global Protocol</Text>
+                  <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Daily Goal</Text>
                 </View>
               </View>
             </View>

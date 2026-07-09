@@ -341,7 +341,7 @@ export default function LogMealScreen() {
                     </View>
 
                     <View className="mb-8">
-                        <Text className="text-white text-3xl font-black">{analysisResult.mealName || 'Unknown Protocol'}</Text>
+                        <Text className="text-white text-3xl font-black">{analysisResult.mealName || 'Unknown Meal'}</Text>
                         <Text className="text-slate-500 font-bold mt-2 text-lg leading-6">{analysisResult.description || 'Analysis completed with limited data.'}</Text>
                     </View>
 
