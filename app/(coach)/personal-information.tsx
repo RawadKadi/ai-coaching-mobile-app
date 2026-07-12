@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Linking, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -19,6 +20,7 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string,
 );
 
 export default function CoachPersonalInformationScreen() {
+  const colors = useBrandColors();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { profile, coach, user } = useAuth();
@@ -68,12 +70,12 @@ export default function CoachPersonalInformationScreen() {
                     {/* Account Info */}
                     <View className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 mb-6">
                         <Text className="text-white font-black text-lg mb-4 ml-1">Identity</Text>
-                        <InfoRow icon={<User size={16} color="#3B82F6" />} label="Full Name" value={profile?.full_name} />
-                        <InfoRow icon={<Mail size={16} color="#3B82F6" />} label="Email" value={user?.email} />
-                        <InfoRow icon={<Phone size={16} color="#3B82F6" />} label="Phone" value={profile?.phone} />
+                        <InfoRow icon={<User size={16} color={colors.primary} />} label="Full Name" value={profile?.full_name} />
+                        <InfoRow icon={<Mail size={16} color={colors.primary} />} label="Email" value={user?.email} />
+                        <InfoRow icon={<Phone size={16} color={colors.primary} />} label="Phone" value={profile?.phone} />
                         <View className="flex-row items-center py-4">
                             <View className="w-8 h-8 rounded-full bg-blue-600/10 items-center justify-center mr-4">
-                                <Globe size={16} color="#3B82F6" />
+                                <Globe size={16} color={colors.primary} />
                             </View>
                             <View className="flex-1">
                                 <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">Timezone</Text>
@@ -93,9 +95,9 @@ export default function CoachPersonalInformationScreen() {
                     {/* Professional Profile */}
                     <View className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 mb-6">
                         <Text className="text-white font-black text-lg mb-4 ml-1">Credentials</Text>
-                        <InfoRow icon={<Briefcase size={16} color="#3B82F6" />} label="Business Name" value={coach?.business_name || 'Not provided'} />
-                        <InfoRow icon={<Award size={16} color="#3B82F6" />} label="Specialty" value={coach?.specialty || 'Professional Coaching'} />
-                        <InfoRow icon={<Shield size={16} color="#3B82F6" />} label="Subscription Plan" value={coach?.subscription_tier} />
+                        <InfoRow icon={<Briefcase size={16} color={colors.primary} />} label="Business Name" value={coach?.business_name || 'Not provided'} />
+                        <InfoRow icon={<Award size={16} color={colors.primary} />} label="Specialty" value={coach?.specialty || 'Professional Coaching'} />
+                        <InfoRow icon={<Shield size={16} color={colors.primary} />} label="Subscription Plan" value={coach?.subscription_tier} />
                         
                         {coach?.meeting_link && (
                             <TouchableOpacity 
@@ -104,7 +106,7 @@ export default function CoachPersonalInformationScreen() {
                                 className="flex-row items-center py-4 mt-2"
                             >
                                 <View className="w-8 h-8 rounded-full bg-blue-600/10 items-center justify-center mr-4">
-                                    <ExternalLink size={16} color="#3B82F6" />
+                                    <ExternalLink size={16} color={colors.primary} />
                                 </View>
                                 <View className="flex-1">
                                     <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">Meeting Room Link</Text>

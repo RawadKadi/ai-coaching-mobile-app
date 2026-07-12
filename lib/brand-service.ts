@@ -14,8 +14,8 @@ export async function createDefaultBrand(
         const { data: brandId, error: brandError } = await supabase.rpc('create_brand', {
             p_name: brandName,
             p_logo_url: null,
-            p_primary_color: '#3B82F6',
-            p_secondary_color: '#10B981',
+            p_primary_color: '#7FA7FF',
+            p_secondary_color: '#010201ff',
         });
 
         if (brandError) {

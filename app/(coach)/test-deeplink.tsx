@@ -1,8 +1,11 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Link } from 'lucide-react-native';
 
 export default function TestDeepLinkScreen() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const router = useRouter();
 
   const testInvite = (code: string) => {
@@ -40,7 +43,7 @@ export default function TestDeepLinkScreen() {
         style={[styles.button, styles.buttonSecondary]}
         onPress={() => testInvite('zevdshfxkv141ywq')}
       >
-        <Link size={20} color="#3B82F6" />
+        <Link size={20} color={colors.primary} />
         <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
           Test With: zevdshfxkv141ywq
         </Text>
@@ -60,7 +63,7 @@ export default function TestDeepLinkScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
@@ -82,7 +85,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
@@ -91,7 +94,7 @@ const styles = StyleSheet.create({
   buttonSecondary: {
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
   },
   buttonText: {
     color: '#FFFFFF',
@@ -99,7 +102,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   buttonTextSecondary: {
-    color: '#3B82F6',
+    color: colors.primary,
   },
   note: {
     marginTop: 32,

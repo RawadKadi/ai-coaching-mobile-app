@@ -35,7 +35,7 @@ import { AVAILABLE_FONTS, getFontFamily } from '@/hooks/useAppFonts';
 const PRESET_THEMES = {
   modernBlue: {
     name: 'Modern Blue',
-    primary_color: '#3B82F6',
+    primary_color: '#7FA7FF',
     secondary_color: '#10B981',
     accent_color: '#F59E0B',
     background_color: '#F9FAFB',
@@ -104,7 +104,7 @@ export default function BrandSettingsScreen() {
   const [logoUrl, setLogoUrl] = useState('');
   
   // Form state - Colors
-  const [primaryColor, setPrimaryColor] = useState('#3B82F6');
+  const [primaryColor, setPrimaryColor] = useState('#7FA7FF');
   const [secondaryColor, setSecondaryColor] = useState('#10B981');
   const [accentColor, setAccentColor] = useState('#F59E0B');
   const [backgroundColor, setBackgroundColor] = useState('#F9FAFB');
@@ -1477,7 +1477,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#3B82F6',
+    shadowColor: '#7FA7FF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,

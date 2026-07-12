@@ -74,7 +74,7 @@ export default function TeamWelcomeScreen() {
                 justifyContent: 'center',
               }}
             >
-              <UserPlus size={44} color="#3B82F6" />
+              <UserPlus size={44} color={primary} />
             </View>
 
             <View style={{ alignItems: 'center', gap: 8 }}>
@@ -117,7 +117,7 @@ export default function TeamWelcomeScreen() {
                     marginTop: 1,
                   }}
                 >
-                  <CheckCircle size={17} color="#3B82F6" />
+                  <CheckCircle size={17} color={primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800', marginBottom: 4 }}>
@@ -146,7 +146,7 @@ export default function TeamWelcomeScreen() {
                 paddingVertical: 18,
                 borderWidth: 1.5,
                 borderColor: 'rgba(255,255,255,0.1)',
-                backgroundColor: primary || '#3B82F6',
+                backgroundColor: primary || primary,
               }}
               textStyle={{ fontSize: 17, fontWeight: '800' }}
             />

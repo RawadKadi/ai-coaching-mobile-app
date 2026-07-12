@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, Linking } from 'react-native';
 import { X, Send, FileText, FileAudio, Play, Pause, FileSpreadsheet, File } from 'lucide-react-native';
@@ -16,6 +17,8 @@ interface DocumentPreviewModalProps {
 }
 
 export default function DocumentPreviewModal({ visible, uri, type, fileName, onClose, onSend, isSending }: DocumentPreviewModalProps) {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const [caption, setCaption] = useState('');
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -145,11 +148,11 @@ export default function DocumentPreviewModal({ visible, uri, type, fileName, onC
 
     return (
       <View style={styles.genericContainer}>
-        {isExcel ? <FileSpreadsheet size={80} color="#34D399" /> : <FileText size={80} color="#3B82F6" />}
+        {isExcel ? <FileSpreadsheet size={80} color="#34D399" /> : <FileText size={80} color={colors.primary} />}
         <Text style={styles.genericText}>Preview not available for this file type</Text>
         <Text style={styles.genericSubText}>{fileName}</Text>
         <TouchableOpacity 
-          style={{ marginTop: 24, backgroundColor: '#3B82F6', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }} 
+          style={{ marginTop: 24, backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }} 
           onPress={() => Linking.openURL(uri)}
         >
           <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>Open File</Text>
@@ -204,7 +207,7 @@ export default function DocumentPreviewModal({ visible, uri, type, fileName, onC
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#020617',
@@ -263,7 +266,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
@@ -290,7 +293,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     borderRadius: 3,
   },
   genericContainer: {
@@ -340,7 +343,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,

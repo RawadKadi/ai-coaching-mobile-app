@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -6,6 +7,7 @@ import { ArrowLeft, Sparkles, Zap, ClipboardList, Target } from 'lucide-react-na
 import { StatusBar } from 'expo-status-bar';
 
 export default function AISelectionScreen() {
+  const colors = useBrandColors();
     const router = useRouter();
     const { clientId } = useLocalSearchParams();
 
@@ -14,7 +16,7 @@ export default function AISelectionScreen() {
             title: 'AI Challenge',
             subtitle: 'Generate a progression-based program',
             icon: <Zap size={28} color="white" fill="white" />,
-            color: '#3B82F6',
+            color: colors.primary,
             route: `/(coach)/challenges/suggest?clientId=${clientId}`,
             description: 'AI Coach creates a tailored transformation block with specific daily targets.'
         },

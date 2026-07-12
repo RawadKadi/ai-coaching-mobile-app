@@ -695,7 +695,7 @@ export default function ActivityScreen() {
   if (loading && !refreshing) {
     return (
       <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -710,13 +710,13 @@ export default function ActivityScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <View>
               <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>Your Progress</Text>
-              <Text style={{ color: '#3b82f6', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 2, fontSize: 10, marginTop: 4 }}>{formattedDate}</Text>
+              <Text style={{ color: theme.colors.primary, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 2, fontSize: 10, marginTop: 4 }}>{formattedDate}</Text>
             </View>
             <TouchableOpacity
               style={{ width: 48, height: 48, backgroundColor: '#0f172a', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1e293b' }}
               onPress={() => router.push('/(client)/schedule-timeline' as any)}
             >
-              <CalendarIcon size={20} color="#3B82F6" />
+              <CalendarIcon size={20} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -731,7 +731,7 @@ export default function ActivityScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#3B82F6"
+              tintColor={theme.colors.primary}
             />
           }
         >
@@ -755,7 +755,7 @@ export default function ActivityScreen() {
             <MetricCard
               label="Sessions Taken"
               value={sessionsTotal > 0 ? `${sessionsTaken} / ${sessionsTotal}` : '--'}
-              icon={<Video size={18} color="#3B82F6" />}
+              icon={<Video size={18} color={theme.colors.primary} />}
             />
           </View>
 
@@ -845,8 +845,8 @@ export default function ActivityScreen() {
                                         </>
                                       ) : (
                                         <>
-                                          <Target size={16} color="#3B82F6" />
-                                          <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>Active Challenge</Text>
+                                          <Target size={16} color={theme.colors.primary} />
+                                          <Text style={{ color: theme.colors.primary, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>Active Challenge</Text>
                                         </>
                                       )}
                                     </View>
@@ -869,7 +869,7 @@ export default function ActivityScreen() {
                                       style={{
                                         height: '100%',
                                         width: `${Math.min(100, (motherChallenge.completed_subs / Math.max(1, motherChallenge.total_subs)) * 100)}%`,
-                                        backgroundColor: '#3B82F6',
+                                        backgroundColor: theme.colors.primary,
                                         borderRadius: 6
                                       }}
                                     />
@@ -1096,8 +1096,8 @@ export default function ActivityScreen() {
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 48, height: 48, backgroundColor: '#3b82f61a', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#3b82f633' }}>
-                  <Sparkles size={24} color="#3B82F6" />
+                <View style={{ width: 48, height: 48, backgroundColor: `${theme.colors.primary}1a`, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: `${theme.colors.primary}33` }}>
+                  <Sparkles size={24} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{selectedChallenge?.name}</Text>
@@ -1175,7 +1175,7 @@ const CategorySummaryCard = ({
         backgroundColor: '#0f172a',
         borderRadius: 32,
         borderWidth: 1,
-        borderColor: isExpanded ? '#3b82f633' : '#1e293b',
+        borderColor: isExpanded ? `${theme.colors.primary}33` : '#1e293b',
         padding: 20,
         marginBottom: isExpanded ? 16 : 12,
       }}
@@ -1200,7 +1200,7 @@ const CategorySummaryCard = ({
       {showProgressBar && totalCount > 0 && (
         <View style={{ marginTop: 24, marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ flex: 1, height: 8, backgroundColor: '#1e293b', borderRadius: 4, overflow: 'hidden' }}>
-            <View style={{ height: '100%', width: `${percentage}%`, backgroundColor: '#3b82f6', borderRadius: 4 }} />
+            <View style={{ height: '100%', width: `${percentage}%`, backgroundColor: theme.colors.primary, borderRadius: 4 }} />
           </View>
           <Text style={{ color: 'white', fontSize: 12, fontWeight: '900', minWidth: 36, textAlign: 'right' }}>
             {Math.round(percentage)}%
@@ -1224,7 +1224,7 @@ const MetricCard = ({ label, value, icon, active, onPress }: any) => {
         padding: 20,
         borderRadius: 36,
         borderWidth: 1,
-        borderColor: active ? '#3b82f633' : '#1e293b',
+        borderColor: active ? `${theme.colors.primary}33` : '#1e293b',
         alignItems: 'center',
         justifyContent: 'center'
       }}
@@ -1345,10 +1345,10 @@ const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly
           backgroundColor: '#0f172a66',
           borderRadius: 32,
           borderWidth: 1,
-          borderColor: completed ? '#3b82f633' : '#1e293b'
+          borderColor: completed ? `${theme.colors.primary}33` : '#1e293b'
         }}
       >
-        <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: completed ? '#3b82f61a' : '#020617', borderColor: completed ? '#3b82f633' : '#1e293b' }}>
+        <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: completed ? `${theme.colors.primary}1a` : '#020617', borderColor: completed ? `${theme.colors.primary}33` : '#1e293b' }}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
         </View>
         <View style={{ flex: 1 }}>
@@ -1358,7 +1358,7 @@ const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly
         {!readOnly && (
           <TouchableOpacity
             onPress={() => { onToggle && onToggle(); }}
-            style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, backgroundColor: completed ? '#2563eb' : '#020617', borderColor: completed ? '#3b82f6' : '#1e293b' }}
+            style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, backgroundColor: completed ? '#2563eb' : '#020617', borderColor: completed ? theme.colors.primary : '#1e293b' }}
           >
             {completed ? <CheckCircle size={20} color="white" /> : <Circle size={20} color="#475569" />}
           </TouchableOpacity>
@@ -1378,8 +1378,8 @@ const EmptyState = ({ message }: { message: string }) => (
   </View>
 );
 
-const Badge = ({ label, color = "#3b82f6" }: any) => {
-  const isCustom = color !== "#3b82f6";
+const Badge = ({ label, color = theme.colors.primary }: any) => {
+  const isCustom = color !== theme.colors.primary;
   return (
     <View style={{
       paddingHorizontal: 16,
@@ -1389,7 +1389,7 @@ const Badge = ({ label, color = "#3b82f6" }: any) => {
       borderColor: isCustom ? 'rgba(249, 115, 22, 0.2)' : 'rgba(59, 130, 246, 0.2)',
       backgroundColor: isCustom ? 'rgba(249, 115, 22, 0.05)' : 'rgba(59, 130, 246, 0.05)'
     }}>
-      <Text style={{ color: isCustom ? '#f97316' : '#3b82f6', fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>{label}</Text>
+      <Text style={{ color: isCustom ? '#f97316' : theme.colors.primary, fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>{label}</Text>
     </View>
   );
 };

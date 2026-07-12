@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { 
@@ -29,6 +30,7 @@ import type { MotherChallengeWithProgress } from '@/types/challenges-v3';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 export default function CoachChallengesDashboard() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { user, coach } = useAuth();
 
@@ -144,7 +146,7 @@ export default function CoachChallengesDashboard() {
   if (loading && !refreshing) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -206,7 +208,7 @@ export default function CoachChallengesDashboard() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3B82F6" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
       >
         <AnimatePresence>
           {challenges.length === 0 ? (
@@ -430,7 +432,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                         activeOpacity={0.7}
                                     >
                                         <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(59,130,246,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Edit2 size={16} color="#3B82F6" />
+                                            <Edit2 size={16} color={colors.primary} />
                                         </View>
                                         <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Edit</Text>
                                     </TouchableOpacity>
@@ -475,7 +477,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                 : { backgroundColor: '#020617', borderColor: 'rgba(255,255,255,0.05)' }
                             ]}
                         >
-                            <MoreVertical size={20} color={showMenu ? '#3B82F6' : '#64748B'} />
+                            <MoreVertical size={20} color={showMenu ? colors.primary : '#64748B'} />
                         </TouchableOpacity>
                     </View>
                     ) : null}

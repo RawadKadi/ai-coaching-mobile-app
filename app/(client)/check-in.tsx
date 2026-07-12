@@ -210,7 +210,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center gap-3">
               <View className="w-10 h-10 bg-blue-600/10 rounded-xl items-center justify-center border border-blue-600/20">
-                <Scale size={20} color="#3B82F6" />
+                <Scale size={20} color={theme.colors.primary} />
               </View>
               <Text className="text-white font-bold text-lg">Body Weight</Text>
             </View>
@@ -292,24 +292,24 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
           value={energy} 
           min={1} max={10} 
           onChange={setEnergy} 
-          icon={<Zap size={18} color="#3B82F6" />}
-          color="#3B82F6"
+          icon={<Zap size={18} color={theme.colors.primary} />}
+          color={theme.colors.primary}
         />
         <ElasticSlider 
           label="Stress Level" 
           value={stress} 
           min={1} max={10} 
           onChange={setStress} 
-          icon={<Heart size={18} color="#3B82F6" />}
-          color="#3B82F6"
+          icon={<Heart size={18} color={theme.colors.primary} />}
+          color={theme.colors.primary}
         />
         <ElasticSlider 
           label="Hunger Level" 
           value={hunger} 
           min={1} max={10} 
           onChange={setHunger} 
-          icon={<Target size={18} color="#3B82F6" />}
-          color="#3B82F6"
+          icon={<Target size={18} color={theme.colors.primary} />}
+          color={theme.colors.primary}
         />
       </View>
 
@@ -400,7 +400,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
   if (loading) {
     return (
       <View className="flex-1 bg-slate-950 items-center justify-center">
-        <ActivityIndicator color="#3B82F6" size="large" />
+        <ActivityIndicator color={theme.colors.primary} size="large" />
       </View>
     );
   }
@@ -412,7 +412,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
         {renderHeader()}
         <View className="flex-1 px-8 items-center justify-center">
           <View className="w-24 h-24 bg-blue-600/10 rounded-[32px] items-center justify-center border border-blue-600/20 mb-8">
-            <Heart size={40} color="#3B82F6" />
+            <Heart size={40} color={theme.colors.primary} />
           </View>
           <Text className="text-white text-3xl font-black tracking-tighter text-center">Already Checked In</Text>
           <Text className="text-slate-500 font-medium text-lg mt-4 text-center px-10">You've already completed your check-in for today. Rest up!</Text>
@@ -447,7 +447,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
             router.back();
           }}
           variant="info"
-          icon={<CheckCircle2 size={60} color="#3B82F6" />}
+          icon={<CheckCircle2 size={60} color={theme.colors.primary} />}
           title="Check-in Complete"
           body="Your update was sent to your coach."
           ctaLabel="Back to Dashboard"

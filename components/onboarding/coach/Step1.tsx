@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
@@ -17,6 +18,7 @@ interface Step1Props {
 }
 
 export default function Step1({ formData, updateForm, pickImage, removeLogo, uploading }: Step1Props) {
+  const colors = useBrandColors();
   return (
     <View className="gap-8">
       <SectionLabel step="Step 1" title="Build Your Brand" desc="Set up your public identity" />
@@ -46,7 +48,7 @@ export default function Step1({ formData, updateForm, pickImage, removeLogo, upl
               className="w-36 h-36 rounded-3xl border-2 border-dashed border-slate-800 bg-slate-900/20 items-center justify-center active:bg-slate-900/40"
             >
               {uploading ? (
-                <ActivityIndicator color="#3B82F6" />
+                <ActivityIndicator color={colors.primary} />
               ) : (
                 <>
                   <Plus size={32} color="#475569" />

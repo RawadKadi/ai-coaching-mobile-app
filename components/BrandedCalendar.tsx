@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -13,6 +14,8 @@ const MONTH_NAMES = [
 ];
 
 export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, onSelect }) => {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const today = new Date();
 
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -116,7 +119,7 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     backgroundColor: '#020617',
     borderWidth: 1,
@@ -195,7 +198,7 @@ const styles = StyleSheet.create({
   },
   daySelected: {
     backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
   },
   dayToday: {
     backgroundColor: 'rgba(37, 99, 235, 0.1)',

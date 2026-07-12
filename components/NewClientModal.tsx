@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { PartyPopper, Calendar, X } from 'lucide-react-native';
@@ -10,6 +11,8 @@ interface NewClientModalProps {
 }
 
 export default function NewClientModal({ visible, clientName, onSetupSessions, onDismiss }: NewClientModalProps) {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
     return (
         <Modal
             visible={visible}
@@ -50,7 +53,7 @@ export default function NewClientModal({ visible, clientName, onSetupSessions, o
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -95,7 +98,7 @@ const styles = StyleSheet.create({
     },
     highlight: {
         fontWeight: '700',
-        color: '#3B82F6',
+        color: colors.primary,
     },
     subtitle: {
         fontSize: 14,
@@ -109,7 +112,7 @@ const styles = StyleSheet.create({
     },
     primaryButton: {
         flexDirection: 'row',
-        backgroundColor: '#3B82F6',
+        backgroundColor: colors.primary,
         padding: 16,
         borderRadius: 12,
         alignItems: 'center',

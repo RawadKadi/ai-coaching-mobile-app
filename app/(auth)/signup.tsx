@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -19,6 +20,7 @@ import { MotiView, AnimatePresence } from 'moti';
 import { User, Mail, Lock, UserPlus, AlertCircle, ChevronLeft, Sparkles, Shield, CheckCircle2 } from 'lucide-react-native';
 
 export default function SignUpScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { signUp } = useAuth();
   const { invite: inviteParam } = useLocalSearchParams<{ invite?: string }>();
@@ -179,9 +181,9 @@ export default function SignUpScreen() {
                         onChangeText={handleInviteChange}
                         autoCapitalize="characters"
                         editable={!inviteValid}
-                        selectionColor="#3B82F6"
+                        selectionColor={colors.primary}
                       />
-                      {validatingInvite && <ActivityIndicator size="small" color="#3B82F6" />}
+                      {validatingInvite && <ActivityIndicator size="small" color={colors.primary} />}
                     </View>
                   </MotiView>
                 )}
@@ -245,7 +247,7 @@ const InputField = ({ icon, placeholder, value, onChange, secure, keyboardType }
         onChangeText={onChange}
         secureTextEntry={secure}
         keyboardType={keyboardType}
-        selectionColor="#3B82F6"
+        selectionColor={colors.primary}
         autoCapitalize="none"
       />
     </View>

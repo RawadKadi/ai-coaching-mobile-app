@@ -139,7 +139,7 @@ export default function ClientChallengesScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -166,7 +166,7 @@ export default function ClientChallengesScreen() {
         <ScrollView 
           style={{ flex: 1 }}
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3B82F6" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />}
           showsVerticalScrollIndicator={false}
         >
             {/* Header Content */}
@@ -190,12 +190,12 @@ export default function ClientChallengesScreen() {
                 <View style={{ backgroundColor: '#0f172a80', borderWidth: 1, borderColor: '#0f172a', borderRadius: 32, padding: 24 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <View style={{ width: 32, height: 32, borderRadius: 12, backgroundColor: '#3b82f61a', alignItems: 'center', justifyContent: 'center' }}>
-                                <Zap size={16} color="#3B82F6" />
+                            <View style={{ width: 32, height: 32, borderRadius: 12, backgroundColor: `${theme.colors.primary}1a`, alignItems: 'center', justifyContent: 'center' }}>
+                                <Zap size={16} color={theme.colors.primary} />
                             </View>
                             <Text style={{ color: 'white', fontWeight: '900' }}>Deployment Status</Text>
                         </View>
-                        <Text style={{ color: '#3B82F6', fontWeight: '900', fontSize: 18 }}>{Math.round(progressPercent)}%</Text>
+                        <Text style={{ color: theme.colors.primary, fontWeight: '900', fontSize: 18 }}>{Math.round(progressPercent)}%</Text>
                     </View>
                     <View style={{ height: 8, backgroundColor: '#020617', borderRadius: 999, overflow: 'hidden' }}>
                         <View 
@@ -258,10 +258,10 @@ export default function ClientChallengesScreen() {
             {coachName ? (
                 <View style={{ marginHorizontal: 24, marginTop: 48, marginBottom: 48, padding: 24, backgroundColor: '#2563eb0d', borderRadius: 32, borderWidth: 1, borderColor: '#2563eb1a', flexDirection: 'row', alignItems: 'center' }}>
                     <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: '#2563eb1a', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
-                        <MessageSquare size={20} color="#3B82F6" />
+                        <MessageSquare size={20} color={theme.colors.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#3B82F6', fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>Signal from {coachName}</Text>
+                        <Text style={{ color: theme.colors.primary, fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>Signal from {coachName}</Text>
                         <Text style={{ color: '#94a3b8', fontWeight: 'bold', marginTop: 4, fontSize: 14, fontStyle: 'italic' }}>"Complete today's tasks to advance to the next stage."</Text>
                     </View>
                 </View>
@@ -273,7 +273,7 @@ export default function ClientChallengesScreen() {
 }
 
 function getFocusIcon(type: string, completed: boolean) {
-  const color = completed ? '#3b82f6' : '#94a3b8';
+  const color = completed ? theme.colors.primary : '#94a3b8';
   switch (type?.toLowerCase()) {
     case 'training': return <Dumbbell size={24} color={color} />;
     case 'nutrition': return <Apple size={24} color={color} />;

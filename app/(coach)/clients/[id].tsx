@@ -285,7 +285,7 @@ export default function ClientDetailsScreen() {
   if (loading && !refreshing) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -362,7 +362,7 @@ export default function ClientDetailsScreen() {
                     </View>
                 </View>
                 <TouchableOpacity onPress={() => setSchedulerVisible(true)} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
-                    <CalendarIcon size={20} color="#3B82F6" />
+                    <CalendarIcon size={20} color={theme.colors.primary} />
                 </TouchableOpacity>
             </View>
 
@@ -383,7 +383,7 @@ export default function ClientDetailsScreen() {
                 className="flex-1"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 120 }}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
             >
                 {/* Main Tab Navigation */}
                 <View className="border-b border-white/5 mt-4">
@@ -1187,7 +1187,7 @@ export default function ClientDetailsScreen() {
                    onChangeText={setEditingName}
                    placeholder="e.g. Hydration Foundation"
                    placeholderTextColor="#334155"
-                   selectionColor="#3B82F6"
+                   selectionColor={theme.colors.primary}
                  />
                </View>
 
@@ -1202,7 +1202,7 @@ export default function ClientDetailsScreen() {
                    placeholderTextColor="#334155"
                    multiline
                    textAlignVertical="top"
-                   selectionColor="#3B82F6"
+                   selectionColor={theme.colors.primary}
                  />
                </View>
 
@@ -1402,7 +1402,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                         activeOpacity={0.7}
                                     >
                                         <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(59,130,246,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Edit2 size={16} color="#3B82F6" />
+                                            <Edit2 size={16} color={theme.colors.primary} />
                                         </View>
                                         <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Edit</Text>
                                     </TouchableOpacity>
@@ -1447,7 +1447,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                 : { backgroundColor: '#020617', borderColor: 'rgba(255,255,255,0.05)' }
                             ]}
                         >
-                            <MoreVertical size={20} color={showMenu ? '#3B82F6' : '#64748B'} />
+                            <MoreVertical size={20} color={showMenu ? theme.colors.primary : '#64748B'} />
                         </TouchableOpacity>
                         </View>
                         )

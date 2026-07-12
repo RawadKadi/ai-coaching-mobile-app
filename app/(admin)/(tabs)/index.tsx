@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import { useState, useEffect } from 'react';
 import {
   View,
@@ -14,6 +15,8 @@ import { Profile } from '@/types/database';
 import { Users, UserCheck, UserCog, Shield } from 'lucide-react-native';
 
 export default function AdminDashboard() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<Profile[]>([]);
@@ -100,7 +103,7 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -115,7 +118,7 @@ export default function AdminDashboard() {
       {/* Stats */}
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
-          <Users size={24} color="#3B82F6" />
+          <Users size={24} color={colors.primary} />
           <Text style={styles.statValue}>{stats.total}</Text>
           <Text style={styles.statLabel}>Total Users</Text>
         </View>
@@ -181,7 +184,7 @@ export default function AdminDashboard() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
@@ -252,14 +255,14 @@ const styles = StyleSheet.create({
   },
   filterButtonActive: {
     backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
   },
   filterText: {
     fontSize: 14,
     color: '#6B7280',
   },
   filterTextActive: {
-    color: '#3B82F6',
+    color: colors.primary,
     fontWeight: '600',
   },
   content: {
@@ -295,7 +298,7 @@ const styles = StyleSheet.create({
   },
   userRole: {
     fontSize: 12,
-    color: '#3B82F6',
+    color: colors.primary,
     marginTop: 2,
     textTransform: 'capitalize',
   },

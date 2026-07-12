@@ -166,7 +166,7 @@ const BrandContext = createContext<BrandContextType | undefined>(undefined);
 
 function generateThemeColors(brand: Brand | null, isDark: boolean): ThemeColors {
   // Use brand colors EXACTLY as the coach configured them - no modifications
-  const primaryColor = ensureValidColor(brand?.primary_color, '#3B82F6');
+  const primaryColor = ensureValidColor(brand?.primary_color, '#7FA7FF');
   const secondaryColor = ensureValidColor(brand?.secondary_color, '#10B981');
   const accentColor = ensureValidColor(brand?.accent_color, '#F59E0B');
   const backgroundColor = ensureValidColor(brand?.background_color, '#F9FAFB');

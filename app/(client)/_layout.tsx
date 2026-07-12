@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import { View, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
@@ -6,6 +7,7 @@ import SessionMonitor from '@/components/SessionMonitor';
 import ChallengeMonitor from '@/components/ChallengeMonitor';
 
 export default function ClientLayout() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { session, profile, loading } = useAuth();
   const segments = useSegments() as string[];
@@ -38,7 +40,7 @@ export default function ClientLayout() {
       
       {(loading || !session || profile?.role !== 'client') && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
 

@@ -19,8 +19,9 @@ interface PostponeModalProps {
 }
 
 export default function PostponeModal({ visible, onClose, onConfirm, coachId, initialDate, clientId, sessionId }: PostponeModalProps) {
+  const styles = getStyles(theme.colors);
   const theme = useTheme();
-  const [step, setStep] = useState<1 | 2 | 3>(1); // 1=Reason, 2=Day Selection, 3=Slot Selection
+  const [step, setStep] = useState<1 | 2 | 3>(1); // 1=Reason, 2={Day} Selection, 3={Slot} Selection
   const [reason, setReason] = useState<string>('');
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [groupedSlots, setGroupedSlots] = useState<Record<string, string[]>>({});
@@ -270,7 +271,7 @@ const SparklesIcon = () => (
     </View>
 );
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#3B82F6',
+    backgroundColor: theme.colors.primary,
   },
   content: {
     flex: 1,
@@ -327,7 +328,7 @@ const styles = StyleSheet.create({
   },
   selectedOption: {
     backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
+    borderColor: theme.colors.primary,
   },
   optionRow: {
     flexDirection: 'row',
@@ -340,7 +341,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   selectedOptionText: {
-    color: '#3B82F6',
+    color: theme.colors.primary,
     fontWeight: '600',
   },
   loadingContainer: {
@@ -385,7 +386,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   backLinkText: {
-    color: '#3B82F6',
+    color: theme.colors.primary,
     fontWeight: '600',
   },
   slotsGrid: {
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
   },
   selectedSlot: {
     backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
+    borderColor: theme.colors.primary,
   },
   slotText: {
     fontSize: 14,
@@ -412,7 +413,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   selectedSlotText: {
-    color: '#3B82F6',
+    color: theme.colors.primary,
     fontWeight: '600',
   },
   dayHeader: {
@@ -451,7 +452,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   confirmButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,

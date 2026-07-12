@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState } from 'react';
 import {
   View,
@@ -19,6 +20,7 @@ import { MotiView, AnimatePresence } from 'moti';
 const PENDING_INVITE_KEY = '@pending_invite_token';
 
 export default function LoginScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
@@ -106,7 +108,7 @@ export default function LoginScreen() {
                       onChangeText={setEmail}
                       autoCapitalize="none"
                       keyboardType="email-address"
-                      selectionColor="#3B82F6"
+                      selectionColor={colors.primary}
                     />
                   </View>
                 </View>
@@ -121,7 +123,7 @@ export default function LoginScreen() {
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={!showPassword}
-                      selectionColor="#3B82F6"
+                      selectionColor={colors.primary}
                     />
                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                       {showPassword ? <EyeOff size={20} color="#64748B" /> : <Eye size={20} color="#64748B" />}

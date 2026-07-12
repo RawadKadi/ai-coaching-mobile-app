@@ -140,7 +140,7 @@ export default function InviteClientScreen() {
           className="mx-6 mt-8 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden"
         >
             <View className="absolute top-0 right-0 p-4 opacity-10">
-                <Users size={120} color="#3B82F6" />
+                <Users size={120} color={theme.colors.primary} />
             </View>
             <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
                 <Zap size={36} color="white" fill="white" />
@@ -160,7 +160,7 @@ export default function InviteClientScreen() {
         >
           <View className="flex-row items-center gap-2 mb-8">
             <View className="w-8 h-8 rounded-xl bg-slate-950 items-center justify-center border border-white/5">
-                <Smartphone size={16} color="#3B82F6" />
+                <Smartphone size={16} color={theme.colors.primary} />
             </View>
             <Text className="text-white text-lg font-black tracking-tight">Access Control</Text>
           </View>
@@ -183,7 +183,7 @@ export default function InviteClientScreen() {
                   placeholderTextColor="#475569"
                   className={`flex-1 font-black text-xl ${unlimited ? 'text-slate-700' : 'text-white'}`}
                 />
-                {!unlimited && <Users size={20} color="#3B82F6" />}
+                {!unlimited && <Users size={20} color={theme.colors.primary} />}
               </View>
               
               <TouchableOpacity
@@ -265,7 +265,7 @@ export default function InviteClientScreen() {
                         {getInviteLink()}
                     </Text>
                     <MotiView animate={{ scale: copied ? 1.2 : 1 }}>
-                        {copied ? <Check size={20} color="#10B981" /> : <Copy size={20} color="#3B82F6" />}
+                        {copied ? <Check size={20} color="#10B981" /> : <Copy size={20} color={theme.colors.primary} />}
                     </MotiView>
                   </TouchableOpacity>
 
@@ -285,7 +285,7 @@ export default function InviteClientScreen() {
                        onPress={() => shareInvite('email')} 
                     />
                     <ShareButton 
-                       icon={<MessageCircle size={24} color="#3B82F6" />} 
+                       icon={<MessageCircle size={24} color={theme.colors.primary} />} 
                        bg="bg-blue-600/10"
                        borderColor="border-blue-500/20"
                        onPress={() => shareInvite('sms')} 

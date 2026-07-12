@@ -240,7 +240,7 @@ export function ReassignToCoachModal({
                   </View>
 
                   {loading ? (
-                    <ActivityIndicator color="#3B82F6" className="my-10" />
+                    <ActivityIndicator color={theme.colors.primary} className="my-10" />
                   ) : filteredCoaches.length === 0 ? (
                     <View className="py-20 items-center justify-center">
                         <Users size={40} color="#1E293B" />

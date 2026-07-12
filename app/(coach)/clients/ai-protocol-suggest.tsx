@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -7,6 +8,7 @@ import { ArrowLeft, Sparkles, ChevronRight, Zap, Target as FocusIcon, Flame, Che
 import { generateDailyProtocol } from '@/lib/ai-protocol-service';
 
 export default function AIProtocolSuggestScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { coach } = useAuth();
@@ -101,7 +103,7 @@ export default function AIProtocolSuggestScreen() {
               justifyContent: 'center',
               borderWidth: 2,
               backgroundColor: step >= s ? '#2563EB' : '#0F172A',
-              borderColor: step >= s ? '#3B82F6' : '#1E293B'
+              borderColor: step >= s ? colors.primary : '#1E293B'
             }}
           >
             {step > s ? (
@@ -121,7 +123,7 @@ export default function AIProtocolSuggestScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -173,7 +175,7 @@ export default function AIProtocolSuggestScreen() {
                                     borderWidth: 2,
                                     alignItems: 'center',
                                     backgroundColor: isActive ? 'rgba(37, 99, 235, 0.1)' : '#0F172A',
-                                    borderColor: isActive ? '#3B82F6' : '#1E293B'
+                                    borderColor: isActive ? colors.primary : '#1E293B'
                                 }}
                             >
                                 <Text style={{ fontSize: 24, marginBottom: 8 }}>{emojis[f]}</Text>
@@ -241,7 +243,7 @@ export default function AIProtocolSuggestScreen() {
                 <View style={{ backgroundColor: '#0F172A', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#1E293B', marginBottom: 24 }}>
                     <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', trackingWidest: 1.5, marginBottom: 16 }}>Configuration</Text>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
-                        <View style={{ flex: 1, backgroundColor: '#020617', padding: 16, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
+                        <View style={{ flex: 1, backgroundColor: '#020617', padding: 16, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
                             <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Focus</Text>
                             <Text style={{ color: 'white', fontWeight: 'bold', textTransform: 'capitalize' }}>{focusType}</Text>
                         </View>
@@ -259,7 +261,7 @@ export default function AIProtocolSuggestScreen() {
                         {getExamples().map((ex, i) => (
                             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: 'rgba(37, 99, 235, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
-                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3B82F6' }} />
+                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                 </View>
                                 <Text style={{ color: '#94A3B8', fontSize: 13 }}>{ex}</Text>
                             </View>

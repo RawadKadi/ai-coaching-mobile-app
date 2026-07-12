@@ -1,12 +1,14 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import { Tabs } from 'expo-router';
 import { Home, Users, BarChart, User } from 'lucide-react-native';
 
 export default function AdminTabLayout() {
+  const colors = useBrandColors();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#3B82F6',
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',

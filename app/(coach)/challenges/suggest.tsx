@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, TextInput, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -63,7 +64,7 @@ function GenerationLoader() {
   return (
     <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(2, 6, 23, 0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}>
       <Animated.View style={[{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(59, 130, 246, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 32 }, animatedStyle]}>
-        <Zap size={32} color="#3B82F6" />
+        <Zap size={32} color={colors.primary} />
       </Animated.View>
       
       <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 24 }}>
@@ -90,7 +91,7 @@ function GenerationLoader() {
                     }}
                 >
                     {isActive && (
-                        <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3B82F6', marginRight: 12 }, animatedStyle]} />
+                        <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary, marginRight: 12 }, animatedStyle]} />
                     )}
                     <Text style={{ 
                         color: 'white', 
@@ -109,6 +110,8 @@ function GenerationLoader() {
 }
 
 export default function AISuggestChallengeScreen() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { coach } = useAuth();
@@ -209,7 +212,7 @@ export default function AISuggestChallengeScreen() {
               justifyContent: 'center',
               borderWidth: 2,
               backgroundColor: step >= s ? '#2563EB' : '#0F172A',
-              borderColor: step >= s ? '#3B82F6' : '#1E293B'
+              borderColor: step >= s ? colors.primary : '#1E293B'
             }}
           >
             {step > s ? (
@@ -272,7 +275,7 @@ export default function AISuggestChallengeScreen() {
                 </View>
 
                 {loading ? (
-                    <ActivityIndicator size="large" color="#3B82F6" style={{ marginTop: 40 }} />
+                    <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
                 ) : filteredClients.length === 0 ? (
                     <View style={{ alignItems: 'center', marginTop: 40 }}>
                         <FocusIcon size={40} color="#1E293B" />
@@ -292,7 +295,7 @@ export default function AISuggestChallengeScreen() {
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 backgroundColor: selectedClient?.id === client.id ? 'rgba(37, 99, 235, 0.08)' : '#0F172A',
-                                borderColor: selectedClient?.id === client.id ? '#3B82F6' : '#1E293B'
+                                borderColor: selectedClient?.id === client.id ? colors.primary : '#1E293B'
                             }}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -309,8 +312,8 @@ export default function AISuggestChallengeScreen() {
                                 borderWidth: 2,
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                backgroundColor: selectedClient?.id === client.id ? '#3B82F6' : 'transparent',
-                                borderColor: selectedClient?.id === client.id ? '#3B82F6' : '#1E293B'
+                                backgroundColor: selectedClient?.id === client.id ? colors.primary : 'transparent',
+                                borderColor: selectedClient?.id === client.id ? colors.primary : '#1E293B'
                             }}>
                                 {selectedClient?.id === client.id && <Check size={12} color="white" />}
                             </View>
@@ -412,7 +415,7 @@ export default function AISuggestChallengeScreen() {
                     <View style={{ backgroundColor: '#0F172A', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: '#1E293B', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <View style={{ width: 36, height: 36, backgroundColor: '#1E293B', borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                                <Calendar size={16} color="#3B82F6" />
+                                <Calendar size={16} color={colors.primary} />
                             </View>
                             <View>
                                 <Text style={{ color: '#475569', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }}>Start Date</Text>
@@ -550,7 +553,7 @@ export default function AISuggestChallengeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     marginBottom: 40,
   },
@@ -577,7 +580,7 @@ const styles = StyleSheet.create({
   },
   buttonActive: {
     backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
   },
   buttonInactive: {
     backgroundColor: '#0F172A',

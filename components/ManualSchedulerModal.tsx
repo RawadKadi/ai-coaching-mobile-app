@@ -157,14 +157,14 @@ const TimeSlotCard = React.memo(({ slot, isSelected, onPress }: TimeSlotCardProp
                         alignItems: 'center',
                     },
                     isSelected 
-                        ? { backgroundColor: '#2563EB', borderColor: '#3B82F6', borderWidth: 2 } 
+                        ? { backgroundColor: '#2563EB', borderColor: theme.colors.primary, borderWidth: 2 } 
                         : { backgroundColor: '#0F172A', borderColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1 }
                 ]}
                 className="shadow-2xl"
             >
                 <View className="flex-row items-center gap-4">
                     <View className={`w-12 h-12 rounded-2xl items-center justify-center ${isSelected ? 'bg-white' : 'bg-slate-950/50'}`}>
-                        <Clock size={20} color={isSelected ? '#2563EB' : '#3B82F6'} />
+                        <Clock size={20} color={isSelected ? '#2563EB' : theme.colors.primary} />
                     </View>
                     <View>
                         <Text className={`text-xl font-black ${isSelected ? 'text-white' : 'text-slate-200'}`}>
@@ -201,7 +201,7 @@ const TimeSlotCard = React.memo(({ slot, isSelected, onPress }: TimeSlotCardProp
                         }}
                     >
                         <View className="w-7 h-7 bg-white rounded-full items-center justify-center">
-                            <Check size={16} color="#3B82F6" strokeWidth={4} />
+                            <Check size={16} color={theme.colors.primary} strokeWidth={4} />
                         </View>
                     </Animated.View>
                 </View>
@@ -524,7 +524,7 @@ export default function ManualSchedulerModal({
                                           className="mb-10 p-10 rounded-[48px] bg-blue-600/10 border border-blue-600/20 items-center overflow-hidden"
                                         >
                                             <View className="absolute top-0 right-0 p-4 opacity-10">
-                                                <Users size={120} color="#3B82F6" />
+                                                <Users size={120} color={theme.colors.primary} />
                                             </View>
                                             <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-600/50 mb-6 border-2 border-white/20">
                                                 <Calendar size={36} color="white" fill="white" />
@@ -556,7 +556,7 @@ export default function ManualSchedulerModal({
                                             <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 ml-1">Active Roster</Text>
                                             {loading ? (
                                                 <View className="py-20 items-center justify-center">
-                                                    <ActivityIndicator color="#3B82F6" />
+                                                    <ActivityIndicator color={theme.colors.primary} />
                                                     <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mt-4">Syncing Athletes...</Text>
                                                 </View>
                                             ) : filteredClients.length === 0 ? (
@@ -652,7 +652,7 @@ export default function ManualSchedulerModal({
                                         </View>
                                         {renderHeader("Available Times", `${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} · ${sessionType.toUpperCase()} Session`)}
                                         
-                                        {loading ? <ActivityIndicator size="large" color="#3B82F6" className="mt-20" /> : (
+                                        {loading ? <ActivityIndicator size="large" color={theme.colors.primary} className="mt-20" /> : (
                                             <View className="gap-8">
                                                 {/* Morning Slots */}
                                                 <View>
@@ -728,7 +728,7 @@ export default function ManualSchedulerModal({
                                         <View className="p-8 bg-slate-900/50 border border-white/5 rounded-[40px] flex-row items-center justify-between mb-10">
                                             <View className="flex-row items-center gap-5">
                                                 <View className="w-16 h-16 bg-slate-950 rounded-2xl items-center justify-center border border-white/5">
-                                                    <Clock size={28} color="#3B82F6" />
+                                                    <Clock size={28} color={theme.colors.primary} />
                                                 </View>
                                                 <View>
                                                     <Text className="text-white text-2xl font-black">60 minutes</Text>
@@ -761,7 +761,7 @@ export default function ManualSchedulerModal({
                                                                 alignItems: 'center',
                                                             },
                                                             sessionType === type 
-                                                                ? { backgroundColor: '#2563EB', borderColor: '#3B82F6', borderWidth: 1 } 
+                                                                ? { backgroundColor: '#2563EB', borderColor: theme.colors.primary, borderWidth: 1 } 
                                                                 : { backgroundColor: '#0F172A', borderColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1 }
                                                         ]}
                                                         className="gap-3 shadow-lg"
@@ -823,9 +823,9 @@ export default function ManualSchedulerModal({
                                              <View className="bg-slate-900/30 p-6 rounded-[32px] border border-white/5 flex-row items-start gap-5">
                                                  <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/10 mt-1">
                                                     {recurrence === 'once' ? (
-                                                        <Calendar size={20} color="#3B82F6" />
+                                                        <Calendar size={20} color={theme.colors.primary} />
                                                     ) : (
-                                                        <Repeat size={20} color="#3B82F6" />
+                                                        <Repeat size={20} color={theme.colors.primary} />
                                                     )}
                                                  </View>
                                                  <View style={{ flex: 1 }}>
@@ -840,7 +840,7 @@ export default function ManualSchedulerModal({
                                                          <View>
                                                              <Text className="text-white font-bold text-lg mt-0.5">One-time</Text>
                                                              <View className="flex-row items-center gap-2 mt-3 bg-slate-950 self-start px-3.5 py-2 rounded-xl border border-white/5">
-                                                                 <Calendar size={14} color="#3B82F6" />
+                                                                 <Calendar size={14} color={theme.colors.primary} />
                                                                  <Text className="text-slate-200 font-bold text-xs">
                                                                      {selectedDates[0] ? selectedDates[0].toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date selected'}
                                                                  </Text>
@@ -896,7 +896,7 @@ export default function ManualSchedulerModal({
                                                          </View>
 
                                                          {/* Right Arrow */}
-                                                         <ArrowRight size={20} color="#3B82F6" />
+                                                         <ArrowRight size={20} color={theme.colors.primary} />
 
                                                          {/* End Time Pill */}
                                                          <View className="bg-slate-950 px-4 py-2.5 rounded-[16px] border border-white/5 items-center justify-center">

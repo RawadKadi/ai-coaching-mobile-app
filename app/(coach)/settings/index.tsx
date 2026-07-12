@@ -27,8 +27,8 @@ export default function SettingsScreen() {
         <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingBottom: 120 }}>
           <SectionLabel label="Core Systems" />
           <SettingsItem
-            icon={<Clock size={20} color="#3B82F6" />}
-            iconBg="#3B82F620"
+            icon={<Clock size={20} color="#7FA7FF" />}
+            iconBg="#7FA7FF20"
             label="Availability Hub"
             desc="Sync your time windows"
             onPress={() => router.push('/(coach)/settings/availability')}

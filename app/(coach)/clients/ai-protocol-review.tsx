@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -8,6 +9,7 @@ import { MotiView } from 'moti';
 import { SuggestedHabit } from '@/lib/ai-protocol-service';
 
 export default function AIProtocolReviewScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { clientId, clientName, suggestions } = useLocalSearchParams();
   const { coach } = useAuth();
@@ -121,7 +123,7 @@ export default function AIProtocolReviewScreen() {
                     borderRadius: 28,
                     padding: 24,
                     borderWidth: 2,
-                    borderColor: isSelected ? '#3B82F6' : '#1E293B',
+                    borderColor: isSelected ? colors.primary : '#1E293B',
                   }}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -145,8 +147,8 @@ export default function AIProtocolReviewScreen() {
                       borderWidth: 2,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: isSelected ? '#3B82F6' : 'transparent',
-                      borderColor: isSelected ? '#3B82F6' : '#1E293B'
+                      backgroundColor: isSelected ? colors.primary : 'transparent',
+                      borderColor: isSelected ? colors.primary : '#1E293B'
                     }}>
                       {isSelected && <Check size={16} color="white" />}
                     </View>

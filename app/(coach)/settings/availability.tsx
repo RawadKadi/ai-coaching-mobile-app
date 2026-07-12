@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -12,6 +13,7 @@ const DAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function AvailabilitySettings() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { coach } = useAuth();
   
@@ -138,7 +140,7 @@ export default function AvailabilitySettings() {
   if (loading) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -194,7 +196,7 @@ export default function AvailabilitySettings() {
                     onPress={() => addSlot(activeDay)}
                     className="flex-row items-center gap-2 bg-slate-900 px-4 py-2 rounded-2xl border border-slate-800"
                   >
-                    <Plus size={14} color="#3B82F6" />
+                    <Plus size={14} color={colors.primary} />
                     <Text className="text-blue-400 text-xs font-bold">New Slot</Text>
                   </TouchableOpacity>
               </View>
@@ -268,7 +270,7 @@ export default function AvailabilitySettings() {
                 <Text className="text-white text-lg font-bold">Exceptions</Text>
                 <TouchableOpacity onPress={() => setBlockModalVisible(true)} className="flex-row items-center gap-2">
                    <Text className="text-blue-500 text-sm font-bold">Add Vacation</Text>
-                   <ChevronRight size={16} color="#3B82F6" />
+                   <ChevronRight size={16} color={colors.primary} />
                 </TouchableOpacity>
               </View>
               
@@ -293,7 +295,7 @@ export default function AvailabilitySettings() {
          <View className="flex-1 bg-slate-950/90 justify-center p-6">
             <MotiView from={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-slate-900 p-8 rounded-[40px] border border-slate-800">
                <View className="flex-row items-center gap-3 mb-6">
-                  <Sparkles size={24} color="#3B82F6" />
+                  <Sparkles size={24} color={colors.primary} />
                   <Text className="text-white text-xl font-bold">Schedule Assistant</Text>
                </View>
                <TextInput 

@@ -111,7 +111,7 @@ export default function ReassignClientsScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-slate-950 items-center justify-center">
-        <ActivityIndicator color="#3B82F6" />
+        <ActivityIndicator color={theme.colors.primary} />
         <Text className="text-slate-500 mt-4 font-bold tracking-widest text-[10px] uppercase">Reconfiguring Neural Network...</Text>
       </View>
     );

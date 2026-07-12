@@ -98,7 +98,7 @@ export default function CoachProfileScreen() {
               contentContainerStyle={{ paddingBottom: 140 }}
               onScroll={handleScroll}
               scrollEventThrottle={16}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await refreshProfile(); setRefreshing(false); }} tintColor="#3B82F6" />}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await refreshProfile(); setRefreshing(false); }} tintColor={colors.primary} />}
           >
             {/* Profile Overview */}
             <MotiView from={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="items-center pt-10 pb-10 px-6">
@@ -144,7 +144,7 @@ export default function CoachProfileScreen() {
             {/* Menu Sections */}
             <View className="px-6 space-y-4">
               <SectionLabel label="Account" />
-              <ProfileMenuItem icon={<User size={20} color="#3B82F6" />} label="Personal Information" onPress={() => router.push('/(coach)/personal-information')} />
+              <ProfileMenuItem icon={<User size={20} color={colors.primary} />} label="Personal Information" onPress={() => router.push('/(coach)/personal-information')} />
 
               <SectionLabel label="Application" />
               <ProfileMenuItem icon={<Settings size={20} color="#94A3B8" />} label="App Settings" onPress={() => router.push('/(coach)/settings')} />

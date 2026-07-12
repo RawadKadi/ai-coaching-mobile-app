@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar } from 'react-native';
 import { Image } from 'expo-image';
@@ -34,6 +35,8 @@ type MealDetails = {
 };
 
 export default function MealDetailsScreen() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -77,7 +80,7 @@ export default function MealDetailsScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -144,7 +147,7 @@ export default function MealDetailsScreen() {
           <View style={styles.titleSection}>
             <View style={styles.badgeRow}>
               <View style={styles.categoryBadge}>
-                <Clock size={12} color="#3B82F6" />
+                <Clock size={12} color={colors.primary} />
                 <Text style={styles.categoryText}>{meal.meal_time || 'Planned'}</Text>
               </View>
               <Text style={styles.dateText}>
@@ -163,7 +166,7 @@ export default function MealDetailsScreen() {
               label="Energy" 
               value={formatCompactNumber(meal.calories)} 
               unit="kcal" 
-              icon={<Flame size={16} color="#3B82F6" fill="#3B82F6" />}
+              icon={<Flame size={16} color={colors.primary} fill={colors.primary} />}
             />
             <MacroTile 
               label="Protein" 
@@ -186,7 +189,7 @@ export default function MealDetailsScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIcon}>
-                <Utensils size={16} color="#3B82F6" />
+                <Utensils size={16} color={colors.primary} />
               </View>
               <Text style={styles.sectionTitle}>Protocol Ingredients</Text>
             </View>
@@ -211,7 +214,7 @@ export default function MealDetailsScreen() {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={[styles.sectionIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-                  <Zap size={16} color="#3B82F6" fill="#3B82F6" />
+                  <Zap size={16} color={colors.primary} fill={colors.primary} />
                 </View>
                 <Text style={styles.sectionTitle}>Coach Insights</Text>
               </View>
@@ -239,7 +242,7 @@ function MacroTile({ label, value, unit, icon }: { label: string; value: string;
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#020617', // slate-950
@@ -349,7 +352,7 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 11,
     fontWeight: '900',
-    color: '#3B82F6',
+    color: colors.primary,
     textTransform: 'uppercase',
   },
   dateText: {
@@ -452,7 +455,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     marginRight: 16,
   },
   ingredientText: {
@@ -490,7 +493,7 @@ const styles = StyleSheet.create({
   errorButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     borderRadius: 16,
   },
   errorButtonText: {

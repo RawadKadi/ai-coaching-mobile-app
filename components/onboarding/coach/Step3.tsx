@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -53,6 +54,7 @@ function formatDisplay(t: string): string {
 }
 
 export default function Step3({ formData, updateForm, toggleWeekday }: Step3Props) {
+  const colors = useBrandColors();
   const [pickerTarget, setPickerTarget] = useState<'start_time' | 'end_time' | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(new Date());
@@ -121,7 +123,7 @@ export default function Step3({ formData, updateForm, toggleWeekday }: Step3Prop
             borderWidth: 1,
             borderColor: selectedCount > 0 ? '#2563EB' : '#1E293B',
           }}>
-            <Text style={{ color: selectedCount > 0 ? '#3B82F6' : '#475569', fontSize: 12, fontWeight: '800' }}>
+            <Text style={{ color: selectedCount > 0 ? colors.primary : '#475569', fontSize: 12, fontWeight: '800' }}>
               {selectedCount === 0 ? 'None selected' : `${selectedCount} day${selectedCount > 1 ? 's' : ''}`}
             </Text>
           </View>
@@ -155,11 +157,11 @@ export default function Step3({ formData, updateForm, toggleWeekday }: Step3Prop
                     : '#0F172A',
                   borderWidth: 2,
                   borderColor: isOn
-                    ? '#3B82F6'
+                    ? colors.primary
                     : isWeekend
                     ? '#1E293B'
                     : '#1E293B',
-                  shadowColor: isOn ? '#3B82F6' : 'transparent',
+                  shadowColor: isOn ? colors.primary : 'transparent',
                   shadowOpacity: 0.4,
                   shadowRadius: 8,
                   shadowOffset: { width: 0, height: 2 },
@@ -206,7 +208,7 @@ export default function Step3({ formData, updateForm, toggleWeekday }: Step3Prop
             }}
           >
             <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(37,99,235,0.18)', alignItems: 'center', justifyContent: 'center' }}>
-              <Clock size={20} color="#3B82F6" />
+              <Clock size={20} color={colors.primary} />
             </View>
             <Text style={{ color: '#475569', fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.5 }}>Start</Text>
             <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '900', letterSpacing: -0.5 }}>
@@ -236,7 +238,7 @@ export default function Step3({ formData, updateForm, toggleWeekday }: Step3Prop
             }}
           >
             <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(37,99,235,0.18)', alignItems: 'center', justifyContent: 'center' }}>
-              <Clock size={20} color="#3B82F6" />
+              <Clock size={20} color={colors.primary} />
             </View>
             <Text style={{ color: '#475569', fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.5 }}>End</Text>
             <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '900', letterSpacing: -0.5 }}>
@@ -249,8 +251,8 @@ export default function Step3({ formData, updateForm, toggleWeekday }: Step3Prop
         {duration && (
           <View style={{ alignItems: 'center', marginTop: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(37,99,235,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3B82F6' }} />
-              <Text style={{ color: '#3B82F6', fontSize: 13, fontWeight: '700' }}>{duration} work day</Text>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+              <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>{duration} work day</Text>
             </View>
           </View>
         )}

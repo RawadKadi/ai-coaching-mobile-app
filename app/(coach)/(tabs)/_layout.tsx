@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import { Tabs } from 'expo-router';
 import { Platform, View } from 'react-native';
 import { Home, Users, User, Calendar, MessageSquare } from 'lucide-react-native';
@@ -5,6 +6,7 @@ import { useUnread } from '@/contexts/UnreadContext';
 import { FuturisticTabBar } from '@/components/FuturisticTabBar';
 
 export default function CoachTabLayout() {
+  const colors = useBrandColors();
   const { unreadCount } = useUnread();
   
   return (
@@ -41,7 +43,7 @@ export default function CoachTabLayout() {
             title: 'Messages',
             tabBarIcon: ({ size, color }) => <MessageSquare size={22} color={color} />,
             tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-            tabBarBadgeStyle: { backgroundColor: '#3B82F6', color: 'white', fontSize: 10, fontWeight: 'bold' },
+            tabBarBadgeStyle: { backgroundColor: colors.primary, color: 'white', fontSize: 10, fontWeight: 'bold' },
           }}
         />
         <Tabs.Screen

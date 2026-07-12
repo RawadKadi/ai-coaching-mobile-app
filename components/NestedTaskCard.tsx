@@ -1,8 +1,10 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { CheckCircle, Circle, Dumbbell, Apple, Moon, Zap, Clock, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 
 export interface NestedTaskCardProps {
     task: any;
@@ -26,8 +28,8 @@ interface ParsedTaskData {
     sub_tasks: ExerciseTask[];
 }
 
-function getFocusIcon(type: string, completed: boolean) {
-  const color = completed ? '#3b82f6' : '#94a3b8';
+function getFocusIcon(type: string, completed: boolean, primaryColor: string) {
+  const color = completed ? primaryColor : '#94a3b8';
   switch (type?.toLowerCase()) {
     case 'training': return <Dumbbell size={24} color={color} />;
     case 'nutrition': return <Apple size={24} color={color} />;
@@ -36,9 +38,45 @@ function getFocusIcon(type: string, completed: boolean) {
   }
 }
 
+function getSanitizedAssetName(exerciseName: string): string {
+    const raw = exerciseName.toLowerCase().trim();
+    const sanitized = raw.replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+    const mappings: Record<string, string> = {
+        'push-up': 'push-up',
+        'push-ups': 'push-up',
+        'bicep-curl': 'dumbbell-biceps-curl',
+        'biceps-curl': 'dumbbell-biceps-curl',
+        'bicep-curls': 'dumbbell-biceps-curl',
+        'biceps-curls': 'dumbbell-biceps-curl',
+        'squat': 'potty-squat',
+        'squats': 'potty-squat',
+        'bodyweight-squat': 'potty-squat',
+        'bodyweight-squats': 'potty-squat',
+        'air-squat': 'potty-squat',
+        'air-squats': 'potty-squat',
+        'plank': 'weighted-front-plank',
+        'planks': 'weighted-front-plank',
+        'front-plank': 'weighted-front-plank',
+        'crunch': 'weighted-crunch',
+        'crunches': 'weighted-crunch',
+        'sit-up': 'sit-up-v-2',
+        'sit-ups': 'sit-up-v-2',
+        'bench-press': 'barbell-bench-press',
+        'pull-up': 'pull-up',
+        'pull-ups': 'pull-up',
+        'lunge': 'walking-lunge',
+        'lunges': 'walking-lunge',
+    };
+
+    return mappings[sanitized] || sanitized;
+}
+
 export function NestedTaskCard({ task, isCompleted, isFailed, isPast, index = 0, onToggleParent, layoutType = 'feed' }: NestedTaskCardProps) {
+  const colors = useBrandColors();
     const [checkedSets, setCheckedSets] = useState<Set<string>>(new Set());
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
     // Strictly parse the JSON layout to enforce exact TypeScript structural types.
     const parsedData: ParsedTaskData = useMemo(() => {
@@ -149,7 +187,7 @@ export function NestedTaskCard({ task, isCompleted, isFailed, isPast, index = 0,
                             >
                                 <View className="flex-row items-center gap-3 flex-1">
                                     {isExerciseDone ? (
-                                        <CheckCircle size={20} color="#3B82F6" />
+                                        <CheckCircle size={20} color={colors.primary} />
                                     ) : (
                                         <View className="w-5 h-5 rounded-full border-2 border-slate-600" />
                                     )}
@@ -175,6 +213,27 @@ export function NestedTaskCard({ task, isCompleted, isFailed, isPast, index = 0,
                                         className="overflow-hidden bg-slate-950/30"
                                     >
                                         <View className="px-4 pb-4 pt-1">
+                                            {(() => {
+                                                const assetName = getSanitizedAssetName(ex.exercise);
+                                                const activeMediaUrl = `https://ieqccstmunvlmxsohhsa.supabase.co/storage/v1/object/public/exercise-visuals/${assetName}.webp?t=animated`;
+                                                
+                                                if (imageErrors.has(ex.id)) return null;
+
+                                                return (
+                                                    <View className="w-full h-44 rounded-2xl mb-3 bg-white overflow-hidden items-center justify-center">
+                                                        <Image 
+                                                            source={{ uri: activeMediaUrl }} 
+                                                            style={{ width: 150, height: 150 }}
+                                                            contentFit="contain"
+                                                            transition={200}
+                                                            cachePolicy="none"
+                                                            onError={() => {
+                                                                setImageErrors(prev => new Set(prev).add(ex.id));
+                                                            }}
+                                                        />
+                                                    </View>
+                                                );
+                                            })()}
                                             {ex.notes && (
                                                 <Text className="text-slate-400 text-xs italic mb-4">{ex.notes}</Text>
                                             )}
@@ -188,7 +247,7 @@ export function NestedTaskCard({ task, isCompleted, isFailed, isPast, index = 0,
                                                         className="flex-row items-center py-2.5 gap-3"
                                                     >
                                                         {isSetDone ? (
-                                                            <CheckCircle size={20} color="#3B82F6" />
+                                                            <CheckCircle size={20} color={colors.primary} />
                                                         ) : (
                                                             <Circle size={20} color="#475569" />
                                                         )}

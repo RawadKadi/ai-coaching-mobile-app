@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -39,6 +40,7 @@ const PAGE_INDICES = Array.from({ length: 101 }, (_, i) => i - 50);
 const INITIAL_PAGE_INDEX = 50;
 
 export default function ClientScheduleTimeline() {
+  const colors = useBrandColors();
   const { client } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -145,7 +147,7 @@ export default function ClientScheduleTimeline() {
   if (loading && !refreshing) {
     return (
       <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator color="#3B82F6" size="large" />
+        <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
   }
@@ -269,7 +271,7 @@ export default function ClientScheduleTimeline() {
                         width: 36, height: 36, borderRadius: 18,
                         alignItems: 'center', justifyContent: 'center',
                         backgroundColor: isSelected ? '#2563EB' : 'transparent',
-                        shadowColor: isSelected ? '#3B82F6' : 'transparent',
+                        shadowColor: isSelected ? colors.primary : 'transparent',
                         shadowOpacity: isSelected ? 0.5 : 0,
                         shadowRadius: 8,
                         elevation: isSelected ? 4 : 0,
@@ -282,7 +284,7 @@ export default function ClientScheduleTimeline() {
                             : isOtherMonth
                               ? '#1E293B'
                               : isToday
-                                ? '#3B82F6'
+                                ? colors.primary
                                 : isPast
                                   ? '#334155'
                                   : '#94A3B8',
@@ -295,7 +297,7 @@ export default function ClientScheduleTimeline() {
                             bottom: -2,
                             width: 4, height: 4,
                             borderRadius: 2,
-                            backgroundColor: isSelected ? '#fff' : '#3B82F6',
+                            backgroundColor: isSelected ? '#fff' : colors.primary,
                           }} />
                         )}
                       </View>
@@ -323,7 +325,7 @@ export default function ClientScheduleTimeline() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); loadSessions(); }}
-              tintColor="#3B82F6"
+              tintColor={colors.primary}
             />
           }
         >
@@ -390,7 +392,7 @@ export default function ClientScheduleTimeline() {
                     }}>
                       {/* Left: time */}
                       <View style={{ alignItems: 'center', marginRight: 16, width: 52 }}>
-                        <Text style={{ color: isPast ? '#334155' : '#3B82F6', fontWeight: '900', fontSize: 17 }}>
+                        <Text style={{ color: isPast ? '#334155' : colors.primary, fontWeight: '900', fontSize: 17 }}>
                           {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                         </Text>
                         <Text style={{ color: isPast ? '#1E293B' : 'rgba(96,165,250,0.6)', fontWeight: '900', fontSize: 10, textTransform: 'uppercase' }}>

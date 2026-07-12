@@ -1,9 +1,12 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Button } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { LogOut, User } from 'lucide-react-native';
 
 export default function AdminProfileScreen() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const router = useRouter();
   const { profile, signOut } = useAuth();
 
@@ -40,7 +43,7 @@ export default function AdminProfileScreen() {
       <View style={styles.content}>
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <User size={48} color="#3B82F6" />
+            <User size={48} color={colors.primary} />
           </View>
           <Text style={styles.name}>{profile?.full_name}</Text>
           <Text style={styles.role}>Admin Account</Text>
@@ -59,7 +62,7 @@ export default function AdminProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',

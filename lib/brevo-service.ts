@@ -150,7 +150,7 @@ export async function sendSubCoachInvite(params: SubCoachInviteEmailParams): Pro
                 <tr>
                   <td align="center" style="padding: 20px 0;">
                     <a href="${inviteUrl}" 
-                       style="display: inline-block; padding: 16px 32px; background-color: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                       style="display: inline-block; padding: 16px 32px; background-color: #7FA7FF; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
                       Accept Invite →
                     </a>
                   </td>

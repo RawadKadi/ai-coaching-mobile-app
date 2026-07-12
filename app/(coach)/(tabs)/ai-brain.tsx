@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -8,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { AICoachBrain } from '@/types/database';
 
 export default function AIBrainScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { coach } = useAuth();
   
@@ -64,7 +66,7 @@ export default function AIBrainScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -134,7 +136,7 @@ export default function AIBrainScreen() {
                 value={specialtyFocus}
                 onChange={setSpecialtyFocus}
                 placeholder="Hypertrophy and nutrition optimization"
-                icon={<ChevronRight size={18} color="#3B82F6" />}
+                icon={<ChevronRight size={18} color={colors.primary} />}
               />
           </View>
       </ScrollView>

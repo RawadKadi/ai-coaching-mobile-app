@@ -56,7 +56,7 @@ export default function ClientTabLayout() {
           tabBarIcon: ({ color }) => <MessageCircle size={22} color={color} />,
           tabBarBadge: unreadCount > 0 ? String(unreadCount) : undefined,
           tabBarBadgeStyle: { 
-            backgroundColor: '#3B82F6', 
+            backgroundColor: theme.colors.primary, 
             color: 'white',
             fontSize: 10, 
             fontWeight: '900',

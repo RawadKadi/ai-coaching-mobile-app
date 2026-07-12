@@ -497,7 +497,7 @@ export default function ClientMessagesScreen() {
       const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
       return (
         <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
-          <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color="#3B82F6" /></Animated.View>
+          <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color={theme.colors.primary} /></Animated.View>
         </View>
       );
     };
@@ -656,7 +656,7 @@ export default function ClientMessagesScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={{ flex: 1, paddingHorizontal: 16 }}>
           {loading ? (
-            <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View>
+            <View className="flex-1 items-center justify-center"><ActivityIndicator color={theme.colors.primary} /></View>
           ) : (
             <FlatList
                 ref={flatListRef}
@@ -815,7 +815,7 @@ const ClientMessageBubble = ({
         from={{ backgroundColor: isMe ? '#2563EB' : '#0F172A', scale: 1 }}
         animate={{
           scale: isHighlighted ? 1.05 : 1,
-          backgroundColor: isHighlighted ? '#3B82F6' : (isMe ? '#2563EB' : '#0F172A'),
+          backgroundColor: isHighlighted ? theme.colors.primary : (isMe ? '#2563EB' : '#0F172A'),
         }}
         transition={{ type: 'spring', damping: 15 }}
         style={[
@@ -868,7 +868,7 @@ const ClientMessageBubble = ({
         </Text>
         {shouldTruncate && (
           <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} style={{ marginTop: 4 }}>
-            <Text style={{ color: isMe ? 'white' : (theme?.colors?.primary || '#3B82F6'), fontWeight: 'bold', fontSize: 13 }}>
+            <Text style={{ color: isMe ? 'white' : (theme?.colors?.primary || theme.colors.primary), fontWeight: 'bold', fontSize: 13 }}>
               {isExpanded ? 'Show Less' : 'Read More'}
             </Text>
           </TouchableOpacity>

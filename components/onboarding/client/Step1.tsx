@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -9,6 +10,7 @@ interface Step1Props {
 }
 
 export default function Step1({ formData, updateForm }: Step1Props) {
+  const colors = useBrandColors();
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
@@ -44,7 +46,7 @@ export default function Step1({ formData, updateForm }: Step1Props) {
           }}
         >
           <View style={{ width: 40, height: 40, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)' }}>
-            <CalendarDays size={20} color="#3B82F6" />
+            <CalendarDays size={20} color={colors.primary} />
           </View>
           <Text style={{ color: formData.date_of_birth ? '#FFFFFF' : '#475569', fontSize: 18, fontWeight: '800' }}>
             {formData.date_of_birth || 'Select your birthday'}
@@ -56,7 +58,7 @@ export default function Step1({ formData, updateForm }: Step1Props) {
             {Platform.OS === 'ios' && (
               <View style={{ alignItems: 'flex-end', marginBottom: 8 }}>
                 <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                  <Text style={{ color: '#3B82F6', fontWeight: 'bold' }}>Done</Text>
+                  <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Done</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -90,11 +92,11 @@ export default function Step1({ formData, updateForm }: Step1Props) {
                   height: 64,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isSelected ? '#3B82F6' : '#0F172A',
+                  backgroundColor: isSelected ? colors.primary : '#0F172A',
                   borderRadius: 24,
                   borderWidth: 1,
                   borderColor: isSelected ? '#60A5FA' : '#1E293B',
-                  shadowColor: isSelected ? '#3B82F6' : 'transparent',
+                  shadowColor: isSelected ? colors.primary : 'transparent',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: isSelected ? 0.3 : 0,
                   shadowRadius: 12,
@@ -116,7 +118,7 @@ export default function Step1({ formData, updateForm }: Step1Props) {
         <View style={{ flex: 1, height: 150, backgroundColor: 'rgba(15,23,42,0.4)', borderRadius: 32, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ width: 36, height: 36, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)' }}>
-              <Ruler size={18} color="#3B82F6" />
+              <Ruler size={18} color={colors.primary} />
             </View>
             <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 }}>Height</Text>
           </View>

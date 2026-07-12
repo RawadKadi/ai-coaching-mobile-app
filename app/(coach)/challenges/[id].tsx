@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -8,6 +9,7 @@ import { ArrowLeft, X, Calendar, Clock, Dumbbell, Apple, Moon, Zap, Edit2, Chevr
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 export default function ChallengeDetailScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
@@ -83,7 +85,7 @@ export default function ChallengeDetailScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -321,7 +323,7 @@ const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
 const TaskCard = ({ task, index, isFailed, isCompleted }: { task: any, index: number, isFailed?: boolean, isCompleted?: boolean }) => {
   const getIcon = (type: string) => {
     switch (type?.toLowerCase()) {
-      case 'training': return <Dumbbell size={24} color="#3B82F6" />;
+      case 'training': return <Dumbbell size={24} color={colors.primary} />;
       case 'nutrition': return <Apple size={24} color="#10B981" />;
       case 'recovery': return <Moon size={24} color="#8B5CF6" />;
       default: return <Zap size={24} color="#F59E0B" />;

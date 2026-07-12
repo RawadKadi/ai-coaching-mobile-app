@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
 import { Image } from 'expo-image';
@@ -18,6 +19,8 @@ import { safeBack } from '@/lib/navigation-utils';
 type Step = 'camera' | 'analyzing' | 'needs_info' | 'review' | 'nutrition';
 
 export default function LogMealScreen() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const router = useRouter();
   const { client, user } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
@@ -47,7 +50,7 @@ export default function LogMealScreen() {
 
   useEffect(() => { if (!permission) requestPermission(); }, []);
 
-  if (!permission) return <View className="flex-1 bg-slate-950 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View>;
+  if (!permission) return <View className="flex-1 bg-slate-950 items-center justify-center"><ActivityIndicator color={colors.primary} /></View>;
   if (!permission.granted) return (
     <View className="flex-1 bg-slate-950 items-center justify-center p-8">
       <Text className="text-white text-center font-bold text-lg mb-6">Neural sync requires visual sensors.</Text>
@@ -301,7 +304,7 @@ export default function LogMealScreen() {
                 </Text>
                 
                 <View className="mt-12 flex-row items-center bg-blue-500/10 px-6 py-3 rounded-full border border-blue-500/20">
-                    <ActivityIndicator color="#3B82F6" size="small" className="mr-3" />
+                    <ActivityIndicator color={colors.primary} size="small" className="mr-3" />
                     <Text className="text-blue-500 font-black text-[12px] uppercase tracking-widest">Working...</Text>
                 </View>
             </View>
@@ -428,7 +431,7 @@ export default function LogMealScreen() {
                                             )}
                                             {guessingId === ing.id ? (
                                                 <View className="bg-slate-950 px-3 py-2 rounded-xl w-[80px] h-[40px] items-center justify-center relative">
-                                                    <ActivityIndicator size="small" color="#3B82F6" />
+                                                    <ActivityIndicator size="small" color={colors.primary} />
                                                     <View className="absolute inset-0 items-center justify-center pointer-events-none">
                                                         <Text className="text-white font-black text-[8px] uppercase">Ai</Text>
                                                     </View>
@@ -523,7 +526,7 @@ export default function LogMealScreen() {
 
                           {/* Power Cards */}
                           <View className="flex-row flex-wrap gap-4 justify-between mb-10">
-                              <MacroCard label="Calories" value={analysisResult.calories || 0} color="#3B82F6" />
+                              <MacroCard label="Calories" value={analysisResult.calories || 0} color={colors.primary} />
                               <MacroCard label="Protein" value={`${analysisResult.protein_g || 0}g`} color="#E11D48" />
                               <MacroCard label="Carbs" value={`${analysisResult.carbs_g || 0}g`} color="#10B981" />
                               <MacroCard label="Fat" value={`${analysisResult.fat_g || 0}g`} color="#F59E0B" />
@@ -619,7 +622,7 @@ function ScanPreview({ imageUri }: { imageUri: string | null }) {
             left: 0,
             width: '100%',
             height: 4,
-            backgroundColor: '#3B82F6',
+            backgroundColor: colors.primary,
             shadowColor: '#60A5FA',
             shadowOffset: { width: 0, height: 0 },
             shadowOpacity: 1,
@@ -659,6 +662,6 @@ const MicroRow = ({ label, value }: any) => (
     </View>
 );
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   camera: { flex: 1 },
 });

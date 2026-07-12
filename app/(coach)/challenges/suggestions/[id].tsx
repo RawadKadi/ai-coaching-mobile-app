@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -32,6 +33,8 @@ interface AISuggestion {
 }
 
 export default function SuggestionDetailScreen() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
@@ -221,7 +224,7 @@ export default function SuggestionDetailScreen() {
     4: '#f97316',
     3: '#eab308',
     2: '#22c55e',
-    1: '#3b82f6',
+    1: colors.primary,
   };
 
   return (
@@ -438,7 +441,7 @@ function getFocusEmoji(focusType: string): string {
   return emojis[focusType] || '🎯';
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9fafb',

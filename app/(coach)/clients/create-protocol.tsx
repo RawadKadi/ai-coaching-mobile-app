@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,6 +26,7 @@ interface ProtocolTask {
 }
 
 export default function CreateProtocolScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { coach } = useAuth();
@@ -190,7 +192,7 @@ export default function CreateProtocolScreen() {
   if (loading && !selectedClient) {
     return (
       <View style={{ flex: 1, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -272,7 +274,7 @@ export default function CreateProtocolScreen() {
                                 >
                                     <BrandedAvatar size={28} name={c.full_name} imageUrl={c.avatar_url} />
                                     <Text style={{ color: 'white', fontWeight: '500' }}>{c.full_name}</Text>
-                                    {selectedClient?.id === c.id && <Check size={16} color="#3B82F6" style={{ marginLeft: 'auto' }} />}
+                                    {selectedClient?.id === c.id && <Check size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
                                 </TouchableOpacity>
                             ))}
                         </MotiView>
@@ -289,10 +291,10 @@ export default function CreateProtocolScreen() {
                     </View>
                     <TouchableOpacity 
                         onPress={addTask}
-                        style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#3b82f61a', borderRadius: 12, borderWidth: 1, borderColor: '#3b82f633', flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                        style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: `${colors.primary}1a`, borderRadius: 12, borderWidth: 1, borderColor: `${colors.primary}33`, flexDirection: 'row', alignItems: 'center', gap: 6 }}
                     >
-                        <Plus size={16} color="#3B82F6" />
-                        <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 12 }}>Add Task</Text>
+                        <Plus size={16} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12 }}>Add Task</Text>
                     </TouchableOpacity>
                 </View>
 

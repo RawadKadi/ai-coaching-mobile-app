@@ -206,7 +206,7 @@ export default function ClientsScreen() {
         contentContainerStyle={{ paddingBottom: 120 }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
         {/* Tab Switch */}
         <View className="px-6 mt-8 mb-8">
@@ -216,7 +216,7 @@ export default function ClientsScreen() {
               className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'clients' ? 'bg-slate-800' : ''}`}
               style={activeTab === 'clients' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
             >
-              <Users size={18} color={activeTab === 'clients' ? '#3B82F6' : '#475569'} />
+              <Users size={18} color={activeTab === 'clients' ? theme.colors.primary : '#475569'} />
               <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'clients' ? 'text-white' : 'text-slate-500'}`}>Clients</Text>
             </Pressable>
             <Pressable
@@ -224,7 +224,7 @@ export default function ClientsScreen() {
               className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'team' ? 'bg-slate-800' : ''}`}
               style={activeTab === 'team' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
             >
-              <Zap size={18} color={activeTab === 'team' ? '#3B82F6' : '#475569'} />
+              <Zap size={18} color={activeTab === 'team' ? theme.colors.primary : '#475569'} />
               <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'team' ? 'text-white' : 'text-slate-500'}`}>Coaches</Text>
             </Pressable>
           </View>
@@ -236,7 +236,7 @@ export default function ClientsScreen() {
               {/* Athletes Hero */}
               <View className="mx-6 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden">
                 <View className="absolute top-0 right-0 p-4 opacity-10">
-                  <Activity size={120} color="#3B82F6" />
+                  <Activity size={120} color={theme.colors.primary} />
                 </View>
                 <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
                   <Users size={36} color="white" fill="white" />
@@ -251,12 +251,12 @@ export default function ClientsScreen() {
               <View className="mx-6 mt-8 p-8 rounded-[40px] bg-slate-900/40 border border-white/5">
                 <View className="flex-row items-center gap-2 mb-8">
                   <View className="w-8 h-8 rounded-xl bg-slate-950 items-center justify-center border border-white/5">
-                    <TrendingUp size={16} color="#3B82F6" />
+                    <TrendingUp size={16} color={theme.colors.primary} />
                   </View>
                   <Text className="text-white font-black text-lg tracking-tight">Active Performance</Text>
                 </View>
                 <View className="flex-row">
-                  <StatItem label="Active" value={activeCount.toString()} icon={<Users size={14} color="#3B82F6" />} />
+                  <StatItem label="Active" value={activeCount.toString()} icon={<Users size={14} color={theme.colors.primary} />} />
                   <View className="w-px h-12 bg-white/5 mx-2 self-center" />
                   <StatItem label="Pending" value={pendingCount.toString()} icon={<MessageSquare size={14} color="#F59E0B" />} />
                   <View className="w-px h-12 bg-white/5 mx-2 self-center" />
@@ -274,7 +274,7 @@ export default function ClientsScreen() {
 
               {/* Athletes List */}
               <View className="px-6">
-                {loading ? <ActivityIndicator className="mt-10" color="#3B82F6" /> : filteredClients.length === 0 ? (
+                {loading ? <ActivityIndicator className="mt-10" color={theme.colors.primary} /> : filteredClients.length === 0 ? (
                   <View className="py-20 items-center">
                     <Users size={48} color="#1E293B" />
                     <Text className="text-slate-500 font-bold mt-4">No athletes found</Text>
@@ -317,7 +317,7 @@ export default function ClientsScreen() {
                   {/* Coaches Hero */}
                   <View className="mx-6 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden">
                     <View className="absolute top-0 right-0 p-4 opacity-10">
-                      <Shield size={120} color="#3B82F6" />
+                      <Shield size={120} color={theme.colors.primary} />
                     </View>
                     <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
                       <Zap size={36} color="white" fill="white" />
@@ -337,7 +337,7 @@ export default function ClientsScreen() {
                       <Text className="text-white font-black text-lg tracking-tight">{brand?.name || 'Network Stats'}</Text>
                     </View>
                     <View className="flex-row">
-                      <StatItem label="Coaches" value={subCoaches.length.toString()} icon={<Users size={14} color="#3B82F6" />} />
+                      <StatItem label="Coaches" value={subCoaches.length.toString()} icon={<Users size={14} color={theme.colors.primary} />} />
                       <View className="w-px h-12 bg-white/5 mx-2 self-center" />
                       <StatItem label="Total Depth" value={totalTeamClients.toString()} icon={<Zap size={14} color="#10B981" />} />
                       <View className="w-px h-12 bg-white/5 mx-2 self-center" />
@@ -355,7 +355,7 @@ export default function ClientsScreen() {
 
                   {/* Coaches List */}
                   <View className="px-6">
-                    {loading ? <ActivityIndicator className="mt-10" color="#3B82F6" /> : filteredCoaches.length === 0 ? (
+                    {loading ? <ActivityIndicator className="mt-10" color={theme.colors.primary} /> : filteredCoaches.length === 0 ? (
                       <View className="py-20 items-center">
                         <Users size={48} color="#1E293B" />
                         <Text className="text-slate-500 font-bold mt-4">No coaches found</Text>

@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Check, Shield } from 'lucide-react-native';
@@ -12,7 +13,8 @@ interface CardOptionProps {
   activeColor?: string;
 }
 
-export default function CardOption({ label, desc, icon, selected, onSelect, activeColor = '#3B82F6' }: CardOptionProps) {
+export default function CardOption({ label, desc, icon, selected, onSelect, activeColor = colors.primary }: CardOptionProps) {
+  const colors = useBrandColors();
   return (
     <TouchableOpacity 
       onPress={onSelect}

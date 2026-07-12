@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text } from 'react-native';
 import { Image } from 'expo-image';
@@ -11,6 +12,7 @@ interface Slide1bProps {
 }
 
 export default function Slide1b({ formData }: Slide1bProps) {
+  const colors = useBrandColors();
   const brandName = formData.business_name || 'Your Brand';
   const initial = brandName.charAt(0).toUpperCase();
 
@@ -18,7 +20,7 @@ export default function Slide1b({ formData }: Slide1bProps) {
     <View style={{ gap: 28 }}>
       {/* Heading */}
       <View style={{ gap: 8 }}>
-        <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 3 }}>
+        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 3 }}>
           Brand Preview
         </Text>
         <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '900', letterSpacing: -0.5, lineHeight: 34 }}>
@@ -43,7 +45,7 @@ export default function Slide1b({ formData }: Slide1bProps) {
               />
             ) : (
               <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#1E3A5F', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#3B82F6', fontSize: 14, fontWeight: '900' }}>{initial}</Text>
+                <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '900' }}>{initial}</Text>
               </View>
             )}
             <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>{brandName}</Text>
@@ -83,7 +85,7 @@ export default function Slide1b({ formData }: Slide1bProps) {
           <View style={{ backgroundColor: 'rgba(37,99,235,0.08)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Text style={{ fontSize: 22 }}>⚡</Text>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>Active Challenge</Text>
+              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>Active Challenge</Text>
               <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', marginTop: 2 }}>7-Day Strength</Text>
               <Text style={{ color: '#475569', fontSize: 11, fontWeight: '500' }}>Day 3 of 7</Text>
             </View>
@@ -96,7 +98,7 @@ export default function Slide1b({ formData }: Slide1bProps) {
                 <Image source={{ uri: formData.logo_url }} style={{ width: 14, height: 14, borderRadius: 4 }} contentFit="cover" />
               ) : (
                 <View style={{ width: 14, height: 14, borderRadius: 4, backgroundColor: '#1E3A5F', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: '#3B82F6', fontSize: 8, fontWeight: '900' }}>{initial}</Text>
+                  <Text style={{ color: colors.primary, fontSize: 8, fontWeight: '900' }}>{initial}</Text>
                 </View>
               )}
               <Text style={{ color: '#475569', fontSize: 11, fontWeight: '600' }}>
@@ -110,7 +112,7 @@ export default function Slide1b({ formData }: Slide1bProps) {
       {/* Note */}
       <View style={{ flexDirection: 'row', gap: 12, backgroundColor: 'rgba(37,99,235,0.07)', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: 'rgba(59,130,246,0.15)' }}>
         <View style={{ marginTop: 1 }}>
-          <Star size={17} color="#3B82F6" />
+          <Star size={17} color={colors.primary} />
         </View>
         <Text style={{ flex: 1, color: '#64748B', fontSize: 13, fontWeight: '500', lineHeight: 20 }}>
           Every screen your client sees carries your brand identity — consistent and professional from day one.

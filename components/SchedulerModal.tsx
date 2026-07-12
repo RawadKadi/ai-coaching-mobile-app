@@ -28,6 +28,7 @@ interface SchedulerModalProps {
 }
 
 export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId, reschedulingMessageId }: SchedulerModalProps) {
+  const colors = useBrandColors();
     const { coach, profile } = useAuth();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -732,7 +733,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                     marginBottom: 32,
                                     borderWidth: 2,
                                     borderColor: 'rgba(255,255,255,0.2)',
-                                    shadowColor: '#3B82F6',
+                                    shadowColor: colors.primary,
                                     shadowOffset: { width: 0, height: 20 },
                                     shadowOpacity: 0.5,
                                     shadowRadius: 30,
@@ -758,7 +759,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         <ScrollView className="flex-1 px-6 pt-8" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
                             <View className="p-8 rounded-[40px] bg-blue-600/10 border border-blue-500/20 items-center mb-8">
                                 <View className="absolute top-0 right-0 p-4 opacity-10">
-                                    <Sparkles size={120} color="#3B82F6" />
+                                    <Sparkles size={120} color={colors.primary} />
                                 </View>
                                 
                                 <View className="mb-6">
@@ -800,7 +801,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 )}
                                 <View className="flex-row justify-between items-center mt-8 pt-6 border-t border-white/5">
                                     <TouchableOpacity style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B' }}>
-                                        <Mic size={24} color="#3B82F6" />
+                                        <Mic size={24} color={colors.primary} />
                                     </TouchableOpacity>
                                     
                                     <TouchableOpacity 
@@ -813,7 +814,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                             borderRadius: 24,
                                             backgroundColor: input.trim() ? '#2563EB' : '#1E293B',
                                             ...(input.trim() ? {
-                                                shadowColor: '#3B82F6',
+                                                shadowColor: colors.primary,
                                                 shadowOffset: { width: 0, height: 10 },
                                                 shadowOpacity: 0.4,
                                                 shadowRadius: 20,
@@ -850,7 +851,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                 }}
                                                 className="w-6 h-6 rounded-full bg-blue-600/20 border border-blue-500/30 items-center justify-center"
                                             >
-                                                <Sparkles size={12} color="#3B82F6" fill="#3B82F6" />
+                                                <Sparkles size={12} color={colors.primary} fill={colors.primary} />
                                             </MotiView>
                                         )}
                                     </View>
@@ -862,7 +863,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 </View>
 
                                 {agendaLoading && agendaSessions.length === 0 ? (
-                                    <ActivityIndicator size="small" color="#3B82F6" className="py-4" />
+                                    <ActivityIndicator size="small" color={colors.primary} className="py-4" />
                                 ) : filteredAgenda.length > 0 ? (
                                     <View className="gap-3">
                                         {filteredAgenda.map((session, idx) => {
@@ -992,7 +993,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                                 borderRadius: 14,
                                                                 backgroundColor: isSelected ? '#2563EB' : '#020617',
                                                                 borderWidth: 1,
-                                                                borderColor: isSelected ? '#3B82F6' : '#1E293B',
+                                                                borderColor: isSelected ? colors.primary : '#1E293B',
                                                             }}
                                                         >
                                                             <Text style={{
@@ -1075,7 +1076,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 {proposedSessions.some(s => checkConflict(s)?.type === 'daily_limit') && (
                                     <View className="mb-6 p-5 rounded-[28px] bg-blue-600/10 border border-blue-500/20 flex-row gap-4 items-start">
                                         <View className="w-10 h-10 rounded-xl bg-blue-600/20 items-center justify-center border border-blue-500/30">
-                                            <Sparkles size={20} color="#3B82F6" fill="#3B82F6" />
+                                            <Sparkles size={20} color={colors.primary} fill={colors.primary} />
                                         </View>
                                         <View className="flex-1">
                                             <Text className="text-white text-sm font-black tracking-tight">AI Assistant Tip</Text>
@@ -1110,7 +1111,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                         right: -2,
                                                         bottom: -2,
                                                         borderRadius: 34,
-                                                        backgroundColor: '#3B82F6',
+                                                        backgroundColor: colors.primary,
                                                         zIndex: -1
                                                     }}
                                                 />
@@ -1122,7 +1123,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                             {conflict ? (
                                                                 <AlertTriangle size={24} color="#EF4444" />
                                                             ) : (
-                                                                <Clock size={24} color="#3B82F6" />
+                                                                <Clock size={24} color={colors.primary} />
                                                             )}
                                                         </View>
                                                         <View className="flex-1">

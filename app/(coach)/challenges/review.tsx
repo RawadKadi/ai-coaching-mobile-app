@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -69,6 +70,7 @@ const getMonthDaySafe = (dateStr: string) => {
 };
 
 export default function ReviewChallengesScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { coach } = useAuth();
@@ -177,7 +179,7 @@ export default function ReviewChallengesScreen() {
 
   const getFocusIcon = (type: string) => {
     switch (type?.toLowerCase()) {
-      case 'training': return <Dumbbell size={20} color="#3B82F6" />;
+      case 'training': return <Dumbbell size={20} color={colors.primary} />;
       case 'nutrition': return <Apple size={20} color="#10B981" />;
       case 'recovery': return <Moon size={20} color="#8B5CF6" />;
       default: return <Zap size={20} color="#F59E0B" />;

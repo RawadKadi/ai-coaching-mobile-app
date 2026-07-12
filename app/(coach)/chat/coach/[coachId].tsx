@@ -483,7 +483,7 @@ export default function CoachToCoachChat() {
         const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
         return (
             <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
-                <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color="#3B82F6" /></Animated.View>
+                <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color={theme.colors.primary} /></Animated.View>
             </View>
         );
     };
@@ -589,7 +589,7 @@ export default function CoachToCoachChat() {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View> : (
+        {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color={theme.colors.primary} /></View> : (
              <FlatList
                 ref={flatListRef} data={messages} extraData={messages} renderItem={renderMessage} keyExtractor={item => item.id}
                 inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}

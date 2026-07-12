@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -6,6 +7,7 @@ import { ArrowLeft, Zap, Target, ClipboardList } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 
 export default function CreateSelectionScreen() {
+  const colors = useBrandColors();
     const router = useRouter();
     const { clientId } = useLocalSearchParams();
 
@@ -14,7 +16,7 @@ export default function CreateSelectionScreen() {
             title: 'Challenge',
             subtitle: 'Time-based program with daily progression',
             icon: <Zap size={28} color="white" fill="white" />,
-            color: '#3B82F6',
+            color: colors.primary,
             route: `/(coach)/challenges/create?clientId=${clientId}`,
             description: 'Best for transformation phases, bootcamps, or focused performance blocks.'
         },
@@ -63,9 +65,9 @@ export default function CreateSelectionScreen() {
                         }}
                     >
                         <View style={{ position: 'absolute', top: 0, right: 0, padding: 16, opacity: 0.05 }}>
-                            <Target size={120} color="#3B82F6" />
+                            <Target size={120} color={colors.primary} />
                         </View>
-                        <View style={{ width: 64, height: 64, backgroundColor: '#3B82F6', borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, marginBottom: 20 }}>
+                        <View style={{ width: 64, height: 64, backgroundColor: colors.primary, borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, marginBottom: 20 }}>
                             <Target size={32} color="white" />
                         </View>
                         <Text style={{ color: 'white', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: -1 }}>Create</Text>

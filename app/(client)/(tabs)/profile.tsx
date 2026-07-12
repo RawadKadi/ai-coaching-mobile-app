@@ -183,7 +183,7 @@ export default function ProfileScreen() {
   if (authLoading) {
     return (
       <View className="flex-1 bg-slate-950 items-center justify-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -199,7 +199,7 @@ export default function ProfileScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={loadProfileData} tintColor="#3B82F6" />
+            <RefreshControl refreshing={refreshing} onRefresh={loadProfileData} tintColor={theme.colors.primary} />
           }
         >
             {/* Header Identity */}
@@ -237,11 +237,11 @@ export default function ProfileScreen() {
             <View className="pb-12">
                 <SectionLabel label="Account" />
                 <ProfileMenuItem 
-                  icon={<User size={18} color="#3B82F6" />} 
+                  icon={<User size={18} color={theme.colors.primary} />} 
                   label="Personal Information" 
                   onPress={() => router.push('/(client)/personal-information')}
                 />
-                <ProfileMenuItem icon={<Shield size={18} color="#3B82F6" />} label="Security" />
+                <ProfileMenuItem icon={<Shield size={18} color={theme.colors.primary} />} label="Security" />
                 
                 <SectionLabel label="Preferences" />
                 <ProfileMenuItem icon={<Bell size={18} color="#34D399" />} label="Notifications" />

@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -10,6 +11,7 @@ import { UnassignedClientsBanner } from '@/components/UnassignedClientsBanner';
 import { NewAssignmentCelebration } from '@/components/NewAssignmentCelebration';
 
 export default function CoachLayout() {
+  const colors = useBrandColors();
   const router = useRouter();
   const segments = useSegments() as string[];
   const { session, profile, coach, loading, refreshProfile } = useAuth();
@@ -83,7 +85,7 @@ export default function CoachLayout() {
       {/* Absolute Loading Overlay to prevent UI flash, without unmounting the Stack */}
       {(loading || !session || profile?.role !== 'coach') && (
         <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
 

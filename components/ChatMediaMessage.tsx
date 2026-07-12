@@ -610,8 +610,8 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
       )}
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
-          <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}><Check size={18} color="#3B82F6" /></View>
-          <Text style={[styles.challengeTitle, { color: '#3B82F6', fontFamily: theme.typography.fontFamily }]}>Task Completed</Text>
+          <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}><Check size={18} color={theme.colors.primary} /></View>
+          <Text style={[styles.challengeTitle, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Task Completed</Text>
         </View>
         <View style={styles.challengeBody}>
           <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Daily Task'}</Text>
@@ -637,7 +637,7 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
 
   if (isCancelled || isRescheduled) {
     const title = isCancelled ? 'Session Cancelled' : 'Session Rescheduled';
-    const accentColor = isCancelled ? '#EF4444' : '#3B82F6';
+    const accentColor = isCancelled ? '#EF4444' : theme.colors.primary;
     const icon = isCancelled ? <X size={18} color={accentColor} /> : <RefreshCw size={18} color={accentColor} />;
     
     return (
@@ -664,8 +664,8 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
                 onPress={() => router.push('/(client)/(tabs)/calendar')}
                 style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}
               >
-                <Text style={{ color: '#3B82F6', fontSize: 13, fontWeight: '700' }}>View New Schedule</Text>
-                <ChevronLeft size={14} color="#3B82F6" style={{ transform: [{ rotate: '180deg' }] }} />
+                <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '700' }}>View New Schedule</Text>
+                <ChevronLeft size={14} color={theme.colors.primary} style={{ transform: [{ rotate: '180deg' }] }} />
               </TouchableOpacity>
             )}
           </View>
@@ -1074,6 +1074,7 @@ const ChatMediaMessage: React.FC<Props> = ({
   content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress,
   onCancelSession, onRescheduleSession, senderAvatarUrl, senderName,
 }) => {
+  const styles = getStyles(theme.colors);
   const theme = useTheme();
   const highlightAnim = useRef(new Animated.Value(0)).current;
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
@@ -1620,13 +1621,13 @@ const ChatMediaMessage: React.FC<Props> = ({
                                     <View>
                                         <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 8, fontFamily: theme.typography.fontFamily }}>Daily Plan</Text>
                                         {parsed.global_rule ? (
-                                            <View style={{ marginBottom: 12, padding: 10, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
+                                            <View style={{ marginBottom: 12, padding: 10, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 8, borderLeftWidth: 3, borderLeftColor: theme.colors.primary }}>
                                                 <Text style={{ color: '#E2E8F0', fontSize: 13, fontFamily: theme.typography.fontFamily, fontStyle: 'italic' }}>"{parsed.global_rule}"</Text>
                                             </View>
                                         ) : null}
                                         {parsed.sub_tasks.map((task: any, idx: number) => (
                                             <View key={task.id || idx} style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start' }}>
-                                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3B82F6', marginTop: 6, marginRight: 8 }} />
+                                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primary, marginTop: 6, marginRight: 8 }} />
                                                 <View style={{ flex: 1 }}>
                                                     <Text style={{ color: 'white', fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily }}>{task.exercise}</Text>
                                                     <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 2, fontFamily: theme.typography.fontFamily }}>{task.sets} {task.sets === 1 ? 'SET' : 'SETS'} • {task.notes}</Text>
@@ -1656,7 +1657,7 @@ const ChatMediaMessage: React.FC<Props> = ({
                   <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
                     <Text style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Focus</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Target size={14} color="#3B82F6" />
+                      <Target size={14} color={theme.colors.primary} />
                       <Text style={{ fontSize: 14, fontWeight: '600', color: 'white', fontFamily: theme.typography.fontFamily }}>
                         {media.focusType || 'Training'}
                       </Text>
@@ -1720,7 +1721,7 @@ const ChatMediaMessage: React.FC<Props> = ({
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   bubble: { maxWidth: '80%', borderRadius: 16, marginBottom: 4, overflow: 'hidden' },
   myBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
   theirBubble: { alignSelf: 'flex-start', borderBottomLeftRadius: 4, borderWidth: 1 },

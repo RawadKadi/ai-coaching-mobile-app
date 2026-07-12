@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Clock } from 'lucide-react-native';
@@ -26,6 +27,8 @@ interface TimelineViewProps {
 }
 
 export default function TimelineView({ date, existingSessions, proposedSession }: TimelineViewProps) {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
     // Generate hourly slots from 6 AM to 10 PM
     const generateTimeSlots = (): TimeSlot[] => {
         const slots: TimeSlot[] = [];
@@ -123,7 +126,7 @@ export default function TimelineView({ date, existingSessions, proposedSession }
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
     },
@@ -169,7 +172,7 @@ const styles = StyleSheet.create({
     sessionExisting: {
         backgroundColor: '#EFF6FF',
         borderColor: '#BFDBFE',
-        borderLeftColor: '#3B82F6',
+        borderLeftColor: colors.primary,
     },
     sessionProposed: {
         backgroundColor: '#F0FDF4',

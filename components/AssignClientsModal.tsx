@@ -214,7 +214,7 @@ export function AssignClientsModal({
 
         {loading ? (
           <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color="#3B82F6" />
+            <ActivityIndicator color={theme.colors.primary} />
             <Text className="text-slate-500 mt-4 font-bold tracking-widest text-[10px] uppercase">Mapping Identities...</Text>
           </View>
         ) : clients.length === 0 ? (

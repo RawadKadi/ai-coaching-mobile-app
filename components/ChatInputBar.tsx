@@ -51,6 +51,7 @@ export function ChatInputBar({
   replyingTo, onCancelReply, onTyping,
   editingMessage, onConfirmEdit, onCancelEdit,
 }: Props) {
+  const styles = getStyles(theme.colors);
   // LOGGING: Track props
   React.useEffect(() => {
     if (editingMessage) {
@@ -670,7 +671,7 @@ export function ChatInputBar({
             >
               <Plus
                 size={24}
-                color={activePanel === 'attach' ? '#3B82F6' : '#64748B'}
+                color={activePanel === 'attach' ? theme.colors.primary : '#64748B'}
                 strokeWidth={2.5}
               />
             </TouchableOpacity>
@@ -730,8 +731,8 @@ export function ChatInputBar({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-              <Circle cx="12" cy="12" r="10" stroke={activePanel === 'emoji' ? '#3B82F6' : '#64748B'} strokeWidth="2" />
-              <Path d="M12 22C15.5 22 18.5 20 20 17H12C10.3 17 9 15.7 9 14V12H4C4 17.5 7.5 22 12 22Z" fill={activePanel === 'emoji' ? '#3B82F6' : '#64748B'} />
+              <Circle cx="12" cy="12" r="10" stroke={activePanel === 'emoji' ? theme.colors.primary : '#64748B'} strokeWidth="2" />
+              <Path d="M12 22C15.5 22 18.5 20 20 17H12C10.3 17 9 15.7 9 14V12H4C4 17.5 7.5 22 12 22Z" fill={activePanel === 'emoji' ? theme.colors.primary : '#64748B'} />
             </Svg>
           </TouchableOpacity>
           </View>
@@ -760,7 +761,7 @@ export function ChatInputBar({
           <TouchableOpacity
             style={[
               styles.sendBtn,
-              { backgroundColor: editingMessage ? '#1E293B' : '#3B82F6' },
+              { backgroundColor: editingMessage ? '#1E293B' : theme.colors.primary },
               isDisabled && { opacity: 0.5 },
             ]}
             onPress={handleSend}
@@ -808,7 +809,7 @@ export function ChatInputBar({
               
               <TouchableOpacity style={[styles.attachItem, { borderBottomColor: 'rgba(255,255,255,0.03)' }]} onPress={pickFromLibrary}>
                 <View style={[styles.attachIcon, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
-                  <ImageIcon size={22} color="#3B82F6" />
+                  <ImageIcon size={22} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={[styles.attachLabel, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}>Photo / Video</Text>
@@ -818,7 +819,7 @@ export function ChatInputBar({
     
               <TouchableOpacity style={[styles.attachItem, { borderBottomColor: 'rgba(255,255,255,0.03)' }]} onPress={openCamera}>
                 <View style={[styles.attachIcon, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
-                  <Camera size={22} color="#3B82F6" />
+                  <Camera size={22} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={[styles.attachLabel, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}>Camera</Text>
@@ -828,7 +829,7 @@ export function ChatInputBar({
     
               <TouchableOpacity style={[styles.attachItem, { borderBottomColor: 'rgba(255,255,255,0.03)' }]} onPress={pickDocument}>
                 <View style={[styles.attachIcon, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
-                  <FileText size={22} color="#3B82F6" />
+                  <FileText size={22} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={[styles.attachLabel, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}>Document</Text>
@@ -839,7 +840,7 @@ export function ChatInputBar({
               {hasClipboardImage && (
                 <TouchableOpacity style={[styles.attachItem, { borderBottomWidth: 0 }]} onPress={pasteFromClipboard}>
                   <View style={[styles.attachIcon, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
-                    <ClipboardPaste size={22} color="#3B82F6" />
+                    <ClipboardPaste size={22} color={theme.colors.primary} />
                   </View>
                   <View>
                     <Text style={[styles.attachLabel, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}>Paste Image</Text>
@@ -979,7 +980,7 @@ function GifImageItem({ item, onPress }: { item: GifResult, onPress: () => void 
 
 const GIF_CELL = (SCREEN_WIDTH - 8) / 2;
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   mediaPreviewContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,

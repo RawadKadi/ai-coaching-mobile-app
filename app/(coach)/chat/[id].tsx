@@ -87,6 +87,7 @@ function isMediaMessage(content: string): boolean {
 
 
 export default function CoachChatScreen() {
+  const styles = getStyles(theme.colors);
   const { id } = useLocalSearchParams(); 
   const router = useRouter();
   const { user, profile } = useAuth();
@@ -795,7 +796,7 @@ export default function CoachChatScreen() {
         const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
         return (
             <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
-                <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color="#3B82F6" /></Animated.View>
+                <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color={theme.colors.primary} /></Animated.View>
             </View>
         );
     };
@@ -956,7 +957,7 @@ export default function CoachChatScreen() {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View> : (
+        {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color={theme.colors.primary} /></View> : (
              <FlatList
                 ref={flatListRef} data={messages} extraData={messages} renderItem={renderMessage} keyExtractor={item => item.id}
                 inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
@@ -1062,7 +1063,7 @@ export default function CoachChatScreen() {
               <MotiView from={{ translateY: 300 }} animate={{ translateY: 0 }} className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10">
                   <View className="w-12 h-1.5 bg-slate-800 rounded-full self-center mb-8" />
                   <Text className="text-white text-2xl font-black mb-8 tracking-tight">Channel Actions</Text>
-                  <OptionItem icon={<Calendar size={20} color="#3B82F6" />} title="AI Scheduler" sub="Find the next available gap" onPress={() => { setMenuVisible(false); setSchedulerVisible(true); }} />
+                  <OptionItem icon={<Calendar size={20} color={theme.colors.primary} />} title="AI Scheduler" sub="Find the next available gap" onPress={() => { setMenuVisible(false); setSchedulerVisible(true); }} />
                   <OptionItem icon={<Activity size={20} color="#34D399" />} title="Client Dossier" sub="View metrics and protocols" onPress={() => { setMenuVisible(false); router.push(`/(coach)/clients/${id}`); }} />
               </MotiView>
           </Pressable>
@@ -1214,7 +1215,7 @@ const OptionItem = ({ icon, title, sub, onPress }: any) => (
     </TouchableOpacity>
 );
 
-const styles = StyleSheet.create({ header: { backgroundColor: '#020617' } });
+const getStyles = (colors: any) => StyleSheet.create({ header: { backgroundColor: '#020617' } });
 
 const MessageBubble = ({ 
   item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, 

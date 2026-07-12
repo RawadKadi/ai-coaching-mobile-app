@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, SectionList, ActivityIndicator, TouchableOpacity, StatusBar, RefreshControl } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -56,6 +57,7 @@ const formatActivityDate = (dateString: string) => {
 };
 
 export default function CoachDashboard() {
+  const colors = useBrandColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, coach } = useAuth();
@@ -319,7 +321,7 @@ export default function CoachDashboard() {
   if (loading && !refreshing) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator color="#3B82F6" />
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
@@ -339,7 +341,7 @@ export default function CoachDashboard() {
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={() => { setRefreshing(true); loadDashboardData(); }} 
-            tintColor="#3B82F6" 
+            tintColor={colors.primary} 
             progressViewOffset={insets.top + 60}
           />
         }
@@ -374,7 +376,7 @@ export default function CoachDashboard() {
                 <View className="flex-row gap-4">
                     <View className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl">
                         <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center mb-6 border border-blue-600/20">
-                            <Users size={24} color="#3B82F6" />
+                            <Users size={24} color={colors.primary} />
                         </View>
                         <Text className="text-white text-4xl font-black tracking-tighter">{stats.totalClients}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Total Roster</Text>
@@ -507,7 +509,7 @@ export default function CoachDashboard() {
                   onPress={handleOpenAIScheduler}
                 />
                 <ActionCard 
-                  icon={<UserPlus size={28} color="#3B82F6" />} 
+                  icon={<UserPlus size={28} color={colors.primary} />} 
                   title="Onboard Client" 
                   desc="Invite new athlete" 
                   onPress={() => router.push('/(coach)/invite-client')}
@@ -577,7 +579,7 @@ export default function CoachDashboard() {
             ListFooterComponent={
               loadingMore ? (
                 <View className="py-4 items-center justify-center">
-                  <ActivityIndicator color="#3B82F6" />
+                  <ActivityIndicator color={colors.primary} />
                 </View>
               ) : null
             }
@@ -613,7 +615,7 @@ export default function CoachDashboard() {
 
               {loadingClients ? (
                 <View className="flex-1 justify-center items-center">
-                  <ActivityIndicator color="#3B82F6" />
+                  <ActivityIndicator color={colors.primary} />
                 </View>
               ) : (
                 <ScrollView className="flex-1 px-6 pt-4">
@@ -631,7 +633,7 @@ export default function CoachDashboard() {
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-0.5">Active Client</Text>
                       </View>
                       <View className="w-10 h-10 bg-blue-600/10 rounded-full items-center justify-center border border-blue-500/20">
-                        <ChevronRight size={18} color="#3B82F6" />
+                        <ChevronRight size={18} color={colors.primary} />
                       </View>
                     </TouchableOpacity>
                   ))}

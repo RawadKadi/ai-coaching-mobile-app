@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 /**
  * FeedbackModal — reusable full-screen moment card.
  *
@@ -30,42 +31,7 @@ import {
   View,
 } from 'react-native';
 
-// ─── Variant tokens ────────────────────────────────────────────────────────────
-
 type Variant = 'success' | 'warning' | 'info';
-
-const VARIANTS: Record<
-  Variant,
-  {
-    accent: string;
-    accentBg: string;
-    accentBorder: string;
-    ctaBg: string;
-    ctaText: string;
-  }
-> = {
-  success: {
-    accent: '#10B981',
-    accentBg: 'rgba(16, 185, 129, 0.08)',
-    accentBorder: 'rgba(16, 185, 129, 0.2)',
-    ctaBg: '#3B82F6',
-    ctaText: '#ffffff',
-  },
-  warning: {
-    accent: '#F59E0B',
-    accentBg: 'rgba(245, 158, 11, 0.08)',
-    accentBorder: 'rgba(245, 158, 11, 0.2)',
-    ctaBg: '#F59E0B',
-    ctaText: '#0f172a',
-  },
-  info: {
-    accent: '#3B82F6',
-    accentBg: 'rgba(59, 130, 246, 0.08)',
-    accentBorder: 'rgba(59, 130, 246, 0.2)',
-    ctaBg: '#3B82F6',
-    ctaText: '#ffffff',
-  },
-};
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 
@@ -116,6 +82,41 @@ export default function FeedbackModal({
   accentBg,
   accentBorder,
 }: FeedbackModalProps) {
+  const colors = useBrandColors();
+
+  const VARIANTS: Record<
+    Variant,
+    {
+      accent: string;
+      accentBg: string;
+      accentBorder: string;
+      ctaBg: string;
+      ctaText: string;
+    }
+  > = {
+    success: {
+      accent: '#10B981',
+      accentBg: 'rgba(16, 185, 129, 0.08)',
+      accentBorder: 'rgba(16, 185, 129, 0.2)',
+      ctaBg: colors.primary,
+      ctaText: '#ffffff',
+    },
+    warning: {
+      accent: '#F59E0B',
+      accentBg: 'rgba(245, 158, 11, 0.08)',
+      accentBorder: 'rgba(245, 158, 11, 0.2)',
+      ctaBg: '#F59E0B',
+      ctaText: '#0f172a',
+    },
+    info: {
+      accent: colors.primary,
+      accentBg: 'rgba(59, 130, 246, 0.08)',
+      accentBorder: 'rgba(59, 130, 246, 0.2)',
+      ctaBg: colors.primary,
+      ctaText: '#ffffff',
+    },
+  };
+
   const v = VARIANTS[variant];
   const resolvedAccent = accentColor ?? v.accent;
   const resolvedAccentBg = accentBg ?? v.accentBg;

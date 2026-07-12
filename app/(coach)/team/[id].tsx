@@ -192,7 +192,7 @@ export default function SubCoachDetailsScreen() {
   if (loading && !subCoach) {
     return (
       <View className="flex-1 bg-slate-950 items-center justify-center">
-        <ActivityIndicator color="#3B82F6" />
+        <ActivityIndicator color={theme.colors.primary} />
         <Text className="text-slate-500 mt-4 font-bold tracking-widest text-[10px] uppercase">Decrypting Identity...</Text>
       </View>
     );
@@ -222,7 +222,7 @@ export default function SubCoachDetailsScreen() {
             onPress={toggleSelectionMode}
             className={`w-10 h-10 rounded-xl items-center justify-center border ${selectionMode ? 'bg-blue-500/20 border-blue-500/40' : 'bg-slate-900 border-white/5'}`}
           >
-            <CheckCircle2 size={18} color={selectionMode ? '#3B82F6' : '#94A3B8'} />
+            <CheckCircle2 size={18} color={selectionMode ? theme.colors.primary : '#94A3B8'} />
           </TouchableOpacity>
 
           <View>
@@ -270,7 +270,7 @@ export default function SubCoachDetailsScreen() {
           className="mx-6 mt-8 p-10 rounded-[48px] bg-slate-900/40 border border-white/5 items-center overflow-hidden"
         >
             <View className="absolute top-0 right-0 p-4 opacity-10">
-                <Shield size={120} color="#3B82F6" />
+                <Shield size={120} color={theme.colors.primary} />
             </View>
             
             <View className="w-24 h-24 rounded-full bg-slate-950 items-center justify-center border-4 border-blue-600 shadow-2xl shadow-blue-500/50 mb-6">
@@ -287,7 +287,7 @@ export default function SubCoachDetailsScreen() {
             
             <View className="flex-row items-center gap-4">
                 <View className="bg-blue-600/10 px-4 py-2 rounded-full border border-blue-600/20 flex-row items-center gap-2">
-                    <Calendar size={14} color="#3B82F6" />
+                    <Calendar size={14} color={theme.colors.primary} />
                     <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">
                         Joined {new Date(subCoach?.joined_at || '').toLocaleDateString()}
                     </Text>
@@ -308,7 +308,7 @@ export default function SubCoachDetailsScreen() {
                 className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5 items-center"
             >
                 <View className="w-10 h-10 rounded-2xl bg-blue-600/10 items-center justify-center border border-blue-600/20 mb-3">
-                    <Users size={18} color="#3B82F6" />
+                    <Users size={18} color={theme.colors.primary} />
                 </View>
                 <Text className="text-white text-2xl font-black tracking-tighter">{subCoach?.client_count}</Text>
                 <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest mt-1">Assigned Clients</Text>
@@ -427,7 +427,7 @@ export default function SubCoachDetailsScreen() {
                                                     }}
                                                     className="flex-row items-center gap-3 p-4 border-b border-white/5"
                                                 >
-                                                    <Zap size={14} color="#3B82F6" />
+                                                    <Zap size={14} color={theme.colors.primary} />
                                                     <Text className="text-white font-bold text-[10px] uppercase tracking-widest">Reassign</Text>
                                                 </TouchableOpacity>
                                                 <TouchableOpacity 

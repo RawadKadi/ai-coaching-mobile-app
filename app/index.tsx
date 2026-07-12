@@ -1,9 +1,12 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const router = useRouter();
   const { session, profile, loading } = useAuth();
 
@@ -36,12 +39,12 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#3B82F6" />
+      <ActivityIndicator size="large" color={colors.primary} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',

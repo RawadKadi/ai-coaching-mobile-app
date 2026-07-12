@@ -1,13 +1,15 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text } from 'react-native';
 import { Settings, Palette, Type } from 'lucide-react-native';
 
 export default function Slide1c() {
+  const colors = useBrandColors();
   return (
     <View style={{ gap: 28 }}>
       {/* Heading */}
       <View style={{ gap: 8 }}>
-        <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 3 }}>
+        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 3 }}>
           Brand Settings
         </Text>
         <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '900', letterSpacing: -0.5, lineHeight: 34 }}>
@@ -22,7 +24,7 @@ export default function Slide1c() {
       <View style={{ gap: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: '#060F1E', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#0F2040' }}>
           <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(59,130,246,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-            <Palette size={22} color="#3B82F6" />
+            <Palette size={22} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>Custom Colors</Text>

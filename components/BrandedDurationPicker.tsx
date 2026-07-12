@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import { ChevronDown, Clock, Check } from 'lucide-react-native';
@@ -9,6 +10,8 @@ interface BrandedDurationPickerProps {
 }
 
 export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ value, onSelect, label = "Duration" }) => {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const [isOpen, setIsOpen] = useState(false);
   const options = Array.from({ length: 12 }, (_, i) => i + 3); // 3-14 days
 
@@ -23,7 +26,7 @@ export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ va
       >
         <View style={styles.pickerContent}>
           <View style={styles.iconContainer}>
-            <Clock size={20} color="#3B82F6" />
+            <Clock size={20} color={colors.primary} />
           </View>
           <View>
             <Text style={styles.daysText}>{value} Days</Text>
@@ -93,7 +96,7 @@ export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ va
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   headerLabel: {
     color: '#64748B',
     fontSize: 10,
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
   },
   gridOptionActive: {
     backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
   },
   gridOptionInactive: {
     backgroundColor: '#0F172A',

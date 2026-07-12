@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Platform, KeyboardAvoidingView, BackHandler } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,6 +26,7 @@ interface SubChallenge {
 }
 
 export default function EditChallengeScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { coach } = useAuth();
@@ -268,7 +270,7 @@ export default function EditChallengeScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-slate-950 items-center justify-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -376,7 +378,7 @@ export default function EditChallengeScreen() {
                                 <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: sub.completed ? '#10b981' : '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
                                     {sub.completed ? <Check size={14} color="white" /> : <Text style={{ color: 'white', fontSize: 10, fontWeight: '900' }}>{i + 1}</Text>}
                                 </View>
-                                <Text style={{ color: sub.completed ? '#10b981' : '#3b82f6', fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Day {i + 1}</Text>
+                                <Text style={{ color: sub.completed ? '#10b981' : colors.primary, fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Day {i + 1}</Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.6 }}>
@@ -490,7 +492,7 @@ export default function EditChallengeScreen() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 12,
-                    shadowColor: '#3b82f6',
+                    shadowColor: colors.primary,
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.2,
                     shadowRadius: 8,

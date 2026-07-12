@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 
@@ -10,6 +11,7 @@ const DIETS = ['None', 'Vegan', 'Vegetarian', 'Keto', 'Paleo', 'Gluten-Free', 'D
 const MEDICAL = ['None', 'Bad Knees', 'Lower Back Pain', 'Shoulder Issues', 'Asthma', 'Diabetes', 'Other +'];
 
 export default function Step3({ formData, updateForm }: Step3Props) {
+  const colors = useBrandColors();
   const toggleItem = (field: string, item: string) => {
     let currentList = Array.isArray(formData[field]) ? [...formData[field]] : [];
     
@@ -46,7 +48,7 @@ export default function Step3({ formData, updateForm }: Step3Props) {
                   backgroundColor: isSelected ? '#2563EB' : '#0F172A',
                   borderRadius: 24,
                   borderWidth: 1,
-                  borderColor: isSelected ? '#3B82F6' : '#1E293B',
+                  borderColor: isSelected ? colors.primary : '#1E293B',
                 }}
               >
                 <Text style={{ color: isSelected ? '#FFFFFF' : '#94A3B8', fontWeight: '600' }}>
@@ -76,7 +78,7 @@ export default function Step3({ formData, updateForm }: Step3Props) {
               style={{
                 backgroundColor: '#0F172A',
                 borderWidth: 1,
-                borderColor: '#3B82F6',
+                borderColor: colors.primary,
                 borderRadius: 16,
                 padding: 16,
                 color: '#FFFFFF',

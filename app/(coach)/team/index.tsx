@@ -250,7 +250,7 @@ export default function TeamManagementScreen() {
           className="mx-6 mt-8 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden"
         >
             <View className="absolute top-0 right-0 p-4 opacity-10">
-                <Shield size={120} color="#3B82F6" />
+                <Shield size={120} color={theme.colors.primary} />
             </View>
             <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
                 <Users size={36} color="white" fill="white" />
@@ -271,7 +271,7 @@ export default function TeamManagementScreen() {
           <View className="flex-row items-center justify-between mb-8">
             <View className="flex-row items-center gap-2">
                 <View className="w-8 h-8 rounded-xl bg-slate-950 items-center justify-center border border-white/5">
-                    <TrendingUp size={16} color="#3B82F6" />
+                    <TrendingUp size={16} color={theme.colors.primary} />
                 </View>
                 <Text className="text-white font-black text-lg tracking-tight">{brand?.name || 'Network Stats'}</Text>
             </View>
@@ -284,7 +284,7 @@ export default function TeamManagementScreen() {
             <StatItem 
                 label="Coaches" 
                 value={subCoaches.length.toString()} 
-                icon={<Users size={14} color="#3B82F6" />}
+                icon={<Users size={14} color={theme.colors.primary} />}
             />
             <View className="w-px h-12 bg-white/5 mx-2 self-center" />
             <StatItem 
@@ -311,7 +311,7 @@ export default function TeamManagementScreen() {
 
           {loading ? (
             <View className="py-20 items-center justify-center">
-              <ActivityIndicator color="#3B82F6" />
+              <ActivityIndicator color={theme.colors.primary} />
               <Text className="text-slate-500 mt-4 font-bold tracking-widest text-[10px] uppercase">Syncing Neural Data...</Text>
             </View>
           ) : subCoaches.length === 0 ? (

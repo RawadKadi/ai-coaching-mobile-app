@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { X, Calendar, Clock, AlertTriangle, CheckCircle, Bell, MessageCircle, Filter, ChevronDown, Check, Trash2 } from 'lucide-react-native';
@@ -12,6 +13,8 @@ interface PendingResolutionsModalProps {
 }
 
 export default function PendingResolutionsModal({ visible, onClose, sessions: initialSessions, onResolve, onDelete }: PendingResolutionsModalProps) {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
     const [sessions, setSessions] = useState(initialSessions);
     const [filter, setFilter] = useState<'all' | 'pending' | 'unsent'>('all');
     const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
@@ -259,7 +262,7 @@ export default function PendingResolutionsModal({ visible, onClose, sessions: in
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F9FAFB',
@@ -404,7 +407,7 @@ const styles = StyleSheet.create({
     },
     filterChipActive: {
         backgroundColor: '#EFF6FF',
-        borderColor: '#3B82F6',
+        borderColor: colors.primary,
     },
     filterText: {
         fontSize: 13,

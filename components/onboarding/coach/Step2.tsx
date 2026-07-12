@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Animated } from 'react-native';
 import { Check } from 'lucide-react-native';
@@ -33,6 +34,7 @@ interface Step2Props {
 }
 
 export default function Step2({ formData, toggleSpecialty, updateForm }: Step2Props) {
+  const colors = useBrandColors();
   const selected = formData.specialty ?? [];
   const atMax = selected.length >= MAX;
   const otherSelected = selected.includes('Other');
@@ -77,11 +79,11 @@ export default function Step2({ formData, toggleSpecialty, updateForm }: Step2Pr
                 width: 10,
                 height: 10,
                 borderRadius: 5,
-                backgroundColor: dot <= selected.length ? '#3B82F6' : '#1E293B',
+                backgroundColor: dot <= selected.length ? colors.primary : '#1E293B',
               }}
             />
           ))}
-          <Text style={{ color: atMax ? '#3B82F6' : '#64748B', fontSize: 13, fontWeight: '800', marginLeft: 4 }}>
+          <Text style={{ color: atMax ? colors.primary : '#64748B', fontSize: 13, fontWeight: '800', marginLeft: 4 }}>
             {selected.length}/{MAX}
           </Text>
         </View>
@@ -113,7 +115,7 @@ export default function Step2({ formData, toggleSpecialty, updateForm }: Step2Pr
                     ? 'rgba(15,23,42,0.3)'
                     : 'rgba(15,23,42,0.6)',
                   borderColor: isSelected
-                    ? '#3B82F6'
+                    ? colors.primary
                     : isDisabled
                     ? '#0A0F1E'
                     : '#1E293B',

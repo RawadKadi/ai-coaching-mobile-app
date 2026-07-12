@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Modal, Dimensions, PanResponder } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect, Line, Circle } from 'react-native-svg';
@@ -27,6 +28,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
   data,
   currentActive
 }) => {
+  const colors = useBrandColors();
   const insets = useSafeAreaInsets();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -124,7 +126,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
         <View className="px-6 flex-row gap-4 mb-10">
           <View className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5">
             <View className="flex-row items-center gap-2 mb-2">
-              <Users size={14} color="#3B82F6" />
+              <Users size={14} color={colors.primary} />
               <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Total Roster</Text>
             </View>
             <Text className="text-white text-3xl font-black">{data[data.length - 1]?.total_roster || 0}</Text>
@@ -159,8 +161,8 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
 
                 <Defs>
                   <LinearGradient id="fillRoster" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0%" stopColor="#3B82F6" stopOpacity="0.05" />
-                    <Stop offset="100%" stopColor="#3B82F6" stopOpacity="0.01" />
+                    <Stop offset="0%" stopColor={colors.primary} stopOpacity="0.05" />
+                    <Stop offset="100%" stopColor={colors.primary} stopOpacity="0.01" />
                   </LinearGradient>
                   <LinearGradient id="fillPerformers" x1="0" y1="0" x2="0" y2="1">
                     <Stop offset="0%" stopColor="#A855F7" stopOpacity="0.1" />
@@ -170,7 +172,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
 
                 {/* Layer 1: Total Roster */}
                 <Path d={paths.rosterArea} fill="url(#fillRoster)" />
-                <Path d={paths.rosterLine} fill="none" stroke="#3B82F6" strokeWidth="2" strokeDasharray="4 4" opacity={0.5} />
+                <Path d={paths.rosterLine} fill="none" stroke={colors.primary} strokeWidth="2" strokeDasharray="4 4" opacity={0.5} />
 
                 {/* Layer 2: High Performers */}
                 <Path d={paths.performersArea} fill="url(#fillPerformers)" />

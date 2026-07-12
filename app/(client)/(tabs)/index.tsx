@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Alert, Animated as RNAnimated, Easing } from 'react-native';
 import StrandsBackground from '@/components/ui/StrandsBackground';
@@ -35,6 +36,7 @@ import { GlassNavbar } from '@/components/GlassNavbar';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 
 export default function ClientDashboard() {
+  const colors = useBrandColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, client, loading: authLoading } = useAuth();
@@ -316,7 +318,7 @@ export default function ClientDashboard() {
   if (loading && !refreshing) {
     return (
       <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -330,7 +332,7 @@ export default function ClientDashboard() {
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: insets.top + 80, paddingBottom: 140 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" progressViewOffset={insets.top + 60} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} progressViewOffset={insets.top + 60} />}
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
@@ -362,7 +364,7 @@ export default function ClientDashboard() {
                 <MetricCard 
                   label="Calories" 
                   value={todayCalories > 0 ? `${todayCalories} kcal` : '--'} 
-                  icon={<Utensils size={20} color="#3B82F6" />} 
+                  icon={<Utensils size={20} color={colors.primary} />} 
                   active={todayCalories > 0}
                   onPress={() => router.push('/(client)/activity')}
                 />
@@ -382,7 +384,7 @@ export default function ClientDashboard() {
                 <MetricCard 
                   label={stepsSyncEnabled ? "Steps" : "Sync Steps"} 
                   value={todaySteps !== null ? `${todaySteps.toLocaleString()}` : 'Click to Sync'} 
-                  icon={<Activity size={20} color={stepsSyncEnabled ? "#3B82F6" : "#64748B"} />} 
+                  icon={<Activity size={20} color={stepsSyncEnabled ? colors.primary : "#64748B"} />} 
                   active={stepsSyncEnabled}
                   onPress={handleStepsSyncPress}
                   showGlow={!stepsSyncEnabled}
@@ -404,7 +406,7 @@ export default function ClientDashboard() {
                   <View className="p-8">
                       <View className="flex-row items-center gap-2 mb-3">
                         <View className="w-6 h-6 bg-blue-500/20 rounded-full items-center justify-center border border-blue-500/30">
-                          <CheckCircle2 size={12} color="#3B82F6" />
+                          <CheckCircle2 size={12} color={colors.primary} />
                         </View>
                         <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Plan Synced</Text>
                       </View>
@@ -419,7 +421,7 @@ export default function ClientDashboard() {
                               transition={{ delay: 400 }}
                               className="flex-row items-center gap-2 bg-blue-500/10 px-4 py-2 rounded-full border border-blue-500/20"
                           >
-                              <ActivityIndicator size="small" color="#3B82F6" />
+                              <ActivityIndicator size="small" color={colors.primary} />
                               <Text className="text-blue-400 font-black text-[10px] uppercase tracking-widest">AI Processing</Text>
                           </MotiView>
                           
@@ -445,7 +447,7 @@ export default function ClientDashboard() {
                 >
                     <View className="flex-row items-center gap-4 mb-8">
                         <View className="w-12 h-12 bg-blue-600/10 border border-blue-600/20 rounded-2xl items-center justify-center">
-                            <Brain size={24} color="#3B82F6" />
+                            <Brain size={24} color={colors.primary} />
                         </View>
                         <View>
                           <Text className="text-white font-black text-lg tracking-tight">Today's Strategy</Text>
@@ -479,7 +481,7 @@ export default function ClientDashboard() {
                     <ActionCard 
                         label="Log Meal" 
                         sub="Photo Analysis"
-                        icon={<Camera size={28} color="#3B82F6" />} 
+                        icon={<Camera size={28} color={colors.primary} />} 
                         onPress={() => router.push('/(client)/log-meal')}
                     />
                     <ActionCard 
@@ -593,8 +595,8 @@ const MetricCard = ({ label, value, icon, active, onPress, showGlow = false }: a
                         top: 0, left: 0, right: 0, bottom: 0,
                         borderRadius: 36,
                         opacity: glowOpacity,
-                        backgroundColor: '#3B82F6',
-                        shadowColor: '#3B82F6',
+                        backgroundColor: colors.primary,
+                        shadowColor: colors.primary,
                         shadowOffset: { width: 0, height: 0 },
                         shadowOpacity: 1,
                         shadowRadius: 32,
@@ -640,7 +642,7 @@ const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: 
         backgroundColor: canJoin ? '#1D4ED8' : '#0F172A',
         borderWidth: 1,
         borderColor: canJoin ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.06)',
-        shadowColor: canJoin ? '#3B82F6' : '#000',
+        shadowColor: canJoin ? colors.primary : '#000',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: canJoin ? 0.35 : 0.2,
         shadowRadius: 20,
@@ -671,7 +673,7 @@ const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: 
               backgroundColor: canJoin ? 'rgba(255,255,255,0.15)' : 'rgba(59,130,246,0.12)',
               alignItems: 'center', justifyContent: 'center'
             }}>
-              <Video size={13} color={canJoin ? '#fff' : '#3B82F6'} />
+              <Video size={13} color={canJoin ? '#fff' : colors.primary} />
             </View>
             <Text style={{ color: canJoin ? 'rgba(255,255,255,0.75)' : '#64748B', fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
               Live Session

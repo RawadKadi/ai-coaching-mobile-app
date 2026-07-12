@@ -50,7 +50,7 @@ const STRANDS: StrandConfig[] = [
     wavelength: 0.70,
     phase: 0,
     speed: 0.9,
-    colorA: '#3B82F6',
+    colorA: '#7FA7FF',
     colorB: '#6366F1',
   },
   {
@@ -71,7 +71,7 @@ const STRANDS: StrandConfig[] = [
     phase: 2.9,
     speed: 1.1,
     colorA: '#60A5FA',
-    colorB: '#3B82F6',
+    colorB: '#7FA7FF',
   },
 ];
 

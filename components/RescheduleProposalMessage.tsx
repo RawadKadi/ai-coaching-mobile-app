@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Clock, Calendar, CheckCircle2, X, Check } from 'lucide-react-native';
@@ -11,6 +12,8 @@ interface RescheduleProposalMessageProps {
 }
 
 export default function RescheduleProposalMessage({ messageId, metadata, isOwn }: RescheduleProposalMessageProps) {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState(metadata.status || 'pending');
     const [acceptedSlot, setAcceptedSlot] = useState(metadata.acceptedSlot || null);
@@ -230,7 +233,7 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                                         onPress={() => setSelectedSlot(slot)}
                                         activeOpacity={0.7}
                                     >
-                                        <Clock size={18} color={isSelected ? "#3B82F6" : "#6B7280"} />
+                                        <Clock size={18} color={isSelected ? colors.primary : "#6B7280"} />
                                         <View style={{ flex: 1 }}>
                                             <Text style={[styles.modalSlotText, isSelected && styles.modalSlotTextSelected]}>
                                                 {slotDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
@@ -239,7 +242,7 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                                                 {metadata.recurrence === 'weekly' ? `${dayName}s (starting ${dateStr})` : dateStr}
                                             </Text>
                                         </View>
-                                        {isSelected && <Check size={20} color="#3B82F6" />}
+                                        {isSelected && <Check size={20} color={colors.primary} />}
                                     </TouchableOpacity>
                                 );
                             })}
@@ -269,7 +272,7 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         maxWidth: '85%',
         padding: 16,
@@ -309,7 +312,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     primaryButton: {
-        backgroundColor: '#3B82F6',
+        backgroundColor: colors.primary,
         paddingVertical: 12,
         paddingHorizontal: 16,
         borderRadius: 10,
@@ -402,7 +405,7 @@ const styles = StyleSheet.create({
     },
     modalSlotSelected: {
         backgroundColor: '#EFF6FF',
-        borderColor: '#3B82F6',
+        borderColor: colors.primary,
     },
     modalSlotText: {
         fontSize: 17,

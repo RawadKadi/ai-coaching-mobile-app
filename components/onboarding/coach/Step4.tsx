@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Animated, Easing, ActivityIndicator } from 'react-native';
 import { CheckCircle, UserPlus, LayoutDashboard } from 'lucide-react-native';
@@ -8,6 +9,7 @@ interface Step4Props {
 }
 
 export default function Step4({ coachName }: Step4Props) {
+  const colors = useBrandColors();
   const router = useRouter();
   
   const [itemsReady, setItemsReady] = useState([false, false, false]);
@@ -105,9 +107,9 @@ export default function Step4({ coachName }: Step4Props) {
           }}
         >
           {allReady ? (
-            <CheckCircle size={44} color="#3B82F6" />
+            <CheckCircle size={44} color={colors.primary} />
           ) : (
-            <ActivityIndicator size="large" color="#3B82F6" />
+            <ActivityIndicator size="large" color={colors.primary} />
           )}
         </View>
 
@@ -162,7 +164,7 @@ export default function Step4({ coachName }: Step4Props) {
                 }}
               >
                 {isReady ? (
-                  <CheckCircle size={17} color="#3B82F6" />
+                  <CheckCircle size={17} color={colors.primary} />
                 ) : (
                   <ActivityIndicator size="small" color="#475569" />
                 )}

@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 
@@ -18,6 +19,7 @@ const GOALS = [
 const EXPERIENCE_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 
 export default function Step2({ formData, updateForm }: Step2Props) {
+  const colors = useBrandColors();
   // Goals is stored as a single string currently in DB `goal text`
   // We can let them pick up to 2 and join them, or update the DB to array.
   // The user requested: "Goal selection (Max 2)"
@@ -57,7 +59,7 @@ export default function Step2({ formData, updateForm }: Step2Props) {
                   backgroundColor: isSelected ? '#2563EB' : '#0F172A',
                   borderRadius: 24,
                   borderWidth: 1,
-                  borderColor: isSelected ? '#3B82F6' : '#1E293B',
+                  borderColor: isSelected ? colors.primary : '#1E293B',
                   opacity: isDisabled ? 0.5 : 1,
                 }}
               >
@@ -88,7 +90,7 @@ export default function Step2({ formData, updateForm }: Step2Props) {
                   backgroundColor: isSelected ? 'rgba(59,130,246,0.1)' : '#0F172A',
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: isSelected ? '#3B82F6' : '#1E293B',
+                  borderColor: isSelected ? colors.primary : '#1E293B',
                 }}
               >
                 <Text style={{ color: isSelected ? '#FFFFFF' : '#94A3B8', fontWeight: '600', fontSize: 16 }}>

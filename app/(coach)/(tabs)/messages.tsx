@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, RefreshControl, StatusBar, TextInput, Pressable } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -20,6 +21,7 @@ type CoachPreview = {
 type Tab = 'clients' | 'team';
 
 export default function CoachMessagesScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { coach, user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -279,7 +281,7 @@ export default function CoachMessagesScreen() {
           {isSearching && (
             <View className="px-6 mb-6">
               <View className="flex-row items-center bg-slate-900/80 rounded-3xl px-4 py-2 border border-white/10 shadow-2xl">
-                <Search size={20} color="#3B82F6" />
+                <Search size={20} color={colors.primary} />
                 <TextInput
                   autoFocus
                   placeholder={`Search ${activeTab === 'clients' ? 'clients' : 'team'}...`}
@@ -300,7 +302,7 @@ export default function CoachMessagesScreen() {
                 className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'clients' ? 'bg-slate-800' : ''}`}
                 style={activeTab === 'clients' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
               >
-                <Users size={18} color={activeTab === 'clients' ? '#3B82F6' : '#475569'} />
+                <Users size={18} color={activeTab === 'clients' ? colors.primary : '#475569'} />
                 <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'clients' ? 'text-white' : 'text-slate-500'}`}>Clients</Text>
               </Pressable>
               <Pressable
@@ -308,7 +310,7 @@ export default function CoachMessagesScreen() {
                 className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'team' ? 'bg-slate-800' : ''}`}
                 style={activeTab === 'team' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
               >
-                <Zap size={18} color={activeTab === 'team' ? '#3B82F6' : '#475569'} />
+                <Zap size={18} color={activeTab === 'team' ? colors.primary : '#475569'} />
                 <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'team' ? 'text-white' : 'text-slate-500'}`}>Team</Text>
                 {teamUnreadCount > 0 && activeTab !== 'team' && (
                   <View className="w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-slate-900" />
@@ -319,7 +321,7 @@ export default function CoachMessagesScreen() {
 
           {/* List */}
           {loading && !refreshing ? (
-            <View className="flex-1 items-center justify-center"><ActivityIndicator color="#3B82F6" /></View>
+            <View className="flex-1 items-center justify-center"><ActivityIndicator color={colors.primary} /></View>
           ) : (
             <FlatList
               data={(activeTab === 'clients' ? filteredClients : filteredTeammates) as any[]}
@@ -335,7 +337,7 @@ export default function CoachMessagesScreen() {
               keyExtractor={item => 'id' in item ? item.id : item.coach_id}
               contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140 }}
               showsVerticalScrollIndicator={false}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               ListEmptyComponent={
                 <View className="mt-20 items-center px-10">
                   <View className="w-24 h-24 bg-slate-900 rounded-[32px] items-center justify-center border border-white/5 shadow-2xl">

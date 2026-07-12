@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -40,6 +41,7 @@ const TagList = ({ icon, label, tags, isLast }: { icon: React.ReactNode, label: 
 );
 
 export default function PersonalInformationScreen() {
+  const colors = useBrandColors();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { profile, client, user } = useAuth();
@@ -74,12 +76,12 @@ export default function PersonalInformationScreen() {
                     {/* Account Info */}
                     <View className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 mb-6">
                         <Text className="text-white font-black text-lg mb-4 ml-1">Account</Text>
-                        <InfoRow icon={<User size={16} color="#3B82F6" />} label="Full Name" value={profile?.full_name} />
-                        <InfoRow icon={<Mail size={16} color="#3B82F6" />} label="Email" value={user?.email} />
-                        <InfoRow icon={<Phone size={16} color="#3B82F6" />} label="Phone" value={profile?.phone} />
+                        <InfoRow icon={<User size={16} color={colors.primary} />} label="Full Name" value={profile?.full_name} />
+                        <InfoRow icon={<Mail size={16} color={colors.primary} />} label="Email" value={user?.email} />
+                        <InfoRow icon={<Phone size={16} color={colors.primary} />} label="Phone" value={profile?.phone} />
                         <View className="flex-row items-center py-4">
                             <View className="w-8 h-8 rounded-full bg-blue-600/10 items-center justify-center mr-4">
-                                <Globe size={16} color="#3B82F6" />
+                                <Globe size={16} color={colors.primary} />
                             </View>
                             <View className="flex-1">
                                 <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">Timezone</Text>
@@ -91,11 +93,11 @@ export default function PersonalInformationScreen() {
                     {/* Physical Profile */}
                     <View className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 mb-6">
                         <Text className="text-white font-black text-lg mb-4 ml-1">Physical Profile</Text>
-                        <InfoRow icon={<Calendar size={16} color="#3B82F6" />} label="Date of Birth" value={client?.date_of_birth} />
-                        <InfoRow icon={<Activity size={16} color="#3B82F6" />} label="Gender" value={client?.gender} />
+                        <InfoRow icon={<Calendar size={16} color={colors.primary} />} label="Date of Birth" value={client?.date_of_birth} />
+                        <InfoRow icon={<Activity size={16} color={colors.primary} />} label="Gender" value={client?.gender} />
                         <View className="flex-row items-center py-4">
                             <View className="w-8 h-8 rounded-full bg-blue-600/10 items-center justify-center mr-4">
-                                <Ruler size={16} color="#3B82F6" />
+                                <Ruler size={16} color={colors.primary} />
                             </View>
                             <View className="flex-1">
                                 <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">Height</Text>
@@ -109,10 +111,10 @@ export default function PersonalInformationScreen() {
                     {/* Fitness Journey */}
                     <View className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 mb-6">
                         <Text className="text-white font-black text-lg mb-4 ml-1">Fitness Journey</Text>
-                        <InfoRow icon={<Target size={16} color="#3B82F6" />} label="Primary Goal" value={client?.goal} />
+                        <InfoRow icon={<Target size={16} color={colors.primary} />} label="Primary Goal" value={client?.goal} />
                         <View className="flex-row items-center py-4">
                             <View className="w-8 h-8 rounded-full bg-blue-600/10 items-center justify-center mr-4">
-                                <Trophy size={16} color="#3B82F6" />
+                                <Trophy size={16} color={colors.primary} />
                             </View>
                             <View className="flex-1">
                                 <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">Experience Level</Text>
@@ -125,12 +127,12 @@ export default function PersonalInformationScreen() {
                     <View className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 mb-6">
                         <Text className="text-white font-black text-lg mb-4 ml-1">Health Context</Text>
                         <TagList 
-                            icon={<Info size={16} color="#3B82F6" />} 
+                            icon={<Info size={16} color={colors.primary} />} 
                             label="Dietary Restrictions" 
                             tags={client?.dietary_restrictions} 
                         />
                         <TagList 
-                            icon={<AlertTriangle size={16} color="#3B82F6" />} 
+                            icon={<AlertTriangle size={16} color={colors.primary} />} 
                             label="Medical Conditions" 
                             tags={client?.medical_conditions} 
                             isLast={true}

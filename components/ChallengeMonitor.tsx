@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,6 +8,7 @@ import FeedbackModal from '@/components/FeedbackModal';
 import { Target } from 'lucide-react-native';
 
 export default function ChallengeMonitor({ router }: { router: ReturnType<typeof useRouter> }) {
+  const colors = useBrandColors();
   const { client } = useAuth();
   const [visible, setVisible] = useState(false);
   const [challengeName, setChallengeName] = useState('');
@@ -96,7 +98,7 @@ export default function ChallengeMonitor({ router }: { router: ReturnType<typeof
       visible={visible}
       onClose={handleClose}
       variant="info"
-      icon={<Target size={52} color="#3B82F6" />}
+      icon={<Target size={52} color={colors.primary} />}
       title="New Challenge"
       body={`Your coach assigned a new challenge:\n"${challengeName}"\n\nGo check it out.`}
       ctaLabel="Check it out"

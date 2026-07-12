@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -49,6 +50,7 @@ const formatDisplayDate = (dateStr: string) => {
 };
 
 export default function CreateChallengeScreen() {
+  const colors = useBrandColors();
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { coach } = useAuth();
@@ -350,7 +352,7 @@ export default function CreateChallengeScreen() {
   if (loading && !selectedClient) {
     return (
       <View className="flex-1 bg-slate-950 items-center justify-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -423,7 +425,7 @@ export default function CreateChallengeScreen() {
                             >
                                 <BrandedAvatar size={28} name={c.full_name} imageUrl={c.avatar_url} />
                                 <Text style={{ color: 'white', fontWeight: '500' }}>{c.full_name}</Text>
-                                {selectedClient?.id === c.id && <Check size={16} color="#3B82F6" style={{ marginLeft: 'auto' }} />}
+                                {selectedClient?.id === c.id && <Check size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
                             </TouchableOpacity>
                             ))}
                         </View>
@@ -541,7 +543,7 @@ export default function CreateChallengeScreen() {
                                         borderColor: 'rgba(59, 130, 246, 0.2)',
                                         marginRight: 16,
                                     }}>
-                                        <Calendar size={20} color="#3B82F6" />
+                                        <Calendar size={20} color={colors.primary} />
                                     </View>
                                     <View>
                                         <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 20 }}>
@@ -552,7 +554,7 @@ export default function CreateChallengeScreen() {
                                         </Text>
                                     </View>
                                 </View>
-                                <ChevronDown size={20} color={showDatePicker ? '#3b82f6' : '#475569'} />
+                                <ChevronDown size={20} color={showDatePicker ? colors.primary : '#475569'} />
                             </TouchableOpacity>
                         </View>
                     )}
@@ -584,7 +586,7 @@ export default function CreateChallengeScreen() {
                         <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Daily Tasks</Text>
                         <Text style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>Add tasks for each day</Text>
                     </View>
-                    <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#3b82f61a', borderRadius: 12, borderWidth: 1, borderColor: '#3b82f633' }}>
+                    <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: `${colors.primary}1a`, borderRadius: 12, borderWidth: 1, borderColor: `${colors.primary}33` }}>
                         <Text style={{ color: '#60a5fa', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>{days.length} Days</Text>
                     </View>
                 </View>
@@ -600,7 +602,7 @@ export default function CreateChallengeScreen() {
                                 <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
                                     <Text style={{ color: 'white', fontSize: 10, fontWeight: '900' }}>{dayIndex + 1}</Text>
                                 </View>
-                                <Text style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Day {dayIndex + 1}</Text>
+                                <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Day {dayIndex + 1}</Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.6 }}>
@@ -747,8 +749,8 @@ export default function CreateChallengeScreen() {
                                 marginTop: 16
                             }}
                         >
-                            <Plus size={16} color="#3b82f6" />
-                            <Text style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 13 }}>Add Task</Text>
+                            <Plus size={16} color={colors.primary} />
+                            <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 13 }}>Add Task</Text>
                         </TouchableOpacity>
                     </View>
                 ))}
@@ -770,8 +772,8 @@ export default function CreateChallengeScreen() {
                         marginBottom: 24
                     }}
                 >
-                    <Plus size={20} color="#3b82f6" />
-                    <Text style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 16 }}>Add Day</Text>
+                    <Plus size={20} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 16 }}>Add Day</Text>
                 </TouchableOpacity>
             </View>
           </ScrollView>
@@ -789,7 +791,7 @@ export default function CreateChallengeScreen() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 12,
-                    shadowColor: '#3b82f6',
+                    shadowColor: colors.primary,
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.2,
                     shadowRadius: 8,

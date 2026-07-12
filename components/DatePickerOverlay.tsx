@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import {
   Modal,
@@ -48,6 +49,8 @@ export const DatePickerOverlay: React.FC<DatePickerOverlayProps> = ({
   onSelect,
   onClose,
 }) => {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
   );
@@ -228,7 +231,7 @@ export const DatePickerOverlay: React.FC<DatePickerOverlayProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   overlayContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -333,7 +336,7 @@ const styles = StyleSheet.create({
   },
   daySelected: {
     backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
   },
   dayToday: {
     backgroundColor: 'rgba(37,99,235,0.12)',
@@ -378,7 +381,7 @@ const styles = StyleSheet.create({
   },
   presetBtnSelected: {
     backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
   },
   presetText: {
     color: '#94A3B8',

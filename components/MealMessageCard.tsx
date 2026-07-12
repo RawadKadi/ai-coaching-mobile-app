@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
@@ -22,6 +23,8 @@ type Props = {
 };
 
 export default function MealMessageCard({ content, isOwn, onLongPress }: Props) {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const router = useRouter();
   
   // Parse content if it's a string
@@ -45,7 +48,7 @@ export default function MealMessageCard({ content, isOwn, onLongPress }: Props) 
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.iconWrapper}>
-            <Utensils size={14} color="#3B82F6" />
+            <Utensils size={14} color={colors.primary} />
           </View>
           <Text style={styles.headerTitle}>Meal Log</Text>
         </View>
@@ -69,7 +72,7 @@ export default function MealMessageCard({ content, isOwn, onLongPress }: Props) 
           <Text style={styles.mealName} numberOfLines={2}>{data.mealName || 'Unknown Meal'}</Text>
           <View style={styles.macrosRow}>
             <View style={styles.macroItem}>
-                <Zap size={10} color="#3B82F6" fill="#3B82F6" />
+                <Zap size={10} color={colors.primary} fill={colors.primary} />
                 <Text style={styles.macroValue}>{formatCompactNumber(data.calories || 0)} <Text style={styles.macroLabel}>kcal</Text></Text>
             </View>
             <View style={styles.dot} />
@@ -79,14 +82,14 @@ export default function MealMessageCard({ content, isOwn, onLongPress }: Props) 
 
         <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={styles.footerButton}>
           <Text style={styles.footerText}>View Full Analysis</Text>
-          <ChevronRight size={14} color="#3B82F6" strokeWidth={3} />
+          <ChevronRight size={14} color={colors.primary} strokeWidth={3} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     width: 280,
     borderRadius: 32,
@@ -134,7 +137,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#3B82F6',
+    color: colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 2,
   },

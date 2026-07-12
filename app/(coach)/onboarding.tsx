@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -29,6 +30,7 @@ import Step4 from '@/components/onboarding/coach/Step4';
 
 // Auto-persist Formik values to AsyncStorage
 const PersistFormikValues = () => {
+  const colors = useBrandColors();
   const { values } = useFormikContext<any>();
   useEffect(() => {
     if (values) {
@@ -190,7 +192,7 @@ export default function CoachOnboardingScreen() {
   if (!initialValues) {
     return (
       <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -316,7 +318,7 @@ export default function CoachOnboardingScreen() {
                     onPress={clearDraft}
                     style={{ width: 48, height: 48, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)' }}
                   >
-                    <Briefcase size={22} color="#3B82F6" />
+                    <Briefcase size={22} color={colors.primary} />
                   </TouchableOpacity>
                 </View>
               )}
@@ -327,7 +329,7 @@ export default function CoachOnboardingScreen() {
                   <Animated.View
                     style={{
                       height: '100%',
-                      backgroundColor: '#3B82F6',
+                      backgroundColor: colors.primary,
                       borderRadius: 4,
                       width: progressAnim.interpolate({
                         inputRange: [0, 1],

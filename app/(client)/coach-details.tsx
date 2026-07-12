@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StatusBar, Linking, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,6 +22,7 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string,
 );
 
 export default function CoachDetailsScreen() {
+  const colors = useBrandColors();
     const router = useRouter();
     const { coachId } = useLocalSearchParams();
     const insets = useSafeAreaInsets();
@@ -103,7 +105,7 @@ export default function CoachDetailsScreen() {
     if (loading) {
         return (
             <View className="flex-1 bg-slate-950 items-center justify-center">
-                <ActivityIndicator size="large" color="#3B82F6" />
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }
@@ -191,15 +193,15 @@ export default function CoachDetailsScreen() {
                     <View className="bg-slate-900/40 rounded-[32px] p-6 border border-white/5 mb-6">
                         <Text className="text-white font-black text-lg mb-4">Credentials & Info</Text>
                         {coachData.business_name && (
-                            <InfoRow icon={<Briefcase size={16} color="#3B82F6" />} label="Business Name" value={coachData.business_name} />
+                            <InfoRow icon={<Briefcase size={16} color={colors.primary} />} label="Business Name" value={coachData.business_name} />
                         )}
-                        <InfoRow icon={<Mail size={16} color="#3B82F6" />} label="Email" value={p.email} />
+                        <InfoRow icon={<Mail size={16} color={colors.primary} />} label="Email" value={p.email} />
                         {p.phone && (
-                            <InfoRow icon={<Phone size={16} color="#3B82F6" />} label="Phone" value={p.phone} />
+                            <InfoRow icon={<Phone size={16} color={colors.primary} />} label="Phone" value={p.phone} />
                         )}
                         <View className="flex-row items-center py-4">
                             <View className="w-8 h-8 rounded-full bg-blue-600/10 items-center justify-center mr-4">
-                                <Globe size={16} color="#3B82F6" />
+                                <Globe size={16} color={colors.primary} />
                             </View>
                             <View className="flex-1">
                                 <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">Timezone</Text>

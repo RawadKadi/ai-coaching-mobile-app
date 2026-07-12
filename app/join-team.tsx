@@ -1,3 +1,4 @@
+import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -8,6 +9,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const PENDING_INVITE_KEY = '@pending_invite_token';
 
 export default function JoinTeamScreen() {
+  const colors = useBrandColors();
+  const styles = getStyles(colors);
   const router = useRouter();
   const { invite } = useLocalSearchParams<{ invite: string }>();
   const { user, coach, refreshProfile } = useAuth();
@@ -124,7 +127,7 @@ export default function JoinTeamScreen() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#3B82F6" />
+      <ActivityIndicator size="large" color={colors.primary} />
       <Text style={styles.text}>Processing invitation...</Text>
       <Text style={styles.debugText}>Invite: {invite?.slice(0, 8)}...</Text>
       <Text style={styles.debugText}>User: {user ? 'Logged in' : 'Not logged in'}</Text>
@@ -132,7 +135,7 @@ export default function JoinTeamScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
