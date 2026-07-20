@@ -12,6 +12,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import * as DocumentPicker from 'expo-document-picker';
 import { Video, ResizeMode } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/BrandContext';
 import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check, Mic } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
@@ -51,6 +52,7 @@ export function ChatInputBar({
   replyingTo, onCancelReply, onTyping,
   editingMessage, onConfirmEdit, onCancelEdit,
 }: Props) {
+  const theme = useTheme();
   const styles = getStyles(theme.colors);
   // LOGGING: Track props
   React.useEffect(() => {
@@ -58,8 +60,6 @@ export function ChatInputBar({
       console.log('[ChatInputBar] Received editingMessage:', editingMessage.id);
     }
   }, [editingMessage?.id]);
-
-  const theme = useTheme();
   const [text, setText] = useState('');
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel>(null);
@@ -646,11 +646,32 @@ export function ChatInputBar({
       )}
 
       {/* ── Input row ──────────────────────────────────────────────────────── */}
-      <View style={[
-        styles.inputRow,
-        { backgroundColor: '#020617' },
-        Platform.OS === 'ios' ? { paddingBottom: (activePanel || isKeyboardVisible) ? 0 : 24 } : { paddingBottom: 24 },
-      ]}>
+      <View style={[styles.inputRow, { backgroundColor: 'transparent', position: 'relative' }]}>
+        {/* Glowing blurry background effect */}
+        <LinearGradient
+          colors={['transparent', theme.colors.secondary + '1A', theme.colors.secondary + '33']}
+          locations={[0, 0.4, 1]}
+          style={{
+            position: 'absolute',
+            top: -40, // Extend above the input
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: -1,
+          }}
+          pointerEvents="none"
+        />
+        <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: '#020617', // Keep the actual input area solidly dark so text is readable
+            zIndex: -1,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.secondary + '33', // Subtle colored top border
+        }} />
 
         {/* Left: Cancel Edit (X) in edit mode, Plus otherwise — hidden while recording */}
         {!isVoiceRecording && (
@@ -730,9 +751,9 @@ export function ChatInputBar({
             disabled={isDisabled}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-              <Circle cx="12" cy="12" r="10" stroke={activePanel === 'emoji' ? theme.colors.primary : '#64748B'} strokeWidth="2" />
-              <Path d="M12 22C15.5 22 18.5 20 20 17H12C10.3 17 9 15.7 9 14V12H4C4 17.5 7.5 22 12 22Z" fill={activePanel === 'emoji' ? theme.colors.primary : '#64748B'} />
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={activePanel === 'emoji' ? theme.colors.primary : '#64748B'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M21 15a6 6 0 0 1-6 6H7A5 5 0 0 1 2 16V7a5 5 0 0 1 5-5h10a5 5 0 0 1 5 5v8Z" />
+              <Path d="M15 21a6 6 0 0 0 6-6" />
             </Svg>
           </TouchableOpacity>
           </View>
@@ -959,6 +980,7 @@ function CircularProgress({ pct }: { pct: number }) {
 
 function GifImageItem({ item, onPress }: { item: GifResult, onPress: () => void }) {
   const theme = useTheme();
+  const styles = getStyles(theme.colors);
 
   // expo-image handles its own loading skeleton internally — no extra state needed
   return (

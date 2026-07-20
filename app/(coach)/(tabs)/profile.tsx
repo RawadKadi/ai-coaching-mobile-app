@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Saf
 import { useRouter } from 'expo-router';
 import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBrand, useTheme } from '@/contexts/BrandContext';
+import { useBrand, useTheme, useBrandColors } from '@/contexts/BrandContext';
 import { LogOut, User, Settings, Camera, Users, UserPlus, ChevronRight, BrainCircuit, Palette, Shield, Bell, Heart, CreditCard } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,6 +17,7 @@ export default function CoachProfileScreen() {
   const { profile, signOut, coach, refreshProfile, user } = useAuth();
   const { handleScroll } = useTabBarScroll();
   const { brand, canManageBrand } = useBrand();
+  const colors = useBrandColors();
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 

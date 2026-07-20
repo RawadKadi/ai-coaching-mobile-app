@@ -50,6 +50,7 @@ interface MessageOverlayProps {
   onReaction: (emoji: string) => void;
   onAction: (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit' | 'reschedule') => void;
   renderMessageContent: (item: any, isMe: boolean) => React.ReactNode;
+  isCoach?: boolean;
 }
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -61,7 +62,8 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
   onClose,
   onReaction,
   onAction,
-  renderMessageContent
+  renderMessageContent,
+  isCoach
 }) => {
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -173,12 +175,16 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                         label="Reply" 
                         onPress={() => handleAction('reply')} 
                     />
-                    <MenuDivider />
-                    <MenuOption 
-                        icon={<Forward size={20} color="#F8FAFC" />} 
-                        label="Forward" 
-                        onPress={() => handleAction('forward')} 
-                    />
+                    {isCoach && (
+                      <>
+                        <MenuDivider />
+                        <MenuOption 
+                            icon={<Forward size={20} color="#F8FAFC" />} 
+                            label="Forward" 
+                            onPress={() => handleAction('forward')} 
+                        />
+                      </>
+                    )}
                     <MenuDivider />
                     <MenuOption 
                         icon={<Copy size={20} color="#F8FAFC" />} 

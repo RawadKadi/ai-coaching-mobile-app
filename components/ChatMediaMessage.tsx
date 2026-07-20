@@ -529,6 +529,7 @@ function CustomImagePlayer({
 // ── Challenge Card Components ────────────────────────────────────────────────
 function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media: MediaContent, onPressImage?: () => void, onPressDetails?: () => void }) {
   const theme = useTheme();
+  const styles = getStyles(theme.colors);
   const intensityColor = (intensity?: string) => {
     switch(intensity?.toLowerCase()) {
       case 'high': return '#EF4444';
@@ -593,6 +594,7 @@ function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media
 
 function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPressImage?: () => void }) {
   const theme = useTheme();
+  const styles = getStyles(theme.colors);
   return (
     <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: 'rgba(59, 130, 246, 0.2)' }]}>
       {media.imageUrl && (
@@ -624,6 +626,7 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
 
 function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: any, isOwn: boolean, onCancel?: (id: string) => void, onReschedule?: (id: string) => void }) {
   const theme = useTheme();
+  const styles = getStyles(theme.colors);
   const router = useRouter();
   
   const isCancelled = media.status === 'cancelled';
@@ -919,72 +922,78 @@ function VoiceNotePlayer({
     ? senderName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : '?';
 
+  // Avatar/speed slot — extracted so it can be placed before or after the main content
+  const avatarOrSpeedSlot = (
+    <TouchableOpacity
+      onPress={showAvatar ? undefined : cycleSpeed}
+      activeOpacity={showAvatar ? 1 : 0.7}
+      style={{
+        width: 44,
+        height: 44,
+        marginLeft: isOwn ? 0 : 8,
+        marginRight: isOwn ? 8 : 0,
+        flexShrink: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      {showAvatar ? (
+        // Profile photo + mic badge
+        <View style={{ width: 44, height: 44 }}>
+          {senderAvatarUrl ? (
+            <Image
+              source={{ uri: senderAvatarUrl }}
+              style={{ width: 44, height: 44, borderRadius: 22 }}
+              contentFit="cover"
+            />
+          ) : (
+            // Fallback initials circle
+            <View style={{
+              width: 44, height: 44, borderRadius: 22,
+              backgroundColor: isOwn ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.12)',
+              justifyContent: 'center', alignItems: 'center',
+            }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{initials}</Text>
+            </View>
+          )}
+          {/* Mic badge bottom-right */}
+          <View style={{
+            position: 'absolute', bottom: -2, right: -2,
+            width: 20, height: 20, borderRadius: 10,
+            backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+            borderWidth: 2,
+            borderColor: isOwn ? theme.colors.primary : '#0F172A',
+            justifyContent: 'center', alignItems: 'center',
+          }}>
+            <Text style={{ fontSize: 9 }}>🎤</Text>
+          </View>
+        </View>
+      ) : (
+        // Speed badge
+        <View style={{
+          minWidth: 40,
+          height: 28,
+          borderRadius: 8,
+          backgroundColor: isOwn ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 6,
+        }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800', letterSpacing: -0.3 }}>
+            {playbackSpeed === 1 ? '1×' : `${playbackSpeed}×`}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', width: 240, paddingVertical: 4 }}>
 
-      {/* Left slot: avatar+mic (not started) OR speed badge (playing/paused mid-way) */}
-      <TouchableOpacity
-        onPress={showAvatar ? undefined : cycleSpeed}
-        activeOpacity={showAvatar ? 1 : 0.7}
-        style={{
-          width: 44,
-          height: 44,
-          marginRight: 8,
-          flexShrink: 0,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        {showAvatar ? (
-          // Profile photo + mic badge
-          <View style={{ width: 44, height: 44 }}>
-            {senderAvatarUrl ? (
-              <Image
-                source={{ uri: senderAvatarUrl }}
-                style={{ width: 44, height: 44, borderRadius: 22 }}
-                contentFit="cover"
-              />
-            ) : (
-              // Fallback initials circle
-              <View style={{
-                width: 44, height: 44, borderRadius: 22,
-                backgroundColor: isOwn ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.12)',
-                justifyContent: 'center', alignItems: 'center',
-              }}>
-                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{initials}</Text>
-              </View>
-            )}
-            {/* Mic badge bottom-right */}
-            <View style={{
-              position: 'absolute', bottom: -2, right: -2,
-              width: 20, height: 20, borderRadius: 10,
-              backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
-              borderWidth: 2,
-              borderColor: isOwn ? theme.colors.primary : '#0F172A',
-              justifyContent: 'center', alignItems: 'center',
-            }}>
-              <Text style={{ fontSize: 9 }}>🎤</Text>
-            </View>
-          </View>
-        ) : (
-          // Speed badge
-          <View style={{
-            minWidth: 40,
-            height: 28,
-            borderRadius: 8,
-            backgroundColor: isOwn ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingHorizontal: 6,
-          }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800', letterSpacing: -0.3 }}>
-              {playbackSpeed === 1 ? '1×' : `${playbackSpeed}×`}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
+      {/* Sent: avatar LEFT of play button. Received: avatar RIGHT (rendered after scrubber) */}
+      {isOwn && avatarOrSpeedSlot}
 
-      {/* Play/Pause button */}
+      {/* Play/Pause button — always leftmost for received, second for sent */}
       <TouchableOpacity 
         onPress={togglePlayback}
         disabled={isLoading}
@@ -1067,6 +1076,9 @@ function VoiceNotePlayer({
           )}
         </View>
       </View>
+
+      {/* Received: avatar RIGHT of scrubber */}
+      {!isOwn && avatarOrSpeedSlot}
     </View>
   );
 }
@@ -1074,8 +1086,8 @@ const ChatMediaMessage: React.FC<Props> = ({
   content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress,
   onCancelSession, onRescheduleSession, senderAvatarUrl, senderName,
 }) => {
-  const styles = getStyles(theme.colors);
   const theme = useTheme();
+  const styles = getStyles(theme.colors);
   const highlightAnim = useRef(new Animated.Value(0)).current;
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
   const [isChallengeExpanded, setIsChallengeExpanded] = useState(false);

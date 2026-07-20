@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, Text, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert, Platform, SafeAreaView } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat, Sparkles, ChevronLeft, Info, Activity } from 'lucide-react-native';
-import { useTheme } from '@/contexts/BrandContext';
+import { useTheme, useBrandColors } from '@/contexts/BrandContext';
 import { parseScheduleRequest, ProposedSession, RateLimitError, extractSchedulingIntent, extractAgendaContext, AgendaContext } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
 import ConflictResolutionModal from './ConflictResolutionModal';
@@ -28,7 +28,8 @@ interface SchedulerModalProps {
 }
 
 export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId, reschedulingMessageId }: SchedulerModalProps) {
-  const colors = useBrandColors();
+  const { primary } = useBrandColors();
+  const colors = { primary };
     const { coach, profile } = useAuth();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);

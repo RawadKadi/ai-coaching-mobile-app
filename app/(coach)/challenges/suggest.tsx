@@ -27,7 +27,7 @@ const GENERATION_STATES = [
   'Finalizing challenge...'
 ];
 
-function GenerationLoader() {
+function GenerationLoader({ colors }: { colors: any }) {
   const [activeStateIdx, setActiveStateIdx] = useState(0);
   const pulse = useSharedValue(1);
 
@@ -547,7 +547,7 @@ export default function AISuggestChallengeScreen() {
         </View>
 
         {/* Full-screen Loading Overlay */}
-        {generating && <GenerationLoader />}
+        {generating && <GenerationLoader colors={colors} />}
       </SafeAreaView>
     </View>
   );

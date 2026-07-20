@@ -1,7 +1,7 @@
 import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Alert, Animated as RNAnimated, Easing } from 'react-native';
-import StrandsBackground from '@/components/ui/StrandsBackground';
+
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { 
@@ -473,7 +473,7 @@ export default function ClientDashboard() {
                   <UpcomingSessionCard
                     session={upcomingSession}
                     nowMs={nowMs}
-                    onJoin={() => router.push('/(client)/chat' as any)}
+                    onJoin={() => router.push('/(client)/messages')}
                   />
                 )}
 
@@ -504,28 +504,19 @@ export default function ClientDashboard() {
 // Wraps the "Complete Your Check-in" card and injects the native Strands
 // animation as an absolute background layer, faded and using brand colours.
 const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
-  const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
-
   return (
     <MotiView
       key="checkin-cta"
       from={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       style={{ marginTop: 24, borderRadius: 40, overflow: 'hidden' }}
-      className="bg-blue-600 shadow-2xl shadow-blue-500/30 border border-white/10"
-      onLayout={(e) => {
-        const { width, height } = e.nativeEvent.layout;
-        setCardSize({ width, height });
-      }}
+      className="bg-blue-600 shadow-2xl shadow-blue-500/30 border border-white/10 relative"
     >
-      {/* Faded strands animation in the background */}
-      <StrandsBackground
-        width={cardSize.width}
-        height={cardSize.height}
-        opacity={0.28}
-      />
+      {/* Lightweight static decoration replacing the heavy animated background */}
+      <View className="absolute -top-24 -right-12 w-64 h-64 bg-white/10 rounded-full" />
+      <View className="absolute -bottom-24 -left-12 w-48 h-48 bg-black/10 rounded-full" />
 
-      <TouchableOpacity className="p-8" onPress={onPress}>
+      <TouchableOpacity className="p-8 relative z-10" onPress={onPress}>
         <View className="flex-row items-center gap-2 mb-3">
           <Zap size={14} color="white" />
           <Text className="text-white/80 text-[10px] font-black uppercase tracking-[3px]">Daily Goal</Text>

@@ -17,7 +17,7 @@ import {
   StatusBar,
   TextInput
 } from 'react-native';
-import GrainientBackground from '@/components/ui/GrainientBackground';
+
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
@@ -33,14 +33,17 @@ import {
   Reply,
   MoreVertical,
   ArrowDown,
-  X
+  X,
+  Forward
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { safeBack } from '@/lib/navigation-utils';
+import BubblePuff from '@/components/ui/BubblePuff';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
 import SchedulerModal from '@/components/SchedulerModal';
 import { MessageOverlay } from '@/components/MessageOverlay';
+import ForwardModal from '@/components/ForwardModal';
 import MealMessageCard from '@/components/MealMessageCard';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
@@ -87,11 +90,11 @@ function isMediaMessage(content: string): boolean {
 
 
 export default function CoachChatScreen() {
-  const styles = getStyles(theme.colors);
   const { id } = useLocalSearchParams(); 
   const router = useRouter();
   const { user, profile } = useAuth();
   const theme = useTheme();
+  const styles = getStyles(theme.colors);
   const insets = useSafeAreaInsets();
   const { refreshUnreadCount } = useUnread();
   const { suppressToast } = useNotification();
@@ -120,7 +123,19 @@ export default function CoachChatScreen() {
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const showScrollBottomRef = useRef(false);
   const [newMessagesCount, setNewMessagesCount] = useState(0);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [forwardModalVisible, setForwardModalVisible] = useState(false);
 
+  const toggleMessageSelection = useCallback((messageId: string) => {
+    setSelectedMessageIds(prev => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      if (next.size === 0) setIsSelectionMode(false); // Auto exit if nothing is selected
+      return next;
+    });
+  }, []);
   useEffect(() => {
     showScrollBottomRef.current = showScrollBottom;
   }, [showScrollBottom]);
@@ -405,12 +420,35 @@ export default function CoachChatScreen() {
   const handleSendText = async (text: string, replyId?: string) => {
     if (!profile || !clientUserId) return;
     setSending(true);
-    const msg = { sender_id: user?.id, recipient_id: clientUserId, content: text, read: false, reply_to_id: replyId, ai_generated: false };
-    const { error } = await supabase.from('messages').insert(msg);
-    if (error) Alert.alert('Error', 'Failed to send');
+    
+    // Optimistic UI for instant feedback
+    const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+
+    const msg = { 
+      id: newId, 
+      sender_id: user?.id || '', 
+      recipient_id: clientUserId, 
+      content: text, 
+      read: false, 
+      reply_to_id: replyId, 
+      ai_generated: false,
+      created_at: new Date().toISOString()
+    };
+    
+    setMessages(prev => [msg as Message, ...prev]);
     setSending(false);
     setReplyingTo(null);
     scrollToBottom();
+
+    const { error } = await supabase.from('messages').insert(msg);
+    if (error) {
+      Alert.alert('Error', 'Failed to send message');
+      // Revert optimistic update on error
+      setMessages(prev => prev.filter(m => m.id !== newId));
+    }
   };
 
   const handleTyping = (isTyping: boolean) => {
@@ -683,8 +721,50 @@ export default function CoachChatScreen() {
     } else if (action === 'reschedule') {
       setReschedulingMessageId(activeMessageForMenu.id);
       setSchedulerVisible(true);
+    } else if (action === 'forward') {
+      setIsSelectionMode(true);
+      setSelectedMessageIds(new Set([activeMessageForMenu.id]));
     }
     setActiveMessageForMenu(null);
+  };
+
+  const handleForwardSelected = async (targetUserIds: string[]) => {
+    if (!user || targetUserIds.length === 0 || selectedMessageIds.size === 0) return;
+    
+    // Sort selected messages chronologically
+    const selectedMsgs = messages
+      .filter(m => selectedMessageIds.has(m.id))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    const payloads = [];
+    for (const targetUserId of targetUserIds) {
+      for (const msg of selectedMsgs) {
+        const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+        payloads.push({
+          id: newId,
+          sender_id: user.id,
+          recipient_id: targetUserId,
+          content: msg.content,
+          read: false,
+          reply_to_id: null,
+          ai_generated: false,
+          created_at: new Date().toISOString()
+        });
+      }
+    }
+
+    const { error } = await supabase.from('messages').insert(payloads);
+    if (error) {
+      throw error;
+    }
+    
+    // Reset selection mode
+    setIsSelectionMode(false);
+    setSelectedMessageIds(new Set());
+    setForwardModalVisible(false);
   };
 
   const handleReaction = async (emoji: string) => {
@@ -804,11 +884,24 @@ export default function CoachChatScreen() {
     return (
       <Swipeable
         ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderLeftActions={renderLeftActions}
-        onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
+        renderLeftActions={isSelectionMode ? undefined : renderLeftActions}
+        onSwipeableWillOpen={() => { if (!isSelectionMode) { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); } }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
       >
-          <View style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+        <TouchableOpacity 
+          activeOpacity={isSelectionMode ? 0.8 : 1}
+          onPress={() => isSelectionMode ? toggleMessageSelection(item.id) : undefined}
+          onLongPress={isSelectionMode ? undefined : undefined}
+          style={{ flexDirection: 'row', alignItems: 'center' }}
+          disabled={!isSelectionMode}
+        >
+          {isSelectionMode && (
+            <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: selectedMessageIds.has(item.id) ? '#3B82F6' : 'rgba(255,255,255,0.3)', marginRight: 12, marginLeft: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: selectedMessageIds.has(item.id) ? '#3B82F6' : 'transparent' }}>
+              {selectedMessageIds.has(item.id) && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <BubblePuff isMe={isMe}>
               {isMedia ? (
                 <View>
                   <ChatMediaMessage 
@@ -866,10 +959,12 @@ export default function CoachChatScreen() {
                 }}
               />
             )}
-          </View>
-      </Swipeable>
-    );
-  };
+          </BubblePuff>
+        </View>
+      </TouchableOpacity>
+    </Swipeable>
+  );
+};
 
   // For MessageOverlay: render the correct component based on message type
   const renderOverlayContent = (msg: any, isMe: boolean) => {
@@ -904,12 +999,10 @@ export default function CoachChatScreen() {
     );
   };
 
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
-      {/* Animated Grainient background — sits behind everything */}
-      <GrainientBackground width={screenWidth} height={screenHeight} />
 
       <StatusBar barStyle="light-content" />
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]} className="border-b border-white/5 bg-[#020617]/60">
@@ -984,7 +1077,7 @@ export default function CoachChatScreen() {
               animate={{ opacity: 1, scale: 1, translateY: 0 }}
               exit={{ opacity: 0, scale: 0.8, translateY: 20 }}
               transition={{ type: 'timing', duration: 200 }}
-              style={{ position: 'absolute', bottom: 100, right: 16, zIndex: 50 }}
+              style={{ position: 'absolute', bottom: replyingTo ? 160 : 100, right: 16, zIndex: 50 }}
             >
               <TouchableOpacity 
                 onPress={scrollToBottom}
@@ -1001,16 +1094,36 @@ export default function CoachChatScreen() {
             </MotiView>
           )}
         </AnimatePresence>
-        <ChatInputBar 
-          onSendText={handleSendText} 
-          onSendMedia={handleSendMedia} 
-          replyingTo={replyingTo} 
-          onCancelReply={() => setReplyingTo(null)} 
-          onTyping={handleTyping}
-          editingMessage={editingMessage}
-          onConfirmEdit={handleConfirmEdit}
-          onCancelEdit={() => setEditingMessage(null)}
-        />
+        <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', backgroundColor: 'rgba(2,6,23,0.88)', paddingBottom: Math.max(insets.bottom, 8) }}>
+          {isSelectionMode ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}>
+              <TouchableOpacity onPress={() => setIsSelectionMode(false)}>
+                <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>
+                {selectedMessageIds.size} Selected
+              </Text>
+              <TouchableOpacity 
+                disabled={selectedMessageIds.size === 0}
+                style={{ opacity: selectedMessageIds.size === 0 ? 0.5 : 1 }}
+                onPress={() => setForwardModalVisible(true)}
+              >
+                <Forward size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ChatInputBar 
+              onSendText={handleSendText} 
+              onSendMedia={handleSendMedia} 
+              replyingTo={replyingTo} 
+              onCancelReply={() => setReplyingTo(null)} 
+              onTyping={handleTyping}
+              editingMessage={editingMessage}
+              onConfirmEdit={handleConfirmEdit}
+              onCancelEdit={() => setEditingMessage(null)}
+            />
+          )}
+        </View>
       </KeyboardAvoidingView>
 
       <SchedulerModal 
@@ -1075,6 +1188,13 @@ export default function CoachChatScreen() {
           isMe={activeMessageForMenu?.sender_id === user?.id}
           onClose={() => setActiveMessageForMenu(null)} onReaction={handleReaction} onAction={handleAction} 
           renderMessageContent={renderOverlayContent}
+          isCoach={true}
+      />
+
+      <ForwardModal 
+        visible={forwardModalVisible}
+        onClose={() => setForwardModalVisible(false)}
+        onForward={handleForwardSelected}
       />
 
       {/* Enlarged Avatar Modal */}

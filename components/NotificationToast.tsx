@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, PanResponder } from 'react-native';
 import { MessageCircle } from 'lucide-react-native';
 import { useBrandColors } from '@/contexts/BrandContext';
+import { BlurView } from 'expo-blur';
 
 interface NotificationToastProps {
   senderName: string;
@@ -20,22 +21,29 @@ export default function NotificationToast({
 }: NotificationToastProps) {
   const colors = useBrandColors();
 
-  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const slideAnim = useRef(new Animated.Value(-150)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
   useEffect(() => {
-    // Slide in
+    // Slide in with spring physics
     Animated.parallel([
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
-        tension: 50,
+        tension: 60,
         friction: 8,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 10,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 250,
         useNativeDriver: true,
       }),
     ]).start();
@@ -51,12 +59,17 @@ export default function NotificationToast({
   const slideOut = () => {
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: -100,
+        toValue: -150,
         duration: 300,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
         toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.9,
         duration: 300,
         useNativeDriver: true,
       }),
@@ -72,26 +85,21 @@ export default function NotificationToast({
     }, 100);
   };
 
-  // Pan responder for swipe up to dismiss
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond if swiping up (dy < 0)
         return Math.abs(gestureState.dy) > 5;
       },
       onPanResponderMove: (_, gestureState) => {
-        // Only allow upward movement
         if (gestureState.dy < 0) {
           pan.setValue({ x: 0, y: gestureState.dy });
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        // If swiped up more than 50px, dismiss
         if (gestureState.dy < -50) {
           slideOut();
         } else {
-          // Snap back to original position
           Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
             useNativeDriver: true,
@@ -101,10 +109,6 @@ export default function NotificationToast({
     })
   ).current;
 
-  // Derive a soft tinted background for the icon container from the brand primary color
-  // We take the primary color and add ~15% opacity as a tint
-  const iconBgColor = colors.primary + '26'; // 26 hex ≈ 15% opacity
-
   return (
     <Animated.View
       {...panResponder.panHandlers}
@@ -113,32 +117,45 @@ export default function NotificationToast({
         {
           transform: [
             { translateY: Animated.add(slideAnim, pan.y) },
+            { scale: scaleAnim },
           ],
           opacity: opacityAnim,
         },
       ]}
     >
       <TouchableOpacity
-        style={[
-          styles.toast,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            shadowColor: colors.primary,
-          },
-        ]}
+        activeOpacity={0.8}
         onPress={handlePress}
-        activeOpacity={0.9}
+        style={{ width: '100%' }}
       >
-        <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
-          <MessageCircle size={24} color={colors.primary} />
-        </View>
-        <View style={styles.content}>
-          <Text style={[styles.senderName, { color: colors.text }]}>{senderName}</Text>
-          <Text style={[styles.message, { color: colors.textSecondary }]} numberOfLines={2}>
-            {message}
-          </Text>
-          <Text style={[styles.action, { color: colors.primary }]}>Tap to view • Swipe up to dismiss</Text>
+        <BlurView
+          intensity={40}
+          tint="dark"
+          style={[styles.blurContainer, { borderColor: 'rgba(255,255,255,0.1)' }]}
+        >
+          {/* Subtle gradient glow overlay */}
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.primary, opacity: 0.03 }]} />
+          
+          <View style={[styles.iconContainer, { backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}40`, borderWidth: 1 }]}>
+            <MessageCircle size={20} color={colors.primary} />
+          </View>
+          
+          <View style={styles.content}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                <Text style={styles.senderName}>{senderName}</Text>
+                <Text style={styles.nowText}>now</Text>
+            </View>
+            <Text style={styles.message} numberOfLines={2}>
+              {message}
+            </Text>
+          </View>
+        </BlurView>
+        
+        {/* Helper Action Text Below */}
+        <View style={styles.actionContainer}>
+            <View style={styles.actionPill}>
+               <Text style={styles.action}>Swipe up to dismiss</Text>
+            </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -148,45 +165,71 @@ export default function NotificationToast({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
+    top: Platform.OS === 'ios' ? 55 : 35,
     left: 16,
     right: 16,
     zIndex: 9999,
+    alignItems: 'center',
   },
-  toast: {
-    borderRadius: 16,
-    padding: 16,
+  blurContainer: {
+    borderRadius: 24,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    overflow: 'hidden',
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   content: {
     flex: 1,
+    justifyContent: 'center',
   },
   senderName: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  nowText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   message: {
-    fontSize: 14,
-    marginBottom: 4,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '500',
+  },
+  actionContainer: {
+      marginTop: 8,
+      alignItems: 'center',
+  },
+  actionPill: {
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
   },
   action: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 });

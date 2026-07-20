@@ -7,11 +7,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Check, CheckCheck, ArrowDown, Shield, Reply, MoreVertical } from 'lucide-react-native';
+import { ArrowLeft, Check, CheckCheck, ArrowDown, Shield, Reply, MoreVertical, Forward } from 'lucide-react-native';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { MessageOverlay } from '@/components/MessageOverlay';
+import ForwardModal from '@/components/ForwardModal';
 import { safeBack } from '@/lib/navigation-utils';
 import MealMessageCard from '@/components/MealMessageCard';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
@@ -92,8 +93,20 @@ export default function CoachToCoachChat() {
   const [pressedMessageId, setPressedMessageId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
-  const showScrollBottomRef = useRef(false);
   const [newMessagesCount, setNewMessagesCount] = useState(0);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [forwardModalVisible, setForwardModalVisible] = useState(false);
+
+  const toggleMessageSelection = useCallback((messageId: string) => {
+    setSelectedMessageIds(prev => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      if (next.size === 0) setIsSelectionMode(false);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     showScrollBottomRef.current = showScrollBottom;
@@ -258,12 +271,35 @@ export default function CoachToCoachChat() {
   const handleSendText = async (text: string, replyId?: string) => {
     if (!user || !coachInfo) return;
     setSending(true);
-    const msg = { sender_id: user.id, recipient_id: coachInfo.user_id, content: text, read: false, reply_to_id: replyId, ai_generated: false };
-    const { error } = await supabase.from('messages').insert(msg);
-    if (error) Alert.alert('Error', 'Failed to send');
+    
+    // Optimistic UI for instant feedback
+    const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+
+    const msg = { 
+      id: newId, 
+      sender_id: user.id, 
+      recipient_id: coachInfo.user_id, 
+      content: text, 
+      read: false, 
+      reply_to_id: replyId, 
+      ai_generated: false,
+      created_at: new Date().toISOString()
+    };
+    
+    setMessages(prev => [msg as Message, ...prev]);
     setSending(false);
     setReplyingTo(null);
     scrollToBottom();
+
+    const { error } = await supabase.from('messages').insert(msg);
+    if (error) {
+      Alert.alert('Error', 'Failed to send message');
+      // Revert optimistic update on error
+      setMessages(prev => prev.filter(m => m.id !== newId));
+    }
   };
 
   const handleTyping = (isTyping: boolean) => {
@@ -425,8 +461,50 @@ export default function CoachToCoachChat() {
           console.error('[CoachCoachChat] Deletion failed:', error);
           Alert.alert('Error', 'Failed to delete: ' + error.message);
       }
+    } else if (action === 'forward') {
+      setIsSelectionMode(true);
+      setSelectedMessageIds(new Set([activeMessageForMenu.id]));
     }
     setActiveMessageForMenu(null);
+  };
+
+  const handleForwardSelected = async (targetUserIds: string[]) => {
+    if (!user || targetUserIds.length === 0 || selectedMessageIds.size === 0) return;
+    
+    // Sort selected messages chronologically
+    const selectedMsgs = messages
+      .filter(m => selectedMessageIds.has(m.id))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    const payloads = [];
+    for (const targetUserId of targetUserIds) {
+      for (const msg of selectedMsgs) {
+        const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+        payloads.push({
+          id: newId,
+          sender_id: user.id,
+          recipient_id: targetUserId,
+          content: msg.content,
+          read: false,
+          reply_to_id: null,
+          ai_generated: false,
+          created_at: new Date().toISOString()
+        });
+      }
+    }
+
+    const { error } = await supabase.from('messages').insert(payloads);
+    if (error) {
+      throw error;
+    }
+    
+    // Reset selection mode
+    setIsSelectionMode(false);
+    setSelectedMessageIds(new Set());
+    setForwardModalVisible(false);
   };
 
   const handleReaction = async (emoji: string) => {
@@ -493,12 +571,24 @@ export default function CoachToCoachChat() {
     return (
       <Swipeable
         ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderLeftActions={renderLeftActions}
-        onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
+        renderLeftActions={isSelectionMode ? undefined : renderLeftActions}
+        onSwipeableWillOpen={() => { if (!isSelectionMode) { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); } }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
       >
+        <TouchableOpacity 
+          activeOpacity={isSelectionMode ? 0.8 : 1}
+          onPress={() => isSelectionMode ? toggleMessageSelection(item.id) : undefined}
+          onLongPress={isSelectionMode ? undefined : undefined}
+          style={{ flexDirection: 'row', alignItems: 'center' }}
+          disabled={!isSelectionMode}
+        >
+          {isSelectionMode && (
+            <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: selectedMessageIds.has(item.id) ? '#3B82F6' : 'rgba(255,255,255,0.3)', marginRight: 12, marginLeft: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: selectedMessageIds.has(item.id) ? '#3B82F6' : 'transparent' }}>
+              {selectedMessageIds.has(item.id) && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+            </View>
+          )}
           <View
-             style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+             style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start' }}
           >
               {isMedia ? (
                 <View>
@@ -555,6 +645,7 @@ export default function CoachToCoachChat() {
                 />
               )}
           </View>
+        </TouchableOpacity>
       </Swipeable>
     );
   };
@@ -588,66 +679,104 @@ export default function CoachToCoachChat() {
         </View>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color={theme.colors.primary} /></View> : (
-             <FlatList
-                ref={flatListRef} data={messages} extraData={messages} renderItem={renderMessage} keyExtractor={item => item.id}
-                inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
-                initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
-                onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
-                onScroll={(e) => {
-                  const offsetY = e.nativeEvent.contentOffset.y;
-                  if (offsetY > 300 && !showScrollBottom) {
-                    setShowScrollBottom(true);
-                  } else if (offsetY <= 300 && showScrollBottom) {
-                    setShowScrollBottom(false);
-                    setNewMessagesCount(0);
-                  }
-                }}
-                scrollEventThrottle={16}
-                ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
-                delaysContentTouches={false} keyboardShouldPersistTaps="handled"
-             />
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        {loading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator color={theme.colors.primary} />
+          </View>
+        ) : (
+          <View style={{ flex: 1 }}>
+            <FlatList 
+              ref={flatListRef}
+              data={messages}
+              extraData={messages}
+              inverted
+              keyExtractor={item => item.id}
+              renderItem={renderMessage}
+              contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
+              initialNumToRender={15}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              removeClippedSubviews={Platform.OS !== 'web'}
+              showsVerticalScrollIndicator={false}
+              onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
+              onScroll={(e) => {
+                const offsetY = e.nativeEvent.contentOffset.y;
+                if (offsetY > 300 && !showScrollBottom) {
+                  setShowScrollBottom(true);
+                } else if (offsetY <= 300 && showScrollBottom) {
+                  setShowScrollBottom(false);
+                  setNewMessagesCount(0);
+                }
+              }}
+              scrollEventThrottle={16}
+              ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
+              keyboardShouldPersistTaps="handled"
+            />
+            <AnimatePresence>
+              {showScrollBottom && (
+                <MotiView
+                  from={{ opacity: 0, scale: 0.8, translateY: 20 }}
+                  animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, translateY: 20 }}
+                  style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 50 }}
+                >
+                  <TouchableOpacity 
+                    onPress={scrollToBottom}
+                    activeOpacity={0.8}
+                    style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#1E293B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}
+                  >
+                    <ArrowDown size={20} color="#FFFFFF" />
+                    {newMessagesCount > 0 && (
+                      <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' }}>
+                        <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{newMessagesCount}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </MotiView>
+              )}
+            </AnimatePresence>
+          </View>
         )}
-        <AnimatePresence>
-          {showScrollBottom && (
-            <MotiView
-              from={{ opacity: 0, scale: 0.8, translateY: 20 }}
-              animate={{ opacity: 1, scale: 1, translateY: 0 }}
-              exit={{ opacity: 0, scale: 0.8, translateY: 20 }}
-              transition={{ type: 'timing', duration: 200 }}
-              style={{ position: 'absolute', bottom: 100, right: 16, zIndex: 50 }}
+
+        {isSelectionMode ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(insets.bottom, 16), backgroundColor: 'rgba(2,6,23,0.88)', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' }}>
+            <TouchableOpacity onPress={() => setIsSelectionMode(false)}>
+              <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>
+              {selectedMessageIds.size} Selected
+            </Text>
+            <TouchableOpacity 
+              disabled={selectedMessageIds.size === 0}
+              style={{ opacity: selectedMessageIds.size === 0 ? 0.5 : 1 }}
+              onPress={() => setForwardModalVisible(true)}
             >
-              <TouchableOpacity 
-                onPress={scrollToBottom}
-                activeOpacity={0.8}
-                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#1E293B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}
-              >
-                <ArrowDown size={20} color="#FFFFFF" />
-                {newMessagesCount > 0 && (
-                  <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' }}>
-                    <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{newMessagesCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </MotiView>
-          )}
-        </AnimatePresence>
-        <ChatInputBar 
-          onSendText={handleSendText} 
-          onSendMedia={handleSendMedia} 
-          replyingTo={replyingTo} 
-          onCancelReply={() => setReplyingTo(null)} 
-          onTyping={handleTyping}
-          editingMessage={editingMessage}
-          onConfirmEdit={handleConfirmEdit}
-          onCancelEdit={() => setEditingMessage(null)}
-        />
+              <Forward size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ChatInputBar 
+            onSendText={handleSendText}
+            onSendMedia={handleSendMedia}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+            onTyping={handleTyping}
+            editingMessage={editingMessage}
+            onConfirmEdit={handleConfirmEdit}
+            onCancelEdit={() => setEditingMessage(null)}
+          />
+        )}
       </KeyboardAvoidingView>
 
       <MessageOverlay 
           visible={!!activeMessageForMenu} message={activeMessageForMenu} isMe={activeMessageForMenu?.sender_id === user?.id}
           onClose={() => setActiveMessageForMenu(null)} onReaction={handleReaction} onAction={handleAction}
+          isCoach={true}
           renderMessageContent={(msg: any, isMe: boolean) => (
             <MessageBubble 
               item={msg} 
@@ -661,6 +790,12 @@ export default function CoachToCoachChat() {
               repliedMsg={msg.reply_to_id ? messages.find((m: any) => m.id === msg.reply_to_id) : null}
             />
           )}
+      />
+
+      <ForwardModal 
+        visible={forwardModalVisible}
+        onClose={() => setForwardModalVisible(false)}
+        onForward={handleForwardSelected}
       />
     </View>
   );

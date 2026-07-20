@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
+import BubblePuff from '@/components/ui/BubblePuff';
 import { 
   Send, 
   ArrowLeft, 
@@ -297,12 +298,35 @@ export default function ClientMessagesScreen() {
   const handleSendText = async (text: string, replyId?: string) => {
     if (!user || !coachUserId || !text.trim()) return;
     setSending(true);
-    const msg = { sender_id: user.id, recipient_id: coachUserId, content: text, read: false, reply_to_id: replyId, ai_generated: false };
-    const { error } = await supabase.from('messages').insert(msg);
-    if (error) Alert.alert('Error', 'Failed to send');
+    
+    // Optimistic UI for instant feedback
+    const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+
+    const msg = { 
+      id: newId, 
+      sender_id: user.id, 
+      recipient_id: coachUserId, 
+      content: text, 
+      read: false, 
+      reply_to_id: replyId, 
+      ai_generated: false,
+      created_at: new Date().toISOString()
+    };
+    
+    setMessages(prev => [msg as Message, ...prev]);
     setSending(false);
     setReplyingTo(null);
     scrollToBottom();
+
+    const { error } = await supabase.from('messages').insert(msg);
+    if (error) {
+      Alert.alert('Error', 'Failed to send message');
+      // Revert optimistic update on error
+      setMessages(prev => prev.filter(m => m.id !== newId));
+    }
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
@@ -529,7 +553,7 @@ export default function ClientMessagesScreen() {
         onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
         friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
       >
-          <View style={{ width: '100%',  alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+          <BubblePuff isMe={isMe}>
               {isMedia ? (
                 <View>
                   <ChatMediaMessage 
@@ -584,7 +608,7 @@ export default function ClientMessagesScreen() {
                   }}
                 />
               )}
-          </View>
+          </BubblePuff>
       </Swipeable>
     );
   };
@@ -674,8 +698,13 @@ export default function ClientMessagesScreen() {
       </KeyboardAvoidingView>
 
       <MessageOverlay 
-          visible={!!activeMessageForMenu} message={activeMessageForMenu} isMe={activeMessageForMenu?.sender_id === user?.id}
-          onClose={() => setActiveMessageForMenu(null)} onReaction={handleReaction} onAction={handleAction}
+          visible={!!activeMessageForMenu} 
+          message={activeMessageForMenu} 
+          isMe={activeMessageForMenu?.sender_id === user?.id}
+          onClose={() => setActiveMessageForMenu(null)} 
+          onReaction={handleReaction} 
+          onAction={handleAction}
+          isCoach={false}
           renderMessageContent={(msg: any, isMe: boolean) => {
             const liveMsg = messages.find(m => m.id === msg?.id) || msg;
             if (isMediaMessage(liveMsg.content)) {

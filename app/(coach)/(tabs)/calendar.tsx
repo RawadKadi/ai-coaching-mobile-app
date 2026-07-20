@@ -293,7 +293,7 @@ export default function CalendarScreen() {
     itemVisiblePercentThreshold: 50
   }).current;
 
-  if (loading && !refreshing) return <View className="flex-1 bg-slate-950 items-center justify-center"><ActivityIndicator color={colors.primary} /></View>;
+  if (loading && !refreshing) return <View className="flex-1 bg-slate-950 items-center justify-center"><ActivityIndicator color={primary} /></View>;
 
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
@@ -405,7 +405,7 @@ export default function CalendarScreen() {
               contentContainerStyle={{ paddingBottom: 160 }}
               onScroll={handleScroll}
               scrollEventThrottle={16}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadSessions(); }} tintColor={colors.primary} />}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadSessions(); }} tintColor={primary} />}
           >
               <View className="mb-6 mt-4">
                   <Text className="text-white text-2xl font-black tracking-tight">Today's Focus</Text>
