@@ -20,7 +20,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [activeToast, setActiveToast] = useState<ToastNotification | null>(null);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const suppressedRef = useRef<boolean | string>(false);
 
   const dismissToast = () => {
@@ -99,11 +99,38 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               }
             }
 
+            let navigateTo = '/messages';
+            if (profile?.role === 'coach') {
+              // 1. Try to check if sender is a client
+              const { data: clientData } = await supabase
+                .from('clients')
+                .select('id')
+                .eq('user_id', newMessage.sender_id)
+                .maybeSingle();
+
+              if (clientData?.id) {
+                navigateTo = `/(coach)/chat/${clientData.id}`;
+              } else {
+                // 2. Try to check if sender is another coach
+                const { data: coachData } = await supabase
+                  .from('coaches')
+                  .select('id')
+                  .eq('user_id', newMessage.sender_id)
+                  .maybeSingle();
+
+                if (coachData?.id) {
+                  navigateTo = `/(coach)/chat/coach/${coachData.id}`;
+                } else {
+                  navigateTo = '/(coach)/messages';
+                }
+              }
+            }
+
             setActiveToast({
               id: newMessage.id,
               senderName,
               message: messageText,
-              navigateTo: '/messages',
+              navigateTo,
             });
           } catch (error) {
             console.error('Error fetching sender info:', error);
@@ -115,7 +142,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, profile?.role]);
 
   return (
     <NotificationContext.Provider value={{ activeToast, dismissToast, suppressToast }}>

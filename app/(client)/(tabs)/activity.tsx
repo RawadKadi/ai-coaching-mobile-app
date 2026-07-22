@@ -1331,45 +1331,48 @@ const ScaleFadeIn = ({ children, delay = 0 }: { children: ReactNode; delay?: num
   return <Reanimated.View style={style}>{children}</Reanimated.View>;
 };
 
-const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly, delay = 0 }: any) => (
-  <ScaleFadeIn delay={delay}>
-    <View style={{ marginBottom: 12 }}>
-      <TouchableOpacity
-        activeOpacity={0.7}
-        disabled={!onPress}
-        onPress={onPress}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          padding: 20,
-          backgroundColor: '#0f172a66',
-          borderRadius: 32,
-          borderWidth: 1,
-          borderColor: completed ? `${theme.colors.primary}33` : '#1e293b'
-        }}
-      >
-        <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: completed ? `${theme.colors.primary}1a` : '#020617', borderColor: completed ? `${theme.colors.primary}33` : '#1e293b' }}>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 16, fontWeight: 'bold', color: completed ? 'white' : '#cbd5e1' }}>{title}</Text>
-          <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>{sub}</Text>
-        </View>
-        {!readOnly && (
-          <TouchableOpacity
-            onPress={() => { onToggle && onToggle(); }}
-            style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, backgroundColor: completed ? '#2563eb' : '#020617', borderColor: completed ? theme.colors.primary : '#1e293b' }}
-          >
-            {completed ? <CheckCircle size={20} color="white" /> : <Circle size={20} color="#475569" />}
-          </TouchableOpacity>
-        )}
-        {readOnly && (
-          <ArrowUpRight size={18} color="#475569" />
-        )}
-      </TouchableOpacity>
-    </View>
-  </ScaleFadeIn>
-);
+const ActivityCard = ({ title, sub, completed, icon, onToggle, onPress, readOnly, delay = 0 }: any) => {
+  const theme = useTheme();
+  return (
+    <ScaleFadeIn delay={delay}>
+      <View style={{ marginBottom: 12 }}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          disabled={!onPress}
+          onPress={onPress}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: 20,
+            backgroundColor: '#0f172a66',
+            borderRadius: 32,
+            borderWidth: 1,
+            borderColor: completed ? `${theme.colors.primary}33` : '#1e293b'
+          }}
+        >
+          <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, backgroundColor: completed ? `${theme.colors.primary}1a` : '#020617', borderColor: completed ? `${theme.colors.primary}33` : '#1e293b' }}>
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: completed ? 'white' : '#cbd5e1' }}>{title}</Text>
+            <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>{sub}</Text>
+          </View>
+          {!readOnly && (
+            <TouchableOpacity
+              onPress={() => { onToggle && onToggle(); }}
+              style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, backgroundColor: completed ? '#2563eb' : '#020617', borderColor: completed ? theme.colors.primary : '#1e293b' }}
+            >
+              {completed ? <CheckCircle size={20} color="white" /> : <Circle size={20} color="#475569" />}
+            </TouchableOpacity>
+          )}
+          {readOnly && (
+            <ArrowUpRight size={18} color="#475569" />
+          )}
+        </TouchableOpacity>
+      </View>
+    </ScaleFadeIn>
+  );
+};
 
 
 const EmptyState = ({ message }: { message: string }) => (

@@ -167,21 +167,25 @@ export default function MealDetailsScreen() {
               value={formatCompactNumber(meal.calories)} 
               unit="kcal" 
               icon={<Flame size={16} color={colors.primary} fill={colors.primary} />}
+              styles={styles}
             />
             <MacroTile 
               label="Protein" 
               value={formatCompactNumber(meal.protein_g)} 
               unit="g" 
+              styles={styles}
             />
             <MacroTile 
               label="Carbs" 
               value={formatCompactNumber(meal.carbs_g)} 
               unit="g" 
+              styles={styles}
             />
             <MacroTile 
               label="Fat" 
               value={formatCompactNumber(meal.fat_g)} 
               unit="g" 
+              styles={styles}
             />
           </View>
 
@@ -229,7 +233,7 @@ export default function MealDetailsScreen() {
   );
 }
 
-function MacroTile({ label, value, unit, icon }: { label: string; value: string; unit: string; icon?: React.ReactNode }) {
+function MacroTile({ label, value, unit, icon, styles }: { label: string; value: string; unit: string; icon?: React.ReactNode; styles: any }) {
   return (
     <View style={styles.macroTile}>
       <Text style={styles.macroTileLabel}>{label}</Text>

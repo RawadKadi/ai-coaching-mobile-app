@@ -14,6 +14,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/BrandContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check, Mic } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import DocumentPreviewModal from './DocumentPreviewModal';
@@ -54,6 +55,7 @@ export function ChatInputBar({
 }: Props) {
   const theme = useTheme();
   const styles = getStyles(theme.colors);
+  const insets = useSafeAreaInsets();
   // LOGGING: Track props
   React.useEffect(() => {
     if (editingMessage) {
@@ -564,6 +566,9 @@ export function ChatInputBar({
                   if (content.type === 'video') return '🎥 Video';
                   if (content.type === 'gif') return '🎞 GIF';
                   if (content.type === 'document') return '📄 ' + (content.fileName || 'Document');
+                  if (content.type === 'session_invite' || content.type === 'call_invite') {
+                    return `📹 Session: ${content.description || 'Live Session'}`;
+                  }
                   if (content.type === 'audio') {
                     const duration = content.duration || 0;
                     const mins = Math.floor(duration / 60);
@@ -646,7 +651,14 @@ export function ChatInputBar({
       )}
 
       {/* ── Input row ──────────────────────────────────────────────────────── */}
-      <View style={[styles.inputRow, { backgroundColor: 'transparent', position: 'relative' }]}>
+      <View style={[
+        styles.inputRow,
+        {
+          backgroundColor: 'transparent',
+          position: 'relative',
+          paddingBottom: !isKeyboardVisible ? Math.max(insets.bottom, 12) : 10
+        }
+      ]}>
         {/* Glowing blurry background effect */}
         <LinearGradient
           colors={['transparent', theme.colors.secondary + '1A', theme.colors.secondary + '33']}

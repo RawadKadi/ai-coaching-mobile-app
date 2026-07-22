@@ -13,8 +13,9 @@ import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/contexts/BrandContext';
-import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, ChevronDown, Pause, X, Trophy, Zap, Target, Loader2, Clock, Video as LucideVideo } from 'lucide-react-native';
+import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, ChevronDown, Pause, X, Trophy, Zap, Target, Loader2, Clock, Video as LucideVideo, Forward } from 'lucide-react-native';
 import { MotiView } from 'moti';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
@@ -295,9 +296,10 @@ function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'imag
 
 // ── Custom Video Player (Inline) ─────────────────────────────────────────────
 function CustomVideoPlayer({ 
-  uri: remoteUri, thumbnailUrl, isUploading, progress, onCancel 
+  uri: remoteUri, thumbnailUrl, isUploading, progress, onCancel, onLongPress, onPressIn, onPressOut
 }: { 
-  uri: string, thumbnailUrl?: string, isUploading?: boolean, progress?: number, onCancel?: () => void 
+  uri: string, thumbnailUrl?: string, isUploading?: boolean, progress?: number, onCancel?: () => void,
+  onLongPress?: () => void, onPressIn?: () => void, onPressOut?: () => void
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   // Freeze the URI at the moment the user taps — prevents black screen caused by
@@ -424,6 +426,10 @@ function CustomVideoPlayer({
         <TouchableOpacity 
           activeOpacity={0.9} 
           onPress={openFullscreen} 
+          onLongPress={onLongPress}
+          delayLongPress={200}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
           style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: (isReceiving || isUploading) ? 'rgba(0,0,0,0.4)' : 'transparent' }]}
         >
           {isReceiving && !isUploading && (
@@ -480,10 +486,11 @@ function CustomVideoPlayer({
 
 // ── Custom Image Player (Inline) ─────────────────────────────────────────────
 function CustomImagePlayer({
-  uri, previewUrl, type, isOwn, isUploading, progress, onCancel, onLongPress
+  uri, previewUrl, type, isOwn, isUploading, progress, onCancel, onLongPress, onPressIn, onPressOut
 }: {
   uri: string, previewUrl?: string, type: 'image' | 'gif', isOwn: boolean,
-  isUploading?: boolean, progress?: number, onCancel?: () => void, onLongPress?: () => void
+  isUploading?: boolean, progress?: number, onCancel?: () => void, onLongPress?: () => void,
+  onPressIn?: () => void, onPressOut?: () => void
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { localUri } = useMediaCache(uri, type);
@@ -495,7 +502,9 @@ function CustomImagePlayer({
         activeOpacity={0.9} 
         onPress={() => !isUploading && setIsExpanded(true)} 
         onLongPress={onLongPress}
-        delayLongPress={400}
+        delayLongPress={200}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
         style={StyleSheet.absoluteFill}
       >
         <Image
@@ -1088,6 +1097,12 @@ const ChatMediaMessage: React.FC<Props> = ({
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme.colors);
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
   const highlightAnim = useRef(new Animated.Value(0)).current;
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
   const [isChallengeExpanded, setIsChallengeExpanded] = useState(false);
@@ -1200,6 +1215,12 @@ const ChatMediaMessage: React.FC<Props> = ({
             progress={progress} 
             onCancel={onCancel} 
             onLongPress={onLongPress} 
+            onPressIn={() => {
+              scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+            }}
+            onPressOut={() => {
+              scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+            }}
           />
           
           {!hasCaption && createdAt && (
@@ -1331,6 +1352,13 @@ const ChatMediaMessage: React.FC<Props> = ({
             isUploading={isUploading} 
             progress={progress} 
             onCancel={onCancel} 
+            onLongPress={onLongPress}
+            onPressIn={() => {
+              scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+            }}
+            onPressOut={() => {
+              scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+            }}
           />
           
           {!hasCaption && createdAt && (
@@ -1421,8 +1449,14 @@ const ChatMediaMessage: React.FC<Props> = ({
         ) : (
           <TouchableOpacity 
             activeOpacity={0.9} 
-            delayLongPress={400} 
+            delayLongPress={200} 
             onLongPress={onLongPress} 
+            onPressIn={() => {
+              scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+            }}
+            onPressOut={() => {
+              scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+            }}
             onPress={() => {
               if (!isUploading && media?.url) {
                 setDocumentModalUrl(media.url);
@@ -1513,8 +1547,14 @@ const ChatMediaMessage: React.FC<Props> = ({
       <>
         <TouchableOpacity 
           activeOpacity={0.9} 
-          delayLongPress={400} 
+          delayLongPress={200} 
           onLongPress={onLongPress} 
+          onPressIn={() => {
+            scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+          }}
+          onPressOut={() => {
+            scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+          }}
           style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}
         >
           <TaskCompletedCard media={media} onPressImage={() => media.imageUrl && setIsTaskExpanded(true)} />
@@ -1555,8 +1595,14 @@ const ChatMediaMessage: React.FC<Props> = ({
       <>
         <TouchableOpacity 
           activeOpacity={0.9} 
-          delayLongPress={400} 
+          delayLongPress={200} 
           onLongPress={onLongPress} 
+          onPressIn={() => {
+            scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+          }}
+          onPressOut={() => {
+            scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+          }}
           style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}
         >
           <ChallengeCompletedCard 
@@ -1716,20 +1762,28 @@ const ChatMediaMessage: React.FC<Props> = ({
   }
 
   return (
-    <Pressable
-      delayLongPress={100}
-      unstable_pressDelay={0}
-      onPressIn={() => setIsLocalPressed(true)}
-      onPressOut={() => setIsLocalPressed(false)}
-      onLongPress={onLongPress}
-    >
-      <MotiView 
-        animate={{ scale: isLocalPressed ? 0.9 : 1 }}
-        transition={{ type: 'timing', duration: 100 }}
+    <View style={{ position: 'relative' }}>
+      {media?.is_forwarded && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: isOwn ? 0 : 4, alignSelf: isOwn ? 'flex-end' : 'flex-start', opacity: 0.6 }}>
+          <Forward size={12} color="#94A3B8" style={{ marginRight: 4 }} />
+          <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Forwarded</Text>
+        </View>
+      )}
+      <Pressable
+        delayLongPress={200}
+        onPressIn={() => {
+          scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+        }}
+        onLongPress={onLongPress}
       >
-        {messageBody}
-      </MotiView>
-    </Pressable>
+        <Reanimated.View style={animatedStyle}>
+          {messageBody}
+        </Reanimated.View>
+      </Pressable>
+    </View>
   );
 }
 

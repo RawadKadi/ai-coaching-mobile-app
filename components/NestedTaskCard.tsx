@@ -137,7 +137,7 @@ export function NestedTaskCard({ task, isCompleted, isFailed, isPast, index = 0,
             className={cardClasses}
         >
             <View className="flex-row justify-between items-start mb-6">
-                <View className="flex-row items-center gap-3">
+                <View className="flex-row items-center gap-3 flex-1">
                     <View className="w-10 h-10 bg-slate-950 rounded-xl items-center justify-center border border-slate-800">
                         {getFocusIcon(task.focus_type, isFullyCompleted)}
                     </View>

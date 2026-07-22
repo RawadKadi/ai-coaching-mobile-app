@@ -30,7 +30,7 @@ interface Teammate {
 interface ForwardModalProps {
   visible: boolean;
   onClose: () => void;
-  onForward: (targetUserIds: string[]) => Promise<void>;
+  onForward: (selectedTeammates: Teammate[]) => Promise<void>;
 }
 
 export default function ForwardModal({ visible, onClose, onForward }: ForwardModalProps) {
@@ -93,7 +93,8 @@ export default function ForwardModal({ visible, onClose, onForward }: ForwardMod
     if (selectedIds.size === 0) return;
     setIsSending(true);
     try {
-      await onForward(Array.from(selectedIds));
+      const selectedTeammates = teammates.filter(t => selectedIds.has(t.user_id));
+      await onForward(selectedTeammates);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
     } catch (err: any) {

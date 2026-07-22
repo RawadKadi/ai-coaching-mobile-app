@@ -1365,9 +1365,9 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                         <AnimatePresence>
                             {showMenu && (
                                 <MotiView
-                                    from={{ opacity: 0, translateY: 8, scale: 0.92 }}
+                                    from={{ opacity: 0, translateY: 8, scale: 0.98 }}
                                     animate={{ opacity: 1, translateY: 0, scale: 1 }}
-                                    exit={{ opacity: 0, translateY: 8, scale: 0.92 }}
+                                    exit={{ opacity: 0, translateY: 8, scale: 0.98 }}
                                     transition={{ type: 'timing', duration: 180 }}
                                     style={{
                                         position: 'absolute',

@@ -24,7 +24,9 @@ import { MotiView, AnimatePresence } from 'moti';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { usePresence } from '@/contexts/PresenceContext';
 import { Swipeable } from 'react-native-gesture-handler';
-import GrainientBackground from '@/components/ui/GrainientBackground';
+import { Component as GradientBackground } from '@/components/ui/gradient-backgrounds';
+import BubblePuff from '@/components/ui/BubblePuff';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -54,7 +56,7 @@ function isMediaMessage(content: string): boolean {
   const hasType = s.includes('"type"');
   const hasUrl = s.includes('"url"');
   const hasTask = s.includes('"taskName"');
-  const isMeal = s.includes('"type":"meal"');
+  const isMeal = s.includes('"type":"meal"') || s.includes('"type":"meal_log"');
   
   return s.startsWith('{') && (hasType && (hasUrl || hasTask || isMeal));
 }
@@ -79,6 +81,11 @@ export default function CoachToCoachChat() {
   const { refreshUnreadCount } = useUnread();
   const { isUserOnline } = usePresence();
 
+  const showScrollBottomRef = useRef(false);
+  const flatListRef = useRef<FlatList>(null);
+  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+  const typingChannelRef = useRef<any>(null);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -87,6 +94,7 @@ export default function CoachToCoachChat() {
   const [unreadCountAtOpen, setUnreadCountAtOpen] = useState(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [firstUnreadMessageId, setFirstUnreadMessageId] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
@@ -116,10 +124,6 @@ export default function CoachToCoachChat() {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     setNewMessagesCount(0);
   };
-
-  const flatListRef = useRef<FlatList>(null);
-  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
-  const typingChannelRef = useRef<any>(null);
 
   useEffect(() => {
     if (user && coachId) {
@@ -244,8 +248,17 @@ export default function CoachToCoachChat() {
         .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${info.user_id}),and(sender_id.eq.${info.user_id},recipient_id.eq.${user?.id})`)
         .order('created_at', { ascending: false }).limit(100);
       if (error) throw error;
-      setMessages(data || []);
-      return data || [];
+      const fetchedMessages = data || [];
+      setMessages(fetchedMessages);
+
+      const unreadMsgs = fetchedMessages.filter(m => !m.read && m.recipient_id === user?.id);
+      if (unreadMsgs.length > 0) {
+        const oldestUnread = unreadMsgs[unreadMsgs.length - 1];
+        setFirstUnreadMessageId(oldestUnread.id);
+      } else {
+        setFirstUnreadMessageId(null);
+      }
+      return fetchedMessages;
     } catch (error) {
       console.error('[CoachChat] Error:', error);
       return [];
@@ -468,8 +481,8 @@ export default function CoachToCoachChat() {
     setActiveMessageForMenu(null);
   };
 
-  const handleForwardSelected = async (targetUserIds: string[]) => {
-    if (!user || targetUserIds.length === 0 || selectedMessageIds.size === 0) return;
+  const handleForwardSelected = async (selectedTeammates: any[]) => {
+    if (!user || selectedTeammates.length === 0 || selectedMessageIds.size === 0) return;
     
     // Sort selected messages chronologically
     const selectedMsgs = messages
@@ -477,17 +490,41 @@ export default function CoachToCoachChat() {
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     const payloads = [];
-    for (const targetUserId of targetUserIds) {
+    for (const tm of selectedTeammates) {
       for (const msg of selectedMsgs) {
         const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
           const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
           return v.toString(16);
         });
+
+        let forwardedContent = msg.content;
+        try {
+          const trimmed = msg.content.trim();
+          if (trimmed.startsWith('{')) {
+            let p = JSON.parse(trimmed);
+            if (typeof p === 'string' && p.startsWith('{')) {
+              p = JSON.parse(p);
+            }
+            p.is_forwarded = true;
+            forwardedContent = JSON.stringify(p);
+          } else {
+            forwardedContent = JSON.stringify({
+              text: msg.content,
+              is_forwarded: true
+            });
+          }
+        } catch {
+          forwardedContent = JSON.stringify({
+            text: msg.content,
+            is_forwarded: true
+          });
+        }
+
         payloads.push({
           id: newId,
           sender_id: user.id,
-          recipient_id: targetUserId,
-          content: msg.content,
+          recipient_id: tm.user_id,
+          content: forwardedContent,
           read: false,
           reply_to_id: null,
           ai_generated: false,
@@ -505,6 +542,20 @@ export default function CoachToCoachChat() {
     setIsSelectionMode(false);
     setSelectedMessageIds(new Set());
     setForwardModalVisible(false);
+
+    // If forwarded to exactly one coach, navigate to their chat
+    if (selectedTeammates.length === 1) {
+      const tm = selectedTeammates[0];
+      router.push({
+        pathname: '/(coach)/chat/coach/[coachId]',
+        params: {
+          coachId: tm.coach_id,
+          userId: tm.user_id,
+          fullName: tm.full_name,
+          avatarUrl: tm.avatar_url ?? ''
+        }
+      });
+    }
   };
 
   const handleReaction = async (emoji: string) => {
@@ -514,9 +565,19 @@ export default function CoachToCoachChat() {
     let currentContent: any = {};
     try { currentContent = JSON.parse(currentMsg.content); } catch { currentContent = { text: currentMsg.content, type: 'text' }; }
     const reactions = currentContent.reactions || [];
-    const idx = reactions.findIndex((r: any) => r.user_id === user.id && r.emoji === emoji);
+    const existingUserReactionIndex = reactions.findIndex((r: any) => r.user_id === user.id);
     let nr = [...reactions];
-    if (idx > -1) nr.splice(idx, 1); else nr.push({ emoji, user_id: user.id });
+    
+    if (existingUserReactionIndex > -1) {
+      const oldEmoji = reactions[existingUserReactionIndex].emoji;
+      nr.splice(existingUserReactionIndex, 1);
+      if (oldEmoji !== emoji) {
+        nr.push({ emoji, user_id: user.id });
+      }
+    } else {
+      nr.push({ emoji, user_id: user.id });
+    }
+    
     const updated = JSON.stringify({ ...currentContent, reactions: nr });
     
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: updated } : m));
@@ -569,12 +630,32 @@ export default function CoachToCoachChat() {
     const isMedia = isMediaMessage(item.content);
 
     return (
-      <Swipeable
-        ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderLeftActions={isSelectionMode ? undefined : renderLeftActions}
-        onSwipeableWillOpen={() => { if (!isSelectionMode) { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); } }}
-        friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
-      >
+      <View>
+        {item.id === firstUnreadMessageId && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 16, paddingHorizontal: 16 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(239, 68, 68, 0.3)' }} />
+            <View style={{ 
+              backgroundColor: 'rgba(239, 68, 68, 0.15)', 
+              borderWidth: 1, 
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              borderRadius: 12, 
+              paddingHorizontal: 12, 
+              paddingVertical: 4, 
+              marginHorizontal: 10 
+            }}>
+              <Text style={{ color: '#F87171', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 }}>
+                New messages
+              </Text>
+            </View>
+            <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(239, 68, 68, 0.3)' }} />
+          </View>
+        )}
+        <Swipeable
+          ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
+          renderLeftActions={isSelectionMode ? undefined : renderLeftActions}
+          onSwipeableWillOpen={() => { if (!isSelectionMode) { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); } }}
+          friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
+        >
         <TouchableOpacity 
           activeOpacity={isSelectionMode ? 0.8 : 1}
           onPress={() => isSelectionMode ? toggleMessageSelection(item.id) : undefined}
@@ -587,9 +668,8 @@ export default function CoachToCoachChat() {
               {selectedMessageIds.has(item.id) && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
             </View>
           )}
-          <View
-             style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start' }}
-          >
+          <View style={{ flex: 1 }}>
+            <BubblePuff isMe={isMe}>
               {isMedia ? (
                 <View>
                   <ChatMediaMessage 
@@ -644,9 +724,11 @@ export default function CoachToCoachChat() {
                   }}
                 />
               )}
+            </BubblePuff>
           </View>
         </TouchableOpacity>
       </Swipeable>
+      </View>
     );
   };
 
@@ -654,7 +736,7 @@ export default function CoachToCoachChat() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
-      <GrainientBackground width={screenWidth} height={screenHeight} />
+      <GradientBackground />
       <StatusBar barStyle="light-content" translucent />
       <View style={{ paddingTop: insets.top, backgroundColor: 'transparent' }} className="border-b border-white/5">
         <View className="flex-row items-center justify-between px-6 py-4">
@@ -801,17 +883,51 @@ export default function CoachToCoachChat() {
   );
 }
 
+const MediaBubbleWrapper = ({ children, isMe, onLongPress }: any) => {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  return (
+    <Pressable
+      delayLongPress={200}
+      onPressIn={() => {
+        scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+      }}
+      onLongPress={onLongPress}
+      style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+    >
+      <Reanimated.View style={[animatedStyle, { maxWidth: '100%' }]}>
+        {children}
+      </Reanimated.View>
+    </Pressable>
+  );
+};
+
 const MessageBubble = ({ 
   item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, 
   otherCoachName, otherCoachAvatarUrl, myName, myAvatarUrl, onLongPress 
 }: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [isPressed, setIsPressed] = React.useState(false);
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
   let displayContent = item.content;
   let reactions: any[] = [];
   let isDeleted = false;
   let deletedBy = '';
   let isEdited = false;
+  let isForwarded = false;
 
   try {
     const trimmed = item.content.trim();
@@ -822,6 +938,8 @@ const MessageBubble = ({
     if (typeof p === 'string' && p.startsWith('{')) {
       p = JSON.parse(p);
     }
+    
+    isForwarded = !!p.is_forwarded;
     
     // Aggressive type extraction for malformed/nested JSON
     const type = p.type || 
@@ -842,6 +960,7 @@ const MessageBubble = ({
           isRead={item.read} 
           senderAvatarUrl={isMe ? myAvatarUrl : otherCoachAvatarUrl}
           senderName={isMe ? myName : otherCoachName}
+          onLongPress={onLongPress}
         />
       );
     }
@@ -861,6 +980,7 @@ const MessageBubble = ({
           isRead={item.read} 
           senderAvatarUrl={isMe ? myAvatarUrl : otherCoachAvatarUrl}
           senderName={isMe ? myName : otherCoachName}
+          onLongPress={onLongPress}
         />
       );
     }
@@ -883,74 +1003,83 @@ const MessageBubble = ({
 
   return (
     <View style={{ position: 'relative' }}>
+      {isForwarded && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start', opacity: 0.6 }}>
+          <Forward size={12} color="#94A3B8" style={{ marginRight: 4 }} />
+          <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Forwarded</Text>
+        </View>
+      )}
       <Pressable
-          delayLongPress={100}
-          unstable_pressDelay={0}
-          onPressIn={() => setIsPressed(true)}
-          onPressOut={() => setIsPressed(false)}
+          delayLongPress={200}
+          onPressIn={() => {
+            scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+          }}
+          onPressOut={() => {
+            scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+          }}
           onLongPress={onLongPress}
       >
-        <MotiView 
-            from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
-            animate={{ 
-                scale: isPressed ? 0.9 : (isHighlighted ? 1.05 : 1),
-                backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
-            }}
-            transition={{ type: 'timing', duration: 100 }}
-            className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-            style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
-        >
-        {repliedMsg && (
-           <TouchableOpacity 
-              activeOpacity={0.8}
-              onPress={onReplyPress}
-              className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
-           >
-              <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : (otherCoachName || 'Coach')}</Text>
-              <Text className="text-white/80 text-xs" numberOfLines={1}>
-                {(() => {
-                  try { 
-                    const p = JSON.parse(repliedMsg.content); 
-                    if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
-                    if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
-                    if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
-                    if (p.type === 'image') return '🖼 Photo';
-                    if (p.type === 'video') return '🎥 Video';
-                    if (p.type === 'gif') return '🎞 GIF';
-                    if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
-                    if (p.type === 'audio') {
-                      let dStr = '';
-                      if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
-                        const d = Math.floor(Number(p.duration));
-                        dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+        <Reanimated.View style={animatedStyle}>
+          <MotiView 
+              animate={{ 
+                  backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
+              }}
+              transition={{ type: 'timing', duration: 100 }}
+              className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
+              style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
+          >
+          {repliedMsg && (
+             <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={onReplyPress}
+                className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
+             >
+                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : (otherCoachName || 'Coach')}</Text>
+                <Text className="text-white/80 text-xs" numberOfLines={1}>
+                  {(() => {
+                    try { 
+                      const p = JSON.parse(repliedMsg.content); 
+                      if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
+                      if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
+                      if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
+                      if (p.type === 'image') return '🖼 Photo';
+                      if (p.type === 'video') return '🎥 Video';
+                      if (p.type === 'gif') return '🎞 GIF';
+                      if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                      if (p.type === 'audio') {
+                        let dStr = '';
+                        if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
+                          const d = Math.floor(Number(p.duration));
+                          dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+                        }
+                        return `🎤 Voice Message${dStr}`;
                       }
-                      return `🎤 Voice Message${dStr}`;
-                    }
-                    if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
-                    return p.text || repliedMsg.content; 
-                  } catch { return repliedMsg.content; }
-                })()}
+                      if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
+                      return p.text || repliedMsg.content; 
+                    } catch { return repliedMsg.content; }
+                  })()}
+                </Text>
+             </TouchableOpacity>
+          )}
+          <Text className="text-[15px] font-medium leading-[22px] text-white">
+            {truncatedContent}
+          </Text>
+          {shouldTruncate && (
+            <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
+              <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
+                {isExpanded ? 'Show Less' : 'Read More'}
               </Text>
-           </TouchableOpacity>
-        )}
-        <Text className="text-[15px] font-medium leading-[22px] text-white">
-          {truncatedContent}
-        </Text>
-        {shouldTruncate && (
-          <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
-            <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
-              {isExpanded ? 'Show Less' : 'Read More'}
-            </Text>
-          </TouchableOpacity>
-        )}
-        <View className="flex-row items-center justify-end gap-1.5 mt-2">
-           {isEdited && (
-             <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>
-           )}
-           <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-           {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
-        </View>
-      </MotiView>
+            </TouchableOpacity>
+          )}
+          <View className="flex-row items-center justify-end gap-1.5 mt-2">
+             {isEdited && (
+               <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>
+             )}
+             <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+             {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
+          </View>
+        </MotiView>
+      </Reanimated.View>
       </Pressable>
       {reactions.length > 0 && (
         <View className="flex-row flex-wrap mt-[-8px] ml-2">

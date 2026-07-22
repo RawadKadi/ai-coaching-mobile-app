@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Target, CheckCircle, Circle, Lock, ChevronRight, Zap, Info, MessageSquare, ArrowLeft, Dumbbell, Apple, Moon } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { TodaysSubChallenge } from '@/types/challenges-v3';
 import { NestedTaskCard } from '@/components/NestedTaskCard';
 
@@ -12,6 +13,7 @@ export default function ClientChallengesScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -161,8 +163,7 @@ export default function ClientChallengesScreen() {
   const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
-      <SafeAreaView style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#020617', paddingTop: insets.top }}>
         <ScrollView 
           style={{ flex: 1 }}
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
@@ -170,7 +171,7 @@ export default function ClientChallengesScreen() {
           showsVerticalScrollIndicator={false}
         >
             {/* Header Content */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 40, paddingBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 }}>
                 <TouchableOpacity 
                     onPress={() => router.back()} 
                     style={{ padding: 12, backgroundColor: '#0f172a', borderRadius: 16, borderWidth: 1, borderColor: '#1e293b', marginRight: 16 }}
@@ -267,7 +268,6 @@ export default function ClientChallengesScreen() {
                 </View>
             ) : null}
         </ScrollView>
-      </SafeAreaView>
     </View>
   );
 }

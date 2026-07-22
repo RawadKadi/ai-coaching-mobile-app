@@ -39,6 +39,7 @@ import {
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { safeBack } from '@/lib/navigation-utils';
 import BubblePuff from '@/components/ui/BubblePuff';
+import { Component as GradientBackground } from '@/components/ui/gradient-backgrounds';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
 import SchedulerModal from '@/components/SchedulerModal';
@@ -52,6 +53,8 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { usePresence } from '@/contexts/PresenceContext';
+
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { MotiView, AnimatePresence } from 'moti';
@@ -83,7 +86,7 @@ function isMediaMessage(content: string): boolean {
   const hasType = s.includes('"type"');
   const hasUrl = s.includes('"url"');
   const hasTask = s.includes('"taskName"');
-  const isMeal = s.includes('"type":"meal"');
+  const isMeal = s.includes('"type":"meal"') || s.includes('"type":"meal_log"');
   
   return s.startsWith('{') && (hasType && (hasUrl || hasTask || isMeal));
 }
@@ -123,6 +126,7 @@ export default function CoachChatScreen() {
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const showScrollBottomRef = useRef(false);
   const [newMessagesCount, setNewMessagesCount] = useState(0);
+  const [firstUnreadMessageId, setFirstUnreadMessageId] = useState<string | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
   const [forwardModalVisible, setForwardModalVisible] = useState(false);
@@ -378,7 +382,16 @@ export default function CoachChatScreen() {
         .limit(100);
       
       if (mError) throw mError;
-      setMessages(mData || []);
+      const fetchedMessages = mData || [];
+      setMessages(fetchedMessages);
+
+      const unreadMsgs = fetchedMessages.filter(m => !m.read && m.recipient_id === user?.id);
+      if (unreadMsgs.length > 0) {
+        const oldestUnread = unreadMsgs[unreadMsgs.length - 1];
+        setFirstUnreadMessageId(oldestUnread.id);
+      } else {
+        setFirstUnreadMessageId(null);
+      }
     } catch (e) { 
         console.error('[CoachChat] Error:', e); 
     } finally { 
@@ -728,8 +741,8 @@ export default function CoachChatScreen() {
     setActiveMessageForMenu(null);
   };
 
-  const handleForwardSelected = async (targetUserIds: string[]) => {
-    if (!user || targetUserIds.length === 0 || selectedMessageIds.size === 0) return;
+  const handleForwardSelected = async (selectedTeammates: any[]) => {
+    if (!user || selectedTeammates.length === 0 || selectedMessageIds.size === 0) return;
     
     // Sort selected messages chronologically
     const selectedMsgs = messages
@@ -737,17 +750,41 @@ export default function CoachChatScreen() {
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     const payloads = [];
-    for (const targetUserId of targetUserIds) {
+    for (const tm of selectedTeammates) {
       for (const msg of selectedMsgs) {
         const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
           const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
           return v.toString(16);
         });
+
+        let forwardedContent = msg.content;
+        try {
+          const trimmed = msg.content.trim();
+          if (trimmed.startsWith('{')) {
+            let p = JSON.parse(trimmed);
+            if (typeof p === 'string' && p.startsWith('{')) {
+              p = JSON.parse(p);
+            }
+            p.is_forwarded = true;
+            forwardedContent = JSON.stringify(p);
+          } else {
+            forwardedContent = JSON.stringify({
+              text: msg.content,
+              is_forwarded: true
+            });
+          }
+        } catch {
+          forwardedContent = JSON.stringify({
+            text: msg.content,
+            is_forwarded: true
+          });
+        }
+
         payloads.push({
           id: newId,
           sender_id: user.id,
-          recipient_id: targetUserId,
-          content: msg.content,
+          recipient_id: tm.user_id,
+          content: forwardedContent,
           read: false,
           reply_to_id: null,
           ai_generated: false,
@@ -765,6 +802,20 @@ export default function CoachChatScreen() {
     setIsSelectionMode(false);
     setSelectedMessageIds(new Set());
     setForwardModalVisible(false);
+
+    // If forwarded to exactly one coach, navigate to their chat
+    if (selectedTeammates.length === 1) {
+      const tm = selectedTeammates[0];
+      router.push({
+        pathname: '/(coach)/chat/coach/[coachId]',
+        params: {
+          coachId: tm.coach_id,
+          userId: tm.user_id,
+          fullName: tm.full_name,
+          avatarUrl: tm.avatar_url ?? ''
+        }
+      });
+    }
   };
 
   const handleReaction = async (emoji: string) => {
@@ -782,10 +833,15 @@ export default function CoachChatScreen() {
     }
 
     const reactions = currentContent.reactions || [];
-    const existingIndex = reactions.findIndex((r: any) => r.user_id === user.id && r.emoji === emoji);
+    const existingUserReactionIndex = reactions.findIndex((r: any) => r.user_id === user.id);
     let newReactions = [...reactions];
-    if (existingIndex > -1) {
-      newReactions.splice(existingIndex, 1);
+    
+    if (existingUserReactionIndex > -1) {
+      const oldEmoji = reactions[existingUserReactionIndex].emoji;
+      newReactions.splice(existingUserReactionIndex, 1);
+      if (oldEmoji !== emoji) {
+        newReactions.push({ emoji, user_id: user.id });
+      }
     } else {
       newReactions.push({ emoji, user_id: user.id });
     }
@@ -882,12 +938,32 @@ export default function CoachChatScreen() {
     };
 
     return (
-      <Swipeable
-        ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderLeftActions={isSelectionMode ? undefined : renderLeftActions}
-        onSwipeableWillOpen={() => { if (!isSelectionMode) { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); } }}
-        friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
-      >
+      <View>
+        {item.id === firstUnreadMessageId && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 16, paddingHorizontal: 16 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(239, 68, 68, 0.3)' }} />
+            <View style={{ 
+              backgroundColor: 'rgba(239, 68, 68, 0.15)', 
+              borderWidth: 1, 
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              borderRadius: 12, 
+              paddingHorizontal: 12, 
+              paddingVertical: 4, 
+              marginHorizontal: 10 
+            }}>
+              <Text style={{ color: '#F87171', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 }}>
+                New messages
+              </Text>
+            </View>
+            <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(239, 68, 68, 0.3)' }} />
+          </View>
+        )}
+        <Swipeable
+          ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
+          renderLeftActions={isSelectionMode ? undefined : renderLeftActions}
+          onSwipeableWillOpen={() => { if (!isSelectionMode) { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); } }}
+          friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
+        >
         <TouchableOpacity 
           activeOpacity={isSelectionMode ? 0.8 : 1}
           onPress={() => isSelectionMode ? toggleMessageSelection(item.id) : undefined}
@@ -920,26 +996,26 @@ export default function CoachChatScreen() {
                     senderAvatarUrl={isMe ? profile?.avatar_url : clientProfile?.profiles?.avatar_url}
                     senderName={isMe ? profile?.full_name : clientProfile?.profiles?.full_name}
                   />
-                {/* Reactions on media messages */}
-                {(() => {
-                  try {
-                    const p = JSON.parse(item.content);
-                    const reactions = p.reactions || [];
-                    if (reactions.length === 0) return null;
-                    return (
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
-                        {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
-                          .map(([emoji, count]: any) => (
-                            <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
-                              <Text style={{ fontSize: 12 }}>{emoji}</Text>
-                              {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
-                            </View>
-                          ))}
-                      </View>
-                    );
-                  } catch { return null; }
-                })()}
-              </View>
+                  {/* Reactions on media messages */}
+                  {(() => {
+                    try {
+                      const p = JSON.parse(item.content);
+                      const reactions = p.reactions || [];
+                      if (reactions.length === 0) return null;
+                      return (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
+                          {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
+                            .map(([emoji, count]: any) => (
+                              <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                                {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
+                              </View>
+                            ))}
+                        </View>
+                      );
+                    } catch { return null; }
+                  })()}
+                </View>
             ) : (
               <MessageBubble 
                 item={item} 
@@ -957,14 +1033,17 @@ export default function CoachChatScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
                     setActiveMessageForMenu(item); 
                 }}
+                onCancelSession={handleCancelSession}
+                onRescheduleSession={handleRescheduleSession}
               />
             )}
           </BubblePuff>
         </View>
       </TouchableOpacity>
     </Swipeable>
-  );
-};
+      </View>
+    );
+  };
 
   // For MessageOverlay: render the correct component based on message type
   const renderOverlayContent = (msg: any, isMe: boolean) => {
@@ -1003,6 +1082,7 @@ export default function CoachChatScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
+      <GradientBackground />
 
       <StatusBar barStyle="light-content" />
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]} className="border-b border-white/5 bg-[#020617]/60">
@@ -1094,36 +1174,34 @@ export default function CoachChatScreen() {
             </MotiView>
           )}
         </AnimatePresence>
-        <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', backgroundColor: 'rgba(2,6,23,0.88)', paddingBottom: Math.max(insets.bottom, 8) }}>
-          {isSelectionMode ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}>
-              <TouchableOpacity onPress={() => setIsSelectionMode(false)}>
-                <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>Cancel</Text>
-              </TouchableOpacity>
-              <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>
-                {selectedMessageIds.size} Selected
-              </Text>
-              <TouchableOpacity 
-                disabled={selectedMessageIds.size === 0}
-                style={{ opacity: selectedMessageIds.size === 0 ? 0.5 : 1 }}
-                onPress={() => setForwardModalVisible(true)}
-              >
-                <Forward size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <ChatInputBar 
-              onSendText={handleSendText} 
-              onSendMedia={handleSendMedia} 
-              replyingTo={replyingTo} 
-              onCancelReply={() => setReplyingTo(null)} 
-              onTyping={handleTyping}
-              editingMessage={editingMessage}
-              onConfirmEdit={handleConfirmEdit}
-              onCancelEdit={() => setEditingMessage(null)}
-            />
-          )}
-        </View>
+        {isSelectionMode ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(insets.bottom, 16), backgroundColor: 'rgba(2,6,23,0.88)', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' }}>
+            <TouchableOpacity onPress={() => setIsSelectionMode(false)}>
+              <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>
+              {selectedMessageIds.size} Selected
+            </Text>
+            <TouchableOpacity 
+              disabled={selectedMessageIds.size === 0}
+              style={{ opacity: selectedMessageIds.size === 0 ? 0.5 : 1 }}
+              onPress={() => setForwardModalVisible(true)}
+            >
+              <Forward size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ChatInputBar 
+            onSendText={handleSendText} 
+            onSendMedia={handleSendMedia} 
+            replyingTo={replyingTo} 
+            onCancelReply={() => setReplyingTo(null)} 
+            onTyping={handleTyping}
+            editingMessage={editingMessage}
+            onConfirmEdit={handleConfirmEdit}
+            onCancelEdit={() => setEditingMessage(null)}
+          />
+        )}
       </KeyboardAvoidingView>
 
       <SchedulerModal 
@@ -1337,17 +1415,52 @@ const OptionItem = ({ icon, title, sub, onPress }: any) => (
 
 const getStyles = (colors: any) => StyleSheet.create({ header: { backgroundColor: '#020617' } });
 
+const MediaBubbleWrapper = ({ children, isMe, onLongPress }: any) => {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  return (
+    <Pressable
+      delayLongPress={200}
+      onPressIn={() => {
+        scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+      }}
+      onLongPress={onLongPress}
+      style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+    >
+      <Reanimated.View style={[animatedStyle, { maxWidth: '100%' }]}>
+        {children}
+      </Reanimated.View>
+    </Pressable>
+  );
+};
+
 const MessageBubble = ({ 
   item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, 
-  clientName, clientAvatarUrl, coachName, coachAvatarUrl, onLongPress 
+  clientName, clientAvatarUrl, coachName, coachAvatarUrl, onLongPress,
+  onCancelSession, onRescheduleSession
 }: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [isPressed, setIsPressed] = React.useState(false);
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
   let displayContent = item.content;
   let reactions: any[] = [];
   let isDeleted = false;
   let deletedBy = '';
   let isEdited = false;
+  let isForwarded = false;
 
   try {
     const trimmed = item.content.trim();
@@ -1358,6 +1471,8 @@ const MessageBubble = ({
     if (typeof p === 'string' && p.startsWith('{')) {
       p = JSON.parse(p);
     }
+    
+    isForwarded = !!p.is_forwarded;
     
     // Aggressive type extraction for malformed/nested JSON
     const type = p.type || 
@@ -1378,6 +1493,9 @@ const MessageBubble = ({
           isRead={item.read} 
           senderAvatarUrl={isMe ? coachAvatarUrl : clientAvatarUrl}
           senderName={isMe ? coachName : clientName}
+          onLongPress={onLongPress}
+          onCancelSession={onCancelSession}
+          onRescheduleSession={onRescheduleSession}
         />
       );
     }
@@ -1397,6 +1515,9 @@ const MessageBubble = ({
           isRead={item.read} 
           senderAvatarUrl={isMe ? coachAvatarUrl : clientAvatarUrl}
           senderName={isMe ? coachName : clientName}
+          onLongPress={onLongPress}
+          onCancelSession={onCancelSession}
+          onRescheduleSession={onRescheduleSession}
         />
       );
     }
@@ -1419,74 +1540,83 @@ const MessageBubble = ({
 
   return (
     <View style={{ position: 'relative' }}>
+      {isForwarded && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start', opacity: 0.6 }}>
+          <Forward size={12} color="#94A3B8" style={{ marginRight: 4 }} />
+          <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Forwarded</Text>
+        </View>
+      )}
       <Pressable
-          delayLongPress={100}
-          unstable_pressDelay={0}
-          onPressIn={() => setIsPressed(true)}
-          onPressOut={() => setIsPressed(false)}
+          delayLongPress={200}
+          onPressIn={() => {
+            scale.value = withSpring(0.92, { stiffness: 450, damping: 25 });
+          }}
+          onPressOut={() => {
+            scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+          }}
           onLongPress={onLongPress}
       >
-        <MotiView 
-            from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
-            animate={{ 
-                scale: isPressed ? 0.9 : (isHighlighted ? 1.05 : 1),
-                backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
-            }}
-            transition={{ type: 'timing', duration: 100 }}
-            className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-            style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
-        >
-        {repliedMsg && (
-           <TouchableOpacity 
-              activeOpacity={0.8}
-              onPress={onReplyPress}
-              className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
-           >
-              <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : (clientName || 'Client')}</Text>
-              <Text className="text-white/80 text-xs" numberOfLines={1}>
-                {(() => {
-                  try { 
-                    const p = JSON.parse(repliedMsg.content); 
-                    if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
-                    if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
-                    if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
-                    if (p.type === 'image') return '🖼 Photo';
-                    if (p.type === 'video') return '🎥 Video';
-                    if (p.type === 'gif') return '🎞 GIF';
-                    if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
-                    if (p.type === 'audio') {
-                      let dStr = '';
-                      if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
-                        const d = Math.floor(Number(p.duration));
-                        dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+        <Reanimated.View style={animatedStyle}>
+          <MotiView 
+              animate={{ 
+                  backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
+              }}
+              transition={{ type: 'timing', duration: 100 }}
+              className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
+              style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
+          >
+          {repliedMsg && (
+             <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={onReplyPress}
+                className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
+             >
+                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : (clientName || 'Client')}</Text>
+                <Text className="text-white/80 text-xs" numberOfLines={1}>
+                  {(() => {
+                    try { 
+                      const p = JSON.parse(repliedMsg.content); 
+                      if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
+                      if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
+                      if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
+                      if (p.type === 'image') return '🖼 Photo';
+                      if (p.type === 'video') return '🎥 Video';
+                      if (p.type === 'gif') return '🎞 GIF';
+                      if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                      if (p.type === 'audio') {
+                        let dStr = '';
+                        if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
+                          const d = Math.floor(Number(p.duration));
+                          dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+                        }
+                        return `🎤 Voice Message${dStr}`;
                       }
-                      return `🎤 Voice Message${dStr}`;
-                    }
-                    if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
-                    return p.text || repliedMsg.content; 
-                  } catch { return repliedMsg.content; }
-                })()}
+                      if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
+                      return p.text || repliedMsg.content; 
+                    } catch { return repliedMsg.content; }
+                  })()}
+                </Text>
+             </TouchableOpacity>
+          )}
+          <Text className="text-[15px] font-medium leading-[22px] text-white">
+            {truncatedContent}
+          </Text>
+          {shouldTruncate && (
+            <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
+              <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
+                {isExpanded ? 'Show Less' : 'Read More'}
               </Text>
-           </TouchableOpacity>
-        )}
-        <Text className="text-[15px] font-medium leading-[22px] text-white">
-          {truncatedContent}
-        </Text>
-        {shouldTruncate && (
-          <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
-            <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
-              {isExpanded ? 'Show Less' : 'Read More'}
-            </Text>
-          </TouchableOpacity>
-        )}
-        <View className="flex-row items-center justify-end gap-1.5 mt-2">
-           {isEdited && (
-             <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>
-           )}
-           <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-           {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
-        </View>
-      </MotiView>
+            </TouchableOpacity>
+          )}
+          <View className="flex-row items-center justify-end gap-1.5 mt-2">
+             {isEdited && (
+               <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>
+             )}
+             <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+             {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
+          </View>
+        </MotiView>
+      </Reanimated.View>
       </Pressable>
 
       {reactions.length > 0 && (

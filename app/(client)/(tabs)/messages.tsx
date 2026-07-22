@@ -24,6 +24,7 @@ import { useUnread } from '@/contexts/UnreadContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
 import BubblePuff from '@/components/ui/BubblePuff';
+import { Component as GradientBackground } from '@/components/ui/gradient-backgrounds';
 import { 
   Send, 
   ArrowLeft, 
@@ -34,7 +35,8 @@ import {
   Video,
   Dumbbell,
   Calendar,
-  ArrowDown
+  ArrowDown,
+  Forward
 } from 'lucide-react-native';
 import MealMessageCard from '@/components/MealMessageCard';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
@@ -52,6 +54,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
 import { MotiView, AnimatePresence } from 'moti';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -81,7 +84,7 @@ function isMediaMessage(content: string): boolean {
   const hasType = s.includes('"type"');
   const hasUrl = s.includes('"url"');
   const hasTask = s.includes('"taskName"');
-  const isMeal = s.includes('"type":"meal"');
+  const isMeal = s.includes('"type":"meal"') || s.includes('"type":"meal_log"');
   
   return s.startsWith('{') && (hasType && (hasUrl || hasTask || isMeal));
 }    
@@ -110,6 +113,7 @@ export default function ClientMessagesScreen() {
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const showScrollBottomRef = useRef(false);
   const [newMessagesCount, setNewMessagesCount] = useState(0);
+  const [firstUnreadMessageId, setFirstUnreadMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     showScrollBottomRef.current = showScrollBottom;
@@ -181,10 +185,17 @@ export default function ClientMessagesScreen() {
     const ch = supabase
       .channel(`chat-reactions-${key}`)
       .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
-        setMessages(prev => prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m));
+        setMessages(prev =>
+          prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
+        );
       })
       .on('broadcast', { event: 'message_edit' }, ({ payload }) => {
-        setMessages(prev => prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m));
+        setMessages(prev =>
+          prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
+        );
+      })
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        setIsOtherTyping(payload.isTyping);
       })
       .subscribe();
     reactionChannelRef.current = ch;
@@ -227,15 +238,22 @@ export default function ClientMessagesScreen() {
   const loadChatData = async () => {
     try {
       setLoading(true);
+      
+      const { data: clientRecord, error: clientErr } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (clientErr || !clientRecord) {
+        setLoading(false);
+        return;
+      }
+      
       const { data: linkWithCoach, error: linkError } = await supabase
         .from('coach_client_links')
-        .select(`
-          coach_id,
-          coaches:coach_id (
-            user_id,
-            profiles:user_id (id, full_name, avatar_url)
-          )
-        `)
+        .select(`coach_id, coaches:coach_id(user_id, profiles:user_id(full_name, avatar_url))`)
+        .eq('client_id', clientRecord.id)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -260,7 +278,16 @@ export default function ClientMessagesScreen() {
         .limit(100);
       
       if (msgError) throw msgError;
-      setMessages(mData || []);
+      const fetchedMessages = mData || [];
+      setMessages(fetchedMessages);
+
+      const unreadMsgs = fetchedMessages.filter(m => !m.read && m.recipient_id === user?.id);
+      if (unreadMsgs.length > 0) {
+        const oldestUnread = unreadMsgs[unreadMsgs.length - 1];
+        setFirstUnreadMessageId(oldestUnread.id);
+      } else {
+        setFirstUnreadMessageId(null);
+      }
     } catch (e) { 
         console.error('[ClientChat] Error:', e);
     } finally { 
@@ -497,11 +524,15 @@ export default function ClientMessagesScreen() {
     }
     
     const reactions = currentContent.reactions || [];
-    const existingIndex = reactions.findIndex((r: any) => r.user_id === user.id && r.emoji === emoji);
+    const existingUserReactionIndex = reactions.findIndex((r: any) => r.user_id === user.id);
     
     let newReactions = [...reactions];
-    if (existingIndex > -1) {
-      newReactions.splice(existingIndex, 1);
+    if (existingUserReactionIndex > -1) {
+      const oldEmoji = reactions[existingUserReactionIndex].emoji;
+      newReactions.splice(existingUserReactionIndex, 1);
+      if (oldEmoji !== emoji) {
+        newReactions.push({ emoji, user_id: user.id });
+      }
     } else {
       newReactions.push({ emoji, user_id: user.id });
     }
@@ -547,12 +578,32 @@ export default function ClientMessagesScreen() {
     const isMedia = isMediaMessage(item.content);
 
     return (
-      <Swipeable
-        ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
-        renderLeftActions={renderLeftActions}
-        onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
-        friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
-      >
+      <View>
+        {item.id === firstUnreadMessageId && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 16, paddingHorizontal: 16 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(239, 68, 68, 0.3)' }} />
+            <View style={{ 
+              backgroundColor: 'rgba(239, 68, 68, 0.15)', 
+              borderWidth: 1, 
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              borderRadius: 12, 
+              paddingHorizontal: 12, 
+              paddingVertical: 4, 
+              marginHorizontal: 10 
+            }}>
+              <Text style={{ color: '#F87171', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 }}>
+                New messages
+              </Text>
+            </View>
+            <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(239, 68, 68, 0.3)' }} />
+          </View>
+        )}
+        <Swipeable
+          ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
+          renderLeftActions={renderLeftActions}
+          onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
+          friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
+        >
           <BubblePuff isMe={isMe}>
               {isMedia ? (
                 <View>
@@ -609,15 +660,17 @@ export default function ClientMessagesScreen() {
                 />
               )}
           </BubblePuff>
-      </Swipeable>
+        </Swipeable>
+      </View>
     );
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
+      <GradientBackground />
       <StatusBar barStyle="light-content" translucent />
       
-      <View style={{ paddingTop: insets.top, backgroundColor: '#020617' }} className="border-b border-white/5">
+      <View style={{ paddingTop: insets.top, backgroundColor: 'transparent' }} className="border-b border-white/5">
         <View className="flex-row items-center justify-between px-6 py-4">
             <View className="flex-row items-center gap-4">
                 <TouchableOpacity onPress={() => safeBack()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
@@ -736,17 +789,51 @@ export default function ClientMessagesScreen() {
     </View>
   );
 }
+const MediaBubbleWrapper = ({ children, isMe, onLongPress }: any) => {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  return (
+    <Pressable
+      delayLongPress={200}
+      onPressIn={() => {
+        scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+      }}
+      onLongPress={onLongPress}
+      style={{ width: '100%', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+    >
+      <Reanimated.View style={[animatedStyle, { maxWidth: '100%' }]}>
+        {children}
+      </Reanimated.View>
+    </Pressable>
+  );
+};
+
 const MessageBubble = ({ 
   item, isMe, repliedMsg, isHighlighted, onReplyPress, theme, user, 
   coachName, coachAvatarUrl, clientName, clientAvatarUrl, onLongPress 
 }: any) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [isPressed, setIsPressed] = React.useState(false);
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
   let displayContent = item.content;
   let reactions: any[] = [];
   let isDeleted = false;
   let deletedBy = '';
   let isEdited = false;
+  let isForwarded = false;
 
   try {
     const trimmed = item.content.trim();
@@ -757,6 +844,8 @@ const MessageBubble = ({
     if (typeof p === 'string' && p.startsWith('{')) {
       p = JSON.parse(p);
     }
+    
+    isForwarded = !!p.is_forwarded;
     
     // Aggressive type extraction for malformed/nested JSON
     const type = p.type || 
@@ -777,6 +866,7 @@ const MessageBubble = ({
           isRead={item.read} 
           senderAvatarUrl={isMe ? clientAvatarUrl : coachAvatarUrl}
           senderName={isMe ? clientName : coachName}
+          onLongPress={onLongPress}
         />
       );
     }
@@ -796,6 +886,7 @@ const MessageBubble = ({
           isRead={item.read} 
           senderAvatarUrl={isMe ? clientAvatarUrl : coachAvatarUrl}
           senderName={isMe ? clientName : coachName}
+          onLongPress={onLongPress}
         />
       );
     }
@@ -818,64 +909,73 @@ const MessageBubble = ({
 
   return (
     <View style={{ position: 'relative' }}>
+      {isForwarded && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start', opacity: 0.6 }}>
+          <Forward size={12} color="#94A3B8" style={{ marginRight: 4 }} />
+          <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Forwarded</Text>
+        </View>
+      )}
       <Pressable
-          delayLongPress={100}
-          unstable_pressDelay={0}
-          onPressIn={() => setIsPressed(true)}
-          onPressOut={() => setIsPressed(false)}
+          delayLongPress={200}
+          onPressIn={() => {
+            scale.value = withSpring(0.92, { stiffness: 450, damping: 25 });
+          }}
+          onPressOut={() => {
+            scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+          }}
           onLongPress={onLongPress}
       >
-        <MotiView 
-            from={{ backgroundColor: isMe ? theme.colors.primary : '#334155', scale: 1 }}
-            animate={{ 
-                scale: isPressed ? 0.9 : (isHighlighted ? 1.05 : 1),
-                backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
-            }}
-            transition={{ type: 'timing', duration: 100 }}
-            className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-            style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
-        >
-        {repliedMsg && (
-           <TouchableOpacity 
-              activeOpacity={0.8}
-              onPress={onReplyPress}
-              className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
-           >
-              <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
-              <Text className="text-white/80 text-xs" numberOfLines={1}>
-                {(() => {
-                  try { 
-                    const p = JSON.parse(repliedMsg.content); 
-                    if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
-                    if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
-                    if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
-                    if (p.type === 'image') return '🖼 Photo';
-                    if (p.type === 'video') return '🎥 Video';
-                    if (p.type === 'gif') return '🎞 GIF';
-                    if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
-                    if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
-                    return p.text || repliedMsg.content; 
-                  } catch { return repliedMsg.content; }
-                })()}
+        <Reanimated.View style={animatedStyle}>
+          <MotiView 
+              animate={{ 
+                  backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
+              }}
+              transition={{ type: 'timing', duration: 100 }}
+              className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
+              style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
+          >
+          {repliedMsg && (
+             <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={onReplyPress}
+                className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
+             >
+                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
+                <Text className="text-white/80 text-xs" numberOfLines={1}>
+                  {(() => {
+                    try { 
+                      const p = JSON.parse(repliedMsg.content); 
+                      if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
+                      if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
+                      if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
+                      if (p.type === 'image') return '🖼 Photo';
+                      if (p.type === 'video') return '🎥 Video';
+                      if (p.type === 'gif') return '🎞 GIF';
+                      if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
+                      if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
+                      return p.text || repliedMsg.content; 
+                    } catch { return repliedMsg.content; }
+                  })()}
+                </Text>
+             </TouchableOpacity>
+          )}
+          <Text className="text-[15px] font-medium leading-[22px] text-white">
+            {truncatedContent}
+          </Text>
+          {shouldTruncate && (
+            <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
+              <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
+                {isExpanded ? 'Show Less' : 'Read More'}
               </Text>
-           </TouchableOpacity>
-        )}
-        <Text className="text-[15px] font-medium leading-[22px] text-white">
-          {truncatedContent}
-        </Text>
-        {shouldTruncate && (
-          <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
-            <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
-              {isExpanded ? 'Show Less' : 'Read More'}
-            </Text>
-          </TouchableOpacity>
-        )}
-        <View className="flex-row items-center justify-end gap-1.5 mt-2">
-           {isEdited && <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>}
-           <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-           {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
-        </View>
-      </MotiView>
+            </TouchableOpacity>
+          )}
+          <View className="flex-row items-center justify-end gap-1.5 mt-2">
+             {isEdited && <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>}
+             <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+             {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
+          </View>
+        </MotiView>
+      </Reanimated.View>
       </Pressable>
 
       {reactions.length > 0 && (

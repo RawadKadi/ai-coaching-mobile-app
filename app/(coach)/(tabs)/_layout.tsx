@@ -42,8 +42,19 @@ export default function CoachTabLayout() {
           options={{
             title: 'Messages',
             tabBarIcon: ({ size, color }) => <MessageSquare size={22} color={color} />,
-            tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-            tabBarBadgeStyle: { backgroundColor: colors.primary, color: 'white', fontSize: 10, fontWeight: 'bold' },
+            tabBarBadge: unreadCount > 0 ? String(unreadCount) : undefined,
+            tabBarBadgeStyle: { 
+              backgroundColor: colors.primary, 
+              color: 'white',
+              fontSize: 10, 
+              fontWeight: '900',
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
+              textAlign: 'center',
+              lineHeight: 18,
+              padding: 0
+            },
           }}
         />
         <Tabs.Screen

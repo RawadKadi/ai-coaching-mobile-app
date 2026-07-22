@@ -12,7 +12,17 @@ import {
   StyleProp,
   ViewStyle
 } from 'react-native';
-import { MotiView, AnimatePresence } from 'moti';
+import Animated, { 
+  FadeIn, 
+  FadeOut, 
+  ZoomIn, 
+  ZoomOut,
+  FadeInDown,
+  FadeOutDown,
+  withSpring,
+  withTiming,
+  withDelay
+} from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { 
   Reply, 
@@ -22,8 +32,30 @@ import {
   Info,
   Star,
   Pencil,
+  Calendar,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useAuth } from '@/contexts/AuthContext';
+
+import { Keyframe } from 'react-native-reanimated';
+
+const SubtleBubblePop = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 0.85 }] },
+  70: { opacity: 1, transform: [{ scale: 1.02 }] },
+  100: { opacity: 1, transform: [{ scale: 1 }] },
+}).duration(250);
+
+const SubtleMenuPop = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 0.9 }, { translateY: 15 }] },
+  70: { opacity: 1, transform: [{ scale: 1.02 }, { translateY: -2 }] },
+  100: { opacity: 1, transform: [{ scale: 1 }, { translateY: 0 }] },
+}).duration(250);
+
+const SubtleEmojiBarPop = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 0.9 }, { translateY: -10 }] },
+  70: { opacity: 1, transform: [{ scale: 1.02 }, { translateY: 2 }] },
+  100: { opacity: 1, transform: [{ scale: 1 }, { translateY: 0 }] },
+}).duration(250);
 
 /** Returns true if the message was sent within the last 15 minutes */
 function isWithin15Minutes(createdAt: string): boolean {
@@ -65,6 +97,17 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
   renderMessageContent,
   isCoach
 }) => {
+  const { user } = useAuth();
+  
+  // Local state to keep the message content during the exit animation
+  const [activeMsg, setActiveMsg] = React.useState<any>(null);
+  
+  useEffect(() => {
+    if (message) {
+      setActiveMsg(message);
+    }
+  }, [message]);
+
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       if (visible) {
@@ -76,22 +119,17 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
     return () => backHandler.remove();
   }, [visible]);
 
-  if (!visible || !message) return null;
+  if (!activeMsg) return null;
 
-  const canEdit = isMe && isWithin15Minutes(message?.created_at);
+  const canEdit = isMe && isWithin15Minutes(activeMsg?.created_at);
 
   const handleAction = (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit' | 'reschedule') => {
     console.log('[MessageOverlay] handleAction internal triggered:', action);
-    console.log('[MessageOverlay] onAction prop type:', typeof onAction);
-    console.log('[MessageOverlay] onAction body:', onAction?.toString?.().substring(0, 200));
-    
     try {
       onAction(action);
-      console.log('[MessageOverlay] onAction returned successfully');
     } catch (e: any) {
       console.error('[MessageOverlay] ERROR calling onAction:', e?.message, e);
     }
-    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onClose();
   };
@@ -103,52 +141,77 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
   };
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="auto">
-      {/* Full-screen backdrop — tapping outside the menu closes the overlay */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-        <BlurView 
-          intensity={Platform.OS === 'ios' ? 30 : 100} 
-          tint="dark" 
-          style={StyleSheet.absoluteFill} 
-        />
-      </Pressable>
+    <>
+      {visible && (
+        <Animated.View 
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(200)}
+          style={[StyleSheet.absoluteFill, { zIndex: 9999 }]} 
+          pointerEvents="auto"
+        >
+          {/* Full-screen backdrop — tapping outside the menu closes the overlay */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+            <Animated.View
+              entering={FadeIn.duration(100)}
+              exiting={FadeOut.duration(100)}
+              style={StyleSheet.absoluteFill}
+            >
+              <BlurView 
+                intensity={Platform.OS === 'ios' ? 30 : 100} 
+                tint="dark" 
+                style={StyleSheet.absoluteFill} 
+              />
+            </Animated.View>
+          </Pressable>
 
-      {/* Menu content — stopPropagation prevents taps here from reaching the backdrop */}
-      <View style={styles.container} pointerEvents="box-none">
-        <AnimatePresence>
-          <MotiView 
-            from={{ opacity: 0, scale: 0.9, translateY: 20 }}
-            animate={{ opacity: 1, scale: 1, translateY: 0 }}
-            exit={{ opacity: 0, scale: 0.9, translateY: 20 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 250 }}
-            style={styles.modalContent}
-            pointerEvents="box-none"
-          >
+          {/* Menu content — stopPropagation prevents taps here from reaching the backdrop */}
+          <View style={styles.container} pointerEvents="box-none">
             <ScrollView 
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
-              style={{ width: '100%' }}
+              style={{ width: '100%', maxHeight: '90%' }}
               bounces={true}
             >
               <Pressable onPress={onClose} style={styles.scrollContentWrapper}>
                 {/* Emoji Bar */}
                 <Pressable onPress={(e) => e.stopPropagation()}>
-                  <MotiView 
-                    from={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', damping: 15, stiffness: 150 }}
+                  <Animated.View 
+                    entering={SubtleEmojiBarPop}
+                    exiting={FadeOutDown.duration(150)}
                     style={styles.emojiBar}
                   >
-                    {EMOJIS.map((emoji, index) => (
-                      <TouchableOpacity 
-                        key={index} 
-                        onPress={() => handleReaction(emoji)}
-                        style={styles.emojiItem}
-                      >
-                        <Text style={styles.emojiText}>{emoji}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </MotiView>
+                    {EMOJIS.map((emoji, index) => {
+                      let isReacted = false;
+                      try {
+                        const contentObj = typeof activeMsg.content === 'string' ? JSON.parse(activeMsg.content) : activeMsg.content;
+                        const reactionsList = contentObj.reactions || [];
+                        isReacted = reactionsList.some((r: any) => r.user_id === user?.id && r.emoji === emoji);
+                      } catch {}
+
+                      return (
+                        <Animated.View
+                          key={index}
+                          entering={ZoomIn.duration(200).delay(index * 35).springify().damping(20).stiffness(350)}
+                          exiting={ZoomOut.duration(150)}
+                        >
+                          <TouchableOpacity 
+                            onPress={() => handleReaction(emoji)}
+                            style={[
+                              styles.emojiItem,
+                              isReacted && {
+                                borderWidth: 2,
+                                borderColor: '#3B82F6',
+                                borderRadius: 999,
+                                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                              }
+                            ]}
+                          >
+                            <Text style={styles.emojiText}>{emoji}</Text>
+                          </TouchableOpacity>
+                        </Animated.View>
+                      );
+                    })}
+                  </Animated.View>
                 </Pressable>
 
                 {/* Message Preview */}
@@ -159,102 +222,106 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                     { alignSelf: isMe ? 'flex-end' : 'flex-start' }
                   ]}
                 >
-                  {renderMessageContent(message, isMe)}
+                  <Animated.View
+                    entering={SubtleBubblePop}
+                    exiting={FadeOut.duration(150)}
+                  >
+                    {renderMessageContent(activeMsg, isMe)}
+                  </Animated.View>
                 </Pressable>
 
                 {/* Action Menu */}
                 <Pressable onPress={(e) => e.stopPropagation()}>
-                  <MotiView 
-                    from={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', damping: 12, stiffness: 120 }}
+                  <Animated.View 
+                    entering={SubtleMenuPop}
+                    exiting={FadeOutDown.duration(150)}
                     style={styles.menuContainer}
                   >
-                    <MenuOption 
+                      <MenuOption 
                         icon={<Reply size={20} color="#F8FAFC" />} 
                         label="Reply" 
                         onPress={() => handleAction('reply')} 
-                    />
-                    {isCoach && (
-                      <>
-                        <MenuDivider />
-                        <MenuOption 
+                      />
+                      {isCoach && (
+                        <>
+                          <MenuDivider />
+                          <MenuOption 
                             icon={<Forward size={20} color="#F8FAFC" />} 
                             label="Forward" 
                             onPress={() => handleAction('forward')} 
-                        />
-                      </>
-                    )}
-                    <MenuDivider />
-                    <MenuOption 
+                          />
+                        </>
+                      )}
+                      <MenuDivider />
+                      <MenuOption 
                         icon={<Copy size={20} color="#F8FAFC" />} 
                         label="Copy" 
                         onPress={() => handleAction('copy')} 
-                    />
-                    <MenuDivider />
-                    <MenuOption 
+                      />
+                      <MenuDivider />
+                      <MenuOption 
                         icon={<Star size={20} color="#F8FAFC" />} 
                         label="Star" 
                         onPress={() => {}} 
-                    />
-                    <MenuDivider />
-                    <MenuOption 
+                      />
+                      <MenuDivider />
+                      <MenuOption 
                         icon={<Info size={20} color="#F8FAFC" />} 
                         label="Info" 
                         onPress={() => {}} 
-                    />
-                    
-                    {canEdit && (
-                      <>
-                        <MenuDivider />
-                        <MenuOption 
-                          icon={<Pencil size={20} color="#60A5FA" />} 
-                          label="Edit" 
-                          onPress={() => handleAction('edit')}
-                        />
-                      </>
-                    )}
+                      />
+                      
+                      {canEdit && (
+                        <>
+                          <MenuDivider />
+                          <MenuOption 
+                            icon={<Pencil size={20} color="#60A5FA" />} 
+                            label="Edit" 
+                            onPress={() => handleAction('edit')}
+                          />
+                        </>
+                      )}
 
-                    {(() => {
-                      try {
-                        const p = JSON.parse(message.content);
-                        if (p.type === 'session_invite' || p.type === 'call_invite') {
-                          return (
-                            <>
-                              <MenuDivider />
-                              <MenuOption 
-                                icon={<Calendar size={20} color="#10B981" />} 
-                                label="Reschedule" 
-                                onPress={() => handleAction('reschedule')}
-                              />
-                            </>
-                          );
-                        }
-                      } catch {}
-                      return null;
-                    })()}
+                      {(() => {
+                        try {
+                          const p = JSON.parse(activeMsg.content);
+                          if (p.type === 'session_invite' || p.type === 'call_invite') {
+                            return (
+                              <>
+                                <MenuDivider />
+                                <MenuOption 
+                                  icon={<Calendar size={20} color="#10B981" />} 
+                                  label="Reschedule" 
+                                  onPress={() => handleAction('reschedule')}
+                                />
+                              </>
+                            );
+                          }
+                        } catch {}
+                        return null;
+                      })()}
 
-                    {isMe && (
-                      <>
-                        <MenuDivider />
-                        <MenuOption 
-                          icon={<Trash2 size={20} color="#EF4444" />} 
-                          label="Delete" 
-                          onPress={() => handleAction('delete')}
-                          destructive
-                        />
-                      </>
-                    )}
-                  </MotiView>
+                      {isMe && (
+                        <>
+                          <MenuDivider />
+                          <MenuOption 
+                            icon={<Trash2 size={20} color="#EF4444" />} 
+                            label="Delete" 
+                            onPress={() => handleAction('delete')}
+                            destructive
+                          />
+                        </>
+                      )}
+                    </Animated.View>
+                  </Pressable>
+                  
+                  <View style={{ height: 100 }} />
                 </Pressable>
-                
-                <View style={{ height: 100 }} />
-              </Pressable>
-            </ScrollView>
-          </MotiView>
-        </AnimatePresence>
-      </View>
-    </View>
+              </ScrollView>
+          </View>
+        </Animated.View>
+      )}
+    </>
   );
 };
 
@@ -294,10 +361,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 40,
+    flexGrow: 1,
   },
   scrollContentWrapper: {
     alignItems: 'center',
     width: '100%',
+    flexGrow: 1,
   },
   emojiBar: {
     flexDirection: 'row',

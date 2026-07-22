@@ -455,7 +455,20 @@ export default function ClientDashboard() {
                         </View>
                     </View>
                     <Text className="text-slate-200 leading-7 font-medium text-lg">
-                        {todayCheckIn.ai_analysis}
+                        {(() => {
+                          const aiAnalysis = todayCheckIn.ai_analysis;
+                          if (!aiAnalysis) return '';
+                          const trimmed = aiAnalysis.trim();
+                          if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                            try {
+                              const parsed = JSON.parse(trimmed);
+                              return parsed.coaching_advice || parsed.analysis || parsed.advice || parsed.insight || trimmed;
+                            } catch (e) {
+                              return trimmed;
+                            }
+                          }
+                          return trimmed;
+                        })()}
                     </Text>
                     <View className="mt-8 pt-8 border-t border-white/5 flex-row items-center gap-2">
                         <Sparkles size={16} color="#818CF8" />
@@ -535,6 +548,7 @@ const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
 };
 
 const MetricCard = ({ label, value, icon, active, onPress, showGlow = false }: any) => {
+    const colors = useBrandColors();
     const displayValue = typeof value === 'number' ? formatCompactNumber(value) : value;
 
     // Auto-pulsing glow: breathes between dim and bright

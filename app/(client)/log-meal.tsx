@@ -587,6 +587,7 @@ export default function LogMealScreen() {
 
 /** Scan preview with Reanimated-powered scan line — works reliably on native iOS */
 function ScanPreview({ imageUri }: { imageUri: string | null }) {
+  const colors = useBrandColors();
   const scanY = useSharedValue(0);
 
   useEffect(() => {

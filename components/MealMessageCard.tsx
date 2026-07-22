@@ -1,6 +1,7 @@
 import { useBrandColors } from '@/contexts/BrandContext';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Utensils, ChevronRight, Zap } from 'lucide-react-native';
@@ -26,6 +27,12 @@ export default function MealMessageCard({ content, isOwn, onLongPress }: Props) 
   const colors = useBrandColors();
   const styles = getStyles(colors);
   const router = useRouter();
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
   
   // Parse content if it's a string
   const data: MealMessageContent = typeof content === 'string' ? JSON.parse(content) : content;
@@ -35,57 +42,66 @@ export default function MealMessageCard({ content, isOwn, onLongPress }: Props) 
   };
 
   return (
-    <TouchableOpacity 
-      activeOpacity={0.9}
-      delayLongPress={400}
+    <Pressable 
+      delayLongPress={200}
+      onPressIn={() => {
+        scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { stiffness: 450, damping: 25 });
+      }}
       onLongPress={onLongPress}
-      style={[
-        styles.container,
-        isOwn ? styles.ownContainer : styles.otherContainer
-      ]}
     >
-      {/* Header Signal */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.iconWrapper}>
-            <Utensils size={14} color={colors.primary} />
-          </View>
-          <Text style={styles.headerTitle}>Meal Log</Text>
-        </View>
-      </View>
-
-      <View style={styles.content}>
-        {data.imageUrl && (
-          <View style={styles.imageContainer}>
-            <Image 
-              source={{ uri: data.imageUrl }} 
-              style={styles.image} 
-              contentFit="cover"
-              transition={200}
-              cachePolicy="disk"
-            />
-            {/* Overlay Gradient Placeholder (simulated with absolute view if needed, but keeping it clean) */}
-          </View>
-        )}
-        
-        <View style={styles.details}>
-          <Text style={styles.mealName} numberOfLines={2}>{data.mealName || 'Unknown Meal'}</Text>
-          <View style={styles.macrosRow}>
-            <View style={styles.macroItem}>
-                <Zap size={10} color={colors.primary} fill={colors.primary} />
-                <Text style={styles.macroValue}>{formatCompactNumber(data.calories || 0)} <Text style={styles.macroLabel}>kcal</Text></Text>
+      <Reanimated.View
+        style={[
+          styles.container,
+          isOwn ? styles.ownContainer : styles.otherContainer,
+          animatedStyle
+        ]}
+      >
+        {/* Header Signal */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.iconWrapper}>
+              <Utensils size={14} color={colors.primary} />
             </View>
-            <View style={styles.dot} />
-            <Text style={styles.macroValue}>{formatCompactNumber(data.protein || 0)}g <Text style={styles.macroLabel}>protein</Text></Text>
+            <Text style={styles.headerTitle}>Meal Log</Text>
           </View>
         </View>
 
-        <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={styles.footerButton}>
-          <Text style={styles.footerText}>View Full Analysis</Text>
-          <ChevronRight size={14} color={colors.primary} strokeWidth={3} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+        <View style={styles.content}>
+          {data.imageUrl && (
+            <View style={styles.imageContainer}>
+              <Image 
+                source={{ uri: data.imageUrl }} 
+                style={styles.image} 
+                contentFit="cover"
+                transition={200}
+                cachePolicy="disk"
+              />
+              {/* Overlay Gradient Placeholder (simulated with absolute view if needed, but keeping it clean) */}
+            </View>
+          )}
+          
+          <View style={styles.details}>
+            <Text style={styles.mealName} numberOfLines={2}>{data.mealName || 'Unknown Meal'}</Text>
+            <View style={styles.macrosRow}>
+              <View style={styles.macroItem}>
+                  <Zap size={10} color={colors.primary} fill={colors.primary} />
+                  <Text style={styles.macroValue}>{formatCompactNumber(data.calories || 0)} <Text style={styles.macroLabel}>kcal</Text></Text>
+              </View>
+              <View style={styles.dot} />
+              <Text style={styles.macroValue}>{formatCompactNumber(data.protein || 0)}g <Text style={styles.macroLabel}>protein</Text></Text>
+            </View>
+          </View>
+
+          <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={styles.footerButton}>
+            <Text style={styles.footerText}>View Full Analysis</Text>
+            <ChevronRight size={14} color={colors.primary} strokeWidth={3} />
+          </TouchableOpacity>
+        </View>
+      </Reanimated.View>
+    </Pressable>
   );
 }
 
