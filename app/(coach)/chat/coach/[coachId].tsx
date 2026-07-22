@@ -283,6 +283,7 @@ export default function CoachToCoachChat() {
 
   const handleSendText = async (text: string, replyId?: string) => {
     if (!user || !coachInfo) return;
+    setFirstUnreadMessageId(null);
     setSending(true);
     
     // Optimistic UI for instant feedback

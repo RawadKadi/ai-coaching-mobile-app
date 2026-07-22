@@ -324,6 +324,7 @@ export default function ClientMessagesScreen() {
 
   const handleSendText = async (text: string, replyId?: string) => {
     if (!user || !coachUserId || !text.trim()) return;
+    setFirstUnreadMessageId(null);
     setSending(true);
     
     // Optimistic UI for instant feedback

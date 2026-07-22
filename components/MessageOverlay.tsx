@@ -21,7 +21,9 @@ import Animated, {
   FadeOutDown,
   withSpring,
   withTiming,
-  withDelay
+  withDelay,
+  useSharedValue,
+  useAnimatedStyle
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { 
@@ -101,6 +103,7 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
   
   // Local state to keep the message content during the exit animation
   const [activeMsg, setActiveMsg] = React.useState<any>(null);
+  const [internalVisible, setInternalVisible] = React.useState(visible);
   
   useEffect(() => {
     if (message) {
@@ -109,19 +112,42 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
   }, [message]);
 
   useEffect(() => {
+    setInternalVisible(visible);
+  }, [visible]);
+
+  useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       if (visible) {
-        onClose();
+        handleClose();
         return true;
       }
       return false;
     });
     return () => backHandler.remove();
-  }, [visible]);
+  }, [visible, internalVisible]);
+
+  const handleClose = () => {
+    if (!internalVisible) return;
+    setInternalVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 150);
+  };
 
   if (!activeMsg) return null;
 
   const canEdit = isMe && isWithin15Minutes(activeMsg?.created_at);
+
+  // Detect if this is a media/non-text message (hide Copy for those)
+  const isMediaMessage = (() => {
+    try {
+      const p = JSON.parse(activeMsg.content);
+      const mediaTypes = ['image', 'video', 'gif', 'document', 'audio', 'session_invite', 'call_invite', 'task_completion', 'challenge_completed', 'meal', 'meal_log'];
+      return mediaTypes.includes(p.type);
+    } catch {
+      return false;
+    }
+  })();
 
   const handleAction = (action: 'reply' | 'copy' | 'delete' | 'forward' | 'edit' | 'reschedule') => {
     console.log('[MessageOverlay] handleAction internal triggered:', action);
@@ -131,29 +157,29 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
       console.error('[MessageOverlay] ERROR calling onAction:', e?.message, e);
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onClose();
+    handleClose();
   };
 
   const handleReaction = (emoji: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onReaction(emoji);
-    onClose();
+    handleClose();
   };
 
   return (
     <>
-      {visible && (
+      {internalVisible && (
         <Animated.View 
           entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(200)}
+          exiting={FadeOut.duration(50)}
           style={[StyleSheet.absoluteFill, { zIndex: 9999 }]} 
           pointerEvents="auto"
         >
           {/* Full-screen backdrop — tapping outside the menu closes the overlay */}
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+          <Pressable style={StyleSheet.absoluteFill} onPressIn={handleClose}>
             <Animated.View
               entering={FadeIn.duration(100)}
-              exiting={FadeOut.duration(100)}
+              exiting={FadeOut.duration(50)}
               style={StyleSheet.absoluteFill}
             >
               <BlurView 
@@ -172,12 +198,12 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
               style={{ width: '100%', maxHeight: '90%' }}
               bounces={true}
             >
-              <Pressable onPress={onClose} style={styles.scrollContentWrapper}>
+              <Pressable onPressIn={handleClose} style={styles.scrollContentWrapper}>
                 {/* Emoji Bar */}
                 <Pressable onPress={(e) => e.stopPropagation()}>
                   <Animated.View 
                     entering={SubtleEmojiBarPop}
-                    exiting={FadeOutDown.duration(150)}
+                    exiting={FadeOutDown.duration(50)}
                     style={styles.emojiBar}
                   >
                     {EMOJIS.map((emoji, index) => {
@@ -224,7 +250,7 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                 >
                   <Animated.View
                     entering={SubtleBubblePop}
-                    exiting={FadeOut.duration(150)}
+                    exiting={FadeOut.duration(50)}
                   >
                     {renderMessageContent(activeMsg, isMe)}
                   </Animated.View>
@@ -234,7 +260,7 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                 <Pressable onPress={(e) => e.stopPropagation()}>
                   <Animated.View 
                     entering={SubtleMenuPop}
-                    exiting={FadeOutDown.duration(150)}
+                    exiting={FadeOutDown.duration(50)}
                     style={styles.menuContainer}
                   >
                       <MenuOption 
@@ -253,12 +279,16 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                         </>
                       )}
                       <MenuDivider />
-                      <MenuOption 
-                        icon={<Copy size={20} color="#F8FAFC" />} 
-                        label="Copy" 
-                        onPress={() => handleAction('copy')} 
-                      />
-                      <MenuDivider />
+                      {!isMediaMessage && (
+                        <>
+                          <MenuOption 
+                            icon={<Copy size={20} color="#F8FAFC" />} 
+                            label="Copy" 
+                            onPress={() => handleAction('copy')} 
+                          />
+                          <MenuDivider />
+                        </>
+                      )}
                       <MenuOption 
                         icon={<Star size={20} color="#F8FAFC" />} 
                         label="Star" 
@@ -325,25 +355,40 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
   );
 };
 
-const MenuOption = ({ icon, label, onPress, destructive }: any) => (
-  <Pressable 
-    onPress={() => {
-      console.log('[MessageOverlay] MenuOption pressed:', label);
-      onPress();
-    }} 
-    style={({ pressed }) => [
-      { width: '100%' },
-      pressed && { backgroundColor: 'rgba(255, 255, 255, 0.08)' }
-    ]}
-  >
-    <View style={styles.menuOptionInternal}>
-      <Text numberOfLines={1} style={[styles.menuLabel, destructive && { color: '#FF453A' }]}>{label}</Text>
-      <View style={styles.menuIconWrapper}>
-        {icon}
-      </View>
-    </View>
-  </Pressable>
-);
+const MenuOption = ({ icon, label, onPress, destructive }: any) => {
+  const bgOpacity = useSharedValue(0);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      backgroundColor: `rgba(255, 255, 255, ${bgOpacity.value})`,
+      width: '100%',
+    };
+  });
+
+  return (
+    <Pressable 
+      onPressIn={() => {
+        bgOpacity.value = withTiming(0.12, { duration: 80 });
+      }}
+      onPressOut={() => {
+        bgOpacity.value = withTiming(0, { duration: 150 });
+      }}
+      onPress={() => {
+        console.log('[MessageOverlay] MenuOption pressed:', label);
+        onPress();
+      }} 
+    >
+      <Animated.View style={animatedStyle}>
+        <View style={styles.menuOptionInternal}>
+          <Text numberOfLines={1} style={[styles.menuLabel, destructive && { color: '#FF453A' }]}>{label}</Text>
+          <View style={styles.menuIconWrapper}>
+            {icon}
+          </View>
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 const MenuDivider = () => <View style={styles.divider} />;
 

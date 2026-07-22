@@ -432,6 +432,7 @@ export default function CoachChatScreen() {
 
   const handleSendText = async (text: string, replyId?: string) => {
     if (!profile || !clientUserId) return;
+    setFirstUnreadMessageId(null);
     setSending(true);
     
     // Optimistic UI for instant feedback
