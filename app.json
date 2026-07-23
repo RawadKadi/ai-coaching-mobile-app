@@ -14,7 +14,9 @@
       "infoPlist": {
         "NSHealthShareUsageDescription": "Allow $(PRODUCT_NAME) to read your steps to sync them with your coach.",
         "NSHealthUpdateUsageDescription": "Allow $(PRODUCT_NAME) to sync your steps with your coach.",
-        "NSMotionUsageDescription": "Allow $(PRODUCT_NAME) to read your steps to sync them with your coach."
+        "NSMotionUsageDescription": "Allow $(PRODUCT_NAME) to read your steps to sync them with your coach.",
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera for video calls with your coach.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone for voice and video calls with your coach."
       },
       "entitlements": {
         "com.apple.developer.healthkit": true
@@ -23,7 +25,10 @@
     "android": {
       "package": "com.coaching.app",
       "permissions": [
-        "android.permission.health.READ_STEPS"
+        "android.permission.health.READ_STEPS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "intentFilters": [
         {
@@ -50,7 +55,8 @@
       "expo-font",
       "expo-web-browser",
       "@react-native-community/datetimepicker",
-      "react-native-health-connect"
+      "react-native-health-connect",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

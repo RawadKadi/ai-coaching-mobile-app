@@ -41,6 +41,12 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
       return;
     }
 
+    const isNetworkError = (err: any) => {
+      if (!err) return false;
+      const msg = (err.message || String(err)).toLowerCase();
+      return msg.includes('network') || msg.includes('timeout') || msg.includes('timed out') || msg.includes('offline');
+    };
+
     try {
       // 1. First check by ID (already linked)
       const { data: idData, error: idError } = await supabase
@@ -53,9 +59,8 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
         .maybeSingle();
 
       if (idError) {
-        // Network errors are common and shouldn't trigger a red box in dev
-        if (idError.message === 'TypeError: Network request failed' || idError.message?.includes('Network request failed')) {
-          console.warn('[TeamInvitationMonitor] Network request failed (offline?). Will retry.');
+        if (isNetworkError(idError)) {
+          console.warn('[TeamInvitationMonitor] Network or timeout issue checking by ID. Will retry.');
         } else {
           console.error('[TeamInvitationMonitor] ❌ Error checking by ID:', idError);
         }
@@ -97,8 +102,8 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
         .maybeSingle();
 
       if (emailError) {
-        if (emailError.message === 'TypeError: Network request failed' || emailError.message?.includes('Network request failed')) {
-          // Ignore network errors for polling
+        if (isNetworkError(emailError)) {
+          console.warn('[TeamInvitationMonitor] Network or timeout issue checking by email. Will retry.');
         } else {
           console.error('[TeamInvitationMonitor] ❌ Error checking by email:', emailError);
         }
@@ -111,7 +116,11 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
         });
 
         if (acceptError) {
-          console.error('[TeamInvitationMonitor] ❌ Auto-link RPC failed:', acceptError);
+          if (isNetworkError(acceptError)) {
+            console.warn('[TeamInvitationMonitor] Network or timeout issue in Auto-link RPC. Will retry.');
+          } else {
+            console.error('[TeamInvitationMonitor] ❌ Auto-link RPC failed:', acceptError);
+          }
         } else if (isMounted.current) {
           handleFoundInvitation({
             id: emailData.id,
@@ -122,8 +131,8 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
         setHasChecked(true);
       }
     } catch (err: any) {
-      if (err?.message?.includes('Network request failed')) {
-        console.warn('[TeamInvitationMonitor] Caught network error in check.');
+      if (isNetworkError(err)) {
+        console.warn('[TeamInvitationMonitor] Caught network/timeout error in check.');
       } else {
         console.error('[TeamInvitationMonitor] Unexpected error:', err);
       }

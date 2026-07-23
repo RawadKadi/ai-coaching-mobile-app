@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -51,6 +52,10 @@ function RootLayoutNav() {
         <Stack.Screen name="(client)" />
         <Stack.Screen name="(coach)" />
         <Stack.Screen name="(admin)" />
+        <Stack.Screen
+          name="call/[id]"
+          options={{ headerShown: false, presentation: 'fullScreenModal' }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />

@@ -599,7 +599,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         status: 'scheduled',
                         is_locked: true,
                         ai_generated: true,
-                        meet_link: `https://meet.jit.si/${coach.id}-${targetClientId}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                        meet_link: `coachingapp://call/pending`,
                         notes: proposed.notes || `AI Scheduled session for ${clientContext?.name || 'Athlete'}`,
                         recurrence_rule: i === 0 ? recurrenceRule : null // Store RRULE on the first instance
                     });

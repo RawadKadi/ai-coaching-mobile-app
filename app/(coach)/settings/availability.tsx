@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { availabilityService, AvailabilitySlot, DayOfWeek, BlockedDate } from '@/lib/availability-service';
-import { ArrowLeft, Plus, Trash2, Sparkles, Calendar as CalendarIcon, Clock, X, ChevronRight, Zap } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, Plus, Trash2, Sparkles, Calendar as CalendarIcon, Clock, X, ChevronRight, Zap } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { generateText } from '@/lib/google-ai';
 
@@ -165,24 +165,39 @@ export default function AvailabilitySettings() {
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          {/* Day Selector Header */}
+          <View className="flex-row items-center justify-between px-6 pt-4">
+            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Select Day</Text>
+            <View className="flex-row items-center gap-1.5 opacity-60 bg-slate-900/50 px-2 py-1 rounded-full border border-white/5">
+              <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Swipe</Text>
+              <ArrowRight size={10} color="#64748B" />
+            </View>
+          </View>
+
           {/* Day Selector */}
           <MotiView 
             from={{ opacity: 0, translateY: -10 }}
             animate={{ opacity: 1, translateY: 0 }}
-            className="flex-row justify-between px-6 py-8"
+            className="py-4"
           >
-            {DAYS_SHORT.map((day, i) => {
-               const isActive = activeDay === i;
-               return (
-                  <TouchableOpacity 
-                    key={i} 
-                    onPress={() => setActiveDay(i)}
-                    className={`w-10 h-10 rounded-xl items-center justify-center border-2 ${isActive ? 'bg-blue-600 border-blue-400 shadow-lg shadow-blue-500/30' : 'bg-slate-900 border-slate-800'}`}
-                  >
-                    <Text className={`font-bold text-sm ${isActive ? 'text-white' : 'text-slate-500'}`}>{day}</Text>
-                  </TouchableOpacity>
-               );
-            })}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}
+            >
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => {
+                 const isActive = activeDay === i;
+                 return (
+                    <TouchableOpacity 
+                      key={i} 
+                      onPress={() => setActiveDay(i)}
+                      className={`w-[56px] h-[72px] rounded-2xl items-center justify-center border-2 ${isActive ? 'bg-blue-600 border-blue-400 shadow-lg shadow-blue-500/30' : 'bg-slate-900 border-slate-800'}`}
+                    >
+                      <Text className={`font-black text-xl ${isActive ? 'text-white' : 'text-slate-400'}`}>{day}</Text>
+                    </TouchableOpacity>
+                 );
+              })}
+            </ScrollView>
           </MotiView>
 
           {/* Slots Content */}
@@ -204,6 +219,7 @@ export default function AvailabilitySettings() {
               <AnimatePresence>
                 {currentSlots.length === 0 ? (
                   <MotiView 
+                    key={`empty-${activeDay}`}
                     from={{ opacity: 0 }} animate={{ opacity: 1 }}
                     className="bg-slate-900 p-8 rounded-[32px] border border-slate-800 items-center border-dashed"
                   >
@@ -213,7 +229,7 @@ export default function AvailabilitySettings() {
                 ) : (
                   currentSlots.map((slot, idx) => (
                     <MotiView
-                      key={idx}
+                      key={`slot-${activeDay}-${idx}-${slot.start_time}-${slot.end_time}`}
                       from={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className="bg-slate-900 mb-4 p-6 rounded-[32px] border border-slate-800 flex-row items-center justify-between"
@@ -316,10 +332,46 @@ export default function AvailabilitySettings() {
       </Modal>
 
       {showTimePicker && (
-        <DateTimePicker value={tempTime} mode="time" display="spinner" onChange={(e, d) => {
-            setShowTimePicker(false);
-            if (d && editingSlot) updateSlotTime(editingSlot.day, editingSlot.index, editingSlot.type, d);
-        }} />
+         <Modal visible={showTimePicker} animationType="slide" transparent>
+            <View className="flex-1 bg-slate-950/80 justify-end">
+               <View className="bg-slate-900 p-6 rounded-t-[40px] border-t border-slate-800 pb-12">
+                  <View className="flex-row justify-between items-center mb-6">
+                     <Text className="text-white text-lg font-bold">
+                        {editingSlot?.type === 'start' ? 'Start Time' : 'End Time'}
+                     </Text>
+                     <TouchableOpacity 
+                        onPress={() => {
+                           setShowTimePicker(false);
+                           if (editingSlot) {
+                              updateSlotTime(editingSlot.day, editingSlot.index, editingSlot.type, tempTime);
+                           }
+                        }}
+                        className="bg-blue-600 px-5 py-2 rounded-full"
+                     >
+                        <Text className="text-white font-bold text-sm">Done</Text>
+                     </TouchableOpacity>
+                  </View>
+                  <View className="items-center justify-center">
+                     <DateTimePicker 
+                        value={tempTime} 
+                        mode="time" 
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        themeVariant="dark"
+                        onChange={(e, d) => {
+                           if (d) setTempTime(d);
+                           if (Platform.OS === 'android') {
+                              setShowTimePicker(false);
+                              if (d && editingSlot) {
+                                 updateSlotTime(editingSlot.day, editingSlot.index, editingSlot.type, d);
+                              }
+                           }
+                        }} 
+                        style={Platform.OS === 'ios' ? { height: 180, width: 280 } : undefined}
+                     />
+                  </View>
+               </View>
+            </View>
+         </Modal>
       )}
     </View>
   );

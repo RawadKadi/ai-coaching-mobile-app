@@ -227,7 +227,12 @@ export default function CoachMessagesScreen() {
 
   const onRefresh = () => { setRefreshing(true); loadClients(); loadTeammates(); };
   const renderCard = (fullName: string, avatarUrl: string | null, lastMsg: string | undefined, lastTime: string | undefined, unread: number | undefined, onPress: () => void, index: number, userId: string) => (
-    <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: index * 50 }} className="mb-4">
+    <MotiView
+      from={{ opacity: 0, translateY: -24 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 350, delay: index * 70 }}
+      className="mb-4"
+    >
       <TouchableOpacity
         className="flex-row items-center p-5 bg-slate-900/40 rounded-[32px] border border-white/5"
         onPress={onPress}
@@ -324,6 +329,7 @@ export default function CoachMessagesScreen() {
             <View className="flex-1 items-center justify-center"><ActivityIndicator color={colors.primary} /></View>
           ) : (
             <FlatList
+              key={activeTab}
               data={(activeTab === 'clients' ? filteredClients : filteredTeammates) as any[]}
               renderItem={({ item, index }) => {
                 if ('id' in item) {

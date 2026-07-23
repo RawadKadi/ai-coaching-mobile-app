@@ -93,6 +93,15 @@ export function ChatInputBar({
         useNativeDriver: true,
         easing: Easing.out(Easing.quad),
       }).start();
+
+      // Close active attachments/emoji panel to let the keyboard show up
+      if (activePanel) {
+        panelHeightAnim.setValue(0);
+        setActivePanel(null);
+        setDeferRender(false);
+      }
+
+      setTimeout(() => inputRef.current?.focus(), 150);
     } else {
       Animated.timing(replyAnim, {
         toValue: 0,

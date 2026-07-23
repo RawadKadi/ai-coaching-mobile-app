@@ -135,6 +135,8 @@ export interface Session {
     session_type: 'training' | 'nutrition' | 'check_in' | 'consultation' | 'other';
     notes?: string;
     meet_link?: string;
+    meeting_provider?: 'STREAM' | 'GOOGLE_MEET';
+    external_meeting_url?: string | null;
     is_locked: boolean;
     invite_sent?: boolean;
     cancellation_reason?: string;

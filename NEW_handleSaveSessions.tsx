@@ -67,7 +67,7 @@ const handleSaveSessions = async (proposedSessions: ProposedSession[]) => {
             console.log(`[SaveSessions] Creating new session on ${nextDate.toLocaleDateString()}`);
             sessionsToInsert.push({
               ...sessionData,
-              meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}-week${i}`,
+              meet_link: `coachingapp://call/pending`,
             });
           }
         }
@@ -122,7 +122,7 @@ const handleSaveSessions = async (proposedSessions: ProposedSession[]) => {
           console.log(`[SaveSessions] Creating new session on ${proposedDate.toLocaleDateString()}`);
           sessionsToInsert.push({
             ...sessionData,
-            meet_link: `https://meet.jit.si/${coach.id}-${client.id}-${Date.now()}`,
+            meet_link: `coachingapp://call/pending`,
           });
         }
       }

@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Check, CheckCheck, ArrowDown, Shield, Reply, MoreVertical, Forward } from 'lucide-react-native';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
+import { useChatSound } from '@/hooks/useChatSound';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { MessageOverlay } from '@/components/MessageOverlay';
 import ForwardModal from '@/components/ForwardModal';
@@ -80,6 +81,7 @@ export default function CoachToCoachChat() {
   const insets = useSafeAreaInsets();
   const { refreshUnreadCount } = useUnread();
   const { isUserOnline } = usePresence();
+  const { playReceive, playSend } = useChatSound();
 
   const showScrollBottomRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
@@ -164,6 +166,7 @@ export default function CoachToCoachChat() {
                 return [nm, ...prev];
               });
               markAsRead(nm.id);
+              playReceive();
               if (showScrollBottomRef.current) {
                 setNewMessagesCount(prev => prev + 1);
               }
@@ -307,6 +310,7 @@ export default function CoachToCoachChat() {
     setSending(false);
     setReplyingTo(null);
     scrollToBottom();
+    playSend();
 
     const { error } = await supabase.from('messages').insert(msg);
     if (error) {
@@ -359,6 +363,7 @@ export default function CoachToCoachChat() {
     // Add to state immediately
     setMessages(prev => [optimisticMsg, ...prev]);
     scrollToBottom();
+    playSend();
 
     let finalContent = contentWithCid;
     try {

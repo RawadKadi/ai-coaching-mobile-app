@@ -44,7 +44,7 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                         session_type: metadata.proposedSessionData.session_type,
                         status: 'scheduled',
                         invite_sent: true,
-                        meet_link: `https://meet.jit.si/${metadata.proposedSessionData.coach_id}-${metadata.proposedSessionData.client_id}-${Date.now()}`,
+                        meet_link: `coachingapp://call/pending`,
                     })
                     .select()
                     .single();

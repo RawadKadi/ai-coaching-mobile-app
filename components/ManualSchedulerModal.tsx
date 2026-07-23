@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { View, Text, Modal, Pressable, ScrollView, ActivityIndicator, Alert, TextInput, Dimensions, Platform, StatusBar, TouchableOpacity, Animated } from 'react-native';
 import { MotiView } from 'moti';
-import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat, Sparkles, ArrowLeft, ArrowRight, Zap, Target, Search, Filter, ChevronRight, Info, Lock, Users } from 'lucide-react-native';
+import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat, Sparkles, ArrowLeft, ArrowRight, Zap, Target, Search, Filter, ChevronRight, Info, Lock, Users, Plus } from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
@@ -9,8 +9,37 @@ import { availabilityService } from '@/lib/availability-service';
 import { supabase } from '@/lib/supabase';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { BrandedCalendar } from '@/components/BrandedCalendar';
+import { DatePickerOverlay } from '@/components/DatePickerOverlay';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+
+const formatDateToISO = (date: any): string => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const formatDisplayDate = (date: any, formatType: 'long' | 'short' | 'summary'): string => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const weekdaysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const weekdaysLong = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  if (formatType === 'short') {
+    return `${monthsShort[d.getMonth()]} ${d.getDate()}`;
+  }
+  if (formatType === 'summary') {
+    return `${weekdaysShort[d.getDay()]}, ${monthsShort[d.getMonth()]} ${d.getDate()}`;
+  }
+  return `${weekdaysLong[d.getDay()]}, ${monthsShort[d.getMonth()]} ${d.getDate()}`;
+};
 
 const { width } = Dimensions.get('window');
 
@@ -130,6 +159,7 @@ interface TimeSlotCardProps {
 }
 
 const TimeSlotCard = React.memo(({ slot, isSelected, onPress }: TimeSlotCardProps) => {
+    const theme = useTheme();
     const fadeAnim = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
 
     useEffect(() => {
@@ -222,6 +252,7 @@ export default function ManualSchedulerModal({
     // Let's ensure we use a stable context for the Modal contents
     
     const theme = useTheme();
+    const router = useRouter();
     const insets = useSafeAreaInsets();
     const scrollRef = useRef<ScrollView>(null);
     const [loading, setLoading] = useState(false);
@@ -240,6 +271,7 @@ export default function ManualSchedulerModal({
     const [notes, setNotes] = useState('');
     const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
     const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     const steps: StepType[] = ['client', 'days', 'time', 'details', 'confirm'];
     const currentStepIdx = steps.indexOf(step);
@@ -389,11 +421,11 @@ export default function ManualSchedulerModal({
                 const sStart = new Date(session.scheduled_at);
                 const sEnd = new Date(sStart.getTime() + session.duration_minutes * 60000);
                 if (sStart.toDateString() === slotStart.toDateString() && slotStart < sEnd && slotEnd > sStart) {
-                    return { time, available: false, reason: `Conflict on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` };
+                    return { time, available: false, reason: `Conflict on ${formatDisplayDate(date, 'short')}` };
                 }
             }
             const hasSession = existingSessions.some(s => s.status !== 'cancelled' && s.client_id === selectedClient?.id && new Date(s.scheduled_at).toDateString() === slotStart.toDateString());
-            if (hasSession) return { time, available: false, reason: `Client busy on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` };
+            if (hasSession) return { time, available: false, reason: `Client busy on ${formatDisplayDate(date, 'short')}` };
         }
         return { time, available: true };
     };
@@ -428,7 +460,7 @@ export default function ManualSchedulerModal({
     const generateSessionObject = (time: Date) => ({
         coach_id: coachId, client_id: selectedClient?.id, scheduled_at: time.toISOString(),
         duration_minutes: duration, session_type: sessionType, status: 'scheduled', is_locked: true, ai_generated: false,
-        meet_link: `https://meet.jit.si/${coachId}-${selectedClient?.id}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        meet_link: `coachingapp://call/pending`,
         notes: notes || `Manual ${sessionType} session with ${selectedClient?.profiles.full_name}`
     });
 
@@ -447,10 +479,24 @@ export default function ManualSchedulerModal({
         return clients.filter(c => c.profiles.full_name.toLowerCase().includes(searchQuery.toLowerCase()));
     }, [clients, searchQuery]);
 
+    const headerSub = useMemo(() => {
+        let dateStr = '';
+        if (recurrence === 'once' && selectedDates[0]) {
+            dateStr = formatDisplayDate(selectedDates[0], 'long');
+        } else if (recurrence === 'weekly' && selectedWeekdays.length > 0) {
+            const weekdaysNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            dateStr = selectedWeekdays.map(d => weekdaysNames[d]).join(', ');
+        } else {
+            dateStr = formatDisplayDate(new Date(), 'long');
+        }
+        return `${dateStr} · ${sessionType.toUpperCase()} Session`;
+    }, [recurrence, selectedDates, selectedWeekdays, sessionType]);
+
     const next14Days = Array.from({ length: 14 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return d; });
 
     function toggleDate(d: Date, exists: boolean) {
-        if (exists) setSelectedDates(selectedDates.filter(sd => sd.toDateString() !== d.toDateString()));
+        const dStr = formatDateToISO(d);
+        if (exists) setSelectedDates(selectedDates.filter(sd => formatDateToISO(sd) !== dStr));
         else setSelectedDates([...selectedDates, d]);
     }
     function toggleWeekday(idx: number, exists: boolean) {
@@ -604,15 +650,52 @@ export default function ManualSchedulerModal({
                                             </TouchableOpacity>
                                         </View>
 
-                                        {recurrence === 'once' && (
-                                            <View>
-                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Select Specific Date</Text>
-                                                <BrandedCalendar 
-                                                    selectedDate={selectedDates[0] || null} 
-                                                    onSelect={(date) => setSelectedDates([date])} 
-                                                />
-                                            </View>
-                                        )}
+                                         {recurrence === 'once' && (
+                                             <View>
+                                                 <View className="flex-row items-center justify-between mb-4 ml-1 pr-1">
+                                                     <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Selected Dates</Text>
+                                                     <TouchableOpacity 
+                                                         onPress={() => setShowDatePicker(true)}
+                                                         className="flex-row items-center gap-1.5 bg-blue-600/10 border border-blue-500/20 px-3 py-1.5 rounded-full"
+                                                     >
+                                                         <Plus size={12} color="#60A5FA" />
+                                                         <Text className="text-blue-400 text-[10px] font-black uppercase tracking-widest">Add Date</Text>
+                                                     </TouchableOpacity>
+                                                 </View>
+
+                                                 {selectedDates.length === 0 ? (
+                                                     <Pressable 
+                                                         onPress={() => setShowDatePicker(true)}
+                                                         className="bg-slate-900/30 p-8 rounded-[32px] border border-white/5 border-dashed items-center justify-center mb-6"
+                                                     >
+                                                         <Calendar size={28} color="#475569" className="mb-2" />
+                                                         <Text className="text-slate-500 font-bold text-center text-xs">No dates selected. Tap to add one.</Text>
+                                                     </Pressable>
+                                                 ) : (
+                                                     <View className="flex-row flex-wrap gap-2.5 mb-6">
+                                                         {selectedDates.map((date, idx) => {
+                                                             const d = new Date(date);
+                                                             return (
+                                                                 <View 
+                                                                     key={d.toISOString() + idx}
+                                                                     className="flex-row items-center gap-2 bg-slate-900 border border-white/5 pl-4 pr-2.5 py-2.5 rounded-2xl"
+                                                                 >
+                                                                     <Text className="text-white font-bold text-xs">
+                                                                         {formatDisplayDate(d, 'summary')}
+                                                                     </Text>
+                                                                     <TouchableOpacity 
+                                                                         onPress={() => setSelectedDates(selectedDates.filter((_, i) => i !== idx))}
+                                                                         className="w-5 h-5 bg-white/5 rounded-full items-center justify-center"
+                                                                     >
+                                                                         <X size={10} color="#64748B" />
+                                                                     </TouchableOpacity>
+                                                                 </View>
+                                                             );
+                                                         })}
+                                                     </View>
+                                                 )}
+                                             </View>
+                                         )}
                                         
                                         {recurrence === 'weekly' && (
                                             <View>
@@ -650,63 +733,83 @@ export default function ManualSchedulerModal({
                                             <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Step 3 of 5</Text>
                                             <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Select Time</Text>
                                         </View>
-                                        {renderHeader("Available Times", `${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} · ${sessionType.toUpperCase()} Session`)}
+                                        {renderHeader("Available Times", headerSub)}
                                         
                                         {loading ? <ActivityIndicator size="large" color={theme.colors.primary} className="mt-20" /> : (
                                             <View className="gap-8">
-                                                {/* Morning Slots */}
-                                                <View>
-                                                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Morning Slots</Text>
-                                                    <View className="gap-3">
-                                                        {availableSlots.filter(s => s.time.getHours() < 12).map((slot, i) => (
-                                                            <TimeSlotCard 
-                                                                key={slot.time.toISOString()}
-                                                                slot={slot}
-                                                                isSelected={selectedTime?.getTime() === slot.time.getTime()}
-                                                                onPress={() => {
-                                                                    if (slot.available) {
-                                                                        if (selectedTime?.getTime() === slot.time.getTime()) {
-                                                                            setSelectedTime(null);
-                                                                        } else {
-                                                                            setSelectedTime(slot.time);
-                                                                        }
-                                                                    }
-                                                                }}
-                                                            />
-                                                        ))}
-                                                    </View>
-                                                </View>
+                                                {availableSlots.length > 0 ? (
+                                                    <>
+                                                        {/* Morning Slots */}
+                                                        {availableSlots.some(s => s.time.getHours() < 12) && (
+                                                            <View>
+                                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Morning Slots</Text>
+                                                                <View className="gap-3">
+                                                                    {availableSlots.filter(s => s.time.getHours() < 12).map((slot, i) => (
+                                                                        <TimeSlotCard 
+                                                                            key={slot.time.toISOString()}
+                                                                            slot={slot}
+                                                                            isSelected={selectedTime?.getTime() === slot.time.getTime()}
+                                                                            onPress={() => {
+                                                                                if (slot.available) {
+                                                                                    if (selectedTime?.getTime() === slot.time.getTime()) {
+                                                                                        setSelectedTime(null);
+                                                                                    } else {
+                                                                                        setSelectedTime(slot.time);
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    ))}
+                                                                </View>
+                                                            </View>
+                                                        )}
 
-                                                {/* Afternoon Slots */}
-                                                <View>
-                                                    <View className="flex-row items-center gap-4 mb-4">
-                                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest ml-1">Afternoon Slots</Text>
-                                                        <View className="flex-1 h-[1px] bg-white/5" />
-                                                    </View>
-                                                    <View className="gap-3">
-                                                        {availableSlots.filter(s => s.time.getHours() >= 12).map((slot, i) => (
-                                                            <TimeSlotCard 
-                                                                key={slot.time.toISOString()}
-                                                                slot={slot}
-                                                                isSelected={selectedTime?.getTime() === slot.time.getTime()}
-                                                                onPress={() => {
-                                                                    if (slot.available) {
-                                                                        if (selectedTime?.getTime() === slot.time.getTime()) {
-                                                                            setSelectedTime(null);
-                                                                        } else {
-                                                                            setSelectedTime(slot.time);
-                                                                        }
-                                                                    }
-                                                                }}
-                                                            />
-                                                        ))}
-                                                    </View>
-                                                </View>
-
-                                                {availableSlots.length === 0 && (
-                                                    <View className="p-16 items-center justify-center bg-slate-900/20 rounded-[48px] border border-white/5 border-dashed">
-                                                        <Info size={32} color="#1E293B" className="mb-4" />
-                                                        <Text className="text-slate-600 font-bold text-center">No slots available for the selected pattern.</Text>
+                                                        {/* Afternoon Slots */}
+                                                        {availableSlots.some(s => s.time.getHours() >= 12) && (
+                                                            <View>
+                                                                <View className="flex-row items-center gap-4 mb-4">
+                                                                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest ml-1">Afternoon Slots</Text>
+                                                                    <View className="flex-1 h-[1px] bg-white/5" />
+                                                                </View>
+                                                                <View className="gap-3">
+                                                                    {availableSlots.filter(s => s.time.getHours() >= 12).map((slot, i) => (
+                                                                        <TimeSlotCard 
+                                                                            key={slot.time.toISOString()}
+                                                                            slot={slot}
+                                                                            isSelected={selectedTime?.getTime() === slot.time.getTime()}
+                                                                            onPress={() => {
+                                                                                if (slot.available) {
+                                                                                    if (selectedTime?.getTime() === slot.time.getTime()) {
+                                                                                        setSelectedTime(null);
+                                                                                    } else {
+                                                                                        setSelectedTime(slot.time);
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    ))}
+                                                                </View>
+                                                            </View>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <View className="p-10 items-center justify-center bg-slate-900/20 rounded-[40px] border border-white/5 border-dashed mt-4">
+                                                        <Clock size={32} color="#475569" className="mb-4" />
+                                                        <Text className="text-slate-200 font-black text-center text-lg mb-2">No times open</Text>
+                                                        <Text className="text-slate-500 font-medium text-center text-xs mb-6 px-4">
+                                                            Choose another day or change your working hours.
+                                                        </Text>
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                onClose();
+                                                                router.push('/(coach)/settings/availability');
+                                                            }}
+                                                            className="px-6 py-3.5 bg-blue-600 rounded-2xl flex-row items-center gap-2 border border-blue-500"
+                                                            activeOpacity={0.8}
+                                                        >
+                                                            <Clock size={16} color="white" />
+                                                            <Text className="text-white font-black text-sm">Change Working Hours</Text>
+                                                        </TouchableOpacity>
                                                     </View>
                                                 )}
                                             </View>
@@ -842,7 +945,7 @@ export default function ManualSchedulerModal({
                                                              <View className="flex-row items-center gap-2 mt-3 bg-slate-950 self-start px-3.5 py-2 rounded-xl border border-white/5">
                                                                  <Calendar size={14} color={theme.colors.primary} />
                                                                  <Text className="text-slate-200 font-bold text-xs">
-                                                                     {selectedDates[0] ? selectedDates[0].toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date selected'}
+                                                                     {selectedDates[0] ? formatDisplayDate(selectedDates[0], 'summary') : 'No date selected'}
                                                                  </Text>
                                                              </View>
                                                          </View>
@@ -1000,9 +1103,21 @@ export default function ManualSchedulerModal({
                                 );
                             }}
                         </Pressable>
-                    </View>
-                </View>
             </View>
+          </View>
+        </View>
+          
+          <DatePickerOverlay 
+              visible={showDatePicker}
+              selectedDate={new Date()}
+              onSelect={(date) => {
+                  const dISO = formatDateToISO(date);
+                  if (!selectedDates.some(sd => formatDateToISO(sd) === dISO)) {
+                      setSelectedDates([...selectedDates, date]);
+                  }
+              }}
+              onClose={() => setShowDatePicker(false)}
+          />
         </Modal>
     );
 }

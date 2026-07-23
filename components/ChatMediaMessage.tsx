@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import MealMessageCard from './MealMessageCard';
+import JoinSessionModal from './JoinSessionModal';
 import DocumentPreviewModal from './DocumentPreviewModal';
 
 // ── Global playback speed (persisted, shared across all voice note players) ───
@@ -28,6 +29,10 @@ type PlaybackSpeed = typeof SPEED_STEPS[number];
 const SPEED_KEY = 'voice_note_playback_speed';
 let _cachedSpeed: PlaybackSpeed = 1; // in-memory cache so all mounted players share it
 let _speedListeners: Array<(s: PlaybackSpeed) => void> = [];
+
+// Global tracker to ensure only one voice note plays at a time
+let activePlayingSound: Audio.Sound | null = null;
+let activePlayingSetIsPlaying: ((playing: boolean) => void) | null = null;
 
 async function loadGlobalSpeed(): Promise<PlaybackSpeed> {
   try {
@@ -637,14 +642,13 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
   const theme = useTheme();
   const styles = getStyles(theme.colors);
   const router = useRouter();
+  const [modalVisible, setModalVisible] = useState(false);
   
   const isCancelled = media.status === 'cancelled';
   const isRescheduled = media.status === 'rescheduled';
   
   const handleJoin = () => {
-    if (media.link) {
-      Linking.openURL(media.link);
-    }
+    setModalVisible(true);
   };
 
   if (isCancelled || isRescheduled) {
@@ -751,6 +755,18 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
           </View>
         )}
       </View>
+
+      <JoinSessionModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        session={{
+          id: media.sessionId || '',
+          meeting_provider: media.meetingProvider || 'STREAM',
+          external_meeting_url: media.externalMeetingUrl || (media.link && !media.link.includes('jit.si') ? media.link : null),
+        }}
+        isCoach={isOwn}
+        participantName={isOwn ? 'Coach' : 'Client'}
+      />
     </View>
   );
 }
@@ -827,6 +843,10 @@ function VoiceNotePlayer({
                 setPosition(0);
                 soundRef.current?.pauseAsync().catch(() => {});
                 soundRef.current?.setPositionAsync(0).catch(() => {});
+                if (activePlayingSound === soundRef.current) {
+                  activePlayingSound = null;
+                  activePlayingSetIsPlaying = null;
+                }
               }
             }
           }
@@ -849,6 +869,10 @@ function VoiceNotePlayer({
     return () => {
       mounted = false;
       if (soundRef.current) {
+        if (activePlayingSound === soundRef.current) {
+          activePlayingSound = null;
+          activePlayingSetIsPlaying = null;
+        }
         soundRef.current.unloadAsync();
       }
     };
@@ -863,13 +887,33 @@ function VoiceNotePlayer({
     try {
       if (isPlaying) {
         await soundRef.current.pauseAsync();
+        if (activePlayingSound === soundRef.current) {
+          activePlayingSound = null;
+          activePlayingSetIsPlaying = null;
+        }
       } else {
+        // Pause any other playing voice note
+        if (activePlayingSound && activePlayingSound !== soundRef.current) {
+          try {
+            await activePlayingSound.pauseAsync();
+          } catch (e) {
+            console.log('Error pausing previous sound:', e);
+          }
+          if (activePlayingSetIsPlaying) {
+            activePlayingSetIsPlaying(false);
+          }
+        }
+
         if (position >= totalDuration - 100) {
           await soundRef.current.setPositionAsync(0);
         }
         // Apply current speed before playing
         await soundRef.current.setRateAsync(playbackSpeed, true);
         await soundRef.current.playAsync();
+
+        // Track this as the active playing voice note
+        activePlayingSound = soundRef.current;
+        activePlayingSetIsPlaying = setIsPlaying;
       }
     } catch (error) {
       console.error('Playback error:', error);
@@ -997,97 +1041,106 @@ function VoiceNotePlayer({
   );
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', width: 240, paddingVertical: 4 }}>
+    <View style={{ width: 240, paddingVertical: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {/* Sent: avatar LEFT of play button. Received: avatar RIGHT (rendered after scrubber) */}
+        {isOwn && avatarOrSpeedSlot}
 
-      {/* Sent: avatar LEFT of play button. Received: avatar RIGHT (rendered after scrubber) */}
-      {isOwn && avatarOrSpeedSlot}
-
-      {/* Play/Pause button — always leftmost for received, second for sent */}
-      <TouchableOpacity 
-        onPress={togglePlayback}
-        disabled={isLoading}
-        style={{ 
-          width: 44, 
-          height: 44, 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          flexShrink: 0,
-        }}
-      >
-        {isLoading ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
-        ) : isPlaying ? (
-          <Pause size={22} color="#FFFFFF" fill="#FFFFFF" />
-        ) : (
-          <Play size={22} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 3 }} />
-        )}
-      </TouchableOpacity>
-
-      <View style={{ flex: 1, marginHorizontal: 12 }}>
-        <PanGestureHandler
-          onGestureEvent={onGestureEvent}
-          onHandlerStateChange={onHandlerStateChange}
-          activeOffsetX={[-5, 5]}
-          failOffsetY={[-10, 10]}
-          disallowInterruption={true}
-          shouldCancelWhenOutside={false}
+        {/* Play/Pause button — always leftmost for received, second for sent */}
+        <TouchableOpacity 
+          onPress={togglePlayback}
+          disabled={isLoading}
+          style={{ 
+            width: 44, 
+            height: 44, 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            flexShrink: 0,
+          }}
         >
-          <View 
-            onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-            style={{ height: 28, justifyContent: 'center' }}
-          >
-          {/* Track background */}
-          <View style={{ height: 4, backgroundColor: isOwn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
-            <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: '#FFFFFF' }} />
-          </View>
-          
-          {/* Draggable thumb/knob */}
-          <View 
-            style={{ 
-              position: 'absolute', 
-              left: `${progress * 100}%`, 
-              marginLeft: -8,
-              width: 16, 
-              height: 16, 
-              borderRadius: 8, 
-              backgroundColor: '#FFFFFF',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 3,
-              elevation: 4,
-              borderWidth: 1,
-              borderColor: 'rgba(0,0,0,0.05)'
-            }} 
-          />
-        </View>
-      </PanGestureHandler>
-        
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
-          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>
-            {formatTime(totalDuration)}
-          </Text>
-          {createdAt && (
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ 
-                fontSize: 9, 
-                color: 'rgba(255,255,255,0.7)', 
-                fontWeight: '700' 
-              }}>
-                {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-              {isOwn && (
-                isRead 
-                  ? <CheckCheck size={11} color="#10B981" style={{ marginLeft: 3 }} /> 
-                  : <Check size={11} color="rgba(255,255,255,0.6)" style={{ marginLeft: 3 }} />
-              )}
-            </View>
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : isPlaying ? (
+            <Pause size={22} color="#FFFFFF" fill="#FFFFFF" />
+          ) : (
+            <Play size={22} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 3 }} />
           )}
+        </TouchableOpacity>
+
+        <View style={{ flex: 1, marginHorizontal: 12 }}>
+          <PanGestureHandler
+            onGestureEvent={onGestureEvent}
+            onHandlerStateChange={onHandlerStateChange}
+            activeOffsetX={[-5, 5]}
+            failOffsetY={[-10, 10]}
+            disallowInterruption={true}
+            shouldCancelWhenOutside={false}
+          >
+            <View 
+              onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+              style={{ height: 28, justifyContent: 'center' }}
+            >
+              {/* Track background */}
+              <View style={{ height: 4, backgroundColor: isOwn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: '#FFFFFF' }} />
+              </View>
+              
+              {/* Draggable thumb/knob */}
+              <View 
+                style={{ 
+                  position: 'absolute', 
+                  left: `${progress * 100}%`, 
+                  marginLeft: -8,
+                  width: 16, 
+                  height: 16, 
+                  borderRadius: 8, 
+                  backgroundColor: '#FFFFFF',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 3,
+                  elevation: 4,
+                  borderWidth: 1,
+                  borderColor: 'rgba(0,0,0,0.05)'
+                }} 
+              />
+            </View>
+          </PanGestureHandler>
         </View>
+
+        {/* Received: avatar RIGHT of scrubber */}
+        {!isOwn && avatarOrSpeedSlot}
       </View>
 
-      {/* Received: avatar RIGHT of scrubber */}
-      {!isOwn && avatarOrSpeedSlot}
+      {/* Bottom Row: Voice duration & message time/status */}
+      <View style={{ 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginTop: 2,
+        paddingLeft: isOwn ? 100 : 56,
+        paddingRight: isOwn ? 12 : 64,
+      }}>
+        <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>
+          {formatTime(totalDuration)}
+        </Text>
+        {createdAt && (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ 
+              fontSize: 9, 
+              color: 'rgba(255,255,255,0.7)', 
+              fontWeight: '700' 
+            }}>
+              {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isOwn && (
+              isRead 
+                ? <CheckCheck size={11} color="#10B981" style={{ marginLeft: 3 }} /> 
+                : <Check size={11} color="rgba(255,255,255,0.6)" style={{ marginLeft: 3 }} />
+            )}
+          </View>
+        )}
+      </View>
     </View>
   );
 }

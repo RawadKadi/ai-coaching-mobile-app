@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Video, X, AlertCircle, Clock } from 'lucide-react-native';
+import JoinSessionModal from './JoinSessionModal';
 
 export default function SessionMonitor({ router }: { router: ReturnType<typeof useRouter> }) {
   const { user, coach } = useAuth();
@@ -11,6 +12,7 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
   const [toastMessage, setToastMessage] = useState('');
   const [currentSession, setCurrentSession] = useState<any>(null);
   const [toastType, setToastType] = useState<'join' | 'cancelled' | 'postponed'>('join');
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(-150)).current;
 
   // Refs to track state inside intervals/callbacks without stale closures
@@ -231,14 +233,22 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
     }
   };
 
+  const getAppCallLink = (sessionId: string) => `coachingapp://call/${sessionId}`;
+
   const sendInvite = async (session: any) => {
     try {
+      const appCallLink = getAppCallLink(session.id);
+      const meetingProvider = session.meeting_provider || 'STREAM';
+      const externalUrl = session.external_meeting_url || null;
+
       const messageContent = JSON.stringify({
         type: 'session_invite',
         description: 'Scheduled Session',
         timestamp: session.scheduled_at,
-        link: session.meet_link,
-        sessionId: session.id
+        link: externalUrl || appCallLink,
+        sessionId: session.id,
+        meetingProvider,
+        externalMeetingUrl: externalUrl
       });
 
       // Get recipient ID (Client's User ID)
@@ -258,7 +268,11 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
         read: false
       });
 
-      await supabase.from('sessions').update({ invite_sent: true }).eq('id', session.id);
+      // Store the URL in the session for later reference
+      await supabase
+        .from('sessions')
+        .update({ invite_sent: true, meet_link: externalUrl || appCallLink })
+        .eq('id', session.id);
     } catch (error) {
       console.error('Error sending invite:', error);
     }
@@ -302,11 +316,7 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
     if (!currentSession) return;
 
     if (toastType === 'join') {
-      if (coach) {
-        router.push(`/(coach)/chat/${currentSession.client_id}` as any);
-      } else {
-        router.push('/(client)/(tabs)/chat' as any); 
-      }
+      setJoinModalVisible(true);
     } else if (toastType === 'postponed' && coach) {
       // Check Up Logic
       const reason = currentSession.cancellation_reason?.toLowerCase() || '';
@@ -365,35 +375,54 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
   };
 
   return (
-    <SafeAreaView style={styles.container} pointerEvents="box-none">
-      <Animated.View style={[styles.toast, getToastStyle(), { transform: [{ translateY: slideAnim }] }]}>
-        <TouchableOpacity style={styles.content} onPress={handleAction} disabled={!getButtonText()}>
-          <View style={[styles.iconContainer, { backgroundColor: getIconBgColor() }]}>
-            {toastType === 'join' && <Video size={20} color={getIconColor()} />}
-            {toastType === 'cancelled' && <X size={20} color={getIconColor()} />}
-            {toastType === 'postponed' && <Clock size={20} color={getIconColor()} />}
-          </View>
-          <View style={styles.textContainer}>
-            <Text style={styles.title}>
-              {toastType === 'join' ? 'Session Starting' : (toastType === 'postponed' ? 'Session Postponed' : 'Session Cancelled')}
-            </Text>
-            <Text style={styles.message}>
-              {toastMessage}
-            </Text>
-          </View>
-          {getButtonText() && (
-            <View style={[styles.button, { backgroundColor: getIconColor() }]}>
-              <Text style={styles.buttonText}>
-                {getButtonText()}
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999 }} pointerEvents="box-none">
+      <SafeAreaView style={styles.container} pointerEvents="box-none">
+        <Animated.View style={[styles.toast, getToastStyle(), { transform: [{ translateY: slideAnim }] }]}>
+          <TouchableOpacity style={styles.content} onPress={handleAction} disabled={!getButtonText()}>
+            <View style={[styles.iconContainer, { backgroundColor: getIconBgColor() }]}>
+              {toastType === 'join' && <Video size={20} color={getIconColor()} />}
+              {toastType === 'cancelled' && <X size={20} color={getIconColor()} />}
+              {toastType === 'postponed' && <Clock size={20} color={getIconColor()} />}
+            </View>
+            <View style={styles.textContainer}>
+              <Text style={styles.title}>
+                {toastType === 'join' ? 'Session Starting' : (toastType === 'postponed' ? 'Session Postponed' : 'Session Cancelled')}
+              </Text>
+              <Text style={styles.message}>
+                {toastMessage}
               </Text>
             </View>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.closeButton} onPress={hideToast}>
-          <X size={18} color="#64748b" />
-        </TouchableOpacity>
-      </Animated.View>
-    </SafeAreaView>
+            {getButtonText() && (
+              <View style={[styles.button, { backgroundColor: getIconColor() }]}>
+                <Text style={styles.buttonText}>
+                  {getButtonText()}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.closeButton} onPress={hideToast}>
+            <X size={18} color="#64748b" />
+          </TouchableOpacity>
+        </Animated.View>
+      </SafeAreaView>
+
+      {currentSession && (
+        <JoinSessionModal
+          visible={joinModalVisible}
+          onClose={() => {
+            setJoinModalVisible(false);
+            hideToast();
+          }}
+          session={currentSession}
+          isCoach={!!coach}
+          participantName={
+            coach
+              ? (coach as any)?.profiles?.full_name || 'Coach'
+              : 'Client'
+          }
+        />
+      )}
+    </View>
   );
 }
 

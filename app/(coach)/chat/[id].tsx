@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { useNotification } from '@/contexts/NotificationContext';
+import { useChatSound } from '@/hooks/useChatSound';
 import { supabase } from '@/lib/supabase';
 import { 
   ArrowLeft, 
@@ -101,6 +102,7 @@ export default function CoachChatScreen() {
   const insets = useSafeAreaInsets();
   const { refreshUnreadCount } = useUnread();
   const { suppressToast } = useNotification();
+  const { playReceive, playSend } = useChatSound();
   const { isUserOnline, onlineUserIds, lastSeenMap } = usePresence();
   
   const [messages, setMessages] = useState<Message[]>([]);
@@ -324,6 +326,7 @@ export default function CoachChatScreen() {
       return [nm, ...prev];
     });
     markAsRead(nm.id);
+    playReceive();
     if (showScrollBottomRef.current) {
       setNewMessagesCount(prev => prev + 1);
     }
@@ -456,6 +459,7 @@ export default function CoachChatScreen() {
     setSending(false);
     setReplyingTo(null);
     scrollToBottom();
+    playSend();
 
     const { error } = await supabase.from('messages').insert(msg);
     if (error) {
@@ -505,6 +509,7 @@ export default function CoachChatScreen() {
 
     setMessages(prev => [optimisticMsg, ...prev]);
     scrollToBottom();
+    playSend();
 
     let finalContent = contentWithCid;
     try {
@@ -1131,50 +1136,52 @@ export default function CoachChatScreen() {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color={theme.colors.primary} /></View> : (
-             <FlatList
-                ref={flatListRef} data={messages} extraData={messages} renderItem={renderMessage} keyExtractor={item => item.id}
-                inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
-                initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
-                onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
-                onScroll={(e) => {
-                  const offsetY = e.nativeEvent.contentOffset.y;
-                  if (offsetY > 300 && !showScrollBottom) {
-                    setShowScrollBottom(true);
-                  } else if (offsetY <= 300 && showScrollBottom) {
-                    setShowScrollBottom(false);
-                    setNewMessagesCount(0);
-                  }
-                }}
-                scrollEventThrottle={16}
-                ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
-                delaysContentTouches={false} keyboardShouldPersistTaps="handled"
-             />
-        )}
-        <AnimatePresence>
-          {showScrollBottom && (
-            <MotiView
-              from={{ opacity: 0, scale: 0.8, translateY: 20 }}
-              animate={{ opacity: 1, scale: 1, translateY: 0 }}
-              exit={{ opacity: 0, scale: 0.8, translateY: 20 }}
-              transition={{ type: 'timing', duration: 200 }}
-              style={{ position: 'absolute', bottom: replyingTo ? 160 : 100, right: 16, zIndex: 50 }}
-            >
-              <TouchableOpacity 
-                onPress={scrollToBottom}
-                activeOpacity={0.8}
-                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#1E293B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}
-              >
-                <ArrowDown size={20} color="#FFFFFF" />
-                {newMessagesCount > 0 && (
-                  <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' }}>
-                    <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{newMessagesCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </MotiView>
+        <View style={{ flex: 1, position: 'relative' }}>
+          {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color={theme.colors.primary} /></View> : (
+               <FlatList
+                  ref={flatListRef} data={messages} extraData={messages} renderItem={renderMessage} keyExtractor={item => item.id}
+                  inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
+                  initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
+                  onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}
+                  onScroll={(e) => {
+                    const offsetY = e.nativeEvent.contentOffset.y;
+                    if (offsetY > 300 && !showScrollBottom) {
+                      setShowScrollBottom(true);
+                    } else if (offsetY <= 300 && showScrollBottom) {
+                      setShowScrollBottom(false);
+                      setNewMessagesCount(0);
+                    }
+                  }}
+                  scrollEventThrottle={16}
+                  ListHeaderComponent={isOtherTyping ? <TypingIndicator /> : null}
+                  delaysContentTouches={false} keyboardShouldPersistTaps="handled"
+               />
           )}
-        </AnimatePresence>
+          <AnimatePresence>
+            {showScrollBottom && (
+              <MotiView
+                from={{ opacity: 0, scale: 0.8, translateY: 20 }}
+                animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                exit={{ opacity: 0, scale: 0.8, translateY: 20 }}
+                transition={{ type: 'timing', duration: 200 }}
+                style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 50 }}
+              >
+                <TouchableOpacity 
+                  onPress={scrollToBottom}
+                  activeOpacity={0.8}
+                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#1E293B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}
+                >
+                  <ArrowDown size={20} color="#FFFFFF" />
+                  {newMessagesCount > 0 && (
+                    <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' }}>
+                      <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{newMessagesCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </MotiView>
+            )}
+          </AnimatePresence>
+        </View>
         {isSelectionMode ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(insets.bottom, 16), backgroundColor: 'rgba(2,6,23,0.88)', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' }}>
             <TouchableOpacity onPress={() => setIsSelectionMode(false)}>
