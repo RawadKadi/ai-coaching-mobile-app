@@ -99,7 +99,10 @@ export default function CoachMessagesScreen() {
         const lastMsg = lastMsgMap[client.user_id];
         let preview = lastMsg?.content || 'No messages yet';
         try { 
-          const p = JSON.parse(preview); 
+          let p = JSON.parse(preview); 
+          if (typeof p === 'string' && p.startsWith('{')) {
+            p = JSON.parse(p);
+          }
           if (p?.type === 'task_completion') {
             preview = `✅ Task: ${p.taskName || 'Completed'}`;
           } else if (p?.type === 'challenge_completed') {
@@ -120,7 +123,7 @@ export default function CoachMessagesScreen() {
               const d = Math.floor(Number(p.duration));
               if (!isNaN(d)) durStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
             }
-            preview = `🎤 Voice Message${durStr}`;
+            preview = `🎤 Voice message${durStr}`;
           } else if (p?.type === 'session_invite' || p?.type === 'call_invite') {
             preview = '📹 Session Invitation';
           } else if (p?.type === 'deleted') {
@@ -178,7 +181,10 @@ export default function CoachMessagesScreen() {
         const lastMsg = lastMsgMap[tm.user_id];
         let preview = lastMsg?.content || 'No messages yet';
         try { 
-          const p = JSON.parse(preview); 
+          let p = JSON.parse(preview); 
+          if (typeof p === 'string' && p.startsWith('{')) {
+            p = JSON.parse(p);
+          }
           if (p?.type === 'task_completion') {
             preview = `✅ Task: ${p.taskName || 'Completed'}`;
           } else if (p?.type === 'challenge_completed') {
@@ -199,7 +205,7 @@ export default function CoachMessagesScreen() {
               const d = Math.floor(Number(p.duration));
               if (!isNaN(d)) durStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
             }
-            preview = `🎤 Voice Message${durStr}`;
+            preview = `🎤 Voice message${durStr}`;
           } else if (p?.type === 'session_invite' || p?.type === 'call_invite') {
             preview = '📹 Session Invitation';
           } else if (p?.type === 'deleted') {

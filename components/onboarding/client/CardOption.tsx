@@ -13,8 +13,9 @@ interface CardOptionProps {
   activeColor?: string;
 }
 
-export default function CardOption({ label, desc, icon, selected, onSelect, activeColor = colors.primary }: CardOptionProps) {
+export default function CardOption({ label, desc, icon, selected, onSelect, activeColor }: CardOptionProps) {
   const colors = useBrandColors();
+  const effectiveActiveColor = activeColor || colors.primary;
   return (
     <TouchableOpacity 
       onPress={onSelect}
@@ -23,8 +24,8 @@ export default function CardOption({ label, desc, icon, selected, onSelect, acti
       }`}
     >
       <View className="flex-row items-center gap-5 flex-1">
-        <View style={selected ? { backgroundColor: activeColor + '20' } : {}} className={`w-14 h-14 rounded-2xl items-center justify-center ${selected ? '' : 'bg-slate-950 border border-slate-800'}`}>
-          {icon || <Shield size={20} color={selected ? activeColor : '#475569'} />}
+        <View style={selected ? { backgroundColor: effectiveActiveColor + '20' } : {}} className={`w-14 h-14 rounded-2xl items-center justify-center ${selected ? '' : 'bg-slate-950 border border-slate-800'}`}>
+          {icon || <Shield size={20} color={selected ? effectiveActiveColor : '#475569'} />}
         </View>
         <View className="flex-1">
           <Text className={`text-lg font-black ${selected ? 'text-white' : 'text-slate-400'}`}>{label}</Text>

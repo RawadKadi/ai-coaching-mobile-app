@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Target, Award, X } from 'lucide-react-native';
 import { MotiView, AnimatePresence } from 'moti';
+import MagicRings from '../ui/MagicRings';
 
 interface FirstTimeHeroCardsProps {
   clientName: string;
@@ -43,8 +44,24 @@ export const FirstTimeHeroCards = ({ clientName }: FirstTimeHeroCardsProps) => {
             from={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95, height: 0 }}
-            className="bg-blue-600 rounded-[32px] p-6 shadow-xl shadow-blue-500/20"
+            className="bg-blue-600 rounded-[32px] p-6 shadow-xl shadow-blue-500/20 relative overflow-hidden"
           >
+            {/* Animated MagicRings in background */}
+            <View style={{ ...StyleSheet.absoluteFillObject, opacity: 0.4 }} pointerEvents="none">
+              <MagicRings
+                color="#60a5fa"
+                colorTwo="#1d4ed8"
+                backgroundColor="#2563eb"
+                ringCount={5}
+                speed={0.7}
+                attenuation={8}
+                lineThickness={2}
+                baseRadius={0.3}
+                radiusStep={0.12}
+                followMouse={false}
+                clickBurst={false}
+              />
+            </View>
             <View className="flex-row items-center gap-3 mb-4">
               <View className="w-10 h-10 bg-white/20 rounded-full items-center justify-center">
                 <Target size={20} color="white" />

@@ -5,27 +5,35 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Video, X, AlertCircle, Clock } from 'lucide-react-native';
 import JoinSessionModal from './JoinSessionModal';
+import { joinSession, generateGoogleMeetUrl } from '@/utils/session';
 
-export default function SessionMonitor({ router }: { router: ReturnType<typeof useRouter> }) {
-  const { user, coach } = useAuth();
+interface SessionMonitorProps {
+  children?: React.ReactNode;
+}
+
+export default function SessionMonitor({ children }: SessionMonitorProps) {
+  const { user, profile, coach } = useAuth();
+  const router = useRouter();
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [currentSession, setCurrentSession] = useState<any>(null);
   const [toastType, setToastType] = useState<'join' | 'cancelled' | 'postponed'>('join');
+  const [currentSession, setCurrentSession] = useState<any>(null);
   const [joinModalVisible, setJoinModalVisible] = useState(false);
-  const slideAnim = useRef(new Animated.Value(-150)).current;
-
-  // Refs to track state inside intervals/callbacks without stale closures
-  const currentSessionRef = useRef<any>(null);
+  
+  // Track previous state to avoid duplicate toasts
+  const previousSessionIds = useRef<Set<string>>(new Set());
   const toastTypeRef = useRef<'join' | 'cancelled' | 'postponed'>('join');
+  const currentSessionRef = useRef<any>(null);
+  const slideAnim = useRef(new Animated.Value(-150)).current;
   const isToastVisibleRef = useRef(false);
 
-  // Sync refs with state
   useEffect(() => {
     currentSessionRef.current = currentSession;
     toastTypeRef.current = toastType;
     isToastVisibleRef.current = toastVisible;
   }, [currentSession, toastType, toastVisible]);
+
+  const getAppCallLink = (sessionId: string) => generateGoogleMeetUrl(sessionId);
 
   useEffect(() => {
     if (!user) return;
@@ -233,8 +241,6 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
     }
   };
 
-  const getAppCallLink = (sessionId: string) => `coachingapp://call/${sessionId}`;
-
   const sendInvite = async (session: any) => {
     try {
       const appCallLink = getAppCallLink(session.id);
@@ -316,7 +322,8 @@ export default function SessionMonitor({ router }: { router: ReturnType<typeof u
     if (!currentSession) return;
 
     if (toastType === 'join') {
-      setJoinModalVisible(true);
+      const url = currentSession.external_meeting_url || currentSession.meet_link || currentSession.meeting_url;
+      joinSession(url, currentSession.id);
     } else if (toastType === 'postponed' && coach) {
       // Check Up Logic
       const reason = currentSession.cancellation_reason?.toLowerCase() || '';

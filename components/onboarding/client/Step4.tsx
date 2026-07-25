@@ -114,7 +114,7 @@ export default function Step4({ formData }: Step4Props) {
     <Animated.View style={{ opacity: fade, flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: '#0F172A', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: isDone ? 'rgba(59,130,246,0.3)' : '#1E293B' }}>
       <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
         {isDone ? (
-          <CheckCircle size={24} color={colors.primary} weight="fill" />
+          <CheckCircle size={24} color={colors.primary} />
         ) : (
           <Animated.View style={{ transform: [{ rotate: spin(spinAnim) }] }}>
             <ActivityIndicator size="small" color="#64748B" />

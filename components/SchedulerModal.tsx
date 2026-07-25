@@ -9,6 +9,7 @@ import ConflictResolutionModal from './ConflictResolutionModal';
 import { ConflictInfo, Resolution } from '@/types/conflict';
 import { findAvailableSlots } from '@/lib/time-slot-finder';
 import { supabase } from '@/lib/supabase';
+import { generateGoogleMeetUrl } from '@/utils/session';
 import { useAuth } from '@/contexts/AuthContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useEffect, useMemo } from 'react';
@@ -599,7 +600,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         status: 'scheduled',
                         is_locked: true,
                         ai_generated: true,
-                        meet_link: `coachingapp://call/pending`,
+                        meet_link: generateGoogleMeetUrl(),
                         notes: proposed.notes || `AI Scheduled session for ${clientContext?.name || 'Athlete'}`,
                         recurrence_rule: i === 0 ? recurrenceRule : null // Store RRULE on the first instance
                     });

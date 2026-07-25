@@ -19,8 +19,8 @@ interface PostponeModalProps {
 }
 
 export default function PostponeModal({ visible, onClose, onConfirm, coachId, initialDate, clientId, sessionId }: PostponeModalProps) {
-  const styles = getStyles(theme.colors);
   const theme = useTheme();
+  const styles = getStyles(theme.colors);
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1=Reason, 2={Day} Selection, 3={Slot} Selection
   const [reason, setReason] = useState<string>('');
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
@@ -133,23 +133,23 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
+        <View style={styles.container}>
           
           {/* Header */}
-          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
+          <View style={styles.header}>
+            <Text style={styles.title}>
               {step === 1 && 'Why are you postponing?'}
               {step === 2 && 'Select a Day'}
               {step === 3 && 'Select a Time'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color={theme.colors.textSecondary} />
+              <X size={24} color="#94A3B8" />
             </TouchableOpacity>
           </View>
 
           {/* Progress Bar */}
-          <View style={[styles.progressContainer, { backgroundColor: theme.colors.border }]}>
-            <View style={[styles.progressBar, { width: `${(step / 3) * 100}%`, backgroundColor: theme.colors.primary }]} />
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressBar, { width: `${(step / 3) * 100}%` }]} />
           </View>
 
           <ScrollView style={styles.content}>
@@ -160,11 +160,11 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
                 {['Sickness', 'Family Emergency', 'Schedule Conflict', 'Personal Emergency', 'Other'].map((r) => (
                   <TouchableOpacity 
                     key={r} 
-                    style={[styles.optionButton, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }, reason === r && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary }]}
+                    style={[styles.optionButton, reason === r && styles.selectedOption]}
                     onPress={() => handleReasonSelect(r)}
                   >
-                    <Text style={[styles.optionText, { color: theme.colors.text }, reason === r && { color: theme.colors.primary, fontWeight: '600' }]}>{r}</Text>
-                    {reason === r && <Check size={20} color={theme.colors.primary} />}
+                    <Text style={[styles.optionText, reason === r && styles.selectedOptionText]}>{r}</Text>
+                    {reason === r && <Check size={20} color="#60A5FA" />}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -175,17 +175,17 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
               <View>
                 {loadingSlots ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={theme.colors.primary} />
-                    <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Finding best available days...</Text>
+                    <ActivityIndicator size="large" color="#60A5FA" />
+                    <Text style={styles.loadingText}>Finding best available days...</Text>
                   </View>
                 ) : availableDays.length === 0 ? (
                   <View style={styles.emptyContainer}>
-                    <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No Available Days</Text>
-                    <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                    <Text style={styles.emptyTitle}>No Available Days</Text>
+                    <Text style={styles.emptyText}>
                         Your schedule or the coach's schedule is full for the next 2 weeks.
                     </Text>
-                    <TouchableOpacity onPress={handleCancelSession} style={[styles.cancelLinkButton, { backgroundColor: theme.colors.warning + '10', borderColor: theme.colors.warning + '40' }]}>
-                      <Text style={[styles.cancelLinkText, { color: theme.colors.warning }]}>Cancel Session Instead</Text>
+                    <TouchableOpacity onPress={handleCancelSession} style={styles.cancelLinkButton}>
+                      <Text style={styles.cancelLinkText}>Cancel Session Instead</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -193,20 +193,20 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
                     {availableDays.map((day) => (
                       <TouchableOpacity
                         key={day}
-                        style={[styles.optionButton, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}
+                        style={styles.optionButton}
                         onPress={() => handleDaySelect(day)}
                       >
                         <View style={styles.optionRow}>
-                            <CalendarIcon size={20} color={theme.colors.textSecondary} />
-                            <Text style={[styles.optionText, { color: theme.colors.text }]}>{formatDayLabel(day)}</Text>
+                            <CalendarIcon size={20} color="#94A3B8" />
+                            <Text style={styles.optionText}>{formatDayLabel(day)}</Text>
                         </View>
-                        <ChevronRight size={20} color={theme.colors.textTertiary} />
+                        <ChevronRight size={20} color="#475569" />
                       </TouchableOpacity>
                     ))}
                     
-                    <View style={[styles.cantDoTodayContainer, { borderTopColor: theme.colors.border }]}>
-                        <TouchableOpacity onPress={handleCancelSession} style={[styles.cancelLinkButton, { backgroundColor: theme.colors.warning + '10', borderColor: theme.colors.warning + '40' }]}>
-                            <Text style={[styles.cancelLinkText, { color: theme.colors.warning }]}>Cancel Session Instead</Text>
+                    <View style={styles.cantDoTodayContainer}>
+                        <TouchableOpacity onPress={handleCancelSession} style={styles.cancelLinkButton}>
+                            <Text style={styles.cancelLinkText}>Cancel Session Instead</Text>
                         </TouchableOpacity>
                     </View>
                   </View>
@@ -217,15 +217,15 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
             {/* STEP 3: Slot Selection */}
             {step === 3 && selectedDay && (
                 <View>
-                    <Text style={[styles.dayHeader, { color: theme.colors.text }]}>{formatDayLabel(selectedDay)}</Text>
+                    <Text style={styles.dayHeader}>{formatDayLabel(selectedDay)}</Text>
                     <View style={styles.slotsGrid}>
                         {groupedSlots[selectedDay]?.map((slot) => (
                             <TouchableOpacity
                                 key={slot}
-                                style={[styles.slotButton, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }, selectedSlot === slot && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary }]}
+                                style={[styles.slotButton, selectedSlot === slot && styles.selectedSlot]}
                                 onPress={() => setSelectedSlot(slot)}
                             >
-                                <Text style={[styles.slotText, { color: theme.colors.text }, selectedSlot === slot && { color: theme.colors.primary, fontWeight: '600' }]}>
+                                <Text style={[styles.slotText, selectedSlot === slot && styles.selectedSlotText]}>
                                     {formatSlotTime(slot)}
                                 </Text>
                             </TouchableOpacity>
@@ -237,24 +237,24 @@ export default function PostponeModal({ visible, onClose, onConfirm, coachId, in
           </ScrollView>
 
           {/* Footer Actions */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
+          <View style={styles.footer}>
             {step > 1 && (
               <TouchableOpacity 
                 style={styles.backButton} 
                 onPress={() => setStep(prev => (prev - 1) as 1 | 2 | 3)}
                 disabled={submitting}
               >
-                <Text style={[styles.backButtonText, { color: theme.colors.textSecondary }]}>Back</Text>
+                <Text style={styles.backButtonText}>Back</Text>
               </TouchableOpacity>
             )}
             
             {step === 3 && selectedSlot && (
               <TouchableOpacity 
-                style={[styles.confirmButton, { backgroundColor: theme.colors.primary }, submitting && styles.disabledButton]} 
+                style={[styles.confirmButton, submitting && styles.disabledButton]} 
                 onPress={handleConfirm}
                 disabled={submitting}
               >
-                {submitting ? <ActivityIndicator color={theme.colors.textOnPrimary} /> : <Text style={[styles.confirmButtonText, { color: theme.colors.textOnPrimary }]}>Confirm Change</Text>}
+                {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.confirmButtonText}>Confirm Change</Text>}
               </TouchableOpacity>
             )}
           </View>
@@ -274,14 +274,16 @@ const SparklesIcon = () => (
 const getStyles = (colors: any) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(2, 6, 23, 0.75)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: '80%',
+    backgroundColor: '#0F172A',
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    height: '75%',
     paddingBottom: 40,
   },
   header: {
@@ -290,24 +292,24 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   closeButton: {
     padding: 4,
   },
   progressContainer: {
     height: 4,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     width: '100%',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: theme.colors.primary,
+    backgroundColor: colors?.primary || '#3B82F6',
   },
   content: {
     flex: 1,
@@ -321,14 +323,14 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   selectedOption: {
-    backgroundColor: '#EFF6FF',
-    borderColor: theme.colors.primary,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderColor: colors?.primary || '#3B82F6',
   },
   optionRow: {
     flexDirection: 'row',
@@ -337,11 +339,11 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   optionText: {
     fontSize: 16,
-    color: '#374151',
+    color: '#E2E8F0',
     fontWeight: '500',
   },
   selectedOptionText: {
-    color: theme.colors.primary,
+    color: '#60A5FA',
     fontWeight: '600',
   },
   loadingContainer: {
@@ -350,7 +352,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     gap: 16,
   },
   loadingText: {
-    color: '#6B7280',
+    color: '#94A3B8',
     fontSize: 14,
   },
   emptyContainer: {
@@ -361,32 +363,34 @@ const getStyles = (colors: any) => StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   emptyText: {
-    color: '#6B7280',
+    color: '#94A3B8',
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 16,
   },
   cancelLinkButton: {
-    padding: 12,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 8,
+    padding: 14,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelLinkText: {
     color: '#EF4444',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 16,
   },
   backLink: {
     padding: 8,
   },
   backLinkText: {
-    color: theme.colors.primary,
+    color: colors?.primary || '#3B82F6',
     fontWeight: '600',
   },
   slotsGrid: {
@@ -397,29 +401,29 @@ const getStyles = (colors: any) => StyleSheet.create({
   slotButton: {
     width: '48%',
     padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(255,255,255,0.05)',
     alignItems: 'center',
   },
   selectedSlot: {
-    backgroundColor: '#EFF6FF',
-    borderColor: theme.colors.primary,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderColor: colors?.primary || '#3B82F6',
   },
   slotText: {
     fontSize: 14,
-    color: '#374151',
+    color: '#E2E8F0',
     fontWeight: '500',
   },
   selectedSlotText: {
-    color: theme.colors.primary,
+    color: '#60A5FA',
     fontWeight: '600',
   },
   dayHeader: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 16,
     marginTop: 8,
   },
@@ -428,17 +432,17 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: 'rgba(255,255,255,0.05)',
   },
   cantDoTodayText: {
-    color: '#6B7280',
+    color: '#94A3B8',
     fontSize: 14,
     marginBottom: 12,
   },
   footer: {
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: 'rgba(255,255,255,0.05)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -447,15 +451,15 @@ const getStyles = (colors: any) => StyleSheet.create({
     padding: 12,
   },
   backButtonText: {
-    color: '#6B7280',
+    color: '#94A3B8',
     fontSize: 16,
     fontWeight: '600',
   },
   confirmButton: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: colors?.primary || '#3B82F6',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 24,
     marginLeft: 'auto',
   },
   confirmButtonText: {
@@ -467,3 +471,4 @@ const getStyles = (colors: any) => StyleSheet.create({
     opacity: 0.7,
   },
 });
+

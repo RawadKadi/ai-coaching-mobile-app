@@ -5,6 +5,7 @@ import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat, Spar
 import { useTheme } from '@/contexts/BrandContext';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
+import { generateGoogleMeetUrl } from '@/utils/session';
 import { availabilityService } from '@/lib/availability-service';
 import { supabase } from '@/lib/supabase';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
@@ -460,7 +461,7 @@ export default function ManualSchedulerModal({
     const generateSessionObject = (time: Date) => ({
         coach_id: coachId, client_id: selectedClient?.id, scheduled_at: time.toISOString(),
         duration_minutes: duration, session_type: sessionType, status: 'scheduled', is_locked: true, ai_generated: false,
-        meet_link: `coachingapp://call/pending`,
+        meet_link: generateGoogleMeetUrl(),
         notes: notes || `Manual ${sessionType} session with ${selectedClient?.profiles.full_name}`
     });
 
@@ -652,48 +653,11 @@ export default function ManualSchedulerModal({
 
                                          {recurrence === 'once' && (
                                              <View>
-                                                 <View className="flex-row items-center justify-between mb-4 ml-1 pr-1">
-                                                     <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Selected Dates</Text>
-                                                     <TouchableOpacity 
-                                                         onPress={() => setShowDatePicker(true)}
-                                                         className="flex-row items-center gap-1.5 bg-blue-600/10 border border-blue-500/20 px-3 py-1.5 rounded-full"
-                                                     >
-                                                         <Plus size={12} color="#60A5FA" />
-                                                         <Text className="text-blue-400 text-[10px] font-black uppercase tracking-widest">Add Date</Text>
-                                                     </TouchableOpacity>
-                                                 </View>
-
-                                                 {selectedDates.length === 0 ? (
-                                                     <Pressable 
-                                                         onPress={() => setShowDatePicker(true)}
-                                                         className="bg-slate-900/30 p-8 rounded-[32px] border border-white/5 border-dashed items-center justify-center mb-6"
-                                                     >
-                                                         <Calendar size={28} color="#475569" className="mb-2" />
-                                                         <Text className="text-slate-500 font-bold text-center text-xs">No dates selected. Tap to add one.</Text>
-                                                     </Pressable>
-                                                 ) : (
-                                                     <View className="flex-row flex-wrap gap-2.5 mb-6">
-                                                         {selectedDates.map((date, idx) => {
-                                                             const d = new Date(date);
-                                                             return (
-                                                                 <View 
-                                                                     key={d.toISOString() + idx}
-                                                                     className="flex-row items-center gap-2 bg-slate-900 border border-white/5 pl-4 pr-2.5 py-2.5 rounded-2xl"
-                                                                 >
-                                                                     <Text className="text-white font-bold text-xs">
-                                                                         {formatDisplayDate(d, 'summary')}
-                                                                     </Text>
-                                                                     <TouchableOpacity 
-                                                                         onPress={() => setSelectedDates(selectedDates.filter((_, i) => i !== idx))}
-                                                                         className="w-5 h-5 bg-white/5 rounded-full items-center justify-center"
-                                                                     >
-                                                                         <X size={10} color="#64748B" />
-                                                                     </TouchableOpacity>
-                                                                 </View>
-                                                             );
-                                                         })}
-                                                     </View>
-                                                 )}
+                                                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Select Specific Date</Text>
+                                                 <BrandedCalendar 
+                                                     selectedDate={selectedDates[0] || null} 
+                                                     onSelect={(date) => setSelectedDates([date])} 
+                                                 />
                                              </View>
                                          )}
                                         

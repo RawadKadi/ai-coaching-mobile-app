@@ -1,11 +1,11 @@
 import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { availabilityService, AvailabilitySlot, DayOfWeek, BlockedDate } from '@/lib/availability-service';
-import { ArrowLeft, ArrowRight, Plus, Trash2, Sparkles, Calendar as CalendarIcon, Clock, X, ChevronRight, Zap } from 'lucide-react-native';
+import { ArrowLeft, Plus, Trash2, Sparkles, Calendar as CalendarIcon, Clock, X, ChevronRight, Zap } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { generateText } from '@/lib/google-ai';
 
@@ -18,7 +18,7 @@ export default function AvailabilitySettings() {
   const { coach } = useAuth();
   
   const [loading, setLoading] = useState(true);
-  const [activeDay, setActiveDay] = useState(new Date().getDay());
+  const [selectedDays, setSelectedDays] = useState<number[]>([new Date().getDay()]);
   const [availability, setAvailability] = useState<Record<number, AvailabilitySlot[]>>({});
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [initialAvailability, setInitialAvailability] = useState<Record<number, AvailabilitySlot[]>>({});
@@ -35,7 +35,7 @@ export default function AvailabilitySettings() {
   
   // Time Picker
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [editingSlot, setEditingSlot] = useState<{day: number, index: number, type: 'start' | 'end'} | null>(null);
+  const [editingSlot, setEditingSlot] = useState<{index: number, type: 'start' | 'end'} | null>(null);
   const [tempTime, setTempTime] = useState(new Date());
 
   useEffect(() => { loadData(); }, [coach]);
@@ -92,21 +92,49 @@ export default function AvailabilitySettings() {
     }
   };
 
-  const addSlot = (dayIndex: number) => {
-    const newSlot: AvailabilitySlot = { day_of_week: dayIndex as DayOfWeek, start_time: '09:00:00', end_time: '17:00:00', is_active: true };
-    setAvailability(prev => ({ ...prev, [dayIndex]: [...(prev[dayIndex] || []), newSlot] }));
+  const toggleDaySelection = (dayIdx: number, exists: boolean) => {
+    if (exists) {
+      if (selectedDays.length > 1) {
+        setSelectedDays(selectedDays.filter(d => d !== dayIdx));
+      }
+    } else {
+      setSelectedDays([...selectedDays, dayIdx]);
+    }
   };
 
-  const removeSlot = (dayIndex: number, slotIndex: number) => {
-    setAvailability(prev => ({ ...prev, [dayIndex]: prev[dayIndex].filter((_, i) => i !== slotIndex) }));
+  const addSlot = () => {
+    setAvailability(prev => {
+      const next = { ...prev };
+      selectedDays.forEach(dayIdx => {
+        const newSlot: AvailabilitySlot = { day_of_week: dayIdx as DayOfWeek, start_time: '09:00:00', end_time: '17:00:00', is_active: true };
+        next[dayIdx] = [...(prev[dayIdx] || []), newSlot];
+      });
+      return next;
+    });
   };
 
-  const updateSlotTime = (dayIndex: number, slotIndex: number, type: 'start' | 'end', time: Date) => {
+  const removeSlot = (slotIndex: number) => {
+    setAvailability(prev => {
+      const next = { ...prev };
+      selectedDays.forEach(dayIdx => {
+        next[dayIdx] = (prev[dayIdx] || []).filter((_, i) => i !== slotIndex);
+      });
+      return next;
+    });
+  };
+
+  const updateSlotTime = (slotIndex: number, type: 'start' | 'end', time: Date) => {
     const timeStr = time.toTimeString().split(' ')[0];
     setAvailability(prev => {
-      const daySlots = [...prev[dayIndex]];
-      daySlots[slotIndex] = { ...daySlots[slotIndex], [type === 'start' ? 'start_time' : 'end_time']: timeStr };
-      return { ...prev, [dayIndex]: daySlots };
+      const next = { ...prev };
+      selectedDays.forEach(dayIdx => {
+        const daySlots = [...(prev[dayIdx] || [])];
+        if (daySlots[slotIndex]) {
+          daySlots[slotIndex] = { ...daySlots[slotIndex], [type === 'start' ? 'start_time' : 'end_time']: timeStr };
+        }
+        next[dayIdx] = daySlots;
+      });
+      return next;
     });
   };
 
@@ -145,7 +173,7 @@ export default function AvailabilitySettings() {
     );
   }
 
-  const currentSlots = availability[activeDay] || [];
+  const currentSlots = availability[selectedDays[0]] || [];
 
   return (
     <View className="flex-1 bg-slate-950">
@@ -154,7 +182,7 @@ export default function AvailabilitySettings() {
         <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full border border-slate-800">
           <ArrowLeft size={20} color="#94A3B8" />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">Availability Hub</Text>
+        <Text className="text-white text-xl font-bold">Working Hours</Text>
         <TouchableOpacity 
           onPress={handleSaveAll}
           disabled={!hasChanges}
@@ -165,50 +193,48 @@ export default function AvailabilitySettings() {
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-          {/* Day Selector Header */}
-          <View className="flex-row items-center justify-between px-6 pt-4">
-            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Select Day</Text>
-            <View className="flex-row items-center gap-1.5 opacity-60 bg-slate-900/50 px-2 py-1 rounded-full border border-white/5">
-              <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Swipe</Text>
-              <ArrowRight size={10} color="#64748B" />
-            </View>
-          </View>
-
           {/* Day Selector */}
           <MotiView 
             from={{ opacity: 0, translateY: -10 }}
             animate={{ opacity: 1, translateY: 0 }}
-            className="py-4"
+            className="px-6 py-8"
           >
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}
-            >
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => {
-                 const isActive = activeDay === i;
-                 return (
-                    <TouchableOpacity 
-                      key={i} 
-                      onPress={() => setActiveDay(i)}
-                      className={`w-[56px] h-[72px] rounded-2xl items-center justify-center border-2 ${isActive ? 'bg-blue-600 border-blue-400 shadow-lg shadow-blue-500/30' : 'bg-slate-900 border-slate-800'}`}
-                    >
-                      <Text className={`font-black text-xl ${isActive ? 'text-white' : 'text-slate-400'}`}>{day}</Text>
-                    </TouchableOpacity>
-                 );
-              })}
-            </ScrollView>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6 px-6">
+                  <View className="flex-row gap-3 pr-12">
+                      {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
+                          const dayIdx = (i + 1) % 7;
+                          const isSelected = selectedDays.includes(dayIdx);
+                          return (
+                              <Pressable 
+                                  key={i} 
+                                  onPress={() => toggleDaySelection(dayIdx, isSelected)}
+                                  className={`w-20 h-20 rounded-[28px] items-center justify-center ${isSelected ? 'bg-blue-600 border border-blue-500 shadow-lg shadow-blue-500/30' : 'bg-slate-900 border border-white/5'}`}
+                              >
+                                  <Text className={`font-black text-2xl ${isSelected ? 'text-white' : 'text-slate-500'}`}>{day}</Text>
+                              </Pressable>
+                          );
+                      })}
+                  </View>
+              </ScrollView>
           </MotiView>
 
           {/* Slots Content */}
           <View className="px-6">
               <View className="flex-row justify-between items-center mb-6">
-                  <View>
-                    <Text className="text-white text-lg font-bold">{DAYS_FULL[activeDay]}</Text>
-                    <Text className="text-slate-500 text-xs font-medium">Standard Working Hours</Text>
+                  <View className="flex-1 mr-4">
+                    <Text className="text-white text-lg font-bold">
+                      {selectedDays.length === 1 
+                        ? DAYS_FULL[selectedDays[0]] 
+                        : `${selectedDays.length} Days Selected`}
+                    </Text>
+                    <Text className="text-slate-500 text-xs font-medium">
+                      {selectedDays.length === 1 
+                        ? 'Standard Working Hours' 
+                        : selectedDays.map(d => DAYS_FULL[d].substring(0, 3)).join(', ')}
+                    </Text>
                   </View>
                   <TouchableOpacity 
-                    onPress={() => addSlot(activeDay)}
+                    onPress={addSlot}
                     className="flex-row items-center gap-2 bg-slate-900 px-4 py-2 rounded-2xl border border-slate-800"
                   >
                     <Plus size={14} color={colors.primary} />
@@ -219,17 +245,16 @@ export default function AvailabilitySettings() {
               <AnimatePresence>
                 {currentSlots.length === 0 ? (
                   <MotiView 
-                    key={`empty-${activeDay}`}
                     from={{ opacity: 0 }} animate={{ opacity: 1 }}
                     className="bg-slate-900 p-8 rounded-[32px] border border-slate-800 items-center border-dashed"
                   >
                     <Clock size={32} color="#475569" />
-                    <Text className="text-slate-500 mt-3 font-medium">No hours assigned</Text>
+                    <Text className="text-slate-500 mt-3 font-medium">No hours set</Text>
                   </MotiView>
                 ) : (
                   currentSlots.map((slot, idx) => (
                     <MotiView
-                      key={`slot-${activeDay}-${idx}-${slot.start_time}-${slot.end_time}`}
+                      key={idx}
                       from={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className="bg-slate-900 mb-4 p-6 rounded-[32px] border border-slate-800 flex-row items-center justify-between"
@@ -239,7 +264,7 @@ export default function AvailabilitySettings() {
                             onPress={() => {
                                 const [h, m] = slot.start_time.split(':');
                                 const d = new Date(); d.setHours(parseInt(h), parseInt(m));
-                                setTempTime(d); setEditingSlot({ day: activeDay, index: idx, type: 'start' }); setShowTimePicker(true);
+                                setTempTime(d); setEditingSlot({ index: idx, type: 'start' }); setShowTimePicker(true);
                             }}
                             className="bg-slate-950 px-4 py-2 rounded-xl border border-slate-800"
                          >
@@ -250,14 +275,14 @@ export default function AvailabilitySettings() {
                             onPress={() => {
                                 const [h, m] = slot.end_time.split(':');
                                 const d = new Date(); d.setHours(parseInt(h), parseInt(m));
-                                setTempTime(d); setEditingSlot({ day: activeDay, index: idx, type: 'end' }); setShowTimePicker(true);
+                                setTempTime(d); setEditingSlot({ index: idx, type: 'end' }); setShowTimePicker(true);
                             }}
                             className="bg-slate-950 px-4 py-2 rounded-xl border border-slate-800"
                          >
                             <Text className="text-white font-bold text-sm">{formatTime(slot.end_time)}</Text>
                          </TouchableOpacity>
                       </View>
-                      <TouchableOpacity onPress={() => removeSlot(activeDay, idx)}>
+                      <TouchableOpacity onPress={() => removeSlot(idx)}>
                         <X size={18} color="#EF4444" />
                       </TouchableOpacity>
                     </MotiView>
@@ -274,8 +299,8 @@ export default function AvailabilitySettings() {
                      <Zap size={20} color="white" />
                   </View>
                   <View className="flex-1">
-                     <Text className="text-white font-bold">AI Quick Configure</Text>
-                     <Text className="text-blue-400/70 text-xs">Set entire week via voice or text</Text>
+                     <Text className="text-white font-bold">AI Auto-Fill</Text>
+                     <Text className="text-blue-400/70 text-xs">Set your week using text</Text>
                   </View>
               </TouchableOpacity>
           </View>
@@ -283,9 +308,9 @@ export default function AvailabilitySettings() {
           {/* Exceptions */}
           <View className="mt-12 px-6">
               <View className="flex-row justify-between items-center mb-6">
-                <Text className="text-white text-lg font-bold">Exceptions</Text>
+                <Text className="text-white text-lg font-bold">Time Off</Text>
                 <TouchableOpacity onPress={() => setBlockModalVisible(true)} className="flex-row items-center gap-2">
-                   <Text className="text-blue-500 text-sm font-bold">Add Vacation</Text>
+                   <Text className="text-blue-500 text-sm font-bold">Add Time Off</Text>
                    <ChevronRight size={16} color={colors.primary} />
                 </TouchableOpacity>
               </View>
@@ -294,7 +319,7 @@ export default function AvailabilitySettings() {
                  <View key={b.id || b.date} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 mb-3 flex-row justify-between items-center">
                     <View>
                        <Text className="text-white font-bold">
-                         {new Date(b.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {new Date(b.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                        </Text>
                        <Text className="text-slate-500 text-xs">{b.reason || 'Blocked Out'}</Text>
                     </View>
@@ -312,7 +337,7 @@ export default function AvailabilitySettings() {
             <MotiView from={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-slate-900 p-8 rounded-[40px] border border-slate-800">
                <View className="flex-row items-center gap-3 mb-6">
                   <Sparkles size={24} color={colors.primary} />
-                  <Text className="text-white text-xl font-bold">Schedule Assistant</Text>
+                  <Text className="text-white text-xl font-bold">Schedule Helper</Text>
                </View>
                <TextInput 
                   multiline className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-white min-h-[120px] mb-6"
@@ -324,7 +349,7 @@ export default function AvailabilitySettings() {
                      <Text className="text-slate-400 font-bold">Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handleAiGenerate} disabled={aiLoading} className="flex-2 bg-blue-600 py-4 rounded-2xl items-center px-8 shadow-lg shadow-blue-500/20">
-                     {aiLoading ? <ActivityIndicator color="white" /> : <Text className="text-white font-bold">Configure Hub</Text>}
+                     {aiLoading ? <ActivityIndicator color="white" /> : <Text className="text-white font-bold">Apply Hours</Text>}
                   </TouchableOpacity>
                </View>
             </MotiView>
@@ -342,9 +367,6 @@ export default function AvailabilitySettings() {
                      <TouchableOpacity 
                         onPress={() => {
                            setShowTimePicker(false);
-                           if (editingSlot) {
-                              updateSlotTime(editingSlot.day, editingSlot.index, editingSlot.type, tempTime);
-                           }
                         }}
                         className="bg-blue-600 px-5 py-2 rounded-full"
                      >
@@ -358,12 +380,14 @@ export default function AvailabilitySettings() {
                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                         themeVariant="dark"
                         onChange={(e, d) => {
-                           if (d) setTempTime(d);
+                           if (d) {
+                              setTempTime(d);
+                              if (editingSlot) {
+                                 updateSlotTime(editingSlot.index, editingSlot.type, d);
+                              }
+                           }
                            if (Platform.OS === 'android') {
                               setShowTimePicker(false);
-                              if (d && editingSlot) {
-                                 updateSlotTime(editingSlot.day, editingSlot.index, editingSlot.type, d);
-                              }
                            }
                         }} 
                         style={Platform.OS === 'ios' ? { height: 180, width: 280 } : undefined}

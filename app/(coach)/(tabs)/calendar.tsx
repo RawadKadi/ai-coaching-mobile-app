@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, Animated, StatusBar, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, Animated, StatusBar, Dimensions, Alert, Modal, TouchableOpacity } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search, ChevronsLeftRight, CalendarDays } from 'lucide-react-native';
+import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search, ChevronsLeftRight, CalendarDays, Trash2, Pen, MessageSquare, X } from 'lucide-react-native';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
 import { DatePickerOverlay } from '@/components/DatePickerOverlay';
@@ -13,6 +13,8 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBrandColors } from '@/contexts/BrandContext';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
+import { Swipeable } from 'react-native-gesture-handler';
+import PostponeModal from '@/components/PostponeModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CALENDAR_BOX_MARGIN = 24;
@@ -82,10 +84,13 @@ AnimatedDayButton.displayName = 'AnimatedDayButton';
 interface AnimatedSessionCardProps {
     session: any;
     onPress: () => void;
+    onLongPress?: () => void;
 }
 
-const AnimatedSessionCard = React.memo(({ session, onPress }: AnimatedSessionCardProps) => {
+const AnimatedSessionCard = React.memo(({ session, onPress, onLongPress }: AnimatedSessionCardProps) => {
     const scaleAnim = useRef(new Animated.Value(1)).current;
+    const isPostponed = session.status === 'postponed' || (session.status === 'cancelled' && session.cancellation_reason?.toLowerCase().includes('postpone'));
+    const isCancelled = session.status === 'cancelled' && !isPostponed;
 
     const handlePressIn = () => {
         Animated.spring(scaleAnim, {
@@ -110,31 +115,41 @@ const AnimatedSessionCard = React.memo(({ session, onPress }: AnimatedSessionCar
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
             onPress={onPress}
+            onLongPress={onLongPress}
+            delayLongPress={200}
         >
             {({ pressed }) => (
                 <Animated.View 
                     style={[{ transform: [{ scale: scaleAnim }] }]}
-                    className={`border border-white/5 rounded-[36px] p-6 flex-row items-center ${pressed ? 'bg-slate-900/60' : 'bg-slate-900/40'}`}
+                    className={`border rounded-[36px] p-6 flex-row items-center ${
+                        isPostponed
+                            ? 'bg-yellow-950/15 border-yellow-500/20'
+                            : isCancelled 
+                                ? 'bg-red-950/15 border-red-500/20' 
+                                : pressed 
+                                    ? 'bg-slate-900/60 border-white/5' 
+                                    : 'bg-slate-900/40 border-white/5'
+                    }`}
                 >
                     {/* Left: Time */}
                     <View className="items-center mr-4 w-16">
-                        <Text className="text-blue-500 font-black text-lg">
+                        <Text className={`font-black text-lg ${isPostponed || isCancelled ? 'text-white' : 'text-blue-500'}`}>
                             {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                         </Text>
-                        <Text className="text-blue-400/60 font-black text-[10px] uppercase">
+                        <Text className={`font-black text-[10px] uppercase ${isPostponed || isCancelled ? 'text-slate-400' : 'text-blue-400/60'}`}>
                             {new Date(session.scheduled_at).getHours() >= 12 ? 'PM' : 'AM'}
                         </Text>
                     </View>
 
                     {/* Vertical Line */}
-                    <View className="w-[2px] h-12 bg-blue-600/30 rounded-full mr-6" />
+                    <View className={`w-[2px] h-12 rounded-full mr-6 ${isPostponed ? 'bg-yellow-500/20' : isCancelled ? 'bg-red-500/20' : 'bg-blue-600/30'}`} />
 
                     {/* Middle: Info */}
                     <View className="flex-1">
-                        <Text className="text-white font-black text-lg tracking-tight leading-tight mb-1">
+                        <Text className="font-black text-lg tracking-tight leading-tight mb-1 text-white">
                             {session.session_type === 'video' ? 'Performance Video Call' : 'Strategic Coaching'}
                         </Text>
-                        <Text className="text-slate-500 font-bold text-xs">
+                        <Text className="font-bold text-xs text-slate-500">
                             {session.client?.profiles?.full_name} • 60 min
                         </Text>
                     </View>
@@ -146,15 +161,26 @@ const AnimatedSessionCard = React.memo(({ session, onPress }: AnimatedSessionCar
                             imageUrl={session.client?.profiles?.avatar_url} 
                             size={32} 
                         />
-                        <View className="w-8 h-8 rounded-full bg-cyan-400/20 items-center justify-center">
-                            <Video size={14} color="#22D3EE" />
-                        </View>
+                        {isPostponed ? (
+                            <View className="w-8 h-8 rounded-full bg-yellow-500/10 items-center justify-center">
+                                <Clock size={14} color="#EAB308" />
+                            </View>
+                        ) : isCancelled ? (
+                            <View className="w-8 h-8 rounded-full bg-red-500/10 items-center justify-center">
+                                <X size={14} color="#EF4444" />
+                            </View>
+                        ) : (
+                            <View className="w-8 h-8 rounded-full bg-cyan-400/20 items-center justify-center">
+                                <Video size={14} color="#22D3EE" />
+                            </View>
+                        )}
                     </View>
                 </Animated.View>
             )}
         </Pressable>
     );
 });
+
 
 AnimatedSessionCard.displayName = 'AnimatedSessionCard';
 
@@ -176,6 +202,160 @@ export default function CalendarScreen() {
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [initialClientData, setInitialClientData] = useState<any>(null);
   
+  // Gesture & Actions states for session management
+  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+  const [selectedSessionForMenu, setSelectedSessionForMenu] = useState<any>(null);
+  const [sessionToEdit, setSessionToEdit] = useState<any>(null);
+  const [showPostponeModal, setShowPostponeModal] = useState(false);
+  const [currentlyOpenSessionId, setCurrentlyOpenSessionId] = useState<string | null>(null);
+
+  const closeAllSwipes = useCallback(() => {
+    if (currentlyOpenSessionId) {
+      swipeableRefs.current[currentlyOpenSessionId]?.close();
+      setCurrentlyOpenSessionId(null);
+    }
+  }, [currentlyOpenSessionId]);
+
+  // Cancellation and Postponement Handlers
+  const handleLongPressSession = (session: any) => {
+    setSelectedSessionForMenu(session);
+  };
+
+  const handlePostponeDirect = (session: any) => {
+    setSessionToEdit(session);
+    setShowPostponeModal(true);
+  };
+
+  const handleCancelSessionConfirm = (session: any) => {
+    Alert.alert(
+      'Cancel Call',
+      'Do you want to cancel this call?',
+      [
+        { text: 'No', style: 'cancel' },
+        { text: 'Yes', onPress: () => performCancelSession(session) }
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const performCancelSession = async (session: any) => {
+    try {
+      setLoading(true);
+      // 1. Update session status to cancelled
+      const { error } = await supabase
+        .from('sessions')
+        .update({ status: 'cancelled', cancellation_reason: 'Cancelled from Calendar' })
+        .eq('id', session.id);
+      
+      if (error) throw error;
+
+      // 2. Find and update matching message referencing this session in public.messages
+      const { data: dbMessages } = await supabase
+        .from('messages')
+        .select('*')
+        .ilike('content', `%${session.id}%`);
+      
+      if (dbMessages) {
+        for (const msg of dbMessages) {
+          try {
+            const p = JSON.parse(msg.content);
+            if (p.sessionId !== session.id) continue;
+            
+            const updatedContent = JSON.stringify({
+              ...p,
+              status: 'cancelled',
+              cancellation_reason: 'Cancelled from Calendar'
+            });
+            
+            await supabase.from('messages').update({ content: updatedContent }).eq('id', msg.id);
+          } catch (err) {
+            console.error('Error updating message content:', err);
+          }
+        }
+      }
+
+      // Reload sessions to refresh UI
+      await loadSessions();
+    } catch (e: any) {
+      console.error('Error cancelling session:', e);
+      Alert.alert('Error', 'Failed to cancel session: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePostponeConfirm = async (reason: string, newDate: string) => {
+    if (!sessionToEdit) return;
+    try {
+      setLoading(true);
+      
+      // 1. Cancel the old session
+      const { error: cancelError } = await supabase
+        .from('sessions')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: `Postponed: ${reason}`
+        })
+        .eq('id', sessionToEdit.id);
+      
+      if (cancelError) throw cancelError;
+
+      // 2. Create the new session
+      const { error: insertError } = await supabase
+        .from('sessions')
+        .insert({
+          coach_id: sessionToEdit.coach_id,
+          client_id: sessionToEdit.client_id,
+          scheduled_at: newDate,
+          duration_minutes: sessionToEdit.duration_minutes || 60,
+          session_type: sessionToEdit.session_type || 'training',
+          status: 'scheduled',
+          is_locked: true,
+          meet_link: sessionToEdit.meet_link || `https://meet.google.com/new`,
+          notes: `Postponed from ${new Date(sessionToEdit.scheduled_at).toLocaleDateString()}`
+        });
+
+      if (insertError) throw insertError;
+
+      // 3. Update old message content
+      const { data: dbMessages } = await supabase
+        .from('messages')
+        .select('*')
+        .ilike('content', `%${sessionToEdit.id}%`);
+      
+      if (dbMessages) {
+        for (const msg of dbMessages) {
+          try {
+            const p = JSON.parse(msg.content);
+            if (p.sessionId !== sessionToEdit.id) continue;
+            
+            const updatedContent = JSON.stringify({
+              ...p,
+              status: 'cancelled',
+              cancellation_reason: `Postponed: ${reason}`,
+              postponedTo: newDate,
+              postponedAt: new Date().toISOString()
+            });
+            
+            await supabase.from('messages').update({ content: updatedContent }).eq('id', msg.id);
+          } catch (err) {
+            console.error('Error updating message content:', err);
+          }
+        }
+      }
+
+      // Reload sessions
+      await loadSessions();
+      setShowPostponeModal(false);
+      setSessionToEdit(null);
+    } catch (e: any) {
+      console.error('Error postponing session:', e);
+      Alert.alert('Error', 'Failed to postpone session: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Animation scales for buttons
   const calendarBtnScale = useRef(new Animated.Value(1)).current;
   const plusBtnScale = useRef(new Animated.Value(1)).current;
@@ -380,7 +560,10 @@ export default function CalendarScreen() {
                                   isToday={isToday}
                                   hasSessions={has}
                                   isOtherMonth={isOtherMonth}
-                                  onPress={() => setSelectedDate(item)}
+                                  onPress={() => {
+                                      closeAllSwipes();
+                                      setSelectedDate(item);
+                                  }}
                               />
                           );
                       };
@@ -406,6 +589,7 @@ export default function CalendarScreen() {
               onScroll={handleScroll}
               scrollEventThrottle={16}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadSessions(); }} tintColor={primary} />}
+              onScrollBeginDrag={closeAllSwipes}
           >
               <View className="mb-6 mt-4">
                   <Text className="text-white text-2xl font-black tracking-tight">Today's Focus</Text>
@@ -421,14 +605,70 @@ export default function CalendarScreen() {
                           <Text className="text-slate-800 font-medium text-[10px] mt-2 text-center px-6 leading-5">You have no live coaching sessions scheduled for this date.</Text>
                       </View>
                   ) : (
-                      getSessionsForDate(selectedDate).map((session, idx) => (
-                          <MotiView key={session.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: idx * 50 }} className="mb-4">
-                                <AnimatedSessionCard 
-                                    session={session}
-                                    onPress={() => router.push({ pathname: '/(coach)/chat/[id]', params: { id: session.client_id } })}
-                                />
-                          </MotiView>
-                      ))
+                      getSessionsForDate(selectedDate).map((session, idx) => {
+                          const isPostponed = session.status === 'postponed' || (session.status === 'cancelled' && session.cancellation_reason?.toLowerCase().includes('postpone'));
+                          const isCancelled = session.status === 'cancelled' && !isPostponed;
+                          return (
+                              <MotiView key={session.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: idx * 50 }} className="mb-4">
+                                  <Swipeable
+                                       ref={ref => { if (ref) swipeableRefs.current[session.id] = ref; }}
+                                       enabled={!isCancelled && !isPostponed}
+                                       onSwipeableWillOpen={() => {
+                                           if (currentlyOpenSessionId && currentlyOpenSessionId !== session.id) {
+                                               swipeableRefs.current[currentlyOpenSessionId]?.close();
+                                           }
+                                           setCurrentlyOpenSessionId(session.id);
+                                       }}
+                                       renderRightActions={() => (
+                                           <View className="flex-row items-center pl-4 pr-2">
+                                               {/* Postpone/Reschedule (Yellow Circle) */}
+                                               <TouchableOpacity 
+                                                   onPress={() => {
+                                                       swipeableRefs.current[session.id]?.close();
+                                                       setCurrentlyOpenSessionId(null);
+                                                       handlePostponeDirect(session);
+                                                   }}
+                                                   className="w-12 h-12 rounded-full bg-yellow-600 items-center justify-center mr-3 shadow-lg shadow-yellow-600/30"
+                                               >
+                                                   <Clock size={18} color="white" />
+                                               </TouchableOpacity>
+
+                                               {/* Delete/Trash (Red Circle) */}
+                                               <TouchableOpacity 
+                                                   onPress={() => {
+                                                       swipeableRefs.current[session.id]?.close();
+                                                       setCurrentlyOpenSessionId(null);
+                                                       handleCancelSessionConfirm(session);
+                                                   }}
+                                                   className="w-12 h-12 rounded-full bg-red-600 items-center justify-center shadow-lg shadow-red-600/30"
+                                               >
+                                                   <Trash2 size={18} color="white" />
+                                               </TouchableOpacity>
+                                           </View>
+                                       )}
+                                   >
+                                       <AnimatedSessionCard 
+                                           session={session}
+                                           onPress={() => {
+                                               if (currentlyOpenSessionId) {
+                                                   closeAllSwipes();
+                                               } else {
+                                                   router.push({ pathname: '/(coach)/chat/[id]', params: { id: session.client_id } });
+                                               }
+                                           }}
+                                           onLongPress={() => {
+                                               if (currentlyOpenSessionId) {
+                                                   closeAllSwipes();
+                                               } else {
+                                                   handleLongPressSession(session);
+                                               }
+                                           }}
+                                       />
+                                   </Swipeable>
+                              </MotiView>
+                          );
+                      })
+
                   )}
               </View>
           </ScrollView>
@@ -487,7 +727,90 @@ export default function CalendarScreen() {
               onClose={() => setShowDatePicker(false)}
             />
           )}
+
+          {/* Bottom Sheet Actions Modal (Long Press / Hold) */}
+          <Modal 
+            visible={!!selectedSessionForMenu} 
+            transparent 
+            animationType="slide"
+            onRequestClose={() => setSelectedSessionForMenu(null)}
+          >
+              <Pressable 
+                className="flex-1 bg-black/60 justify-end" 
+                onPress={() => setSelectedSessionForMenu(null)}
+              >
+                  <MotiView 
+                    from={{ translateY: 300 }} 
+                    animate={{ translateY: 0 }} 
+                    className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10"
+                  >
+                      <View className="w-12 h-1.5 bg-slate-800 rounded-full self-center mb-8" />
+                      <Text className="text-white text-2xl font-black mb-6 tracking-tight">Session Actions</Text>
+                      
+                      {selectedSessionForMenu && (selectedSessionForMenu.status !== 'cancelled' && !selectedSessionForMenu.cancellation_reason?.toLowerCase().includes('postpone')) ? (
+                        <>
+                          <OptionItem 
+                              icon={<Clock size={20} color="#EAB308" />} 
+                              title="Postpone Session" 
+                              sub="Quick postpone using AI slots" 
+                              onPress={() => { 
+                                  const session = selectedSessionForMenu;
+                                  setSelectedSessionForMenu(null); 
+                                  handlePostponeDirect(session);
+                              }} 
+                          />
+                          <OptionItem 
+                              icon={<Trash2 size={20} color="#EF4444" />} 
+                              title="Cancel Session" 
+                              sub="Mark session as cancelled" 
+                              onPress={() => { 
+                                  const session = selectedSessionForMenu;
+                                  setSelectedSessionForMenu(null); 
+                                  handleCancelSessionConfirm(session);
+                              }} 
+                          />
+                        </>
+                      ) : (
+                        <Text className="text-slate-500 italic text-center p-4">No actions available for this session</Text>
+                      )}
+                  </MotiView>
+              </Pressable>
+          </Modal>
+
+
+          {/* PostponeModal Integration */}
+          {coach && sessionToEdit && (
+            <PostponeModal
+              visible={showPostponeModal}
+              onClose={() => {
+                setShowPostponeModal(false);
+                setSessionToEdit(null);
+              }}
+              onConfirm={handlePostponeConfirm}
+              coachId={coach.id}
+              initialDate={sessionToEdit.scheduled_at}
+              clientId={sessionToEdit.client_id}
+              sessionId={sessionToEdit.id}
+            />
+          )}
       </View>
     </View>
   );
 }
+
+// Bottom sheet/Action Menu Option Item Helper
+const OptionItem = ({ icon, title, sub, onPress }: { icon: React.ReactNode; title: string; sub: string; onPress: () => void }) => (
+    <Pressable 
+        onPress={onPress} 
+        className="flex-row items-center p-4 bg-slate-800/40 rounded-3xl border border-white/5 mb-4 active:bg-slate-800/80"
+    >
+        <View className="w-10 h-10 rounded-2xl items-center justify-center bg-slate-900 border border-white/5 mr-4">
+            {icon}
+        </View>
+        <View className="flex-1">
+            <Text className="text-white font-bold text-base">{title}</Text>
+            <Text className="text-slate-500 text-xs mt-0.5">{sub}</Text>
+        </View>
+        <ChevronRight size={16} color="#64748B" />
+    </Pressable>
+);

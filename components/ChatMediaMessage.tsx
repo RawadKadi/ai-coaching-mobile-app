@@ -19,9 +19,10 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-
 import { useRouter } from 'expo-router';
 import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
-import MealMessageCard from './MealMessageCard';
 import JoinSessionModal from './JoinSessionModal';
+import { joinSession } from '@/utils/session';
 import DocumentPreviewModal from './DocumentPreviewModal';
+import MealMessageCard from './MealMessageCard';
 
 // ── Global playback speed (persisted, shared across all voice note players) ───
 const SPEED_STEPS = [1, 1.5, 2] as const;
@@ -82,6 +83,9 @@ type MediaContent = {
   timestamp?: string;
   imageUrl?: string; // For task completions with photo verification
   text?: string; // Caption text for the media
+  duration?: number;
+  is_edited?: boolean;
+  is_forwarded?: boolean;
 };
 
 // ── Media Caching Hook ──────────────────────────────────────────────────────
@@ -644,17 +648,18 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
   
-  const isCancelled = media.status === 'cancelled';
+  const isPostponed = media.status === 'postponed' || (media.status === 'cancelled' && media.cancellation_reason?.toLowerCase().includes('postpone'));
+  const isCancelled = media.status === 'cancelled' && !isPostponed;
   const isRescheduled = media.status === 'rescheduled';
   
   const handleJoin = () => {
-    setModalVisible(true);
+    joinSession(media.link || media.external_meeting_url || media.meet_link);
   };
 
-  if (isCancelled || isRescheduled) {
-    const title = isCancelled ? 'Session Cancelled' : 'Session Rescheduled';
-    const accentColor = isCancelled ? '#EF4444' : theme.colors.primary;
-    const icon = isCancelled ? <X size={18} color={accentColor} /> : <RefreshCw size={18} color={accentColor} />;
+  if (isCancelled || isRescheduled || isPostponed) {
+    const title = isPostponed ? 'Session Postponed' : isCancelled ? 'Session Cancelled' : 'Session Rescheduled';
+    const accentColor = isPostponed ? '#EAB308' : isCancelled ? '#EF4444' : theme.colors.primary;
+    const icon = isPostponed ? <Clock size={18} color={accentColor} /> : isCancelled ? <X size={18} color={accentColor} /> : <RefreshCw size={18} color={accentColor} />;
     
     return (
       <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: `${accentColor}33`, minWidth: 260 }]}>
@@ -665,13 +670,15 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
           </View>
           <View style={styles.challengeBody}>
             <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: '#94A3B8' }]}>
-              {isCancelled 
-                ? (isOwn ? 'You cancelled this session' : 'Coach cancelled this session')
-                : (isOwn ? 'You rescheduled this session' : 'Coach rescheduled this session')
+              {isPostponed
+                ? (isOwn ? 'You postponed this session' : 'Coach postponed this session')
+                : isCancelled 
+                  ? (isOwn ? 'You cancelled this session' : 'Coach cancelled this session')
+                  : (isOwn ? 'You rescheduled this session' : 'Coach rescheduled this session')
               }
             </Text>
-            {isCancelled && media.cancellation_reason && (
-              <View style={{ marginTop: 8, backgroundColor: 'rgba(239, 68, 68, 0.05)', padding: 10, borderRadius: 8 }}>
+            {(isCancelled || isPostponed) && media.cancellation_reason && (
+              <View style={{ marginTop: 8, backgroundColor: isPostponed ? 'rgba(234, 179, 8, 0.05)' : 'rgba(239, 68, 68, 0.05)', padding: 10, borderRadius: 8 }}>
                 <Text style={{ color: '#F8FAFC', fontSize: 12, fontStyle: 'italic' }}>"{media.cancellation_reason}"</Text>
               </View>
             )}
@@ -821,70 +828,92 @@ function VoiceNotePlayer({
   }, [playbackSpeed]);
 
 
-  // Pre-load sound if it's a "fresh" message (less than 1 min old) or just on mount
-  useEffect(() => {
-    let mounted = true;
-    const loadSound = async () => {
+  // Lazy load sound on demand or during play to avoid exhausting iOS AVFoundation player instances
+  const createAndLoadSound = async (autoPlay: boolean = false) => {
+    if (!uri) return null;
+    try {
+      setIsLoading(true);
       try {
-        if (!uri) return;
-        setIsLoading(true);
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri },
-          { shouldPlay: false, volume: 1.0, isMuted: false, isLooping: false },
-          (status) => {
-            if (status.isLoaded && mounted) {
-              if (!isDragging) {
-                setPosition(status.positionMillis);
-              }
-              setTotalDuration(status.durationMillis || 0);
-              setIsPlaying(status.isPlaying);
-              if (status.didJustFinish) {
-                setIsPlaying(false);
-                setPosition(0);
-                soundRef.current?.pauseAsync().catch(() => {});
-                soundRef.current?.setPositionAsync(0).catch(() => {});
-                if (activePlayingSound === soundRef.current) {
-                  activePlayingSound = null;
-                  activePlayingSetIsPlaying = null;
-                }
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          allowsRecordingIOS: false,
+          staysActiveInBackground: false,
+        });
+      } catch (e) {}
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: autoPlay, volume: 1.0, isMuted: false, isLooping: false },
+        (status) => {
+          if (status.isLoaded) {
+            if (!isDragging) {
+              setPosition(status.positionMillis);
+            }
+            if (status.durationMillis) {
+              setTotalDuration(status.durationMillis);
+            }
+            setIsPlaying(status.isPlaying);
+            if (status.didJustFinish) {
+              setIsPlaying(false);
+              setPosition(0);
+              newSound.pauseAsync().catch(() => {});
+              newSound.setPositionAsync(0).catch(() => {});
+              if (activePlayingSound === newSound) {
+                activePlayingSound = null;
+                activePlayingSetIsPlaying = null;
               }
             }
           }
-        );
-        if (mounted) {
-          soundRef.current = newSound;
-          setSound(newSound);
-          setIsLoaded(true);
-          setIsLoading(false);
-        } else {
-          newSound.unloadAsync();
         }
-      } catch (error) {
-        console.error('Error loading sound:', error);
-        if (mounted) setIsLoading(false);
-      }
-    };
+      );
 
-    loadSound();
+      soundRef.current = newSound;
+      setSound(newSound);
+      setIsLoaded(true);
+      setIsLoading(false);
+
+      if (autoPlay) {
+        if (activePlayingSound && activePlayingSound !== newSound) {
+          try {
+            await activePlayingSound.pauseAsync();
+          } catch (e) {}
+          if (activePlayingSetIsPlaying) {
+            activePlayingSetIsPlaying(false);
+          }
+        }
+        await newSound.setRateAsync(playbackSpeed, true).catch(() => {});
+        activePlayingSound = newSound;
+        activePlayingSetIsPlaying = setIsPlaying;
+      }
+      return newSound;
+    } catch (error) {
+      console.warn('Handled sound load error:', error);
+      setIsLoading(false);
+      setIsLoaded(false);
+      return null;
+    }
+  };
+
+  // Cleanup sound instance on unmount or uri change
+  useEffect(() => {
     return () => {
-      mounted = false;
       if (soundRef.current) {
         if (activePlayingSound === soundRef.current) {
           activePlayingSound = null;
           activePlayingSetIsPlaying = null;
         }
-        soundRef.current.unloadAsync();
+        soundRef.current.unloadAsync().catch(() => {});
       }
     };
   }, [uri]);
 
   const togglePlayback = async () => {
-    if (!soundRef.current || !isLoaded) {
-      setIsLoading(true);
-      return;
-    }
-
     try {
+      if (!soundRef.current || !isLoaded) {
+        await createAndLoadSound(true);
+        return;
+      }
+
       if (isPlaying) {
         await soundRef.current.pauseAsync();
         if (activePlayingSound === soundRef.current) {
@@ -916,7 +945,8 @@ function VoiceNotePlayer({
         activePlayingSetIsPlaying = setIsPlaying;
       }
     } catch (error) {
-      console.error('Playback error:', error);
+      console.warn('Playback error:', error);
+      setIsLoading(false);
     }
   };
 
@@ -1551,7 +1581,7 @@ const ChatMediaMessage: React.FC<Props> = ({
                   fontWeight: '500'
                 }}
               >
-                {isUploading ? `Uploading… ${progress}%` : isAudio ? 'Voice Message' : 'Document'}
+                {isUploading ? `Uploading… ${progress}%` : isAudio ? 'Voice message' : 'Document'}
               </Text>
             </View>
           </TouchableOpacity>

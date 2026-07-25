@@ -1044,7 +1044,10 @@ const MessageBubble = ({
                 <Text className="text-white/80 text-xs" numberOfLines={1}>
                   {(() => {
                     try { 
-                      const p = JSON.parse(repliedMsg.content); 
+                      let p = JSON.parse(repliedMsg.content); 
+                      if (typeof p === 'string' && p.startsWith('{')) {
+                        p = JSON.parse(p);
+                      }
                       if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
                       if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
                       if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
@@ -1058,10 +1061,10 @@ const MessageBubble = ({
                           const d = Math.floor(Number(p.duration));
                           dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
                         }
-                        return `🎤 Voice Message${dStr}`;
+                        return `🎤 Voice message${dStr}`;
                       }
                       if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
-                      return p.text || repliedMsg.content; 
+                      return p.text || (typeof repliedMsg.content === 'string' ? repliedMsg.content : JSON.stringify(repliedMsg.content)); 
                     } catch { return repliedMsg.content; }
                   })()}
                 </Text>

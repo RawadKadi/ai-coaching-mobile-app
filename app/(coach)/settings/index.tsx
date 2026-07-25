@@ -19,40 +19,40 @@ export default function SettingsScreen() {
             <ChevronLeft size={20} color="white" />
           </TouchableOpacity>
           <View>
-            <Text className="text-white text-xl font-black">System Configuration</Text>
-            <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Engine Parameters</Text>
+            <Text className="text-white text-xl font-black">App Settings</Text>
+            <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Preferences</Text>
           </View>
         </View>
 
         <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingBottom: 120 }}>
-          <SectionLabel label="Core Systems" />
+          <SectionLabel label="Availability & Scheduling" />
           <SettingsItem
             icon={<Clock size={20} color="#7FA7FF" />}
             iconBg="#7FA7FF20"
-            label="Availability Hub"
-            desc="Sync your time windows"
+            label="Select working hours"
+            desc="Set your weekly work hours"
             onPress={() => router.push('/(coach)/settings/availability')}
           />
 
           {(coach?.brand_id || coach?.can_manage_brand) && (
             <>
-              <SectionLabel label="Identity & Brand" />
+              <SectionLabel label="Branding" />
               <SettingsItem
                 icon={<Palette size={20} color="#F59E0B" />}
                 iconBg="#F59E0B20"
-                label="Brand Studio"
+                label="Brand Customization"
                 desc={canManageBrand ? "Customize colors & logo" : "View brand settings"}
                 onPress={() => router.push('/(coach)/settings/branding')}
               />
             </>
           )}
 
-          <SectionLabel label="Intelligence Layer" />
+          <SectionLabel label="AI Assistant" />
           <SettingsItem
             icon={<BrainCircuit size={20} color="#8B5CF6" />}
             iconBg="#8B5CF620"
-            label="Neural Engine Config"
-            desc="Tune your AI persona"
+            label="AI Settings"
+            desc="Customize your AI coach"
             onPress={() => router.push('/(coach)/(tabs)/ai-brain')}
           />
         </ScrollView>

@@ -38,6 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatCompactNumber } from '@/lib/format-utils';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
+import MagicRings from '@/components/ui/MagicRings';
 
 /** Returns today's date as YYYY-MM-DD in the device's local timezone, not UTC. */
 function getLocalDateString(): string {
@@ -828,9 +829,29 @@ export default function ActivityScreen() {
                                     padding: 24,
                                     borderWidth: 1,
                                     borderColor: isFailed ? '#ef444450' : isCompleted ? '#10b98150' : '#1e293b',
-                                    opacity: (isFailed || isCompleted) ? 0.6 : 1
+                                    opacity: (isFailed || isCompleted) ? 0.6 : 1,
+                                    position: 'relative',
+                                    overflow: 'hidden'
                                   }}
                                 >
+                                  {/* Magic Rings background only for active challenges */}
+                                  {!isFailed && !isCompleted && (
+                                    <View style={{ ...StyleSheet.absoluteFillObject, opacity: 0.25 }} pointerEvents="none">
+                                      <MagicRings
+                                        color="#3B82F6"
+                                        colorTwo="#1d4ed8"
+                                        backgroundColor="#0f172a"
+                                        ringCount={5}
+                                        speed={0.6}
+                                        attenuation={9}
+                                        lineThickness={2}
+                                        baseRadius={0.32}
+                                        radiusStep={0.12}
+                                        followMouse={false}
+                                        clickBurst={false}
+                                      />
+                                    </View>
+                                  )}
                                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                       {isFailed ? (

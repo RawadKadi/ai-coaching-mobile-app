@@ -1,5 +1,5 @@
 import { useBrandColors } from '@/contexts/BrandContext';
-import React, { useState } from 'react';
+import { generateGoogleMeetUrl } from '@/utils/session';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Clock, Calendar, CheckCircle2, X, Check } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -44,7 +44,7 @@ export default function RescheduleProposalMessage({ messageId, metadata, isOwn }
                         session_type: metadata.proposedSessionData.session_type,
                         status: 'scheduled',
                         invite_sent: true,
-                        meet_link: `coachingapp://call/pending`,
+                        meet_link: generateGoogleMeetUrl(),
                     })
                     .select()
                     .single();

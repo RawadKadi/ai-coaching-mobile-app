@@ -32,7 +32,6 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isHealthSyncAvailable, requestHealthPermissions, getTodaySteps } from '@/lib/health-service';
 import { FirstTimeHeroCards } from '@/components/client/FirstTimeHeroCards';
-import { GlassNavbar } from '@/components/GlassNavbar';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 
 export default function ClientDashboard() {
@@ -331,18 +330,19 @@ export default function ClientDashboard() {
       <ScrollView 
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + 80, paddingBottom: 140 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} progressViewOffset={insets.top + 60} />}
+        contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: 140 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} progressViewOffset={insets.top + 10} />}
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-          {/* Refined Client Header (Now scrolls under the glass navbar) */}
+          {/* Refined Client Header */}
           <MotiView 
               from={{ opacity: 0, translateY: -10 }}
               animate={{ opacity: 1, translateY: 0 }}
               className="px-6 pb-6 flex-row items-center justify-between"
           >
               <View>
+                  <Text className="text-slate-400 text-base font-bold tracking-tight mb-1">Your dashboard</Text>
                   <Text className="text-white text-3xl font-black tracking-tighter">Good morning,</Text>
                   <Text className="text-blue-500 text-3xl font-black tracking-tighter">{profile?.full_name?.split(' ')[0]}</Text>
               </View>
@@ -406,7 +406,7 @@ export default function ClientDashboard() {
                   <View className="p-8">
                       <View className="flex-row items-center gap-2 mb-3">
                         <View className="w-6 h-6 bg-blue-500/20 rounded-full items-center justify-center border border-blue-500/30">
-                          <CheckCircle2 size={12} color={colors.primary} />
+                           <CheckCircle2 size={12} color={colors.primary} />
                         </View>
                         <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Plan Synced</Text>
                       </View>
@@ -484,9 +484,9 @@ export default function ClientDashboard() {
                 {/* Upcoming Session Card — today only */}
                 {upcomingSession && (
                   <UpcomingSessionCard
-                    session={upcomingSession}
-                    nowMs={nowMs}
-                    onJoin={() => router.push('/(client)/messages')}
+                     session={upcomingSession}
+                     nowMs={nowMs}
+                     onJoin={() => router.push('/(client)/messages')}
                   />
                 )}
 
@@ -507,8 +507,6 @@ export default function ClientDashboard() {
             </View>
           </View>
         </ScrollView>
-
-        <GlassNavbar title="Home" />
     </View>
   );
 }

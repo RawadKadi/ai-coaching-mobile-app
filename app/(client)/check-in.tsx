@@ -282,7 +282,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
       className="flex-1 px-8"
     >
       <View className="mb-10">
-        <Text className="text-white text-4xl font-black tracking-tighter">Vitality Shield</Text>
+        <Text className="text-white text-4xl font-black tracking-tighter">Energy & Stress</Text>
         <Text className="text-slate-500 font-medium text-lg mt-2">How are your internal levels today?</Text>
       </View>
 
@@ -339,7 +339,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
       className="flex-1 px-8"
     >
       <View className="mb-10">
-        <Text className="text-white text-4xl font-black tracking-tighter">Psychological Ops</Text>
+        <Text className="text-white text-4xl font-black tracking-tighter">Daily Notes</Text>
         <Text className="text-slate-500 font-medium text-lg mt-2">Capture your mental state and any notes.</Text>
       </View>
 
