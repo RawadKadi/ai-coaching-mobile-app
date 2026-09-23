@@ -1,6 +1,6 @@
 import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useCallback, useEffect } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { 
   View, 
   Text, 
@@ -11,7 +11,6 @@ import {
   TouchableWithoutFeedback, 
   Alert 
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';

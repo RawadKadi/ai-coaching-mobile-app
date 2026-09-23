@@ -87,7 +87,7 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
     <Animated.View style={[styles.container, { left: animatedMargin, right: animatedMargin }]}>
       {/* Background with rounded corners and clipped glow */}
       <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }]}>
-        <BlurView intensity={60} tint="dark" style={styles.blurContainer} />
+        <BlurView intensity={80} tint="systemUltraThinMaterialDark" style={styles.blurContainer} />
         
         {/* Glow Indicator (Simulating CSS blur with concentric fading circles) */}
         <Animated.View
@@ -217,11 +217,17 @@ const styles = StyleSheet.create({
   },
   blurContainer: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.45)', // Slight dark tint
+    backgroundColor: 'rgba(2, 6, 23, 0.55)', // Slightly more opaque for visible frosting
   },
   tabsWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
-    flex: 1,
+    alignItems: 'center',
+    zIndex: 10,
   },
   glowIndicatorWrapper: {
     ...StyleSheet.absoluteFillObject,
@@ -243,9 +249,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E3A8A', // Much darker blue (blue-900)
   },
   tabButton: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
   },
   badgeContainer: {
     position: 'absolute',
