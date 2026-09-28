@@ -1,5 +1,7 @@
 # AI-Powered Coaching Platform
 
+<a href='https://www.sideprojectors.com/project/96231/ai-coaching-mobile-app' alt='ai-coaching-mobile-app is for sale at @SideProjectors'><img style='position:fixed;z-index:1000;top:-5px; right: 20px; border: 0;' src='https://www.sideprojectors.com/img/badges/badge_2_red.png' alt='ai-coaching-mobile-app is sale at @SideProjectors'></a>
+
 A comprehensive mobile application ecosystem for coaches and clients, featuring AI-powered meal planning, workout generation, progress tracking, and personalized coaching insights.
 
 ## Overview
