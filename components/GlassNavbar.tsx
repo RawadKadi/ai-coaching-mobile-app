@@ -11,16 +11,17 @@ const NAVBAR_HEIGHT = 60;
 
 export function GlassNavbar({ title }: GlassNavbarProps) {
   const insets = useSafeAreaInsets();
+  const { isDarkMode } = require('@/contexts/BrandContext').useTheme();
   
   return (
     <View style={[styles.container, { height: insets.top + NAVBAR_HEIGHT }]}>
-      <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFillObject} />
+      <BlurView intensity={70} tint={isDarkMode ? "dark" : "light"} style={StyleSheet.absoluteFillObject} />
       
       {/* Border to mimic glass edge */}
-      <View style={styles.glassEdge} />
+      <View style={[styles.glassEdge, { backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)' }]} />
 
       <View style={[styles.content, { paddingTop: insets.top }]}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, { color: isDarkMode ? 'white' : '#000000' }]}>{title}</Text>
       </View>
     </View>
   );

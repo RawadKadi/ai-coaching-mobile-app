@@ -76,8 +76,8 @@ export const analyzeMealImage = async (
 
         return analysisData;
     } catch (error: any) {
-        console.error('Error analyzing meal:', error);
-        console.error('Error details:', error.message, error.stack);
+        console.warn('Error analyzing meal:', error);
+        console.warn('Error details:', error.message, error.stack);
 
         // Provide more specific error messages
         if (error.message?.includes('API key')) {
@@ -183,7 +183,7 @@ const parseAIResponse = (text: string): MealAnalysisResult => {
         const endIndex = text.lastIndexOf('}');
         
         if (startIndex === -1 || endIndex === -1) {
-            console.error('No JSON found in response:', text);
+            console.warn('No JSON found in response:', text);
             throw new Error('No valid JSON found in AI response');
         }
 
@@ -201,8 +201,8 @@ const parseAIResponse = (text: string): MealAnalysisResult => {
 
         return parsed as MealAnalysisResult;
     } catch (error) {
-        console.error('Error parsing AI response:', error);
-        console.error('Raw text:', text);
+        console.warn('Error parsing AI response:', error);
+        console.warn('Raw text:', text);
         throw new Error('Failed to parse meal analysis. Please try again.');
     }
 };
@@ -266,7 +266,7 @@ RESPONSE FORMAT (JSON only):
         }
 
   } catch (error) {
-    console.error('Error recalculating nutrition:', error);
+    console.warn('Error recalculating nutrition:', error);
     throw new Error('Failed to recalculate nutrition.');
   }
 };
@@ -325,7 +325,7 @@ Return ONLY the name, no other text.`;
     const response = await result.response;
     return response.text().trim().replace(/[*"]/g, '');
   } catch (error) {
-    console.error('Error generating meal name:', error);
+    console.warn('Error generating meal name:', error);
     return 'Custom Meal';
   }
 };
@@ -427,7 +427,7 @@ Same format as before. Return the complete corrected analysis object.
 
         return parseAIResponse(text);
     } catch (error: any) {
-        console.error('Error re-analyzing meal with feedback:', error);
+        console.warn('Error re-analyzing meal with feedback:', error);
 
         if (error.message?.includes('429') || error.message?.includes('Resource exhausted')) {
             throw new Error('AI is currently busy (rate limit). Please wait a moment and try again.');

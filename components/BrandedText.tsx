@@ -1,6 +1,7 @@
 import React from 'react';
-import { Text, StyleSheet, TextStyle } from 'react-native';
+import { Text as RNText, StyleSheet, TextStyle } from 'react-native';
 import { useTheme } from '@/contexts/BrandContext';
+import { getFontFamily } from '@/hooks/useAppFonts';
 
 interface BrandedTextProps {
   children: React.ReactNode;
@@ -56,10 +57,10 @@ export function BrandedText({
   };
   
   return (
-    <Text
+    <RNText
       style={[
         {
-          fontFamily: theme.typography.fontFamily,
+          fontFamily: getFontFamily(theme.typography.fontFamily, getFontWeight() as string),
           fontSize: theme.typography.sizes[variant],
           fontWeight: getFontWeight() as any,
           color: getTextColor(),
@@ -68,6 +69,17 @@ export function BrandedText({
       ]}
     >
       {children}
-    </Text>
+    </RNText>
   );
+}
+
+import { TextProps as RNTextProps } from 'react-native';
+
+export function Text(props: RNTextProps & { className?: string }) {
+  const theme = useTheme();
+  const flatStyle = StyleSheet.flatten(props.style) || {};
+  const weight = flatStyle.fontWeight || '400';
+  const fontFamily = getFontFamily(theme.typography.fontFamily, String(weight));
+
+  return <RNText {...props} style={[props.style, { fontFamily }]} />;
 }

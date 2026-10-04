@@ -56,6 +56,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
 import { MotiView, AnimatePresence } from 'moti';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { isDarkColor } from '@/lib/theme-utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -672,7 +673,7 @@ export default function ClientMessagesScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <GradientBackground />
       <StatusBar barStyle="light-content" translucent />
       
@@ -915,6 +916,10 @@ const MessageBubble = ({
   const shouldTruncate = displayContent.length > 300;
   const truncatedContent = shouldTruncate && !isExpanded ? displayContent.slice(0, 300) + '...' : displayContent;
 
+  const isBgDark = isMe ? isDarkColor(theme.colors.primary) : isDarkColor(theme.colors.surface);
+  const textColor = isBgDark ? '#FFFFFF' : '#000000';
+  const mutedTextColor = isBgDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
+
   return (
     <View style={{ position: 'relative' }}>
       {isForwarded && (
@@ -936,20 +941,21 @@ const MessageBubble = ({
         <Reanimated.View style={animatedStyle}>
           <MotiView 
               animate={{ 
-                  backgroundColor: isHighlighted ? '#1E293B' : (isMe ? theme.colors.primary : '#334155') 
+                  backgroundColor: isHighlighted ? theme.colors.border : (isMe ? theme.colors.primary : theme.colors.surface) 
               }}
               transition={{ type: 'timing', duration: 100 }}
               className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
-              style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : '#334155' }}
+              style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : theme.colors.surface, borderColor: isMe ? 'transparent' : theme.colors.border }}
           >
           {repliedMsg && (
              <TouchableOpacity 
                 activeOpacity={0.8}
                 onPress={onReplyPress}
-                className="bg-black/20 px-4 py-3 rounded-2xl mb-2 border-l-4 border-white/30 min-h-[44px]"
+                className="px-4 py-3 rounded-2xl mb-2 border-l-4 min-h-[44px]"
+                style={{ backgroundColor: 'rgba(0,0,0,0.15)', borderColor: mutedTextColor }}
              >
-                <Text className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
-                <Text className="text-white/80 text-xs" numberOfLines={1}>
+                <Text style={{ fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2, color: mutedTextColor }}>{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
+                <Text style={{ color: textColor, fontSize: 12, opacity: 0.8 }} numberOfLines={1}>
                   {(() => {
                     try { 
                       let p: any = repliedMsg.content;
@@ -989,20 +995,20 @@ const MessageBubble = ({
                 </Text>
              </TouchableOpacity>
           )}
-          <Text className="text-[15px] font-medium leading-[22px] text-white">
+          <Text style={{ fontSize: 15, fontWeight: '500', lineHeight: 22, color: textColor }}>
             {truncatedContent}
           </Text>
           {shouldTruncate && (
             <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} className="mt-1">
-              <Text style={{ color: isMe ? 'white' : theme.colors.primary, fontWeight: 'bold', fontSize: 13 }}>
+              <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 13, opacity: 0.9 }}>
                 {isExpanded ? 'Show Less' : 'Read More'}
               </Text>
             </TouchableOpacity>
           )}
           <View className="flex-row items-center justify-end gap-1.5 mt-2">
-             {isEdited && <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>Edited</Text>}
-             <Text className="text-[9px] font-bold text-white/40">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-             {isMe && <CheckCheck size={11} color={item.read ? '#34D399' : '#94A3B8'} />}
+             {isEdited && <Text style={{ fontSize: 9, fontWeight: '600', color: mutedTextColor, fontStyle: 'italic' }}>Edited</Text>}
+             <Text style={{ fontSize: 9, fontWeight: 'bold', color: mutedTextColor }}>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+             {isMe && <CheckCheck size={11} color={item.read ? (isBgDark ? '#34D399' : '#059669') : mutedTextColor} />}
           </View>
         </MotiView>
       </Reanimated.View>

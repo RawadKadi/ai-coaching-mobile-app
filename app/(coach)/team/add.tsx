@@ -169,7 +169,7 @@ export default function AddSubCoachScreen() {
           className="mx-6 mt-8 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden"
         >
             <View className="absolute top-0 right-0 p-4 opacity-10">
-                <UserPlus size={120} color={colors.primary} />
+                <UserPlus size={120} color={primary} />
             </View>
             <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
                 <Send size={36} color="white" fill="white" />
@@ -212,7 +212,7 @@ export default function AddSubCoachScreen() {
 
           {searchState === 'searching' && (
             <View className="py-6 items-center flex-row justify-center gap-3">
-              <ActivityIndicator color={colors.primary} />
+              <ActivityIndicator color={primary} />
               <Text className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Querying Neural Roster...</Text>
             </View>
           )}

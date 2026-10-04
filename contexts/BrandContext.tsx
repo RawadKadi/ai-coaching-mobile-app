@@ -169,7 +169,7 @@ function generateThemeColors(brand: Brand | null, isDark: boolean): ThemeColors 
   const primaryColor = ensureValidColor(brand?.primary_color, '#7FA7FF');
   const secondaryColor = ensureValidColor(brand?.secondary_color, '#10B981');
   const accentColor = ensureValidColor(brand?.accent_color, '#F59E0B');
-  const backgroundColor = ensureValidColor(brand?.background_color, '#F9FAFB');
+  const backgroundColor = ensureValidColor(brand?.background_color, '#010417');
   
   // Use the configured colors directly - NO dark mode overrides
   const finalPrimary = primaryColor;
@@ -231,7 +231,7 @@ function generateTheme(brand: Brand | null, isDark: boolean): Theme {
   const bodyWeight = brand?.body_font_weight || '400';
   
   const typography: ThemeTypography = {
-    fontFamily: getFontFamily(fontDisplayName, bodyWeight),
+    fontFamily: fontDisplayName,
     headingWeight,
     bodyWeight,
     scale: brand?.font_scale || 1.0,

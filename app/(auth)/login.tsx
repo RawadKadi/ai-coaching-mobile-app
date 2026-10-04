@@ -1,5 +1,6 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrand, useBrandColors } from '@/contexts/BrandContext';
 import React, { useState } from 'react';
+import { Image } from 'expo-image';
 import {
   View,
   Text,
@@ -20,6 +21,7 @@ import { MotiView, AnimatePresence } from 'moti';
 const PENDING_INVITE_KEY = '@pending_invite_token';
 
 export default function LoginScreen() {
+  const { brand } = useBrand();
   const colors = useBrandColors();
   const router = useRouter();
   const { signIn } = useAuth();
@@ -69,14 +71,21 @@ export default function LoginScreen() {
                 animate={{ opacity: 1, scale: 1 }}
                 className="items-center mb-16"
               >
-                <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/40 border-2 border-white/10 mb-6">
-                  <ShieldCheck size={40} color="white" />
-                </View>
+                {brand?.logo_url ? (
+                  <View className="w-20 h-20 rounded-[30px] overflow-hidden items-center justify-center shadow-2xl border-2 border-white/10 mb-6 bg-slate-900">
+                    <Image source={{ uri: brand.logo_url }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
+                  </View>
+                ) : (
+                  <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/40 border-2 border-white/10 mb-6">
+                    <ShieldCheck size={40} color="white" />
+                  </View>
+                )}
+                
                 <Text className="text-white text-4xl font-black text-center tracking-tight">
-                  NEURAL<Text className="text-blue-500">SYNC</Text>
+                  {brand?.name ? brand.name : "YOUR BRAND"}
                 </Text>
                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[6px] mt-2">
-                  Version 3.0
+                  Partner Portal
                 </Text>
               </MotiView>
 
@@ -164,7 +173,7 @@ export default function LoginScreen() {
                   </Text>
                 </View>
                 <Text className="text-slate-900 text-[8px] font-bold uppercase">
-                  Secure login protected by NeuralSync
+                  Secure login protected by {brand?.name || "System"}
                 </Text>
               </View>
             </View>

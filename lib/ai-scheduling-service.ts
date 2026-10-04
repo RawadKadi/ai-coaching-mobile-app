@@ -215,8 +215,8 @@ RESPONSE FORMAT (JSON ONLY):
         }
 
         return JSON.parse(cleanedText);
-    } catch (error) {
-        console.error('Error parsing schedule:', error);
+    } catch (error: any) {
+        console.warn('AI Parsing failed (fallback will be used):', error.message || error);
         throw new Error('Failed to parse schedule request');
     }
 };
@@ -296,8 +296,8 @@ Return ONLY valid JSON, no markdown:
         }
 
         return response;
-    } catch (error) {
-        console.error('Error extracting intent:', error);
+    } catch (error: any) {
+        console.warn('AI Intent extraction failed (fallback will be used):', error.message || error);
         return {
             sessions: [],
             recurrence: null,
@@ -376,8 +376,8 @@ Return ONLY the JSON object.
             days: Array.isArray(parsed.days) ? parsed.days : [],
             times: Array.isArray(parsed.times) ? parsed.times : []
         };
-    } catch (error) {
-        console.error('Error extracting agenda context:', error);
+    } catch (error: any) {
+        console.warn('AI Agenda context extraction failed (fallback will be used):', error.message || error);
         return { days: [], times: [] };
     }
 };

@@ -6,13 +6,28 @@ module.exports = {
         extend: {
             colors: {
                 brand: {
-                    primary: "#3B82F6", // Blue-500
-                    secondary: "#1E40AF", // Blue-800
-                    accent: "#FBBF24", // Amber-400
-                    surface: "#0F172A", // Slate-900
-                    background: "#020617", // Slate-950
+                    primary: "var(--color-primary)", 
+                    secondary: "var(--color-secondary)", 
+                    accent: "var(--color-accent)", 
+                    surface: "var(--color-surface)", 
+                    background: "var(--color-bg)", 
                 },
+                slate: {
+                    950: "var(--color-bg)",
+                    900: "var(--color-surface)",
+                    800: "var(--color-border)",
+                    600: "var(--color-text-muted)",
+                    400: "var(--color-text-secondary)",
+                    200: "var(--color-text-primary)",
+                },
+                blue: {
+                    500: "var(--color-primary-text)",
+                    600: "var(--color-primary)",
+                }
             },
+            textColor: {
+                white: "var(--color-text-primary)",
+            }
         },
     },
     plugins: [],

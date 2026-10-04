@@ -1,6 +1,7 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, SectionList, ActivityIndicator, TouchableOpacity, StatusBar, RefreshControl } from 'react-native';
+import { View, ScrollView, SectionList, ActivityIndicator, TouchableOpacity, StatusBar, RefreshControl } from 'react-native';
+import { Text } from '@/components/BrandedText';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
@@ -58,6 +59,7 @@ const formatActivityDate = (dateString: string) => {
 
 export default function CoachDashboard() {
   const colors = useBrandColors();
+  const { isDarkMode } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, coach } = useAuth();
@@ -139,8 +141,10 @@ export default function CoachDashboard() {
     if (coach) {
       loadDashboardData();
       
-      // Subscribe to real-time check-in, habit log, and challenge updates
-      const checkinSubscription = supabase.channel('coach_dashboard_realtime')
+      // Use a unique channel name for this mount to avoid "cannot add callbacks after subscribe()" 
+      // in case of React Strict Mode double-invocation race conditions.
+      const channelId = `coach_dashboard_realtime_${Date.now()}_${Math.random()}`;
+      const checkinSubscription = supabase.channel(channelId)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'check_ins' },
@@ -165,7 +169,7 @@ export default function CoachDashboard() {
         .subscribe();
 
       return () => {
-        checkinSubscription.unsubscribe();
+        supabase.removeChannel(checkinSubscription);
       };
     } else {
       setLoading(false);
@@ -320,15 +324,23 @@ export default function CoachDashboard() {
 
   if (loading && !refreshing) {
     return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
+  const cardStyle = {
+    backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.4)' : colors.surface,
+    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : colors.border,
+    borderWidth: 1,
+  };
+
+  const textStyle = { color: colors.text };
+
   return (
-    <View style={{ flex: 1 }} className="bg-slate-950">
-      <StatusBar barStyle="light-content" translucent />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} translucent />
       <SectionList
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
@@ -358,13 +370,14 @@ export default function CoachDashboard() {
               <View>
                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-2">Performance Center</Text>
                 <View className="flex-row items-baseline gap-2">
-                    <Text className="text-white text-4xl font-black tracking-tighter">Welcome back,</Text>
+                    <Text style={textStyle} className="text-4xl font-black tracking-tighter">Welcome back,</Text>
                 </View>
                 <Text className="text-blue-500 text-4xl font-black tracking-tighter">{profile?.full_name?.split(' ')[0]}</Text>
               </View>
               <TouchableOpacity 
                 onPress={() => router.push('/(coach)/(tabs)/profile')}
-                className="p-1.5 bg-slate-900 rounded-[24px] border border-white/5 shadow-2xl"
+                className="p-1.5 rounded-[24px] shadow-2xl"
+                style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}
               >
                 <BrandedAvatar name={profile?.full_name || 'Coach'} imageUrl={profile?.avatar_url} size={64} />
                 <View className="absolute bottom-1 right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900" />
@@ -374,11 +387,11 @@ export default function CoachDashboard() {
             {/* Strategic Stats Section */}
             <View className="px-6 mb-10">
                 <View className="flex-row gap-4">
-                    <View className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl">
+                    <View className="flex-1 rounded-[36px] p-8 shadow-xl" style={cardStyle}>
                         <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center mb-6 border border-blue-600/20">
                             <Users size={24} color={colors.primary} />
                         </View>
-                        <Text className="text-white text-4xl font-black tracking-tighter">{stats.totalClients}</Text>
+                        <Text style={textStyle} className="text-4xl font-black tracking-tighter">{stats.totalClients}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Total Roster</Text>
                         <View className="flex-row items-center gap-1.5 mt-4">
                             <TrendingUp size={12} color="#34D399" />
@@ -388,7 +401,8 @@ export default function CoachDashboard() {
 
                     <TouchableOpacity 
                         onPress={() => setShowAnalyticsModal(true)}
-                        className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl overflow-hidden relative"
+                        className="flex-1 rounded-[36px] p-8 shadow-xl overflow-hidden relative"
+                        style={cardStyle}
                     >
                         <View className="w-12 h-12 bg-purple-600/10 rounded-2xl items-center justify-center mb-6 border border-purple-600/20">
                             <Activity size={24} color="#A855F7" />
@@ -397,7 +411,7 @@ export default function CoachDashboard() {
                             <ArrowUpRight size={22} color="#475569" />
                         </View>
                         
-                        <Text className="text-white text-4xl font-black tracking-tighter">{displayActiveCount}</Text>
+                        <Text style={textStyle} className="text-4xl font-black tracking-tighter">{displayActiveCount}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Now</Text>
 
                         <View className="h-12 mt-2 opacity-40">
@@ -421,7 +435,8 @@ export default function CoachDashboard() {
                 <View className="flex-row gap-4 mt-4">
                     <TouchableOpacity 
                       onPress={() => router.push({ pathname: '/(coach)/(tabs)/calendar', params: { resetToToday: 'true' } })}
-                      className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl relative"
+                      className="flex-1 rounded-[36px] p-8 shadow-xl relative"
+                      style={cardStyle}
                     >
                         <View className="w-12 h-12 bg-orange-600/10 rounded-2xl items-center justify-center mb-6 border border-orange-600/20">
                             <Zap size={24} color="#F59E0B" />
@@ -429,7 +444,7 @@ export default function CoachDashboard() {
                         <View className="absolute top-8 right-8">
                             <ArrowUpRight size={22} color="#475569" />
                         </View>
-                        <Text className="text-white text-4xl font-black tracking-tighter">{stats.todaysSessions}</Text>
+                        <Text style={textStyle} className="text-4xl font-black tracking-tighter">{stats.todaysSessions}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Today's Sessions</Text>
                         <View className="flex-row items-center gap-1.5 mt-4">
                             <Text className="text-orange-500 font-bold text-[10px]">{stats.todaysSessions === 0 ? 'Clear Schedule' : 'Live Focus'}</Text>
@@ -438,7 +453,8 @@ export default function CoachDashboard() {
 
                     <TouchableOpacity 
                       onPress={() => router.push('/(coach)/challenges')}
-                      className="flex-1 bg-slate-900/40 rounded-[36px] p-8 border border-white/5 shadow-xl relative"
+                      className="flex-1 rounded-[36px] p-8 shadow-xl relative"
+                      style={cardStyle}
                     >
                         <View className="w-12 h-12 bg-emerald-600/10 rounded-2xl items-center justify-center mb-6 border border-emerald-600/20">
                             <Trophy size={24} color="#10B981" />
@@ -446,7 +462,7 @@ export default function CoachDashboard() {
                         <View className="absolute top-8 right-8">
                             <ArrowUpRight size={22} color="#475569" />
                         </View>
-                        <Text className="text-white text-4xl font-black tracking-tighter">{stats.activeChallenges}</Text>
+                        <Text style={textStyle} className="text-4xl font-black tracking-tighter">{stats.activeChallenges}</Text>
                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Challenges</Text>
                         <View className="flex-row items-center gap-1.5 mt-4">
                             <TrendingUp size={12} color="#10B981" />
@@ -457,13 +473,13 @@ export default function CoachDashboard() {
             </View>
 
             {/* Notification/Status Bar */}
-            <View className="mx-6 bg-slate-900/40 rounded-[32px] p-1 border border-white/5 mb-10">
+            <View className="mx-6 rounded-[32px] p-1 mb-10" style={cardStyle}>
               <TouchableOpacity className="flex-row items-center p-5">
-                <View className="w-12 h-12 rounded-2xl bg-slate-950 items-center justify-center mr-5 border border-white/5">
+                <View className="w-12 h-12 rounded-2xl items-center justify-center mr-5" style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}>
                   <ClipboardCheck size={22} color="#94A3B8" />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-white font-bold text-sm tracking-tight">Check-ins Required</Text>
+                  <Text style={textStyle} className="font-bold text-sm tracking-tight">Check-ins Required</Text>
                   <Text className="text-slate-500 text-[10px] font-medium mt-0.5 uppercase tracking-widest">{stats.pendingCheckIns} Athletes pending</Text>
                 </View>
                 <ChevronRight size={18} color="#334155" />
@@ -473,11 +489,11 @@ export default function CoachDashboard() {
                 className="flex-row items-center p-5"
                 onPress={() => router.push('/(coach)/(tabs)/messages')}
               >
-                <View className="w-12 h-12 rounded-2xl bg-slate-950 items-center justify-center mr-5 border border-white/5">
+                <View className="w-12 h-12 rounded-2xl items-center justify-center mr-5" style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}>
                   <MessageSquare size={22} color="#94A3B8" />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-white font-bold text-sm tracking-tight">Communication</Text>
+                  <Text style={textStyle} className="font-bold text-sm tracking-tight">Communication</Text>
                   <Text className="text-slate-500 text-[10px] font-medium mt-0.5 uppercase tracking-widest">{stats.unreadMessages === 0 ? 'Clear Inbox' : `${stats.unreadMessages} New Unread`}</Text>
                 </View>
                 {stats.unreadMessages > 0 && (
@@ -490,7 +506,7 @@ export default function CoachDashboard() {
             {/* Grid-based Quick Actions */}
             <View className="px-6 mb-10">
               <View className="flex-row justify-between items-end mb-8">
-                  <Text className="text-white text-3xl font-black tracking-tighter">Actions</Text>
+                  <Text style={textStyle} className="text-3xl font-black tracking-tighter">Actions</Text>
                   <TouchableOpacity onPress={() => router.push('/(coach)/(tabs)/clients')}>
                       <Text className="text-blue-500 font-black text-[10px] uppercase tracking-widest">View Roster</Text>
                   </TouchableOpacity>
@@ -501,28 +517,40 @@ export default function CoachDashboard() {
                   title="Challenges" 
                   desc="Competitions & goals" 
                   onPress={() => router.push('/(coach)/challenges')}
+                  cardStyle={cardStyle}
+                  textStyle={textStyle}
+                  colors={colors}
                 />
                 <ActionCard 
                   icon={<Zap size={28} color="#A855F7" />} 
                   title="AI Scheduler" 
                   desc="Smart session planning" 
                   onPress={handleOpenAIScheduler}
+                  cardStyle={cardStyle}
+                  textStyle={textStyle}
+                  colors={colors}
                 />
                 <ActionCard 
                   icon={<UserPlus size={28} color={colors.primary} />} 
                   title="Onboard Client" 
                   desc="Invite new athlete" 
                   onPress={() => router.push('/(coach)/invite-client')}
+                  cardStyle={cardStyle}
+                  textStyle={textStyle}
+                  colors={colors}
                 />
                 <ActionCard 
                   icon={<BarChart3 size={28} color="#10B981" />} 
                   title="Analytics" 
                   desc="Growth & metrics" 
+                  cardStyle={cardStyle}
+                  textStyle={textStyle}
+                  colors={colors}
                 />
               </View>
             </View>
                 <View className="px-6 mb-8">
-                  <Text className="text-white text-2xl font-black tracking-tighter">Current Feed</Text>
+                  <Text style={textStyle} className="text-2xl font-black tracking-tighter">Current Feed</Text>
                 </View>
               </View>
             }
@@ -546,12 +574,13 @@ export default function CoachDashboard() {
               <View className="px-6 mb-4">
                 <TouchableOpacity 
                   onPress={() => router.push(`/(coach)/clients/${item.client_id}?tab=checkins`)}
-                  className="bg-slate-900/40 rounded-[32px] p-5 border border-white/5 flex-row items-center"
+                  className="rounded-[32px] p-5 flex-row items-center"
+                  style={cardStyle}
                 >
                   <BrandedAvatar name={item.client_name} imageUrl={item.client_avatar} size={48} />
                   <View className="flex-1 ml-4">
                     <View className="flex-row items-center justify-between">
-                      <Text className="text-white font-bold text-sm tracking-tight">{item.client_name}</Text>
+                      <Text style={textStyle} className="font-bold text-sm tracking-tight">{item.client_name}</Text>
                       <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
                         {formatActivityDate(item.created_at)}
                       </Text>
@@ -710,15 +739,16 @@ export default function CoachDashboard() {
   );
 }
 
-const ActionCard = ({ icon, title, desc, onPress }: any) => (
+const ActionCard = ({ icon, title, desc, onPress, cardStyle, textStyle, colors }: any) => (
   <TouchableOpacity 
     onPress={onPress}
-    className="bg-slate-900/40 border border-white/5 p-7 rounded-[40px] w-[47%] shadow-lg shadow-black/20"
+    className="p-7 rounded-[40px] w-[47%] shadow-lg shadow-black/20"
+    style={cardStyle}
   >
-    <View className="w-14 h-14 bg-slate-950 rounded-[22px] items-center justify-center mb-8 border border-white/5">
+    <View className="w-14 h-14 rounded-[22px] items-center justify-center mb-8" style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }}>
       {icon}
     </View>
-    <Text className="text-white font-black text-lg tracking-tight mb-2 leading-5">{title}</Text>
+    <Text style={textStyle} className="font-black text-lg tracking-tight mb-2 leading-5">{title}</Text>
     <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">{desc}</Text>
   </TouchableOpacity>
 );

@@ -154,6 +154,7 @@ export default function CoachProfileScreen() {
               {canManageBrand && (
                 <>
                   <SectionLabel label="Management" />
+                  <ProfileMenuItem icon={<Palette size={20} color="#F59E0B" />} label="Brand Settings" sub="Customize app colors & logo" onPress={() => router.push('/(coach)/settings/branding')} highlighted />
                   <ProfileMenuItem icon={<CreditCard size={20} color="#94A3B8" />} label="Subscription Plan" />
                 </>
               )}

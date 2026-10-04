@@ -12,7 +12,8 @@ import { Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '@/contexts/BrandContext';
+import { useTheme } from "@/contexts/BrandContext";
+import { isDarkColor } from "@/lib/theme-utils";
 import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, ChevronDown, Pause, X, Trophy, Zap, Target, Loader2, Clock, Video as LucideVideo, Forward } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
@@ -1180,6 +1181,10 @@ const ChatMediaMessage: React.FC<Props> = ({
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme.colors);
+  
+  const isBgDark = isOwn ? isDarkColor(theme.colors.primary) : isDarkColor(theme.colors.surface);
+  const textColor = isBgDark ? '#FFFFFF' : '#000000';
+  const mutedTextColor = isBgDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -1318,7 +1323,7 @@ const ChatMediaMessage: React.FC<Props> = ({
         {media.text && (
           <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 }}>
             <Text style={{ 
-              color: '#FFFFFF', 
+              color: textColor, 
               fontSize: 15, 
               lineHeight: 22,
               fontFamily: theme.typography.fontFamily 
@@ -1335,14 +1340,14 @@ const ChatMediaMessage: React.FC<Props> = ({
               {isEdited && (
                 <Text style={{ 
                   fontSize: 10, 
-                  color: 'rgba(255,255,255,0.5)', 
+                  color: mutedTextColor, 
                   fontStyle: 'italic', 
                   marginRight: 4 
                 }}>Edited</Text>
               )}
               <Text style={{ 
                 fontSize: 10, 
-                color: 'rgba(255,255,255,0.7)', 
+                color: mutedTextColor, 
                 fontWeight: '700' 
               }}>
                 {new Date(createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1456,7 +1461,7 @@ const ChatMediaMessage: React.FC<Props> = ({
         {media.text && (
           <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 }}>
             <Text style={{ 
-              color: '#FFFFFF', 
+              color: textColor, 
               fontSize: 15, 
               lineHeight: 22,
               fontFamily: theme.typography.fontFamily 
@@ -1473,14 +1478,14 @@ const ChatMediaMessage: React.FC<Props> = ({
               {isEdited && (
                 <Text style={{ 
                   fontSize: 10, 
-                  color: 'rgba(255,255,255,0.5)', 
+                  color: mutedTextColor, 
                   fontStyle: 'italic', 
                   marginRight: 4 
                 }}>Edited</Text>
               )}
               <Text style={{ 
                 fontSize: 10, 
-                color: 'rgba(255,255,255,0.7)', 
+                color: mutedTextColor, 
                 fontWeight: '700' 
               }}>
                 {new Date(createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1563,7 +1568,7 @@ const ChatMediaMessage: React.FC<Props> = ({
             <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
               <Text 
                 style={{ 
-                  color: '#FFFFFF', 
+                  color: textColor, 
                   fontSize: 15, 
                   fontWeight: '700',
                   letterSpacing: -0.3
@@ -1597,14 +1602,14 @@ const ChatMediaMessage: React.FC<Props> = ({
           {isEdited && (
             <Text style={{ 
               fontSize: 10, 
-              color: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(148, 163, 184, 0.5)', 
+              color: mutedTextColor, 
               fontStyle: 'italic', 
               marginRight: 6 
             }}>Edited</Text>
           )}
           <Text style={{ 
             fontSize: 10, 
-            color: isOwn ? 'rgba(255,255,255,0.7)' : '#64748B', 
+            color: mutedTextColor, 
             fontWeight: '700' 
           }}>
             {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

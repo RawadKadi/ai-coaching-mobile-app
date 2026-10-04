@@ -22,6 +22,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
 
+import { ThemeWrapper } from '@/components/ThemeWrapper';
+
 function AuthGuard() {
   const { session, loading } = useAuth();
   const router = useRouter();
@@ -106,7 +108,9 @@ export default function RootLayout() {
               <NotificationProvider>
                 <PresenceProvider>
                   <TabBarScrollProvider>
-                    <RootLayoutNav />
+                    <ThemeWrapper>
+                      <RootLayoutNav />
+                    </ThemeWrapper>
                   </TabBarScrollProvider>
                 </PresenceProvider>
               </NotificationProvider>

@@ -15,6 +15,13 @@ export default function ClientTabLayout() {
       tabBar={props => <FuturisticTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        tabBarStyle: {
+          position: 'absolute',
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0
+        }
       }}
     >
       <Tabs.Screen

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { getContrastColor } from '@/lib/theme-utils';
+import { getFontFamily } from '@/hooks/useAppFonts';
 
 interface BrandedButtonProps {
   title: string;
@@ -79,7 +80,7 @@ export function BrandedButton({
                 color: getTextColor(),
                 fontSize: theme.typography.sizes.base,
                 fontWeight: '600',
-                fontFamily: theme.typography.fontFamily,
+                fontFamily: getFontFamily(theme.typography.fontFamily, '600'),
               },
               textStyle
             ]}

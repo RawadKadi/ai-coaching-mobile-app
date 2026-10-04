@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 
 interface Props {
   message: {
@@ -59,6 +60,10 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
 
   const isMedia = !!mediaUrl || snippet.startsWith('📄');
 
+  const isBgDark = isInsideBubble ? (isMe ? isDarkColor(theme.colors.primary) : isDarkColor(theme.colors.surface)) : isDarkColor(theme.colors.background);
+  const textColor = isBgDark ? '#FFFFFF' : '#000000';
+  const mutedTextColor = isBgDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
+
   return (
     <TouchableOpacity 
       activeOpacity={0.8} 
@@ -67,9 +72,9 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
         styles.container, 
         { 
           backgroundColor: isInsideBubble 
-            ? (isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)') 
+            ? 'rgba(0,0,0,0.15)'
             : theme.colors.surfaceAlt,
-          borderLeftColor: isInsideBubble && isMe ? '#FFFFFF' : theme.colors.primary,
+          borderLeftColor: mutedTextColor,
           marginBottom: isInsideBubble ? 8 : 0,
           borderRadius: 8,
           borderLeftWidth: 4,
@@ -81,10 +86,10 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
       ]}
     >
       <View style={styles.content}>
-        <Text style={[styles.sender, { color: isInsideBubble && isMe ? '#FFFFFF' : theme.colors.primary }]} numberOfLines={1}>
+        <Text style={[styles.sender, { color: mutedTextColor, textTransform: 'uppercase', letterSpacing: 1, fontSize: 9, fontWeight: '900', marginBottom: 4 }]} numberOfLines={1}>
           {message.isOwn ? 'You' : (message.sender_name || 'Sender')}
         </Text>
-        <Text style={[styles.snippet, { color: isInsideBubble && isMe ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }]} numberOfLines={2}>
+        <Text style={[styles.snippet, { color: textColor, opacity: 0.8 }]} numberOfLines={2}>
           {snippet}
         </Text>
       </View>

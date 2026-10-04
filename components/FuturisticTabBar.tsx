@@ -49,6 +49,9 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
 
   // We create animated scale values for each tab icon
   const scaleValues = useRef(visibleRoutes.map(() => new Animated.Value(1))).current;
+  
+  // Use brand theme to dynamically adjust the blur tint
+  const { isDarkMode, colors } = require('@/contexts/BrandContext').useTheme();
 
   useEffect(() => {
     // Reset navbar to expanded state when switching tabs
@@ -83,11 +86,24 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
     return null;
   }
 
+  // Convert hex to rgba for the overlay
+  const hexToRgba = (hex: string, alpha: number) => {
+    const r = parseInt(hex.slice(1, 3), 16) || 2;
+    const g = parseInt(hex.slice(3, 5), 16) || 6;
+    const b = parseInt(hex.slice(5, 7), 16) || 23;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+  const overlayColor = hexToRgba(colors.surface, 0.4);
+
   return (
     <Animated.View style={[styles.container, { left: animatedMargin, right: animatedMargin }]}>
       {/* Background with rounded corners and clipped glow */}
-      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }]}>
-        <BlurView intensity={80} tint="systemUltraThinMaterialDark" style={styles.blurContainer} />
+      <BlurView 
+        intensity={40} 
+        tint={isDarkMode ? 'dark' : 'light'} 
+        style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: 'hidden' }]}
+      >
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: overlayColor }]} />
         
         {/* Glow Indicator (Simulating CSS blur with concentric fading circles) */}
         <Animated.View
@@ -97,30 +113,34 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
             { transform: [{ translateX: indicatorPosition }] }
           ]}
         >
-        <View style={styles.glowIndicatorShadow}>
-          {[...Array(8)].map((_, i) => (
-            <Animated.View 
-              key={i} 
-              style={[
-                styles.glowOrb, 
-                { 
-                  transform: [
-                    { scale: 1.6 - (i * 0.12) },
+          <View style={styles.glowIndicatorShadow}>
+            {[...Array(8)].map((_, i) => (
+                <Animated.View 
+                  key={i} 
+                  style={[
+                    styles.glowOrb, 
                     { 
-                      scaleX: isShrunk.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [1, 0.8]
-                      })
+                      backgroundColor: colors.primary, // Dynamic brand glow
+                      transform: [
+                        { scale: 1.6 - (i * 0.12) },
+                        { 
+                          scaleX: isShrunk.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [1, 0.8]
+                          })
+                        }
+                      ], 
+                      opacity: 0.1 + (i * 0.08) 
                     }
-                  ], 
-                  opacity: 0.1 + (i * 0.08) 
-                }
-              ]} 
-            />
-          ))}
-        </View>
+                  ]} 
+                />
+            ))}
+          </View>
         </Animated.View>
-      </View>
+      </BlurView>
+
+      {/* Border overlay */}
+      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, borderWidth: 1, borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)', pointerEvents: 'none' }]} />
 
       {/* Tab Items */}
       <View style={styles.tabsWrapper}>

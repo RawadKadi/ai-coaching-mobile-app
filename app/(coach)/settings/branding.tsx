@@ -33,6 +33,16 @@ import { AVAILABLE_FONTS, getFontFamily } from '@/hooks/useAppFonts';
 
 // Preset themes
 const PRESET_THEMES = {
+  defaultBrand: {
+    name: 'Default',
+    primary_color: '#7FA7FF',
+    secondary_color: '#010201ff',
+    accent_color: '#F59E0B',
+    background_color: '#010417',
+    button_shape: 'rounded' as const,
+    button_style: 'flat' as const,
+    font_family: 'System',
+  },
   modernBlue: {
     name: 'Modern Blue',
     primary_color: '#7FA7FF',
@@ -162,11 +172,11 @@ export default function BrandSettingsScreen() {
   // No permission view
   if (!canManageBrand) {
     return (
-      <View style={[styles.container, { backgroundColor: '#020617' }]}>
+      <View style={[styles.container, { backgroundColor: currentTheme.colors.background }]}>
         <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
           <TouchableOpacity 
             onPress={() => router.back()} 
-            style={[styles.roundIconButton, { borderColor: '#ffffff15', backgroundColor: '#ffffff08' }]}
+            style={[styles.roundIconButton, { borderColor: currentTheme.colors.border, backgroundColor: currentTheme.colors.inputBackground }]}
           >
             <ArrowLeft size={20} color="#FFFFFF" />
           </TouchableOpacity>
@@ -182,14 +192,14 @@ export default function BrandSettingsScreen() {
         <ScrollView contentContainerStyle={styles.contentContainer}>
           <View style={[styles.card, { marginTop: 24, alignItems: 'center' }]}>
             <ShieldAlert size={48} color={primaryColor} style={{ marginBottom: 16 }} />
-            <Text style={[styles.cardTitle, { color: '#FFFFFF', textAlign: 'center' }]}>Access Restricted</Text>
-            <Text style={[styles.helperText, { color: '#94A3B8', textAlign: 'center', marginTop: 8 }]}>
+            <Text style={[styles.cardTitle, { color: currentTheme.colors.text, textAlign: 'center' }]}>Access Restricted</Text>
+            <Text style={[styles.helperText, { color: currentTheme.colors.textSecondary, textAlign: 'center', marginTop: 8 }]}>
               These brand settings are managed at the Headquarters level. Contact your administrator to request changes.
             </Text>
             
             {brand && (
               <View style={[styles.logoPreviewContainer, { width: '100%', borderTopWidth: 1, borderTopColor: '#ffffff08', paddingTop: 20, marginTop: 20 }]}>
-                <Text style={[styles.label, { color: '#64748B', marginBottom: 16 }]}>CURRENT BRAND IDENTITY</Text>
+                <Text style={[styles.label, { color: currentTheme.colors.textSecondary, marginBottom: 16 }]}>CURRENT BRAND IDENTITY</Text>
                 {brand.logo_url && (
                   <Image 
                     source={{ uri: brand.logo_url }} 
@@ -304,6 +314,9 @@ export default function BrandSettingsScreen() {
     setBackgroundColor(preset.background_color);
     setButtonShape(preset.button_shape);
     setButtonStyle(preset.button_style);
+    if ('font_family' in preset && preset.font_family) {
+      setFontFamily(preset.font_family);
+    }
     if ('dark_mode_enabled' in preset && preset.dark_mode_enabled) {
       setDarkModeEnabled(true);
     }
@@ -419,27 +432,27 @@ export default function BrandSettingsScreen() {
               key="identity"
               style={styles.tabContent}
             >
-              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+              <View style={[styles.card, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
                 <View style={styles.cardHeader}>
                   <LayoutGrid size={20} color={primaryColor} />
-                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Identity</Text>
+                  <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>Identity</Text>
                 </View>
                 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Brand Name *</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Brand Name *</Text>
                   <TextInput
-                    style={[styles.input, { backgroundColor: '#1E293B', borderColor: '#334155', color: '#FFFFFF' }]}
+                    style={[styles.input, { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border, color: currentTheme.colors.text }]}
                     placeholder="e.g., Elite Fitness Gym"
                     value={brandName}
                     onChangeText={setBrandName}
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={currentTheme.colors.textSecondary}
                   />
                 </View>
 
                 <View style={[styles.formGroup, { marginTop: 12 }]}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Brand Logo</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Brand Logo</Text>
                   <TouchableOpacity
-                    style={[styles.uploadButton, { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                    style={[styles.uploadButton, { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border }]}
                     onPress={pickImage}
                     disabled={uploading}
                   >
@@ -469,12 +482,12 @@ export default function BrandSettingsScreen() {
                 </View>
               </View>
 
-              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+              <View style={[styles.card, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
                 <View style={styles.cardHeader}>
                   <LayoutTemplate size={20} color={primaryColor} />
-                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Quick Presets</Text>
+                  <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>Quick Presets</Text>
                 </View>
-                <Text style={[styles.helperText, { color: '#94A3B8' }]}>
+                <Text style={[styles.helperText, { color: currentTheme.colors.textSecondary }]}>
                   Apply a preset theme to quickly establish your brand identity
                 </Text>
                 
@@ -484,7 +497,7 @@ export default function BrandSettingsScreen() {
                       key={key}
                       style={[
                         styles.presetCard,
-                        { backgroundColor: '#1E293B', borderColor: '#334155' },
+                        { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border },
                         selectedPreset === key && { borderColor: primaryColor, borderWidth: 2 }
                       ]}
                       onPress={() => applyPreset(key as keyof typeof PRESET_THEMES)}
@@ -497,9 +510,9 @@ export default function BrandSettingsScreen() {
                       <View style={styles.presetColors}>
                         <View style={[styles.presetColorDot, { backgroundColor: preset.primary_color }]} />
                         <View style={[styles.presetColorDot, { backgroundColor: preset.secondary_color }]} />
-                        <View style={[styles.presetColorDot, { backgroundColor: preset.background_color, borderWidth: 1, borderColor: '#333' }]} />
+                        <View style={[styles.presetColorDot, { backgroundColor: preset.background_color, borderWidth: 1, borderColor: currentTheme.colors.border }]} />
                       </View>
-                      <Text style={[styles.presetName, { color: '#FFFFFF' }]}>{preset.name}</Text>
+                      <Text style={[styles.presetName, { color: currentTheme.colors.text }]}>{preset.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -515,10 +528,10 @@ export default function BrandSettingsScreen() {
               key="colors"
               style={styles.tabContent}
             >
-              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+              <View style={[styles.card, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
                 <View style={styles.cardHeader}>
                   <Palette size={20} color={primaryColor} />
-                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Color System</Text>
+                  <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>Color System</Text>
                 </View>
                 
                 <VisualColorPicker
@@ -557,19 +570,19 @@ export default function BrandSettingsScreen() {
               key="typography"
               style={styles.tabContent}
             >
-              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+              <View style={[styles.card, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
                 <View style={styles.cardHeader}>
                   <Type size={20} color={primaryColor} />
-                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Typography</Text>
+                  <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>Typography</Text>
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Font Family</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Font Family</Text>
                   <TouchableOpacity 
-                    style={[styles.fontSelectButton, { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                    style={[styles.fontSelectButton, { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border }]}
                     onPress={() => setShowFontPicker(true)}
                   >
-                    <Text style={[styles.fontSelectButtonText, { fontFamily: getFontFamily(fontFamily), color: '#FFFFFF' }]}>
+                    <Text style={[styles.fontSelectButtonText, { fontFamily: getFontFamily(fontFamily), color: currentTheme.colors.text }]}>
                       {fontFamily || 'Select Font'}
                     </Text>
                     <ChevronRight size={18} color="#94A3B8" />
@@ -577,12 +590,12 @@ export default function BrandSettingsScreen() {
                 </View>
 
                 <View style={[styles.formGroup, { marginTop: 16 }]}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Heading Weight</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Heading Weight</Text>
                   <View style={styles.buttonRow}>
                     {['400', '500', '600', '700', '900'].map((weight) => (
                       <TouchableOpacity
                         key={weight}
-                        style={[styles.optionButton, { backgroundColor: headingWeight === weight ? primaryColor : '#1E293B', borderColor: '#334155' }]}
+                        style={[styles.optionButton, { backgroundColor: headingWeight === weight ? primaryColor : '#1E293B', borderColor: currentTheme.colors.border }]}
                         onPress={() => setHeadingWeight(weight)}
                       >
                         <Text style={[styles.optionButtonText, { color: headingWeight === weight ? '#FFFFFF' : '#94A3B8' }]}>
@@ -594,12 +607,12 @@ export default function BrandSettingsScreen() {
                 </View>
 
                 <View style={[styles.formGroup, { marginTop: 16 }]}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Body Weight</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Body Weight</Text>
                   <View style={styles.buttonRow}>
                     {['400', '500', '600', '700'].map((weight) => (
                       <TouchableOpacity
                         key={weight}
-                        style={[styles.optionButton, { backgroundColor: bodyWeight === weight ? primaryColor : '#1E293B', borderColor: '#334155' }]}
+                        style={[styles.optionButton, { backgroundColor: bodyWeight === weight ? primaryColor : '#1E293B', borderColor: currentTheme.colors.border }]}
                         onPress={() => setBodyWeight(weight)}
                       >
                         <Text style={[styles.optionButtonText, { color: bodyWeight === weight ? '#FFFFFF' : '#94A3B8' }]}>
@@ -611,7 +624,7 @@ export default function BrandSettingsScreen() {
                 </View>
 
                 <View style={[styles.formGroup, { marginTop: 16 }]}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Font Scale: {(fontScale || 1.0).toFixed(1)}x</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Font Scale: {(fontScale || 1.0).toFixed(1)}x</Text>
                   <View style={styles.sliderContainer}>
                     {[0.8, 0.9, 1.0, 1.1, 1.2, 1.3].map((scale) => (
                       <TouchableOpacity
@@ -636,14 +649,14 @@ export default function BrandSettingsScreen() {
               key="buttons"
               style={styles.tabContent}
             >
-              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+              <View style={[styles.card, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
                 <View style={styles.cardHeader}>
                   <Square size={20} color={primaryColor} />
-                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Button Controls</Text>
+                  <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>Button Controls</Text>
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Button Shape</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Button Shape</Text>
                   <View style={styles.buttonRow}>
                     {[
                       { id: 'rounded', label: 'Rounded', icon: <View style={[styles.shapePreview, { borderRadius: 8 }]} /> },
@@ -654,7 +667,7 @@ export default function BrandSettingsScreen() {
                         key={shape.id}
                         style={[
                           styles.shapeOption,
-                          { backgroundColor: '#1E293B', borderColor: '#334155' },
+                          { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border },
                           buttonShape === shape.id && { borderColor: primaryColor, borderWidth: 2 }
                         ]}
                         onPress={() => setButtonShape(shape.id as any)}
@@ -669,14 +682,14 @@ export default function BrandSettingsScreen() {
                 </View>
 
                 <View style={[styles.formGroup, { marginTop: 16 }]}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Initial Style Preset</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Initial Style Preset</Text>
                   <View style={styles.buttonRow}>
                     {['flat', 'gradient', 'outlined'].map((style) => (
                       <TouchableOpacity
                         key={style}
                         style={[
                           styles.optionButton,
-                          { backgroundColor: buttonStyle === style ? primaryColor : '#1E293B', borderColor: '#334155' }
+                          { backgroundColor: buttonStyle === style ? primaryColor : '#1E293B', borderColor: currentTheme.colors.border }
                         ]}
                         onPress={() => setButtonStyle(style as any)}
                       >
@@ -690,8 +703,8 @@ export default function BrandSettingsScreen() {
 
                 <View style={[styles.switchRow, { marginTop: 16 }]}>
                   <View>
-                    <Text style={[styles.label, { color: '#FFFFFF', marginBottom: 0 }]}>Button Shadows</Text>
-                    <Text style={[styles.helperText, { color: '#94A3B8', marginBottom: 0 }]}>Add dynamic depth to buttons</Text>
+                    <Text style={[styles.label, { color: currentTheme.colors.text, marginBottom: 0 }]}>Button Shadows</Text>
+                    <Text style={[styles.helperText, { color: currentTheme.colors.textSecondary, marginBottom: 0 }]}>Add dynamic depth to buttons</Text>
                   </View>
                   <Switch
                     value={buttonShadow}
@@ -712,14 +725,14 @@ export default function BrandSettingsScreen() {
               key="spacing"
               style={styles.tabContent}
             >
-              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+              <View style={[styles.card, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
                 <View style={styles.cardHeader}>
                   <Sliders size={20} color={primaryColor} />
-                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Dimension & Scale</Text>
+                  <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>Dimension & Scale</Text>
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Base Spacing: {spacingScale.toFixed(1)}x</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Base Spacing: {spacingScale.toFixed(1)}x</Text>
                   <View style={styles.sliderContainer}>
                     {[0.8, 0.9, 1.0, 1.2, 1.5].map((scale) => (
                       <TouchableOpacity
@@ -734,14 +747,14 @@ export default function BrandSettingsScreen() {
                 </View>
 
                 <View style={[styles.formGroup, { marginTop: 16 }]}>
-                  <Text style={[styles.label, { color: '#94A3B8' }]}>Default Lift (Shadows)</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Default Lift (Shadows)</Text>
                   <View style={styles.buttonRow}>
                     {['none', 'small', 'medium', 'large'].map((shadow) => (
                       <TouchableOpacity
                         key={shadow}
                         style={[
                           styles.optionButton,
-                          { backgroundColor: cardShadow === shadow ? primaryColor : '#1E293B', borderColor: '#334155' }
+                          { backgroundColor: cardShadow === shadow ? primaryColor : '#1E293B', borderColor: currentTheme.colors.border }
                         ]}
                         onPress={() => setCardShadow(shadow as any)}
                       >
@@ -764,16 +777,16 @@ export default function BrandSettingsScreen() {
               key="dark"
               style={styles.tabContent}
             >
-              <View style={[styles.card, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+              <View style={[styles.card, { backgroundColor: currentTheme.colors.surface, borderColor: currentTheme.colors.border }]}>
                 <View style={styles.cardHeader}>
                   <Moon size={20} color={primaryColor} />
-                  <Text style={[styles.cardTitle, { color: '#FFFFFF' }]}>Night Protocol</Text>
+                  <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>Night Protocol</Text>
                 </View>
 
                 <View style={styles.switchRow}>
                   <View>
-                    <Text style={[styles.label, { color: '#FFFFFF', marginBottom: 0 }]}>Enable Dark Theme</Text>
-                    <Text style={[styles.helperText, { color: '#94A3B8', marginBottom: 0 }]}>Allow the AI to switch to dark mode</Text>
+                    <Text style={[styles.label, { color: currentTheme.colors.text, marginBottom: 0 }]}>Enable Dark Theme</Text>
+                    <Text style={[styles.helperText, { color: currentTheme.colors.textSecondary, marginBottom: 0 }]}>Allow the AI to switch to dark mode</Text>
                   </View>
                   <Switch 
                     value={darkModeEnabled} 
@@ -827,14 +840,14 @@ export default function BrandSettingsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: '#020617' }]}>
+    <View style={[styles.container, { backgroundColor: currentTheme.colors.background }]}>
       <StatusBar style="light" />
       
       {/* Premium Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity 
           onPress={() => router.back()} 
-          style={[styles.roundIconButton, { backgroundColor: '#ffffff10', borderColor: '#ffffff20' }]}
+          style={[styles.roundIconButton, { backgroundColor: '#ffffff10', borderColor: currentTheme.colors.border }]}
         >
           <ArrowLeft size={20} color="#FFFFFF" />
         </TouchableOpacity>
@@ -991,10 +1004,11 @@ function TabItem({ active, label, onPress, icon }: any) {
 }
 
 function FontPickerModal({ visible, active, onClose, onSelect, primaryColor, theme }: any) {
+  const currentTheme = useTheme();
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.modalBlurOverlay}>
-        <View style={[styles.premiumBottomModal, { backgroundColor: '#020617', borderColor: '#ffffff10' }]}>
+        <View style={[styles.premiumBottomModal, { backgroundColor: currentTheme.colors.background, borderColor: currentTheme.colors.border }]}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Identity Font</Text>
@@ -1084,18 +1098,19 @@ function StatBox({ label, value, color, icon }: any) {
 
 // Visual Color Picker Component (Button that opens modal)
 function VisualColorPicker({ label, value, onPress, helper }: { label: string; value: string; onPress: () => void; helper?: string }) {
+  const currentTheme = useTheme();
   return (
     <View style={styles.colorPickerGroup}>
       <View style={styles.colorPickerLabelRow}>
-        <Text style={[styles.label, { color: '#FFFFFF', marginBottom: 0 }]}>{label}</Text>
-        <Text style={[styles.colorHexCode, { color: '#94A3B8' }]}>{value.toUpperCase()}</Text>
+        <Text style={[styles.label, { color: currentTheme.colors.text, marginBottom: 0 }]}>{label}</Text>
+        <Text style={[styles.colorHexCode, { color: currentTheme.colors.textSecondary }]}>{value.toUpperCase()}</Text>
       </View>
       <TouchableOpacity
-        style={[styles.colorTrigger, { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+        style={[styles.colorTrigger, { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border }]}
         onPress={onPress}
       >
         <View style={[styles.colorChip, { backgroundColor: value }]} />
-        <Text style={[styles.colorTriggerText, { color: '#FFFFFF' }]}>Adjust Shade</Text>
+        <Text style={[styles.colorTriggerText, { color: currentTheme.colors.text }]}>Adjust Shade</Text>
         <ChevronRight size={16} color="#94A3B8" />
       </TouchableOpacity>
     </View>
@@ -1194,7 +1209,7 @@ const styles = StyleSheet.create({
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff08',
+    backgroundColor: '#1E293B',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1221,7 +1236,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: '#ffffff08',
+    backgroundColor: '#1E293B',
     gap: 6,
   },
   tabLabel: {
@@ -1274,7 +1289,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    borderColor: '#1E293B',
     color: '#FFFFFF',
   },
   uploadButton: {
@@ -1375,7 +1390,7 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ffffff20',
+    borderColor: '#1E293B',
   },
   colorTriggerText: {
     flex: 1,
@@ -1420,7 +1435,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#ffffff08',
+    backgroundColor: '#1E293B',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1441,7 +1456,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 18,
     borderWidth: 1,
-    borderColor: '#ffffff20',
+    borderColor: '#1E293B',
   },
   switchRow: {
     flexDirection: 'row',
@@ -1468,7 +1483,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 20,
-    backgroundColor: '#020617ee',
+    backgroundColor: '#020617',
     borderTopWidth: 1,
     borderTopColor: '#ffffff08',
   },
@@ -1529,7 +1544,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#ffffff08',
+    backgroundColor: '#1E293B',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1602,7 +1617,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginRight: 16,
     borderWidth: 1,
-    borderColor: '#ffffff20',
+    borderColor: '#1E293B',
   },
   colorPreviewText: {
     fontSize: 18,
@@ -1663,12 +1678,12 @@ const styles = StyleSheet.create({
   },
   fullPreviewStatCard: {
     flex: 1,
-    backgroundColor: '#ffffff08',
+    backgroundColor: '#1E293B',
     padding: 20,
     borderRadius: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ffffff10',
+    borderColor: '#1E293B',
   },
   fullPreviewStatIcon: {
     width: 50,
@@ -1701,9 +1716,9 @@ const styles = StyleSheet.create({
   fullPreviewEmptyState: {
     padding: 30,
     borderRadius: 24,
-    backgroundColor: '#ffffff05',
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: '#ffffff08',
+    borderColor: '#1E293B',
     alignItems: 'center',
   },
 });
