@@ -1,4 +1,4 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useBrand } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -22,7 +22,7 @@ import { availabilityService, DayOfWeek } from '@/lib/availability-service';
 // Modular Step Components
 import Step1 from '@/components/onboarding/coach/Step1';
 import Slide1b from '@/components/onboarding/coach/Slide1b';
-import Slide1c from '@/components/onboarding/coach/Slide1c';
+import CustomizeAppStep from '@/components/onboarding/coach/CustomizeAppStep';
 import Step2 from '@/components/onboarding/coach/Step2';
 import Slide2b from '@/components/onboarding/coach/Slide2b';
 import Step3 from '@/components/onboarding/coach/Step3';
@@ -30,7 +30,6 @@ import Step4 from '@/components/onboarding/coach/Step4';
 
 // Auto-persist Formik values to AsyncStorage
 const PersistFormikValues = () => {
-  const colors = useBrandColors();
   const { values } = useFormikContext<any>();
   useEffect(() => {
     if (values) {
@@ -44,6 +43,8 @@ const TOTAL_FORM_STEPS = 6; // Form inputs and informational slides; step 7 is s
 
 export default function CoachOnboardingScreen() {
   const router = useRouter();
+  const colors = useBrandColors();
+  const { refreshBrand } = useBrand();
   const { user, coach, profile, refreshProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [success, setSuccess] = useState(false); // True after successful submit → show Step 4
@@ -71,6 +72,11 @@ export default function CoachOnboardingScreen() {
         const defaults = {
           business_name: '',
           logo_url: '',
+          primary_color: '#7FA7FF',
+          secondary_color: '#10B981',
+          accent_color: '#F59E0B',
+          background_color: '#010417',
+          font_family: 'System',
           specialty: [] as string[],
           otherSpecialty: '',
           selectedWeekdays: [] as number[],
@@ -89,6 +95,11 @@ export default function CoachOnboardingScreen() {
             setInitialValues({
               business_name: parsed.business_name || '',
               logo_url: parsed.logo_url || '',
+              primary_color: parsed.primary_color || '#7FA7FF',
+              secondary_color: parsed.secondary_color || '#10B981',
+              accent_color: parsed.accent_color || '#F59E0B',
+              background_color: parsed.background_color || '#010417',
+              font_family: parsed.font_family || 'System',
               specialty: Array.isArray(parsed.specialty)
                 ? parsed.specialty
                 : parsed.specialty
@@ -109,6 +120,11 @@ export default function CoachOnboardingScreen() {
         setInitialValues({
           business_name: '',
           logo_url: '',
+          primary_color: '#7FA7FF',
+          secondary_color: '#10B981',
+          accent_color: '#F59E0B',
+          background_color: '#010417',
+          font_family: 'System',
           specialty: [] as string[],
           otherSpecialty: '',
           selectedWeekdays: [] as number[],
@@ -176,6 +192,24 @@ export default function CoachOnboardingScreen() {
         .from('profiles')
         .update({ onboarding_completed: true })
         .eq('id', user.id);
+
+      if (coach.brand_id) {
+        await supabase
+          .from('brands')
+          .update({
+            name: values.business_name || 'My Coaching',
+            logo_url: values.logo_url || null,
+            primary_color: values.primary_color || '#7FA7FF',
+            secondary_color: values.secondary_color || '#10B981',
+            accent_color: values.accent_color || '#F59E0B',
+            background_color: values.background_color || '#010417',
+            font_family: values.font_family || 'System',
+            dark_mode_enabled: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', coach.brand_id);
+        await refreshBrand();
+      }
 
       await AsyncStorage.multiRemove(['@coach_onboarding_step', '@coach_onboarding_form']);
       await refreshProfile();
@@ -360,7 +394,10 @@ export default function CoachOnboardingScreen() {
                   <Slide1b formData={values} />
                 )}
                 {!success && step === 3 && (
-                  <Slide1c />
+                  <CustomizeAppStep
+                    formData={values}
+                    updateForm={(key, val) => setFieldValue(key, val)}
+                  />
                 )}
                 {!success && step === 4 && (
                   <Step2

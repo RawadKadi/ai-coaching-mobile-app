@@ -1,6 +1,7 @@
-import { useBrandColors, useTheme } from '@/contexts/BrandContext';
+import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, ScrollView, SectionList, ActivityIndicator, TouchableOpacity, StatusBar, RefreshControl } from 'react-native';
+import { Image } from 'expo-image';
 import { Text } from '@/components/BrandedText';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
@@ -60,6 +61,7 @@ const formatActivityDate = (dateString: string) => {
 export default function CoachDashboard() {
   const colors = useBrandColors();
   const { isDarkMode } = useTheme();
+  const { brand, refreshBrand } = useBrand();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, coach } = useAuth();
@@ -337,6 +339,8 @@ export default function CoachDashboard() {
   };
 
   const textStyle = { color: colors.text };
+  const rawFirstName = profile?.full_name?.split(' ')[0] || '';
+  const firstName = rawFirstName ? rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1) : '';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -344,7 +348,7 @@ export default function CoachDashboard() {
       <SectionList
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + 80, paddingBottom: 140 }}
+        contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: 140 }}
         sections={groupedCheckins}
         keyExtractor={(item, index) => item.checkin_id + index}
         onScroll={handleScroll}
@@ -352,37 +356,68 @@ export default function CoachDashboard() {
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
-            onRefresh={() => { setRefreshing(true); loadDashboardData(); }} 
+            onRefresh={() => { setRefreshing(true); refreshBrand(); loadDashboardData(); }} 
             tintColor={colors.primary} 
-            progressViewOffset={insets.top + 60}
+            progressViewOffset={insets.top + 10}
           />
         }
             onEndReached={loadMoreCheckins}
             onEndReachedThreshold={0.5}
             ListHeaderComponent={
               <View>
-                {/* New Premium Identity Header */}
-            <MotiView 
-              from={{ opacity: 0, translateY: -10 }} 
-              animate={{ opacity: 1, translateY: 0 }} 
-              className="px-6 py-10 flex-row justify-between items-center"
-            >
-              <View>
-                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-2">Performance Center</Text>
-                <View className="flex-row items-baseline gap-2">
-                    <Text style={textStyle} className="text-4xl font-black tracking-tighter">Welcome back,</Text>
-                </View>
-                <Text className="text-blue-500 text-4xl font-black tracking-tighter">{profile?.full_name?.split(' ')[0]}</Text>
-              </View>
-              <TouchableOpacity 
-                onPress={() => router.push('/(coach)/(tabs)/profile')}
-                className="p-1.5 rounded-[24px] shadow-2xl"
-                style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}
-              >
-                <BrandedAvatar name={profile?.full_name || 'Coach'} imageUrl={profile?.avatar_url} size={64} />
-                <View className="absolute bottom-1 right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900" />
-              </TouchableOpacity>
-            </MotiView>
+                {/* Top Brand Bar */}
+                <MotiView 
+                  from={{ opacity: 0, translateY: -8 }} 
+                  animate={{ opacity: 1, translateY: 0 }} 
+                  className="px-6 pb-4 flex-row items-center justify-between"
+                >
+                  <View className="flex-row items-center gap-3.5">
+                    {brand?.logo_url ? (
+                      <Image
+                        source={{ uri: brand.logo_url }}
+                        style={{ width: 56, height: 56, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' }}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View 
+                        style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: colors.primary + '25', borderColor: colors.primary + '40' }}
+                        className="border items-center justify-center shadow-lg"
+                      >
+                        <Text style={{ color: colors.primary }} className="text-2xl font-black">
+                          {brand?.name ? brand.name.charAt(0).toUpperCase() : (coach?.business_name ? coach.business_name.charAt(0).toUpperCase() : 'C')}
+                        </Text>
+                      </View>
+                    )}
+                    <Text className="text-white text-xl font-black tracking-tight" numberOfLines={1}>
+                      {brand?.name || coach?.business_name || ''}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity 
+                    onPress={() => router.push('/(coach)/(tabs)/profile')}
+                    className="p-1 rounded-full shadow-2xl relative"
+                    style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}
+                  >
+                    <BrandedAvatar name={profile?.full_name || 'Coach'} imageUrl={profile?.avatar_url} size={44} />
+                    <View 
+                      style={{ backgroundColor: colors.primary }}
+                      className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-slate-900" 
+                    />
+                  </TouchableOpacity>
+                </MotiView>
+
+                {/* Greeting Section */}
+                <MotiView 
+                  from={{ opacity: 0, translateY: -4 }} 
+                  animate={{ opacity: 1, translateY: 0 }} 
+                  transition={{ delay: 80 }}
+                  className="px-6 pb-6"
+                >
+                  <Text className="text-white text-3xl font-black tracking-tighter">Welcome back,</Text>
+                  <Text style={{ color: colors.primary }} className="text-3xl font-black tracking-tighter">
+                    {firstName}
+                  </Text>
+                </MotiView>
 
             {/* Strategic Stats Section */}
             <View className="px-6 mb-10">
@@ -733,8 +768,6 @@ export default function CoachDashboard() {
             body={`Weekly plan sent to ${planSentClientName || 'your client'}.`}
             ctaLabel="Done"
           />
-
-      <GlassNavbar title="Dashboard" />
     </View>
   );
 }

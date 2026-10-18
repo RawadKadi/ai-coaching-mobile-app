@@ -7,14 +7,30 @@ interface InputGroupProps extends Omit<TextInputProps, 'onChange'> {
   onChange: (text: string) => void;
 }
 
-export default function InputGroup({ label, value, onChange, placeholder, ...rest }: InputGroupProps) {
+export default function InputGroup({ label, value, onChange, placeholder, style, ...rest }: InputGroupProps) {
   return (
     <View>
-      <Text className="text-slate-400 text-sm font-black uppercase tracking-widest mb-3 px-1">{label}</Text>
+      <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingHorizontal: 4 }}>
+        {label}
+      </Text>
       <TextInput 
-        className="bg-slate-900/50 p-6 rounded-[24px] border-2 border-slate-900 text-white font-black text-base"
+        style={[
+          {
+            backgroundColor: '#0F172A',
+            color: '#FFFFFF',
+            fontSize: 16,
+            fontWeight: '700',
+            paddingVertical: 18,
+            paddingHorizontal: 20,
+            borderRadius: 20,
+            borderWidth: 1.5,
+            borderColor: '#1E293B',
+          },
+          style,
+        ]}
         placeholder={placeholder}
-        placeholderTextColor="#1E293B"
+        placeholderTextColor="#475569"
+        selectionColor="#3B82F6"
         value={value}
         onChangeText={onChange}
         {...rest}

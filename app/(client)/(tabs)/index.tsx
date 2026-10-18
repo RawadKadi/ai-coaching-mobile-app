@@ -1,6 +1,7 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrand, useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Alert, Animated as RNAnimated, Easing } from 'react-native';
+import { Image } from 'expo-image';
 
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
@@ -36,6 +37,7 @@ import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 
 export default function ClientDashboard() {
   const colors = useBrandColors();
+  const { brand, refreshBrand } = useBrand();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, client, loading: authLoading } = useAuth();
@@ -66,6 +68,7 @@ export default function ClientDashboard() {
   // Refresh data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      refreshBrand();
       if (client) loadDashboardData();
       else if (!authLoading) setLoading(false);
     }, [client, authLoading])
@@ -312,7 +315,7 @@ export default function ClientDashboard() {
     );
   };
 
-  const onRefresh = () => { setRefreshing(true); loadDashboardData(); };
+  const onRefresh = () => { setRefreshing(true); refreshBrand(); loadDashboardData(); };
 
   if (loading && !refreshing) {
     return (
@@ -323,6 +326,8 @@ export default function ClientDashboard() {
   }
 
   const completedHabitsCount = todayHabitLogs.filter(log => log.completed).length;
+  const rawFirstName = profile?.full_name?.split(' ')[0] || '';
+  const firstName = rawFirstName ? rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1) : '';
 
   return (
     <View style={{ flex: 1 }} className="bg-slate-950">
@@ -335,29 +340,62 @@ export default function ClientDashboard() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-          {/* Refined Client Header */}
+          {/* Top Brand Bar */}
           <MotiView 
-              from={{ opacity: 0, translateY: -10 }}
+              from={{ opacity: 0, translateY: -8 }}
               animate={{ opacity: 1, translateY: 0 }}
-              className="px-6 pb-6 flex-row items-center justify-between"
+              className="px-6 pb-4 flex-row items-center justify-between"
           >
-              <View>
-                  <Text className="text-slate-400 text-base font-bold tracking-tight mb-1">Your dashboard</Text>
-                  <Text className="text-white text-3xl font-black tracking-tighter">Good morning,</Text>
-                  <Text className="text-blue-500 text-3xl font-black tracking-tighter">{profile?.full_name?.split(' ')[0]}</Text>
+              <View className="flex-row items-center gap-3.5">
+                {brand?.logo_url ? (
+                  <Image
+                    source={{ uri: brand.logo_url }}
+                    style={{ width: 56, height: 56, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' }}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View 
+                    style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: colors.primary + '25', borderColor: colors.primary + '40' }}
+                    className="border items-center justify-center shadow-lg"
+                  >
+                    <Text style={{ color: colors.primary }} className="text-2xl font-black">
+                      {brand?.name ? brand.name.charAt(0).toUpperCase() : 'C'}
+                    </Text>
+                  </View>
+                )}
+                <Text className="text-white text-xl font-black tracking-tight" numberOfLines={1}>
+                  {brand?.name || ''}
+                </Text>
               </View>
+
               <TouchableOpacity
                 onPress={() => router.push('/(client)/(tabs)/profile')}
-                className="p-1.5 bg-slate-900 rounded-[24px] border border-white/5 shadow-2xl"
+                className="p-1 bg-slate-900 rounded-full border border-white/10 shadow-2xl relative"
               >
-                <BrandedAvatar size={60} name={profile?.full_name || 'U'} imageUrl={profile?.avatar_url} />
-                <View className="absolute bottom-1 right-1 w-4 h-4 bg-blue-500 rounded-full border-2 border-slate-900" />
+                <BrandedAvatar size={44} name={profile?.full_name || 'U'} imageUrl={profile?.avatar_url} />
+                <View 
+                  style={{ backgroundColor: colors.primary }}
+                  className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-slate-900" 
+                />
               </TouchableOpacity>
+          </MotiView>
+
+          {/* Client Greeting */}
+          <MotiView 
+              from={{ opacity: 0, translateY: -4 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ delay: 80 }}
+              className="px-6 pb-6"
+          >
+              <Text className="text-white text-3xl font-black tracking-tighter">Good morning,</Text>
+              <Text style={{ color: colors.primary }} className="text-3xl font-black tracking-tighter">
+                {firstName}
+              </Text>
           </MotiView>
 
           <View className="px-3">
             {/* First Time Hero Cards */}
-            <FirstTimeHeroCards clientName={profile?.full_name?.split(' ')[0] || ''} />
+            <FirstTimeHeroCards clientName={firstName} />
 
             {/* Status Grid */}
             <View className="flex-row flex-wrap justify-between gap-4 mb-4">
@@ -505,6 +543,30 @@ export default function ClientDashboard() {
                     />
                 </View>
             </View>
+
+            {/* Powered by Brand Footer */}
+            <View className="items-center pt-8 pb-4">
+              <View className="flex-row items-center gap-2 bg-slate-900/90 px-4 py-2 rounded-full border border-white/10 shadow-sm">
+                {brand?.logo_url ? (
+                  <Image 
+                    source={{ uri: brand.logo_url }} 
+                    style={{ width: 18, height: 18, borderRadius: 4 }} 
+                    contentFit="cover" 
+                  />
+                ) : (
+                  <View 
+                    style={{ width: 18, height: 18, borderRadius: 4, backgroundColor: colors.primary + '30', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '900' }}>
+                      {brand?.name ? brand.name.charAt(0).toUpperCase() : 'C'}
+                    </Text>
+                  </View>
+                )}
+                <Text className="text-slate-400 text-xs font-semibold">
+                  Powered by <Text className="text-white font-bold">{brand?.name || 'Your Coach'}</Text>
+                </Text>
+              </View>
+            </View>
           </View>
         </ScrollView>
     </View>
@@ -515,13 +577,14 @@ export default function ClientDashboard() {
 // Wraps the "Complete Your Check-in" card and injects the native Strands
 // animation as an absolute background layer, faded and using brand colours.
 const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
+  const colors = useBrandColors();
   return (
     <MotiView
       key="checkin-cta"
       from={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      style={{ marginTop: 24, borderRadius: 40, overflow: 'hidden' }}
-      className="bg-blue-600 shadow-2xl shadow-blue-500/30 border border-white/10 relative"
+      style={{ marginTop: 24, borderRadius: 40, overflow: 'hidden', backgroundColor: colors.primary }}
+      className="shadow-2xl border border-white/10 relative"
     >
       {/* Lightweight static decoration replacing the heavy animated background */}
       <View className="absolute -top-24 -right-12 w-64 h-64 bg-white/10 rounded-full" />
@@ -536,7 +599,7 @@ const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
         <Text className="text-white/80 mt-3 font-medium text-sm leading-6">Update your coach on your energy, weight, and meal progress today.</Text>
         <View className="mt-8 flex-row items-center justify-between">
           <View className="bg-white px-5 py-2.5 rounded-full">
-            <Text className="text-blue-600 font-black text-xs uppercase tracking-widest">Start Now</Text>
+            <Text style={{ color: colors.primary }} className="font-black text-xs uppercase tracking-widest">Start Now</Text>
           </View>
           <ChevronRight size={24} color="white" opacity={0.5} />
         </View>
@@ -619,6 +682,7 @@ const MetricCard = ({ label, value, icon, active, onPress, showGlow = false }: a
 
 // ─── Upcoming Session Card ───────────────────────────────────────────────────
 const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: number; onJoin: () => void }) => {
+  const colors = useBrandColors();
   const sessionTime = new Date(session.scheduled_at).getTime();
   const minutesUntil = (sessionTime - nowMs) / 60_000;
   const canJoin = minutesUntil <= 5;

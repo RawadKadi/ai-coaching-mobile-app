@@ -656,33 +656,7 @@ export default function BrandSettingsScreen() {
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Button Shape</Text>
-                  <View style={styles.buttonRow}>
-                    {[
-                      { id: 'rounded', label: 'Rounded', icon: <View style={[styles.shapePreview, { borderRadius: 8 }]} /> },
-                      { id: 'pill', label: 'Pill', icon: <View style={[styles.shapePreview, { borderRadius: 16 }]} /> },
-                      { id: 'square', label: 'Square', icon: <View style={[styles.shapePreview, { borderRadius: 0 }]} /> },
-                    ].map((shape) => (
-                      <TouchableOpacity
-                        key={shape.id}
-                        style={[
-                          styles.shapeOption,
-                          { backgroundColor: currentTheme.colors.inputBackground, borderColor: currentTheme.colors.border },
-                          buttonShape === shape.id && { borderColor: primaryColor, borderWidth: 2 }
-                        ]}
-                        onPress={() => setButtonShape(shape.id as any)}
-                      >
-                        <View style={[styles.shapePreview, { backgroundColor: buttonShape === shape.id ? primaryColor : '#64748B' }]} />
-                        <Text style={[styles.optionButtonText, { color: buttonShape === shape.id ? '#FFFFFF' : '#94A3B8' }]}>
-                          {shape.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={[styles.formGroup, { marginTop: 16 }]}>
-                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Initial Style Preset</Text>
+                  <Text style={[styles.label, { color: currentTheme.colors.textSecondary }]}>Style Preset</Text>
                   <View style={styles.buttonRow}>
                     {['flat', 'gradient', 'outlined'].map((style) => (
                       <TouchableOpacity

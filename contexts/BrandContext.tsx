@@ -331,6 +331,8 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
 
       if (!brandId) {
         console.log('[BrandContext] No brand ID found, utilizing default theme');
+        setBrand(null);
+        setCanManageBrand(false);
         setLoading(false);
         return;
       }

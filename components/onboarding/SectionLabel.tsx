@@ -9,10 +9,16 @@ interface SectionLabelProps {
 
 export default function SectionLabel({ step, title, desc }: SectionLabelProps) {
   return (
-    <View className="mb-2">
-      <Text className="text-blue-500 font-bold text-xs uppercase tracking-[3px] mb-1">{step}</Text>
-      <Text className="text-white text-4xl font-black tracking-tight">{title}</Text>
-      <Text className="text-slate-500 font-bold mt-2 text-base leading-6">{desc}</Text>
+    <View style={{ marginBottom: 12 }}>
+      <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 8 }}>
+        {step}
+      </Text>
+      <Text style={{ color: '#FFFFFF', fontSize: 32, fontWeight: '900', letterSpacing: -0.5, lineHeight: 38 }}>
+        {title}
+      </Text>
+      <Text style={{ color: '#94A3B8', fontSize: 15, fontWeight: '500', lineHeight: 22, marginTop: 8 }}>
+        {desc}
+      </Text>
     </View>
   );
 }

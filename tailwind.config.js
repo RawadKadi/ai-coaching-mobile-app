@@ -25,9 +25,6 @@ module.exports = {
                     600: "var(--color-primary)",
                 }
             },
-            textColor: {
-                white: "var(--color-text-primary)",
-            }
         },
     },
     plugins: [],

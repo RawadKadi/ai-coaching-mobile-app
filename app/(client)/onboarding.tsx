@@ -25,7 +25,6 @@ import Step4 from '@/components/onboarding/client/Step4';
 
 // Auto-persist Formik values to AsyncStorage
 const PersistFormikValues = () => {
-  const colors = useBrandColors();
   const { values } = useFormikContext<any>();
   useEffect(() => {
     if (values) {
@@ -37,6 +36,7 @@ const PersistFormikValues = () => {
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const colors = useBrandColors();
   const { user, refreshProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);

@@ -62,12 +62,14 @@ BEGIN
 
     -- CASE 2: Standalone coach signup (MVP Main Coach)
     ELSE
-      -- Create new brand with minimal required fields
-      INSERT INTO public.brands (name, primary_color, secondary_color)
+      -- Create new brand with default sleek dark theme
+      INSERT INTO public.brands (name, primary_color, secondary_color, background_color, dark_mode_enabled)
       VALUES (
         v_full_name || '''s Coaching',
-        '#3B82F6',
-        '#10B981'
+        '#7FA7FF',
+        '#10B981',
+        '#010417',
+        true
       )
       RETURNING id INTO v_new_brand_id;
 

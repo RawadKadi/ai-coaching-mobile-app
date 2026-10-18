@@ -20,15 +20,17 @@ interface Step1Props {
 export default function Step1({ formData, updateForm, pickImage, removeLogo, uploading }: Step1Props) {
   const colors = useBrandColors();
   return (
-    <View className="gap-8">
+    <View style={{ gap: 28 }}>
       <SectionLabel step="Step 1" title="Build Your Brand" desc="Set up your public identity" />
       
-      <View className="gap-6">
+      <View style={{ gap: 24 }}>
         <View>
-          <Text className="text-slate-400 text-sm font-black uppercase tracking-widest mb-3 px-1">Brand Logo</Text>
+          <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 12, paddingHorizontal: 4 }}>
+            Brand Logo
+          </Text>
           
           {formData.logo_url ? (
-            <View className="relative w-36 h-36 rounded-3xl overflow-hidden border-2 border-slate-800 bg-slate-900/40 justify-center items-center">
+            <View style={{ position: 'relative', width: 144, height: 144, borderRadius: 24, overflow: 'hidden', borderWidth: 2, borderColor: '#1E293B', backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center' }}>
               <Image 
                 source={{ uri: formData.logo_url }} 
                 style={{ width: '100%', height: '100%' }}
@@ -36,7 +38,7 @@ export default function Step1({ formData, updateForm, pickImage, removeLogo, upl
               />
               <TouchableOpacity 
                 onPress={removeLogo}
-                className="absolute bottom-2 right-2 w-9 h-9 bg-red-600/90 rounded-xl items-center justify-center border border-red-500"
+                style={{ position: 'absolute', bottom: 8, right: 8, width: 36, height: 36, backgroundColor: 'rgba(239, 68, 68, 0.9)', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#EF4444' }}
               >
                 <Trash2 size={16} color="white" />
               </TouchableOpacity>
@@ -45,14 +47,14 @@ export default function Step1({ formData, updateForm, pickImage, removeLogo, upl
             <TouchableOpacity 
               onPress={pickImage}
               disabled={uploading}
-              className="w-36 h-36 rounded-3xl border-2 border-dashed border-slate-800 bg-slate-900/20 items-center justify-center active:bg-slate-900/40"
+              style={{ width: 144, height: 144, borderRadius: 24, borderWidth: 2, borderStyle: 'dashed', borderColor: '#334155', backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' }}
             >
               {uploading ? (
                 <ActivityIndicator color={colors.primary} />
               ) : (
                 <>
-                  <Plus size={32} color="#475569" />
-                  <Text className="text-slate-500 font-bold text-xs mt-2">Add Image</Text>
+                  <Plus size={32} color="#64748B" />
+                  <Text style={{ color: '#94A3B8', fontWeight: '700', fontSize: 13, marginTop: 8 }}>Add Image</Text>
                 </>
               )}
             </TouchableOpacity>
