@@ -1,4 +1,4 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, RefreshControl, StatusBar, TextInput, Pressable } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -21,7 +21,9 @@ type CoachPreview = {
 type Tab = 'clients' | 'team';
 
 export default function CoachMessagesScreen() {
-  const colors = useBrandColors();
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDarkMode = theme.isDark;
   const router = useRouter();
   const { coach, user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -240,66 +242,70 @@ export default function CoachMessagesScreen() {
       className="mb-4"
     >
       <TouchableOpacity
-        className="flex-row items-center p-5 bg-slate-900/40 rounded-[32px] border border-white/5"
+        className="flex-row items-center p-5 rounded-[32px] border"
+        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
         onPress={onPress}
       >
         <View className="relative mr-4">
           <BrandedAvatar name={fullName} imageUrl={avatarUrl} size={56} />
           <View 
-            className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-950 ${isUserOnline(userId) ? 'bg-emerald-500' : 'bg-slate-600'}`} 
+            className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 ${isUserOnline(userId) ? 'bg-emerald-500' : 'bg-slate-400'}`} 
+            style={{ borderColor: colors.surface }}
           />
         </View>
         <View className="flex-1 mr-3">
           <View className="flex-row justify-between items-center mb-1">
-            <Text className={`font-black text-base tracking-tight ${unread ? 'text-white' : 'text-slate-300'}`}>{fullName}</Text>
-            <Text className="text-slate-600 text-[10px] font-bold uppercase">{formatTime(lastTime)}</Text>
+            <Text className="font-black text-base tracking-tight" style={{ color: colors.text }}>{fullName}</Text>
+            <Text className="text-[10px] font-bold uppercase" style={{ color: colors.textSecondary }}>{formatTime(lastTime)}</Text>
           </View>
-          <Text className={`text-sm font-medium ${unread ? 'text-slate-400' : 'text-slate-600'}`} numberOfLines={1}>{lastMsg}</Text>
+          <Text className="text-sm font-medium" style={{ color: colors.textSecondary }} numberOfLines={1}>{lastMsg}</Text>
         </View>
         {(unread || 0) > 0 ? (
-          <View className="w-6 h-6 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-500/40">
+          <View className="w-6 h-6 rounded-full items-center justify-center shadow-lg" style={{ backgroundColor: colors.primary }}>
             <Text className="text-white text-[10px] font-black">{unread}</Text>
           </View>
         ) : (
-          <ChevronRight size={18} color="#334155" />
+          <ChevronRight size={18} color={colors.textSecondary} />
         )}
       </TouchableOpacity>
     </MotiView>
   );
 
   return (
-    <View style={{ flex: 1 }} className="bg-slate-950">
-      <StatusBar barStyle="light-content" translucent />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} translucent />
       <View style={{ paddingTop: insets.top }} className="flex-1">
           {/* Header */}
           <View className="px-6 py-8 flex-row justify-between items-end">
             <View>
-                <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[4px] mb-2">Message Center</Text>
-                <Text className="text-white text-4xl font-black tracking-tighter">Messages</Text>
+                <Text className="text-[10px] font-black uppercase tracking-[4px] mb-2" style={{ color: colors.primary }}>Message Center</Text>
+                <Text className="text-4xl font-black tracking-tighter" style={{ color: colors.text }}>Messages</Text>
             </View>
             <TouchableOpacity 
               onPress={() => {
                 setIsSearching(!isSearching);
                 if (isSearching) setSearchQuery('');
               }}
-              className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5"
+              className="w-12 h-12 rounded-2xl items-center justify-center border"
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
             >
-                {isSearching ? <X size={22} color="#EF4444" /> : <Search size={22} color="#64748B" />}
+                {isSearching ? <X size={22} color="#EF4444" /> : <Search size={22} color={colors.textSecondary} />}
             </TouchableOpacity>
           </View>
 
           {/* Search Bar */}
           {isSearching && (
             <View className="px-6 mb-6">
-              <View className="flex-row items-center bg-slate-900/80 rounded-3xl px-4 py-2 border border-white/10 shadow-2xl">
+              <View className="flex-row items-center rounded-3xl px-4 py-2 border shadow-sm" style={{ backgroundColor: colors.surface, borderColor: colors.border }}>
                 <Search size={20} color={colors.primary} />
                 <TextInput
                   autoFocus
                   placeholder={`Search ${activeTab === 'clients' ? 'clients' : 'team'}...`}
-                  placeholderTextColor="#475569"
+                  placeholderTextColor={colors.textTertiary || '#94A3B8'}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  className="flex-1 text-white text-2xl ml-3 h-10"
+                  className="flex-1 text-2xl ml-3 h-10"
+                  style={{ color: colors.text }}
                 />
               </View>
             </View>
@@ -307,24 +313,24 @@ export default function CoachMessagesScreen() {
 
           {/* Tab Switch */}
           <View className="px-6 mb-8">
-            <View className="flex-row bg-slate-900/50 rounded-[28px] p-1.5 border border-white/5">
+            <View className="flex-row rounded-[28px] p-1.5 border" style={{ backgroundColor: colors.surface, borderColor: colors.border }}>
               <Pressable
                 onPress={() => setActiveTab('clients')}
-                className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'clients' ? 'bg-slate-800' : ''}`}
-                style={activeTab === 'clients' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
+                className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
+                style={activeTab === 'clients' ? { backgroundColor: colors.background, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 } : {}}
               >
-                <Users size={18} color={activeTab === 'clients' ? colors.primary : '#475569'} />
-                <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'clients' ? 'text-white' : 'text-slate-500'}`}>Clients</Text>
+                <Users size={18} color={activeTab === 'clients' ? colors.primary : colors.textSecondary} />
+                <Text className="font-black text-sm uppercase tracking-widest" style={{ color: activeTab === 'clients' ? colors.text : colors.textSecondary }}>Clients</Text>
               </Pressable>
               <Pressable
                 onPress={() => setActiveTab('team')}
-                className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'team' ? 'bg-slate-800' : ''}`}
-                style={activeTab === 'team' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
+                className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
+                style={activeTab === 'team' ? { backgroundColor: colors.background, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 } : {}}
               >
-                <Zap size={18} color={activeTab === 'team' ? colors.primary : '#475569'} />
-                <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'team' ? 'text-white' : 'text-slate-500'}`}>Team</Text>
+                <Zap size={18} color={activeTab === 'team' ? colors.primary : colors.textSecondary} />
+                <Text className="font-black text-sm uppercase tracking-widest" style={{ color: activeTab === 'team' ? colors.text : colors.textSecondary }}>Team</Text>
                 {teamUnreadCount > 0 && activeTab !== 'team' && (
-                  <View className="w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-slate-900" />
+                  <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.primary }} />
                 )}
               </Pressable>
             </View>
@@ -352,11 +358,11 @@ export default function CoachMessagesScreen() {
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               ListEmptyComponent={
                 <View className="mt-20 items-center px-10">
-                  <View className="w-24 h-24 bg-slate-900 rounded-[32px] items-center justify-center border border-white/5 shadow-2xl">
-                    <MessageCircle size={40} color="#334155" />
+                  <View className="w-24 h-24 rounded-[32px] items-center justify-center border shadow-sm" style={{ backgroundColor: colors.surface, borderColor: colors.border }}>
+                    <MessageCircle size={40} color={colors.textSecondary} />
                   </View>
-                  <Text className="text-white font-black text-lg mt-8 text-center">Your inbox is clear</Text>
-                  <Text className="text-slate-500 text-xs mt-2 text-center leading-5 font-medium">When you have active conversations with {activeTab === 'clients' ? 'clients' : 'team members'}, they'll appear here.</Text>
+                  <Text className="font-black text-lg mt-8 text-center" style={{ color: colors.text }}>Your inbox is clear</Text>
+                  <Text className="text-xs mt-2 text-center leading-5 font-medium" style={{ color: colors.textSecondary }}>When you have active conversations with {activeTab === 'clients' ? 'clients' : 'team members'}, they'll appear here.</Text>
                 </View>
               }
             />

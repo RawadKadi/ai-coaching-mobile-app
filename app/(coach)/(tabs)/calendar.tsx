@@ -11,7 +11,7 @@ import ManualSchedulerModal from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import { Swipeable } from 'react-native-gesture-handler';
 import PostponeModal from '@/components/PostponeModal';
@@ -31,6 +31,7 @@ interface AnimatedDayButtonProps {
 }
 
 const AnimatedDayButton = React.memo(({ item, isSelected, isToday, hasSessions, isOtherMonth, onPress }: AnimatedDayButtonProps) => {
+    const colors = useBrandColors();
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
     const handlePressIn = () => {
@@ -59,14 +60,14 @@ const AnimatedDayButton = React.memo(({ item, isSelected, isToday, hasSessions, 
             className="items-center justify-center flex-1 py-1"
         >
             <Animated.View 
-                style={[{ transform: [{ scale: scaleAnim }] }]}
-                className={`w-9 h-9 rounded-full items-center justify-center ${isSelected ? 'bg-blue-600 shadow-xl shadow-blue-500/50' : ''}`}
+                style={[{ transform: [{ scale: scaleAnim }] }, isSelected ? { backgroundColor: colors.primary } : {}]}
+                className="w-9 h-9 rounded-full items-center justify-center"
             >
-                <Text className={`text-base font-black ${isSelected ? 'text-white' : isOtherMonth ? 'text-slate-800' : isToday ? 'text-blue-500' : 'text-slate-400'}`}>
+                <Text style={{ color: isSelected ? colors.textOnPrimary : (isToday ? colors.primary : (isOtherMonth ? colors.textTertiary : colors.text)) }} className="text-base font-black">
                     {item.getDate()}
                 </Text>
                 {hasSessions && (
-                    <View className={`absolute -bottom-1 w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-blue-600'}`} />
+                    <View style={{ backgroundColor: isSelected ? colors.textOnPrimary : colors.primary }} className="absolute -bottom-1 w-1 h-1 rounded-full" />
                 )}
             </Animated.View>
         </Pressable>
@@ -88,6 +89,7 @@ interface AnimatedSessionCardProps {
 }
 
 const AnimatedSessionCard = React.memo(({ session, onPress, onLongPress }: AnimatedSessionCardProps) => {
+    const colors = useBrandColors();
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const isPostponed = session.status === 'postponed' || (session.status === 'cancelled' && session.cancellation_reason?.toLowerCase().includes('postpone'));
     const isCancelled = session.status === 'cancelled' && !isPostponed;
@@ -120,23 +122,29 @@ const AnimatedSessionCard = React.memo(({ session, onPress, onLongPress }: Anima
         >
             {({ pressed }) => (
                 <Animated.View 
-                    style={[{ transform: [{ scale: scaleAnim }] }]}
-                    className={`border rounded-[36px] p-6 flex-row items-center ${
-                        isPostponed
-                            ? 'bg-yellow-950/15 border-yellow-500/20'
-                            : isCancelled 
-                                ? 'bg-red-950/15 border-red-500/20' 
-                                : pressed 
-                                    ? 'bg-slate-900/60 border-white/5' 
-                                    : 'bg-slate-900/40 border-white/5'
-                    }`}
+                    style={[
+                        { transform: [{ scale: scaleAnim }] },
+                        {
+                            backgroundColor: isPostponed 
+                                ? 'rgba(234, 179, 8, 0.08)' 
+                                : isCancelled 
+                                    ? 'rgba(239, 68, 68, 0.08)' 
+                                    : colors.surface,
+                            borderColor: isPostponed 
+                                ? 'rgba(234, 179, 8, 0.25)' 
+                                : isCancelled 
+                                    ? 'rgba(239, 68, 68, 0.25)' 
+                                    : colors.border,
+                        }
+                    ]}
+                    className="border rounded-[36px] p-6 flex-row items-center"
                 >
                     {/* Left: Time */}
                     <View className="items-center mr-4 w-16">
-                        <Text className={`font-black text-lg ${isPostponed || isCancelled ? 'text-white' : 'text-blue-500'}`}>
+                        <Text style={{ color: isPostponed || isCancelled ? colors.text : colors.primary }} className="font-black text-lg">
                             {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                         </Text>
-                        <Text className={`font-black text-[10px] uppercase ${isPostponed || isCancelled ? 'text-slate-400' : 'text-blue-400/60'}`}>
+                        <Text style={{ color: colors.textSecondary }} className="font-black text-[10px] uppercase">
                             {new Date(session.scheduled_at).getHours() >= 12 ? 'PM' : 'AM'}
                         </Text>
                     </View>
@@ -146,10 +154,10 @@ const AnimatedSessionCard = React.memo(({ session, onPress, onLongPress }: Anima
 
                     {/* Middle: Info */}
                     <View className="flex-1">
-                        <Text className="font-black text-lg tracking-tight leading-tight mb-1 text-white">
+                        <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight leading-tight mb-1">
                             {session.session_type === 'video' ? 'Performance Video Call' : 'Strategic Coaching'}
                         </Text>
-                        <Text className="font-bold text-xs text-slate-500">
+                        <Text style={{ color: colors.textSecondary }} className="font-bold text-xs">
                             {session.client?.profiles?.full_name} • 60 min
                         </Text>
                     </View>
@@ -189,7 +197,9 @@ export default function CalendarScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
-  const { primary, secondary } = useBrandColors();
+  const colors = useBrandColors();
+  const { isDarkMode } = useTheme();
+  const { primary, secondary } = colors;
   const { handleScroll } = useTabBarScroll();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -471,18 +481,16 @@ export default function CalendarScreen() {
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50
-  }).current;
-
-  if (loading && !refreshing) return <View className="flex-1 bg-slate-950 items-center justify-center"><ActivityIndicator color={primary} /></View>;
+  }).current;  if (loading && !refreshing) return <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={primary} /></View>;
 
   return (
-    <View style={{ flex: 1 }} className="bg-slate-950">
-      <StatusBar barStyle="light-content" translucent />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} translucent />
       <View style={{ flex: 1, paddingTop: insets.top }}>
           {/* Header */}
           <View className="px-6 pt-10 pb-4">
               <View className="flex-row items-center justify-between">
-                <Text className="text-white text-4xl font-black tracking-tight mb-2">
+                <Text style={{ color: colors.text }} className="text-4xl font-black tracking-tight mb-2">
                     {viewingMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </Text>
                 {/* Date picker trigger */}
@@ -493,31 +501,31 @@ export default function CalendarScreen() {
                 >
                   {({ pressed }) => (
                       <Animated.View 
-                          style={[{ transform: [{ scale: calendarBtnScale }] }]}
-                          className={`w-10 h-10 rounded-2xl items-center justify-center border ${pressed ? 'bg-slate-700/80 border-white/10' : 'bg-slate-800/60 border-white/8'} mb-2`}
+                          style={[{ transform: [{ scale: calendarBtnScale }] }, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                          className="w-10 h-10 rounded-2xl items-center justify-center border mb-2"
                       >
-                          <CalendarDays size={18} color="#60A5FA" />
+                          <CalendarDays size={18} color={colors.primary} />
                       </Animated.View>
                   )}
                 </Pressable>
               </View>
-              <Text className="text-slate-400 font-medium">
+              <Text style={{ color: colors.textSecondary }} className="font-medium">
                   You have {getSessionsForDate(selectedDate).length} sessions scheduled for today.
               </Text>
           </View>
           <View className="px-8 flex-row justify-end mb-2 opacity-40">
               <View className="flex-row items-center gap-1">
-                  <ChevronsLeftRight size={14} color="#64748B" />
-                  <Text className="text-slate-500 text-[10px] font-black uppercase">Swipe</Text>
+                  <ChevronsLeftRight size={14} color={colors.textSecondary} />
+                  <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase">Swipe</Text>
               </View>
           </View>
           {/* Calendar Box */}
-          <View className="bg-slate-900/30 rounded-[48px] p-6 mx-6 my-4 border border-white/5">
+          <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="rounded-[48px] p-6 mx-6 my-4 border">
               <View className="flex-row justify-between mb-6 px-2">
                   <View className="flex-row flex-1 justify-between">
                     {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, i) => (
                         <View key={i} className="flex-1 items-center">
-                            <Text className="text-slate-500 text-[9px] font-black">{day}</Text>
+                            <Text style={{ color: colors.textSecondary }} className="text-[9px] font-black">{day}</Text>
                         </View>
                     ))}
                   </View>
@@ -592,17 +600,17 @@ export default function CalendarScreen() {
               onScrollBeginDrag={closeAllSwipes}
           >
               <View className="mb-6 mt-4">
-                  <Text className="text-white text-2xl font-black tracking-tight">Today's Focus</Text>
+                  <Text style={{ color: colors.text }} className="text-2xl font-black tracking-tight">Today's Focus</Text>
               </View>
 
               <View className="space-y-4">
                   {getSessionsForDate(selectedDate).length === 0 ? (
-                      <View className="p-16 items-center justify-center bg-slate-900/20 rounded-[48px] border border-white/5 border-dashed">
-                          <View className="w-20 h-20 bg-slate-900 rounded-[32px] items-center justify-center border border-white/5 mb-6">
-                              <CalendarIcon size={32} color="#1E293B" />
+                      <View style={{ backgroundColor: isDarkMode ? 'rgba(15,23,42,0.2)' : 'rgba(0,0,0,0.02)', borderColor: colors.border }} className="p-16 items-center justify-center rounded-[48px] border border-dashed">
+                          <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="w-20 h-20 rounded-[32px] items-center justify-center border mb-6">
+                              <CalendarIcon size={32} color={colors.primary} />
                           </View>
-                          <Text className="text-slate-700 font-black text-xs uppercase tracking-widest text-center">Day Clear</Text>
-                          <Text className="text-slate-800 font-medium text-[10px] mt-2 text-center px-6 leading-5">You have no live coaching sessions scheduled for this date.</Text>
+                          <Text style={{ color: colors.text }} className="font-black text-xs uppercase tracking-widest text-center">Day Clear</Text>
+                          <Text style={{ color: colors.textSecondary }} className="font-medium text-[10px] mt-2 text-center px-6 leading-5">You have no live coaching sessions scheduled for this date.</Text>
                       </View>
                   ) : (
                       getSessionsForDate(selectedDate).map((session, idx) => {
@@ -686,10 +694,10 @@ export default function CalendarScreen() {
            >
                {({ pressed }) => (
                    <Animated.View 
-                       style={[{ transform: [{ scale: plusBtnScale }] }]}
-                       className={`w-16 h-16 rounded-full items-center justify-center shadow-2xl border border-white/10 ${pressed ? 'bg-blue-700 shadow-blue-500/30' : 'bg-blue-600 shadow-blue-500/50'}`}
+                       style={[{ transform: [{ scale: plusBtnScale }], backgroundColor: primary, shadowColor: primary }]}
+                       className={`w-16 h-16 rounded-full items-center justify-center shadow-2xl border border-white/10 `}
                    >
-                       <Plus size={32} color="white" />
+                       <Plus size={32} color={colors.textOnPrimary || "white"} />
                    </Animated.View>
                )}
            </Pressable>
@@ -739,13 +747,14 @@ export default function CalendarScreen() {
                 className="flex-1 bg-black/60 justify-end" 
                 onPress={() => setSelectedSessionForMenu(null)}
               >
-                  <MotiView 
+                <MotiView 
                     from={{ translateY: 300 }} 
                     animate={{ translateY: 0 }} 
-                    className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10"
+                    style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                    className="rounded-t-[48px] p-8 border-t"
                   >
-                      <View className="w-12 h-1.5 bg-slate-800 rounded-full self-center mb-8" />
-                      <Text className="text-white text-2xl font-black mb-6 tracking-tight">Session Actions</Text>
+                      <View style={{ backgroundColor: colors.border }} className="w-12 h-1.5 rounded-full self-center mb-8" />
+                      <Text style={{ color: colors.text }} className="text-2xl font-black mb-6 tracking-tight">Session Actions</Text>
                       
                       {selectedSessionForMenu && (selectedSessionForMenu.status !== 'cancelled' && !selectedSessionForMenu.cancellation_reason?.toLowerCase().includes('postpone')) ? (
                         <>
@@ -771,7 +780,7 @@ export default function CalendarScreen() {
                           />
                         </>
                       ) : (
-                        <Text className="text-slate-500 italic text-center p-4">No actions available for this session</Text>
+                        <Text style={{ color: colors.textSecondary }} className="italic text-center p-4">No actions available for this session</Text>
                       )}
                   </MotiView>
               </Pressable>
@@ -799,18 +808,22 @@ export default function CalendarScreen() {
 }
 
 // Bottom sheet/Action Menu Option Item Helper
-const OptionItem = ({ icon, title, sub, onPress }: { icon: React.ReactNode; title: string; sub: string; onPress: () => void }) => (
-    <Pressable 
-        onPress={onPress} 
-        className="flex-row items-center p-4 bg-slate-800/40 rounded-3xl border border-white/5 mb-4 active:bg-slate-800/80"
-    >
-        <View className="w-10 h-10 rounded-2xl items-center justify-center bg-slate-900 border border-white/5 mr-4">
-            {icon}
-        </View>
-        <View className="flex-1">
-            <Text className="text-white font-bold text-base">{title}</Text>
-            <Text className="text-slate-500 text-xs mt-0.5">{sub}</Text>
-        </View>
-        <ChevronRight size={16} color="#64748B" />
-    </Pressable>
-);
+const OptionItem = ({ icon, title, sub, onPress }: { icon: React.ReactNode; title: string; sub: string; onPress: () => void }) => {
+    const colors = useBrandColors();
+    return (
+        <Pressable 
+            onPress={onPress} 
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="flex-row items-center p-4 rounded-3xl border mb-4 active:opacity-80"
+        >
+            <View style={{ backgroundColor: colors.background, borderColor: colors.border }} className="w-10 h-10 rounded-2xl items-center justify-center border mr-4">
+                {icon}
+            </View>
+            <View className="flex-1">
+                <Text style={{ color: colors.text }} className="font-bold text-base">{title}</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs mt-0.5">{sub}</Text>
+            </View>
+            <ChevronRight size={16} color={colors.textSecondary} />
+        </Pressable>
+    );
+};

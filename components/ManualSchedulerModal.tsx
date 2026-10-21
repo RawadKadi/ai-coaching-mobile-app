@@ -85,6 +85,8 @@ interface ClientCardProps {
 
 const ClientCard = React.memo(({ client, isSelected, onPress, theme }: ClientCardProps) => {
     const fadeAnim = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
+    const isDark = theme.isDarkMode;
+    const colors = theme.colors;
 
     useEffect(() => {
         Animated.timing(fadeAnim, {
@@ -111,10 +113,18 @@ const ClientCard = React.memo(({ client, isSelected, onPress, theme }: ClientCar
                         justifyContent: 'space-between',
                     },
                     isSelected 
-                        ? { backgroundColor: 'rgba(15, 23, 42, 0.5)', borderColor: theme.colors.primary, borderWidth: 2 } 
-                        : { backgroundColor: 'rgba(15, 23, 42, 0.5)', borderColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 2 }
+                        ? { 
+                            backgroundColor: isDark ? `${colors.primary}18` : `${colors.primary}10`, 
+                            borderColor: colors.primary, 
+                            borderWidth: 2 
+                          } 
+                        : { 
+                            backgroundColor: colors.surface, 
+                            borderColor: colors.border, 
+                            borderWidth: 1.5 
+                          }
                 ]}
-                className="shadow-2xl"
+                className="shadow-sm"
             >
                 <View className="flex-row items-center gap-5">
                     <View className="relative">
@@ -128,26 +138,26 @@ const ClientCard = React.memo(({ client, isSelected, onPress, theme }: ClientCar
                                 transform: [{ scale: fadeAnim }],
                                 width: 24,
                                 height: 24,
-                                backgroundColor: '#2563EB',
+                                backgroundColor: colors.primary,
                                 borderRadius: 12,
-                                borderWidth: 4,
-                                borderColor: '#020617', // slate-950
+                                borderWidth: 3,
+                                borderColor: colors.surface,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                             }}
                         >
-                            <Check size={10} color="white" strokeWidth={4} />
+                            <Check size={10} color={colors.textOnPrimary || 'white'} strokeWidth={4} />
                         </Animated.View>
                     </View>
                     <View>
-                        <Text className="text-white text-xl font-black tracking-tight">{client.profiles.full_name}</Text>
+                        <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight">{client.profiles.full_name}</Text>
                         <View className="flex-row items-center gap-2 mt-1">
                             <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">{client.profiles.subtype || 'Athlete'}</Text>
+                            <Text style={{ color: colors.textSecondary }} className="text-[9px] font-black uppercase tracking-widest">{client.profiles.subtype || 'Client'}</Text>
                         </View>
                     </View>
                 </View>
-                <ChevronRight size={20} color={isSelected ? theme.colors.primary : '#334155'} />
+                <ChevronRight size={20} color={isSelected ? colors.primary : colors.textTertiary} />
             </View>
         </Pressable>
     );
@@ -161,6 +171,7 @@ interface TimeSlotCardProps {
 
 const TimeSlotCard = React.memo(({ slot, isSelected, onPress }: TimeSlotCardProps) => {
     const theme = useTheme();
+    const colors = theme.colors;
     const fadeAnim = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
 
     useEffect(() => {
@@ -175,7 +186,7 @@ const TimeSlotCard = React.memo(({ slot, isSelected, onPress }: TimeSlotCardProp
         <Pressable 
             onPress={onPress}
             style={({ pressed }) => ({
-                opacity: !slot.available ? 0.2 : pressed ? 0.7 : 1
+                opacity: !slot.available ? 0.3 : pressed ? 0.7 : 1
             })}
         >
             <View 
@@ -188,20 +199,31 @@ const TimeSlotCard = React.memo(({ slot, isSelected, onPress }: TimeSlotCardProp
                         alignItems: 'center',
                     },
                     isSelected 
-                        ? { backgroundColor: '#2563EB', borderColor: theme.colors.primary, borderWidth: 2 } 
-                        : { backgroundColor: '#0F172A', borderColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1 }
+                        ? { backgroundColor: colors.primary, borderColor: colors.primary, borderWidth: 2 } 
+                        : { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }
                 ]}
-                className="shadow-2xl"
+                className="shadow-sm"
             >
                 <View className="flex-row items-center gap-4">
-                    <View className={`w-12 h-12 rounded-2xl items-center justify-center ${isSelected ? 'bg-white' : 'bg-slate-950/50'}`}>
-                        <Clock size={20} color={isSelected ? '#2563EB' : theme.colors.primary} />
+                    <View 
+                        style={isSelected ? { backgroundColor: 'rgba(255, 255, 255, 0.2)' } : { backgroundColor: colors.inputBackground }}
+                        className="w-12 h-12 rounded-2xl items-center justify-center"
+                    >
+                        <Clock size={20} color={isSelected ? (colors.textOnPrimary || '#FFFFFF') : colors.primary} />
                     </View>
                     <View>
-                        <Text className={`text-xl font-black ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                        <Text 
+                            style={{ color: isSelected ? (colors.textOnPrimary || '#FFFFFF') : colors.text }}
+                            className="text-xl font-black"
+                        >
                             {slot.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                         </Text>
-                        <Text className={`text-[10px] font-bold ${isSelected ? 'text-white' : 'text-slate-500'}`}>60 min session</Text>
+                        <Text 
+                            style={{ color: isSelected ? (colors.textOnPrimary || '#FFFFFF') : colors.textSecondary, opacity: isSelected ? 0.85 : 1 }}
+                            className="text-[10px] font-bold"
+                        >
+                            60 min session
+                        </Text>
                     </View>
                 </View>
                 <View className="w-7 h-7 items-center justify-center relative">
@@ -220,7 +242,7 @@ const TimeSlotCard = React.memo(({ slot, isSelected, onPress }: TimeSlotCardProp
                             }]
                         }}
                     >
-                        <ChevronRight size={18} color="#475569" />
+                        <ChevronRight size={18} color={colors.textTertiary} />
                     </Animated.View>
                     <Animated.View 
                         style={{
@@ -231,8 +253,8 @@ const TimeSlotCard = React.memo(({ slot, isSelected, onPress }: TimeSlotCardProp
                             }]
                         }}
                     >
-                        <View className="w-7 h-7 bg-white rounded-full items-center justify-center">
-                            <Check size={16} color={theme.colors.primary} strokeWidth={4} />
+                        <View className="w-7 h-7 bg-white rounded-full items-center justify-center shadow">
+                            <Check size={16} color={colors.primary} strokeWidth={4} />
                         </View>
                     </Animated.View>
                 </View>
@@ -253,6 +275,8 @@ export default function ManualSchedulerModal({
     // Let's ensure we use a stable context for the Modal contents
     
     const theme = useTheme();
+    const colors = theme.colors;
+    const isDark = theme.isDarkMode;
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const scrollRef = useRef<ScrollView>(null);
@@ -516,22 +540,22 @@ export default function ManualSchedulerModal({
 
     const renderHeader = (title: string, subTitle?: string) => (
         <View className="mb-8">
-            <Text className="text-white text-4xl font-black tracking-tighter leading-tight">{title}</Text>
+            <Text style={{ color: colors.text }} className="text-4xl font-black tracking-tighter leading-tight">{title}</Text>
             {subTitle && (
-                <Text className="text-slate-500 font-medium text-base mt-2">{subTitle}</Text>
+                <Text style={{ color: colors.textSecondary }} className="font-medium text-base mt-2">{subTitle}</Text>
             )}
         </View>
     );
 
     return (
         <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-            <View className="flex-1 bg-[#020617]">
-                <StatusBar barStyle="light-content" />
+            <View style={{ flex: 1, backgroundColor: colors.background }}>
+                <StatusBar barStyle={theme.isDarkMode ? "light-content" : "dark-content"} />
                 <View className="flex-1">
                     {/* Top Status Bar */}
                     <View 
-                       style={{ paddingTop: insets.top + 16 }}
-                       className="px-6 pb-6 flex-row items-center justify-between border-b border-white/5 bg-[#020617]"
+                       style={{ paddingTop: insets.top + 16, backgroundColor: colors.background, borderBottomColor: colors.border }}
+                       className="px-6 pb-6 flex-row items-center justify-between border-b"
                     >
                         <View className="flex-row items-center gap-3">
                             <Pressable 
@@ -541,21 +565,33 @@ export default function ManualSchedulerModal({
                             >
                                 {({ pressed }) => (
                                     <Animated.View 
-                                        style={[{ transform: [{ scale: closeBtnScale }] }]}
-                                        className={`w-10 h-10 rounded-full items-center justify-center border ${pressed ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/10'}`}
+                                        style={[
+                                            { 
+                                                transform: [{ scale: closeBtnScale }],
+                                                backgroundColor: pressed ? colors.border : colors.surface,
+                                                borderColor: colors.border,
+                                            }
+                                        ]}
+                                        className="w-10 h-10 rounded-full items-center justify-center border"
                                     >
-                                        <X size={20} color="#94A3B8" />
+                                        <X size={20} color={colors.textSecondary} />
                                     </Animated.View>
                                 )}
                             </Pressable>
                             <View>
-                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Scheduler</Text>
-                                <Text className="text-white text-lg font-black tracking-tight">Manual Booking</Text>
+                                <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[3px]">Scheduler</Text>
+                                <Text style={{ color: colors.text }} className="text-lg font-black tracking-tight">Manual Booking</Text>
                             </View>
                         </View>
                         <View className="flex-row gap-1">
                              {steps.map((s, i) => (
-                                 <View key={s} className={`h-1.5 rounded-full ${i <= currentStepIdx ? 'bg-blue-600 w-6' : 'bg-slate-800 w-3'}`} />
+                                 <View 
+                                     key={s} 
+                                     className={`h-1.5 rounded-full ${i <= currentStepIdx ? 'w-6' : 'w-3'}`}
+                                     style={{ 
+                                         backgroundColor: i <= currentStepIdx ? colors.primary : colors.border 
+                                     }}
+                                 />
                              ))}
                         </View>
                     </View>
@@ -568,29 +604,46 @@ export default function ManualSchedulerModal({
                                         <MotiView
                                           from={{ opacity: 0, translateY: 20 }}
                                           animate={{ opacity: 1, translateY: 0 }}
-                                          className="mb-10 p-10 rounded-[48px] bg-blue-600/10 border border-blue-600/20 items-center overflow-hidden"
+                                          style={{
+                                              backgroundColor: `${theme.colors.primary}15`,
+                                              borderColor: `${theme.colors.primary}33`,
+                                          }}
+                                          className="mb-10 p-8 rounded-[40px] border items-center overflow-hidden"
                                         >
                                             <View className="absolute top-0 right-0 p-4 opacity-10">
                                                 <Users size={120} color={theme.colors.primary} />
                                             </View>
-                                            <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-600/50 mb-6 border-2 border-white/20">
-                                                <Calendar size={36} color="white" fill="white" />
+                                            <View 
+                                                style={{ 
+                                                    backgroundColor: theme.colors.primary,
+                                                    shadowColor: theme.colors.primary,
+                                                }}
+                                                className="w-16 h-16 rounded-[24px] items-center justify-center shadow-2xl mb-5 border-2 border-white/20"
+                                            >
+                                                <Calendar size={32} color={theme.colors.textOnPrimary || 'white'} fill={theme.colors.textOnPrimary || 'white'} />
                                             </View>
-                                            <Text className="text-white text-2xl font-black text-center tracking-tighter">Command Center</Text>
-                                            <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
-                                                Take direct control of your schedule. Select an athlete below to precisely deploy your next high-performance coaching session.
+                                            <Text style={{ color: colors.text }} className="text-2xl font-black text-center tracking-tighter">Book a Session</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-center mt-2 leading-5 px-4 text-sm font-medium">
+                                                Select a client to schedule your next coaching call or workout.
                                             </Text>
                                         </MotiView>
 
-                                        {renderHeader("Select Client", "Identify the athlete for this session.")}
+                                        {renderHeader("Select Client", "Choose who you're meeting with.")}
                                         
                                          <View className="mb-8">
-                                             <View className="bg-slate-900 border border-white/5 rounded-[28px] px-6 py-5 flex-row items-center gap-4">
-                                                 <Search size={20} color="#475569" />
+                                             <View 
+                                                 style={{ 
+                                                     backgroundColor: colors.inputBackground, 
+                                                     borderColor: colors.border 
+                                                 }}
+                                                 className="border rounded-[28px] px-6 py-5 flex-row items-center gap-4"
+                                             >
+                                                 <Search size={20} color={colors.textSecondary} />
                                                  <TextInput 
-                                                     className="flex-1 text-white font-bold text-lg"
+                                                     style={{ color: colors.text }}
+                                                     className="flex-1 font-bold text-lg"
                                                      placeholder="Search clients..."
-                                                     placeholderTextColor="#475569"
+                                                     placeholderTextColor={colors.textTertiary}
                                                      value={searchQuery}
                                                      onChangeText={setSearchQuery}
                                                  />
@@ -600,16 +653,19 @@ export default function ManualSchedulerModal({
                                         {/* Removed AI Scheduler card section as per request */}
 
                                         <View className="gap-4">
-                                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 ml-1">Active Roster</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-2 ml-1">Clients</Text>
                                             {loading ? (
                                                 <View className="py-20 items-center justify-center">
                                                     <ActivityIndicator color={theme.colors.primary} />
-                                                    <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mt-4">Syncing Athletes...</Text>
+                                                    <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mt-4">Loading clients...</Text>
                                                 </View>
                                             ) : filteredClients.length === 0 ? (
-                                                <View className="py-16 items-center justify-center bg-slate-900/20 rounded-[40px] border border-white/5 border-dashed">
-                                                    <Users size={48} color="#1E293B" />
-                                                    <Text className="text-slate-600 font-bold mt-4">No athletes found</Text>
+                                                <View 
+                                                    style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                                                    className="py-16 items-center justify-center rounded-[40px] border border-dashed"
+                                                >
+                                                    <Users size={48} color={colors.textTertiary} />
+                                                    <Text style={{ color: colors.textSecondary }} className="font-bold mt-4">No clients found</Text>
                                                 </View>
                                             ) : (
                                                 filteredClients.map(c => (
@@ -629,31 +685,31 @@ export default function ManualSchedulerModal({
                                 {step === 'days' && (
                                     <View>
                                         <View className="flex-row justify-between items-center mb-1">
-                                            <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Step 2 of 5</Text>
-                                            <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Pattern Selection</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Step 2 of 5</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Schedule Type</Text>
                                         </View>
-                                        {renderHeader("Session Pattern", "Is this a one-time session or a recurring one?")}
+                                        {renderHeader("Choose Schedule", "Pick whether this repeats or is a one-time session.")}
                                         
-                                        <View style={{ flexDirection: 'row', backgroundColor: '#0F172A', padding: 8, borderRadius: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', marginBottom: 40 }}>
+                                        <View style={{ flexDirection: 'row', backgroundColor: colors.surface, padding: 8, borderRadius: 32, borderWidth: 1, borderColor: colors.border, marginBottom: 40 }}>
                                             <TouchableOpacity 
                                                 onPress={() => { setRecurrence('once'); setSelectedWeekdays([]); }} 
-                                                style={[{ flex: 1, paddingVertical: 18, alignItems: 'center', borderRadius: 24 }, recurrence === 'once' ? { backgroundColor: '#2563EB' } : {}]}
+                                                style={[{ flex: 1, paddingVertical: 18, alignItems: 'center', borderRadius: 24 }, recurrence === 'once' ? { backgroundColor: theme.colors.primary } : {}]}
                                                 activeOpacity={0.7}
                                             >
-                                                <Text style={{ fontWeight: '900', color: recurrence === 'once' ? '#FFFFFF' : '#475569' }}>One-time</Text>
+                                                <Text style={{ fontWeight: '900', color: recurrence === 'once' ? (theme.colors.textOnPrimary || '#FFFFFF') : colors.textSecondary }}>One-time</Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity 
                                                 onPress={() => { setRecurrence('weekly'); setSelectedDates([]); }} 
-                                                style={[{ flex: 1, paddingVertical: 18, alignItems: 'center', borderRadius: 24 }, recurrence === 'weekly' ? { backgroundColor: '#2563EB' } : {}]}
+                                                style={[{ flex: 1, paddingVertical: 18, alignItems: 'center', borderRadius: 24 }, recurrence === 'weekly' ? { backgroundColor: theme.colors.primary } : {}]}
                                                 activeOpacity={0.7}
                                             >
-                                                <Text style={{ fontWeight: '900', color: recurrence === 'weekly' ? '#FFFFFF' : '#475569' }}>Recurrent</Text>
+                                                <Text style={{ fontWeight: '900', color: recurrence === 'weekly' ? (theme.colors.textOnPrimary || '#FFFFFF') : colors.textSecondary }}>Weekly</Text>
                                             </TouchableOpacity>
                                         </View>
 
                                          {recurrence === 'once' && (
                                              <View>
-                                                 <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Select Specific Date</Text>
+                                                 <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-6 ml-1">Select Date</Text>
                                                  <BrandedCalendar 
                                                      selectedDate={selectedDates[0] || null} 
                                                      onSelect={(date) => setSelectedDates([date])} 
@@ -664,10 +720,10 @@ export default function ManualSchedulerModal({
                                         {recurrence === 'weekly' && (
                                             <View>
                                                 <View className="flex-row items-center justify-between mb-6 ml-1 pr-1">
-                                                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Weekly Frequency</Text>
-                                                    <View className="flex-row items-center gap-1.5 opacity-60 bg-slate-900/50 px-2 py-1 rounded-full border border-white/5">
-                                                        <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Swipe</Text>
-                                                        <ArrowRight size={10} color="#64748B" />
+                                                    <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest">Weekly Frequency</Text>
+                                                    <View style={{ backgroundColor: colors.inputBackground, borderColor: colors.border }} className="flex-row items-center gap-1.5 px-2 py-1 rounded-full border">
+                                                        <Text style={{ color: colors.textSecondary }} className="text-[9px] font-black uppercase tracking-widest">Swipe</Text>
+                                                         <ArrowRight size={10} color={colors.textSecondary} />
                                                     </View>
                                                 </View>
                                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6 mb-12 px-6">
@@ -678,9 +734,14 @@ export default function ManualSchedulerModal({
                                                             return (
                                                                 <Pressable 
                                                                     key={i} onPress={() => toggleWeekday(dayIdx, isSelected)}
-                                                                    className={`w-20 h-20 rounded-[28px] items-center justify-center ${isSelected ? 'bg-blue-600 border border-blue-500' : 'bg-slate-900 border border-white/5'}`}
+                                                                    style={[
+                                                                        { width: 72, height: 72, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+                                                                        isSelected 
+                                                                            ? { backgroundColor: theme.colors.primary, borderWidth: 1, borderColor: theme.colors.primary }
+                                                                            : { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }
+                                                                    ]}
                                                                 >
-                                                                    <Text className={`font-black text-2xl ${isSelected ? 'text-white' : 'text-slate-500'}`}>{day}</Text>
+                                                                    <Text style={{ fontWeight: '900', fontSize: 22, color: isSelected ? (theme.colors.textOnPrimary || '#FFFFFF') : colors.textSecondary }}>{day}</Text>
                                                                 </Pressable>
                                                             );
                                                         })}
@@ -694,8 +755,8 @@ export default function ManualSchedulerModal({
                                 {step === 'time' && (
                                     <View>
                                         <View className="flex-row justify-between items-center mb-1">
-                                            <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Step 3 of 5</Text>
-                                            <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Select Time</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Step 3 of 5</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Select Time</Text>
                                         </View>
                                         {renderHeader("Available Times", headerSub)}
                                         
@@ -706,7 +767,7 @@ export default function ManualSchedulerModal({
                                                         {/* Morning Slots */}
                                                         {availableSlots.some(s => s.time.getHours() < 12) && (
                                                             <View>
-                                                                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Morning Slots</Text>
+                                                                <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Morning Slots</Text>
                                                                 <View className="gap-3">
                                                                     {availableSlots.filter(s => s.time.getHours() < 12).map((slot, i) => (
                                                                         <TimeSlotCard 
@@ -732,8 +793,8 @@ export default function ManualSchedulerModal({
                                                         {availableSlots.some(s => s.time.getHours() >= 12) && (
                                                             <View>
                                                                 <View className="flex-row items-center gap-4 mb-4">
-                                                                    <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest ml-1">Afternoon Slots</Text>
-                                                                    <View className="flex-1 h-[1px] bg-white/5" />
+                                                                    <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest ml-1">Afternoon Slots</Text>
+                                                                    <View style={{ backgroundColor: colors.border }} className="flex-1 h-[1px]" />
                                                                 </View>
                                                                 <View className="gap-3">
                                                                     {availableSlots.filter(s => s.time.getHours() >= 12).map((slot, i) => (
@@ -757,22 +818,26 @@ export default function ManualSchedulerModal({
                                                         )}
                                                     </>
                                                 ) : (
-                                                    <View className="p-10 items-center justify-center bg-slate-900/20 rounded-[40px] border border-white/5 border-dashed mt-4">
-                                                        <Clock size={32} color="#475569" className="mb-4" />
-                                                        <Text className="text-slate-200 font-black text-center text-lg mb-2">No times open</Text>
-                                                        <Text className="text-slate-500 font-medium text-center text-xs mb-6 px-4">
-                                                            Choose another day or change your working hours.
-                                                        </Text>
+                                                    <View 
+                                                         style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                                                         className="p-10 items-center justify-center rounded-[40px] border border-dashed mt-4"
+                                                     >
+                                                         <Clock size={32} color={colors.textSecondary} className="mb-4" />
+                                                         <Text style={{ color: colors.text }} className="font-black text-center text-lg mb-2">No times open</Text>
+                                                         <Text style={{ color: colors.textSecondary }} className="font-medium text-center text-xs mb-6 px-4">
+                                                             Choose another day or change your working hours.
+                                                         </Text>
                                                         <TouchableOpacity
                                                             onPress={() => {
                                                                 onClose();
                                                                 router.push('/(coach)/settings/availability');
                                                             }}
-                                                            className="px-6 py-3.5 bg-blue-600 rounded-2xl flex-row items-center gap-2 border border-blue-500"
+                                                            style={{ backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }}
+                                                            className="px-6 py-3.5 rounded-2xl flex-row items-center gap-2 border"
                                                             activeOpacity={0.8}
                                                         >
-                                                            <Clock size={16} color="white" />
-                                                            <Text className="text-white font-black text-sm">Change Working Hours</Text>
+                                                            <Clock size={16} color={theme.colors.textOnPrimary || 'white'} />
+                                                            <Text style={{ color: theme.colors.textOnPrimary || 'white' }} className="font-black text-sm">Change Working Hours</Text>
                                                         </TouchableOpacity>
                                                     </View>
                                                 )}
@@ -785,27 +850,33 @@ export default function ManualSchedulerModal({
                                     <View>
                                         <View className="flex-row justify-between items-center mb-1">
                                             <Pressable onPress={() => setStep('time')} className="p-2 -ml-2">
-                                                <ArrowLeft size={24} color="white" />
+                                                <ArrowLeft size={24} color={colors.text} />
                                             </Pressable>
-                                            <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Step 4 of 5</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Step 4 of 5</Text>
                                         </View>
-                                        {renderHeader("Refine Your Session", "Define the core parameters and context for today's high-performance training session.")}
+                                        {renderHeader("Session Details", "Choose session type and add any notes.")}
                                         
-                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Duration</Text>
-                                        <View className="p-8 bg-slate-900/50 border border-white/5 rounded-[40px] flex-row items-center justify-between mb-10">
-                                            <View className="flex-row items-center gap-5">
-                                                <View className="w-16 h-16 bg-slate-950 rounded-2xl items-center justify-center border border-white/5">
-                                                    <Clock size={28} color={theme.colors.primary} />
-                                                </View>
-                                                <View>
-                                                    <Text className="text-white text-2xl font-black">60 minutes</Text>
-                                                    <Text className="text-slate-600 text-[10px] font-medium mt-1">Session duration is managed by the engine</Text>
-                                                </View>
-                                            </View>
-                                            <Lock size={20} color="#1E293B" />
-                                        </View>
+                                        <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-3 ml-1">Duration</Text>
+                                        <View 
+                                             style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                                             className="p-8 border rounded-[40px] flex-row items-center justify-between mb-10"
+                                         >
+                                             <View className="flex-row items-center gap-5">
+                                                 <View 
+                                                     style={{ backgroundColor: colors.inputBackground, borderColor: colors.border }}
+                                                     className="w-16 h-16 rounded-2xl items-center justify-center border"
+                                                 >
+                                                     <Clock size={28} color={colors.primary} />
+                                                 </View>
+                                                 <View>
+                                                     <Text style={{ color: colors.text }} className="text-2xl font-black">60 minutes</Text>
+                                                     <Text style={{ color: colors.textSecondary }} className="text-[10px] font-medium mt-1">Default duration is 60 minutes</Text>
+                                                 </View>
+                                             </View>
+                                             <Lock size={20} color={colors.textTertiary} />
+                                         </View>
 
-                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Session Type</Text>
+                                        <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Session Type</Text>
                                         <View className="flex-row flex-wrap gap-3 mb-12">
                                             {[
                                                 { type: 'training', icon: Zap },
@@ -828,37 +899,42 @@ export default function ManualSchedulerModal({
                                                                 alignItems: 'center',
                                                             },
                                                             sessionType === type 
-                                                                ? { backgroundColor: '#2563EB', borderColor: theme.colors.primary, borderWidth: 1 } 
-                                                                : { backgroundColor: '#0F172A', borderColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1 }
+                                                                ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary, borderWidth: 1 } 
+                                                                : { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }
                                                         ]}
                                                         className="gap-3 shadow-lg"
                                                     >
-                                                        <Icon size={16} color={sessionType === type ? 'white' : '#475569'} />
-                                                        <Text style={{ fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: sessionType === type ? '#FFFFFF' : '#64748B' }}>{type.replace('_', ' ')}</Text>
+                                                        <Icon size={16} color={sessionType === type ? (theme.colors.textOnPrimary || 'white') : colors.textSecondary} />
+                                                        <Text style={{ fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: sessionType === type ? (theme.colors.textOnPrimary || '#FFFFFF') : colors.textSecondary }}>{type.replace('_', ' ')}</Text>
                                                     </View>
                                                 </Pressable>
                                             ))}
                                         </View>
 
-                                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Notes (Optional)</Text>
-                                        <View className="bg-slate-900/50 rounded-[48px] border border-white/5 p-8">
-                                            <TextInput 
-                                                className="text-white font-bold text-lg min-h-[160px]"
-                                                placeholder="Add session notes..." placeholderTextColor="#334155"
-                                                multiline value={notes} onChangeText={setNotes} textAlignVertical="top"
-                                            />
-                                            <View className="flex-row justify-end mt-4">
-                                                <Target size={24} color="#1E293B" />
-                                            </View>
-                                        </View>
+                                        <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Notes (Optional)</Text>
+                                         <View 
+                                             style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                                             className="rounded-[40px] border p-8"
+                                         >
+                                             <TextInput 
+                                                 style={{ color: colors.text }}
+                                                 className="font-bold text-lg min-h-[160px]"
+                                                 placeholder="Add session notes..." 
+                                                 placeholderTextColor={colors.textTertiary}
+                                                 multiline value={notes} onChangeText={setNotes} textAlignVertical="top"
+                                             />
+                                             <View className="flex-row justify-end mt-4">
+                                                 <Target size={24} color={colors.textTertiary} />
+                                             </View>
+                                         </View>
                                     </View>
                                 )}
 
                                 {step === 'confirm' && (
                                      <View>
                                          <View className="flex-row justify-between items-center mb-1">
-                                             <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Step 5 of 5</Text>
-                                             <Text className="text-white/40 text-[10px] font-black uppercase tracking-[2px]">Review</Text>
+                                             <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Step 5 of 5</Text>
+                                             <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Review</Text>
                                          </View>
                                          {renderHeader("Review details", "Check details before saving.")}
                                          
@@ -872,14 +948,20 @@ export default function ManualSchedulerModal({
                                              </View>
                                          </View>
 
-                                         <View className="bg-slate-900/50 p-6 rounded-[32px] border border-white/5 mb-6">
+                                         <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="p-6 rounded-[32px] border mb-6">
                                              <View className="flex-row items-center gap-5">
                                                 <BrandedAvatar size={64} name={selectedClient?.profiles.full_name || ''} imageUrl={selectedClient?.profiles.avatar_url} useBrandColor={true} />
                                                 <View className="flex-1">
-                                                   <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[2px] mb-1">Client</Text>
-                                                   <Text className="text-white text-2xl font-black tracking-tight" numberOfLines={1}>{selectedClient?.profiles.full_name}</Text>
-                                                   <View className="bg-blue-600/20 self-start px-2.5 py-1 rounded-lg mt-2 border border-blue-600/20">
-                                                       <Text className="text-blue-500 font-black text-[8px] uppercase tracking-widest">{selectedClient?.profiles.subtype || 'Athlete'}</Text>
+                                                   <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px] mb-1">Client</Text>
+                                                   <Text style={{ color: colors.text }} className="text-2xl font-black tracking-tight" numberOfLines={1}>{selectedClient?.profiles.full_name}</Text>
+                                                   <View 
+                                                       style={{ 
+                                                           backgroundColor: `${theme.colors.primary}20`,
+                                                           borderColor: `${theme.colors.primary}33`,
+                                                       }}
+                                                       className="self-start px-2.5 py-1 rounded-lg mt-2 border"
+                                                   >
+                                                       <Text style={{ color: theme.colors.primary }} className="font-black text-[8px] uppercase tracking-widest">{selectedClient?.profiles.subtype || 'Client'}</Text>
                                                    </View>
                                                 </View>
                                              </View>
@@ -887,8 +969,8 @@ export default function ManualSchedulerModal({
 
                                          <View className="gap-4">
                                              {/* Schedule Card */}
-                                             <View className="bg-slate-900/30 p-6 rounded-[32px] border border-white/5 flex-row items-start gap-5">
-                                                 <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/10 mt-1">
+                                             <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="p-6 rounded-[32px] border flex-row items-start gap-5">
+                                                 <View style={{ backgroundColor: colors.inputBackground, borderColor: colors.border }} className="w-12 h-12 rounded-2xl items-center justify-center border mt-1">
                                                     {recurrence === 'once' ? (
                                                         <Calendar size={20} color={theme.colors.primary} />
                                                     ) : (
@@ -897,7 +979,7 @@ export default function ManualSchedulerModal({
                                                  </View>
                                                  <View style={{ flex: 1 }}>
                                                      <View className="flex-row items-center justify-between">
-                                                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[2px]">Schedule</Text>
+                                                         <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Schedule</Text>
                                                          <View className="w-5 h-5 bg-[#10B981]/10 rounded-full items-center justify-center border border-[#10B981]/20">
                                                              <Check size={12} color="#10B981" strokeWidth={3} />
                                                          </View>
@@ -905,34 +987,35 @@ export default function ManualSchedulerModal({
                                                      
                                                      {recurrence === 'once' ? (
                                                          <View>
-                                                             <Text className="text-white font-bold text-lg mt-0.5">One-time</Text>
-                                                             <View className="flex-row items-center gap-2 mt-3 bg-slate-950 self-start px-3.5 py-2 rounded-xl border border-white/5">
+                                                             <Text style={{ color: colors.text }} className="font-bold text-lg mt-0.5">One-time</Text>
+                                                             <View style={{ backgroundColor: colors.inputBackground, borderColor: colors.border }} className="flex-row items-center gap-2 mt-3 self-start px-3.5 py-2 rounded-xl border">
                                                                  <Calendar size={14} color={theme.colors.primary} />
-                                                                 <Text className="text-slate-200 font-bold text-xs">
+                                                                 <Text style={{ color: colors.text }} className="font-bold text-xs">
                                                                      {selectedDates[0] ? formatDisplayDate(selectedDates[0], 'summary') : 'No date selected'}
                                                                  </Text>
                                                              </View>
                                                          </View>
                                                      ) : (
                                                          <View>
-                                                             <Text className="text-white font-bold text-lg mt-0.5">Weekly</Text>
+                                                             <Text style={{ color: colors.text }} className="font-bold text-lg mt-0.5">Weekly</Text>
                                                              <View className="flex-row gap-1.5 mt-3">
                                                                  {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
                                                                      const dayIdx = (i + 1) % 7;
                                                                      const isSelected = selectedWeekdays.includes(dayIdx);
                                                                      return (
                                                                          <View 
-                                                                             key={i} 
-                                                                             className={`w-8 h-8 rounded-full items-center justify-center border ${
-                                                                                 isSelected 
-                                                                                     ? 'bg-blue-600 border-blue-500 shadow-md shadow-blue-500/20' 
-                                                                                     : 'bg-slate-950 border-white/5'
-                                                                             }`}
-                                                                         >
-                                                                             <Text className={`font-black text-[10px] ${isSelected ? 'text-white' : 'text-slate-600'}`}>
-                                                                                 {day}
-                                                                             </Text>
-                                                                         </View>
+                                                                              key={i} 
+                                                                              style={[
+                                                                                  { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+                                                                                  isSelected 
+                                                                                      ? { backgroundColor: theme.colors.primary, borderWidth: 1, borderColor: theme.colors.primary } 
+                                                                                      : { backgroundColor: colors.inputBackground, borderWidth: 1, borderColor: colors.border }
+                                                                              ]}
+                                                                          >
+                                                                              <Text style={{ fontWeight: '900', fontSize: 10, color: isSelected ? (theme.colors.textOnPrimary || '#FFFFFF') : colors.textSecondary }}>
+                                                                                  {day}
+                                                                              </Text>
+                                                                          </View>
                                                                      );
                                                                  })}
                                                              </View>
@@ -942,13 +1025,13 @@ export default function ManualSchedulerModal({
                                              </View>
 
                                              {/* Time Card */}
-                                             <View className="bg-slate-900/30 p-6 rounded-[32px] border border-white/5 flex-row items-start gap-5">
-                                                 <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/10 mt-1">
-                                                    <Clock size={20} color="#A78BFA" />
+                                             <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="p-6 rounded-[32px] border flex-row items-start gap-5">
+                                                 <View style={{ backgroundColor: colors.inputBackground, borderColor: colors.border }} className="w-12 h-12 rounded-2xl items-center justify-center border mt-1">
+                                                    <Clock size={20} color={theme.colors.primary} />
                                                  </View>
                                                  <View style={{ flex: 1 }}>
                                                      <View className="flex-row items-center justify-between">
-                                                         <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[2px]">Time</Text>
+                                                         <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px]">Time</Text>
                                                          <View className="w-5 h-5 bg-[#10B981]/10 rounded-full items-center justify-center border border-[#10B981]/20">
                                                              <Check size={12} color="#10B981" strokeWidth={3} />
                                                          </View>
@@ -956,8 +1039,8 @@ export default function ManualSchedulerModal({
                                                      
                                                      <View className="mt-4 flex-row items-center gap-3">
                                                          {/* Start Time Pill */}
-                                                         <View className="bg-slate-950 px-4 py-2.5 rounded-[16px] border border-white/5 items-center justify-center">
-                                                             <Text className="text-white font-black text-lg">
+                                                         <View style={{ backgroundColor: colors.inputBackground, borderColor: colors.border }} className="px-4 py-2.5 rounded-[16px] border items-center justify-center">
+                                                             <Text style={{ color: colors.text }} className="font-black text-lg">
                                                                  {selectedTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                                                              </Text>
                                                          </View>
@@ -966,8 +1049,8 @@ export default function ManualSchedulerModal({
                                                          <ArrowRight size={20} color={theme.colors.primary} />
 
                                                          {/* End Time Pill */}
-                                                         <View className="bg-slate-950 px-4 py-2.5 rounded-[16px] border border-white/5 items-center justify-center">
-                                                             <Text className="text-white font-black text-lg">
+                                                         <View style={{ backgroundColor: colors.inputBackground, borderColor: colors.border }} className="px-4 py-2.5 rounded-[16px] border items-center justify-center">
+                                                             <Text style={{ color: colors.text }} className="font-black text-lg">
                                                                  {selectedTime ? new Date(selectedTime.getTime() + duration*60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
                                                              </Text>
                                                          </View>
@@ -995,17 +1078,30 @@ export default function ManualSchedulerModal({
                             >
                                 {({ pressed }) => (
                                     <Animated.View
-                                        style={[{ transform: [{ scale: aiBtnScale }] }]}
-                                        className={`w-20 h-20 rounded-full items-center justify-center shadow-2xl border-4 border-white/10 ${pressed ? 'bg-blue-700 shadow-blue-500/30' : 'bg-blue-600 shadow-blue-500/50'}`}
+                                        style={[
+                                            { 
+                                                transform: [{ scale: aiBtnScale }],
+                                                backgroundColor: pressed ? (theme.colors.primaryHover || theme.colors.primary) : theme.colors.primary,
+                                                shadowColor: theme.colors.primary,
+                                            }
+                                        ]}
+                                        className="w-20 h-20 rounded-full items-center justify-center shadow-2xl border-4 border-white/10"
                                     >
-                                        <Sparkles size={32} color="white" />
+                                        <Sparkles size={32} color={theme.colors.textOnPrimary || 'white'} />
                                     </Animated.View>
                                 )}
                             </Pressable>
                         </MotiView>
                     )}
                     {/* Bottom Actions */}
-                    <View className="p-8 pb-12 border-t border-white/5 flex-row gap-4 items-center bg-[#020617]">
+                    <View 
+                        style={{ 
+                            backgroundColor: colors.background, 
+                            borderTopColor: colors.border,
+                            paddingBottom: Math.max(insets.bottom + 16, 28)
+                        }}
+                        className="p-6 border-t flex-row gap-4 items-center"
+                    >
                         <Pressable 
                             onPressIn={() => handlePressIn(backBtnScale)}
                             onPressOut={() => handlePressOut(backBtnScale)}
@@ -1015,11 +1111,17 @@ export default function ManualSchedulerModal({
                             {({ pressed }) => (
                                 <Animated.View 
                                     style={[
-                                        { transform: [{ scale: backBtnScale }] }
+                                        { 
+                                            transform: [{ scale: backBtnScale }],
+                                            backgroundColor: pressed ? colors.border : colors.surface,
+                                            borderColor: colors.border,
+                                            borderWidth: 1,
+                                            borderRadius: theme.button?.borderRadius ? Math.max(theme.button.borderRadius, 24) : 9999,
+                                        }
                                     ]}
-                                    className={`px-8 py-5 items-center justify-center rounded-full ${pressed ? 'bg-slate-800' : 'bg-slate-900'}`}
+                                    className="px-8 py-5 items-center justify-center shadow-sm"
                                 >
-                                    <Text className="text-white font-bold text-sm">Back</Text>
+                                    <Text style={{ color: colors.text }} className="font-bold text-sm">Back</Text>
                                 </Animated.View>
                             )}
                         </Pressable>
@@ -1043,24 +1145,33 @@ export default function ManualSchedulerModal({
                         >
                             {({ pressed }) => {
                                 const isEnabled = canContinue() && !loading;
-                                const bgStyle = isEnabled 
-                                    ? (pressed ? 'bg-blue-700' : 'bg-blue-600') 
-                                    : 'bg-slate-800';
+                                const buttonBg = isEnabled 
+                                    ? (pressed ? (theme.colors.primaryHover || theme.colors.primary) : theme.colors.primary) 
+                                    : (isDark ? colors.surface : colors.border);
+                                const buttonTextColor = isEnabled ? (theme.colors.textOnPrimary || '#FFFFFF') : colors.textTertiary;
                                 return (
                                     <Animated.View 
                                         style={[
-                                            { transform: [{ scale: nextBtnScale }] }
+                                            { 
+                                                transform: [{ scale: nextBtnScale }],
+                                                backgroundColor: buttonBg,
+                                                shadowColor: isEnabled ? theme.colors.primary : 'transparent',
+                                                borderRadius: theme.button?.borderRadius ? Math.max(theme.button.borderRadius, 24) : 9999,
+                                            }
                                         ]}
-                                        className={`px-8 py-5 items-center justify-center rounded-full flex-row gap-2 ${bgStyle}`}
+                                        className="px-8 py-5 items-center justify-center flex-row gap-2 shadow-lg"
                                     >
                                         {loading ? (
-                                            <ActivityIndicator color="white" />
+                                            <ActivityIndicator color={theme.colors.textOnPrimary || 'white'} />
                                         ) : (
                                             <>
-                                                <Text className={`font-black text-sm tracking-wide ${isEnabled ? 'text-white' : 'text-slate-500'}`}>
+                                                <Text 
+                                                    style={{ color: buttonTextColor }}
+                                                    className="font-black text-sm tracking-wide"
+                                                >
                                                     {step === 'confirm' ? 'Schedule Sessions' : 'Next Step'}
                                                 </Text>
-                                                {step !== 'confirm' && <ArrowRight size={16} color={isEnabled ? 'white' : '#64748B'} />}
+                                                {step !== 'confirm' && <ArrowRight size={16} color={buttonTextColor} />}
                                             </>
                                         )}
                                     </Animated.View>

@@ -5,6 +5,7 @@ import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand } from '@/contexts/BrandContext';
 import { ChevronLeft, ChevronRight, Clock, Palette, BrainCircuit, Shield, Bell } from 'lucide-react-native';
+import { safeBack } from '@/lib/navigation-utils';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function SettingsScreen() {
     <View className="flex-1 bg-slate-950">
       <SafeAreaView className="flex-1">
         <View className="flex-row items-center px-6 pt-10 pb-6 gap-4">
-          <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center">
+          <TouchableOpacity onPress={() => safeBack('/(coach)/(tabs)/profile')} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center">
             <ChevronLeft size={20} color="white" />
           </TouchableOpacity>
           <View>

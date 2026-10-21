@@ -1,11 +1,28 @@
 import { useBrandColors } from '@/contexts/BrandContext';
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  AccessibilityInfo,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Check, Trash2, Edit3, Sparkles, Calendar, Zap, Dumbbell, Apple, Moon, X } from 'lucide-react-native';
+import { ArrowLeft, Check, Trash2, Edit3, Sparkles, Calendar, Zap, Dumbbell, Apple, Moon, X, Plus, Minus } from 'lucide-react-native';
 import { SubChallengeTemplate } from '@/lib/ai-challenge-service';
 
 const formatDateSafe = (dateStr: string) => {
@@ -71,6 +88,7 @@ const getMonthDaySafe = (dateStr: string) => {
 
 export default function ReviewChallengesScreen() {
   const colors = useBrandColors();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { coach } = useAuth();
@@ -78,8 +96,8 @@ export default function ReviewChallengesScreen() {
   const initialChallenges: SubChallengeTemplate[] = params.challenges ? JSON.parse(params.challenges as string) : [];
   const [challenges, setChallenges] = useState<SubChallengeTemplate[]>(initialChallenges);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-
   const clientId = params.clientId as string;
   const clientName = params.clientName as string;
   const clientAvatar = params.clientAvatar as string;
@@ -94,10 +112,148 @@ export default function ReviewChallengesScreen() {
 
   const dates = Object.keys(challengesByDate).sort();
 
-  const handleEdit = (index: number, field: string, value: string) => {
-    const updated = [...challenges];
-    updated[index] = { ...updated[index], [field]: value };
-    setChallenges(updated);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  // Edit form state
+  const [editName, setEditName] = useState('');
+  const [editIntensity, setEditIntensity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [isStructured, setIsStructured] = useState(false);
+  const [editSubTasks, setEditSubTasks] = useState<Array<{ id: string; exercise: string; sets: number; notes: string }>>([]);
+  const [editRule, setEditRule] = useState('');
+  const [editPlainDesc, setEditPlainDesc] = useState('');
+
+  // Modal animations: backdrop fades in/out, bottom sheet slides up/down
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(600)).current;
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+  }, []);
+
+  const openEditModal = (index: number) => {
+    const task = challenges[index];
+    if (!task) return;
+
+    setEditingId(index);
+    setEditName(task.name || '');
+    setEditIntensity((task.intensity as 'low' | 'medium' | 'high') || 'medium');
+
+    let structured = false;
+    let parsedSubTasks: Array<{ id: string; exercise: string; sets: number; notes: string }> = [];
+    let parsedRule = '';
+    let plainDesc = task.description || '';
+
+    try {
+      const parsed = JSON.parse(task.description);
+      if (parsed && Array.isArray(parsed.sub_tasks)) {
+        structured = true;
+        parsedRule = parsed.global_rule || '';
+        parsedSubTasks = parsed.sub_tasks.map((st: any, i: number) => ({
+          id: st.id || `ex_${i}`,
+          exercise: st.exercise || '',
+          sets: typeof st.sets === 'number' ? st.sets : 1,
+          notes: st.notes || '',
+        }));
+      }
+    } catch {
+      // plain text description
+    }
+
+    setIsStructured(structured);
+    setEditSubTasks(parsedSubTasks);
+    setEditRule(parsedRule);
+    setEditPlainDesc(plainDesc);
+
+    setIsModalOpen(true);
+    fadeAnim.setValue(0);
+    slideAnim.setValue(reduceMotion ? 0 : 600);
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: reduceMotion ? 0 : 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: reduceMotion ? 0 : 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeEditModal = (save = false) => {
+    if (save && editingId !== null) {
+      let finalDescription = editPlainDesc;
+      if (isStructured) {
+        finalDescription = JSON.stringify({
+          global_rule: editRule.trim(),
+          sub_tasks: editSubTasks.map((st, i) => ({
+            id: st.id || `ex_${i}`,
+            exercise: st.exercise.trim(),
+            sets: Number(st.sets) || 1,
+            notes: (st.notes || '').trim(),
+          })),
+        });
+      }
+
+      setChallenges((prev) => {
+        const next = [...prev];
+        if (next[editingId]) {
+          next[editingId] = {
+            ...next[editingId],
+            name: editName.trim() || next[editingId].name,
+            intensity: editIntensity,
+            description: finalDescription,
+          };
+        }
+        return next;
+      });
+    }
+
+    const finishClose = () => {
+      setIsModalOpen(false);
+      setEditingId(null);
+    };
+
+    if (reduceMotion) {
+      finishClose();
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 600,
+        duration: 250,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(finishClose);
+  };
+
+  const updateSubTask = (idx: number, field: 'exercise' | 'sets' | 'notes', val: any) => {
+    setEditSubTasks((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: val };
+      return next;
+    });
+  };
+
+  const removeSubTask = (idx: number) => {
+    setEditSubTasks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addSubTask = () => {
+    setEditSubTasks((prev) => [
+      ...prev,
+      { id: `ex_${Date.now()}`, exercise: '', sets: 1, notes: '' },
+    ]);
   };
 
   const handleDelete = (index: number) => {
@@ -214,13 +370,13 @@ export default function ReviewChallengesScreen() {
   };
 
   return (
-      <View className="flex-1 bg-slate-950">
-      <SafeAreaView style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+      <View style={{ flex: 1 }}>
       <View className="flex-row items-center justify-between px-6 pt-4 pb-2">
-          <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-slate-800">
-              <ArrowLeft size={20} color="#94A3B8" />
+          <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="w-10 h-10 rounded-full items-center justify-center border">
+              <ArrowLeft size={20} color={colors.text} />
           </TouchableOpacity>
-          <Text className="text-white text-lg font-bold">Review Plan</Text>
+          <Text style={{ color: colors.text }} className="text-lg font-bold">Review Plan</Text>
           <View className="w-10" />
       </View>
 
@@ -229,7 +385,8 @@ export default function ReviewChallengesScreen() {
           <MotiView 
             from={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="mx-6 mt-8 bg-blue-600 p-8 rounded-[40px] shadow-2xl shadow-blue-500/30"
+            style={{ backgroundColor: colors.primary }}
+            className="mx-6 mt-8 p-8 rounded-[40px] shadow-2xl"
           >
               <View className="flex-row justify-between items-center mb-6">
                  <View className="bg-white/20 px-3 py-1 rounded-full border border-white/30">
@@ -251,12 +408,12 @@ export default function ReviewChallengesScreen() {
                   return (
                       <View key={date} className="mb-8">
                           <View className="px-6 flex-row items-center gap-4 mb-4">
-                              <View className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-slate-800">
-                                  <Calendar size={18} color="#475569" />
+                              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="w-10 h-10 rounded-full items-center justify-center border">
+                                  <Calendar size={18} color={colors.textSecondary} />
                               </View>
                               <View>
-                                  <Text className="text-white font-bold">{dayName}</Text>
-                                  <Text className="text-slate-500 text-xs font-medium">{dateStr}</Text>
+                                  <Text style={{ color: colors.text }} className="font-bold">{dayName}</Text>
+                                  <Text style={{ color: colors.textSecondary }} className="text-xs font-medium">{dateStr}</Text>
                               </View>
                           </View>
 
@@ -267,14 +424,15 @@ export default function ReviewChallengesScreen() {
                                     from={{ opacity: 0, translateX: -20 }}
                                     animate={{ opacity: 1, translateX: 0 }}
                                     transition={{ delay: tidx * 100 }}
-                                    className="bg-slate-900 mb-3 p-5 rounded-[28px] border border-slate-800"
+                                    style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                                    className="mb-3 p-5 rounded-[28px] border"
                                   >
                                       <View className="flex-row justify-between items-start mb-3">
                                           <View className="flex-row items-center gap-3">
-                                              <View className="w-8 h-8 bg-slate-950 rounded-lg items-center justify-center border border-slate-800">
+                                              <View style={{ backgroundColor: colors.background, borderColor: colors.border }} className="w-8 h-8 rounded-lg items-center justify-center border">
                                                   {getFocusIcon(task.focus_type)}
                                               </View>
-                                              <Text className="text-white font-bold text-base">{task.name}</Text>
+                                              <Text style={{ color: colors.text }} className="font-bold text-base">{task.name}</Text>
                                           </View>
                                           <TouchableOpacity onPress={() => handleDelete(task.index)}>
                                               <Trash2 size={18} color="#EF4444" />
@@ -282,11 +440,11 @@ export default function ReviewChallengesScreen() {
                                       </View>
                                       {renderDescription(task.description)}
                                       <View className="flex-row justify-between items-end mt-4">
-                                          <View className="bg-slate-950 px-2 py-1 rounded-md border border-slate-800 self-start">
-                                              <Text className="text-slate-500 text-[10px] font-bold uppercase">{task.intensity}</Text>
+                                          <View style={{ backgroundColor: colors.background, borderColor: colors.border }} className="px-2 py-1 rounded-md border self-start">
+                                              <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase">{task.intensity}</Text>
                                           </View>
-                                          <TouchableOpacity onPress={() => setEditingId(task.index)}>
-                                              <Edit3 size={18} color="#64748B" />
+                                          <TouchableOpacity onPress={() => openEditModal(task.index)}>
+                                              <Edit3 size={18} color={colors.textSecondary} />
                                           </TouchableOpacity>
                                       </View>
                                   </MotiView>
@@ -299,97 +457,225 @@ export default function ReviewChallengesScreen() {
       </ScrollView>
 
       {/* Action Bar */}
-      <View className="absolute bottom-0 w-full p-6 bg-slate-950/90 border-t border-slate-900">
+      <View 
+        style={{ 
+          backgroundColor: colors.background, 
+          borderTopColor: colors.border,
+          paddingBottom: Math.max(insets.bottom, 20)
+        }} 
+        className="absolute bottom-0 w-full px-6 pt-4 border-t"
+      >
           <TouchableOpacity 
-            className={`h-16 rounded-2xl flex-row items-center justify-center gap-3 ${challenges.length > 0 ? 'bg-blue-600 shadow-xl shadow-blue-500/20' : 'bg-slate-800'}`}
+            style={{ backgroundColor: challenges.length > 0 ? colors.primary : colors.surface }}
+            className="h-16 rounded-2xl flex-row items-center justify-center gap-3 shadow-xl"
             onPress={handleApprove}
             disabled={creating || challenges.length === 0}
           >
               {creating ? (
-                  <ActivityIndicator color="white" />
+                  <ActivityIndicator color={colors.textOnPrimary || 'white'} />
               ) : (
                   <>
-                    <Check size={22} color="white" />
-                    <Text className="text-white font-bold text-lg">Send Plan</Text>
+                    <Check size={22} color={colors.textOnPrimary || 'white'} />
+                    <Text style={{ color: colors.textOnPrimary || 'white' }} className="font-bold text-lg">Send Plan</Text>
                   </>
               )}
           </TouchableOpacity>
       </View>
       {/* Edit Modal */}
-      <Modal visible={editingId !== null} transparent animationType="slide">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 bg-black/80 justify-end">
-          <View className="bg-slate-900 rounded-t-3xl border-t border-slate-800 max-h-[80%]">
-            {editingId !== null && challenges[editingId] && (
-              <>
-                <View className="p-6 border-b border-slate-800 flex-row justify-between items-center">
-                  <Text className="text-white text-xl font-bold">Edit Task</Text>
-                  <TouchableOpacity onPress={() => setEditingId(null)} className="p-2 bg-slate-800 rounded-full">
-                    <X size={20} color="#94A3B8" />
-                  </TouchableOpacity>
+      <Modal
+        visible={isModalOpen}
+        transparent={true}
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => closeEditModal(false)}
+      >
+        <View style={StyleSheet.absoluteFill}>
+          {/* Fading dark background: DOES NOT SLIDE */}
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: 'rgba(0, 0, 0, 0.7)', opacity: fadeAnim },
+            ]}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => closeEditModal(false)} />
+          </Animated.View>
+
+          {/* Sliding sheet */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+            pointerEvents="box-none"
+          >
+            <Animated.View
+              style={{
+                backgroundColor: colors.surface,
+                borderTopColor: colors.border,
+                borderTopWidth: 1,
+                borderTopLeftRadius: 32,
+                borderTopRightRadius: 32,
+                maxHeight: '85%',
+                transform: [{ translateY: slideAnim }],
+              }}
+            >
+              <View style={{ borderBottomColor: colors.border }} className="p-6 border-b flex-row justify-between items-center">
+                <Text style={{ color: colors.text }} className="text-xl font-bold">Edit Task</Text>
+                <TouchableOpacity onPress={() => closeEditModal(false)} style={{ backgroundColor: colors.background }} className="p-2 rounded-full">
+                  <X size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView className="p-6" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                {/* Task Name */}
+                <View className="mb-6">
+                  <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Task Name</Text>
+                  <TextInput
+                    style={{ backgroundColor: colors.background, borderColor: colors.border, color: colors.text }}
+                    className="border rounded-2xl p-4 font-bold"
+                    value={editName}
+                    onChangeText={setEditName}
+                    placeholder="Task Name"
+                    placeholderTextColor={colors.textTertiary}
+                  />
                 </View>
 
-                <ScrollView className="p-6" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                {/* Description / Subtasks */}
+                {isStructured ? (
                   <View className="mb-6">
-                    <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Task Name</Text>
-                    <TextInput
-                      className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white font-bold"
-                      value={challenges[editingId].name}
-                      onChangeText={(val) => handleEdit(editingId, 'name', val)}
-                      placeholder="Task Name"
-                      placeholderTextColor="#475569"
-                    />
-                  </View>
+                    <View className="flex-row items-center justify-between mb-3">
+                      <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase">
+                        Exercises ({editSubTasks.length})
+                      </Text>
+                      <TouchableOpacity
+                        onPress={addSubTask}
+                        style={{ borderColor: colors.primary, backgroundColor: `${colors.primary}15` }}
+                        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border"
+                      >
+                        <Plus size={14} color={colors.primary} />
+                        <Text style={{ color: colors.primary }} className="text-xs font-bold">Add Exercise</Text>
+                      </TouchableOpacity>
+                    </View>
 
+                    {editSubTasks.map((st, sIdx) => (
+                      <View
+                        key={st.id || sIdx}
+                        style={{ backgroundColor: colors.background, borderColor: colors.border }}
+                        className="border rounded-2xl p-4 mb-3"
+                      >
+                        <View className="flex-row items-center justify-between gap-3 mb-2">
+                          <TextInput
+                            style={{ color: colors.text }}
+                            className="flex-1 font-bold text-base"
+                            placeholder="Exercise name"
+                            placeholderTextColor={colors.textTertiary}
+                            value={st.exercise}
+                            onChangeText={(val) => updateSubTask(sIdx, 'exercise', val)}
+                          />
+                          {editSubTasks.length > 1 && (
+                            <TouchableOpacity onPress={() => removeSubTask(sIdx)} className="p-1.5">
+                              <Trash2 size={16} color="#EF4444" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        {/* Sets Stepper */}
+                        <View className="flex-row items-center gap-2 pt-2 border-t" style={{ borderTopColor: colors.border }}>
+                          <Text style={{ color: colors.textSecondary }} className="text-xs font-bold">Sets:</Text>
+                          <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-row items-center rounded-xl border px-1 py-0.5">
+                            <TouchableOpacity
+                              onPress={() => updateSubTask(sIdx, 'sets', Math.max(1, (st.sets || 1) - 1))}
+                              className="p-1.5"
+                            >
+                              <Minus size={12} color={colors.text} />
+                            </TouchableOpacity>
+                            <Text style={{ color: colors.text }} className="font-bold text-xs px-2 min-w-[20px] text-center">
+                              {st.sets || 1}
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() => updateSubTask(sIdx, 'sets', (st.sets || 1) + 1)}
+                              className="p-1.5"
+                            >
+                              <Plus size={12} color={colors.text} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        <TextInput
+                          style={{ color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }}
+                          className="border rounded-xl px-3 py-2 text-xs mt-3"
+                          placeholder="Target notes (e.g. 3 reps, 30 min swim...)"
+                          placeholderTextColor={colors.textTertiary}
+                          value={st.notes || ''}
+                          onChangeText={(val) => updateSubTask(sIdx, 'notes', val)}
+                        />
+                      </View>
+                    ))}
+
+                    {/* Coaching Rule / Tip */}
+                    <View className="mt-2">
+                      <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">
+                        Rule / Guidance
+                      </Text>
+                      <TextInput
+                        style={{ backgroundColor: colors.background, borderColor: colors.border, color: colors.text }}
+                        className="border rounded-2xl p-4 text-sm"
+                        placeholder="Optional guidance (e.g. Warm up before pool)"
+                        placeholderTextColor={colors.textTertiary}
+                        value={editRule}
+                        onChangeText={setEditRule}
+                        multiline
+                      />
+                    </View>
+                  </View>
+                ) : (
                   <View className="mb-6">
-                    <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Description</Text>
+                    <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Description</Text>
                     <TextInput
-                      className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white min-h-[100px]"
-                      value={
-                        (function() {
-                          try {
-                            const parsed = JSON.parse(challenges[editingId].description);
-                            return JSON.stringify(parsed, null, 2);
-                          } catch {
-                            return challenges[editingId].description;
-                          }
-                        })()
-                      }
-                      onChangeText={(val) => handleEdit(editingId, 'description', val)}
+                      style={{ backgroundColor: colors.background, borderColor: colors.border, color: colors.text }}
+                      className="border rounded-2xl p-4 min-h-[100px]"
+                      value={editPlainDesc}
+                      onChangeText={setEditPlainDesc}
                       placeholder="Task Details"
-                      placeholderTextColor="#475569"
+                      placeholderTextColor={colors.textTertiary}
                       multiline
                       textAlignVertical="top"
                     />
                   </View>
+                )}
 
-                  <View className="mb-6">
-                    <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Intensity</Text>
-                    <View className="flex-row gap-3">
-                      {(['low', 'medium', 'high'] as const).map(int => (
-                        <TouchableOpacity
-                          key={int}
-                          onPress={() => handleEdit(editingId, 'intensity', int)}
-                          className={`flex-1 py-3 rounded-xl border items-center ${challenges[editingId].intensity === int ? 'bg-blue-600 border-blue-500' : 'bg-slate-950 border-slate-800'}`}
-                        >
-                          <Text className={`font-bold capitalize ${challenges[editingId].intensity === int ? 'text-white' : 'text-slate-400'}`}>{int}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                {/* Intensity */}
+                <View className="mb-6">
+                  <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Intensity</Text>
+                  <View className="flex-row gap-3">
+                    {(['low', 'medium', 'high'] as const).map(int => (
+                      <TouchableOpacity
+                        key={int}
+                        onPress={() => setEditIntensity(int)}
+                        style={{
+                          backgroundColor: editIntensity === int ? colors.primary : colors.background,
+                          borderColor: editIntensity === int ? colors.primary : colors.border
+                        }}
+                        className="flex-1 py-3 rounded-xl border items-center"
+                      >
+                        <Text style={{ color: editIntensity === int ? (colors.textOnPrimary || 'white') : colors.textSecondary }} className="font-bold capitalize">{int}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
+                </View>
 
-                  <TouchableOpacity
-                    onPress={() => setEditingId(null)}
-                    className="bg-blue-600 rounded-2xl py-4 items-center mt-2 mb-10"
-                  >
-                    <Text className="text-white font-bold text-lg">Save Changes</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              </>
-            )}
-          </View>
-        </KeyboardAvoidingView>
+                {/* Save Changes button */}
+                <TouchableOpacity
+                  onPress={() => closeEditModal(true)}
+                  style={{ backgroundColor: colors.primary }}
+                  className="rounded-2xl py-4 items-center mt-2 mb-10"
+                >
+                  <Text style={{ color: colors.textOnPrimary || 'white' }} className="font-bold text-lg">Save Changes</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }

@@ -30,6 +30,7 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { generateDarkTheme } from '@/lib/theme-utils';
 import ColorPicker from 'react-native-wheel-color-picker';
 import { AVAILABLE_FONTS, getFontFamily } from '@/hooks/useAppFonts';
+import { safeBack } from '@/lib/navigation-utils';
 
 // Preset themes
 const PRESET_THEMES = {
@@ -175,7 +176,7 @@ export default function BrandSettingsScreen() {
       <View style={[styles.container, { backgroundColor: currentTheme.colors.background }]}>
         <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
           <TouchableOpacity 
-            onPress={() => router.back()} 
+            onPress={() => safeBack('/(coach)/(tabs)/profile')} 
             style={[styles.roundIconButton, { borderColor: currentTheme.colors.border, backgroundColor: currentTheme.colors.inputBackground }]}
           >
             <ArrowLeft size={20} color="#FFFFFF" />
@@ -409,7 +410,7 @@ export default function BrandSettingsScreen() {
 
       if (success) {
         Alert.alert('Success', 'Brand settings updated successfully!');
-        router.back();
+        safeBack('/(coach)/(tabs)/profile');
       } else {
         Alert.alert('Error', 'Failed to update brand settings');
       }
@@ -820,7 +821,7 @@ export default function BrandSettingsScreen() {
       {/* Premium Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity 
-          onPress={() => router.back()} 
+          onPress={() => safeBack('/(coach)/(tabs)/profile')} 
           style={[styles.roundIconButton, { backgroundColor: '#ffffff10', borderColor: currentTheme.colors.border }]}
         >
           <ArrowLeft size={20} color="#FFFFFF" />

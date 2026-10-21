@@ -672,32 +672,49 @@ export default function ClientMessagesScreen() {
     );
   };
 
+  const isScreenDark = isDarkColor(theme.colors.background || '#020617');
+  const headerTextColor = isScreenDark ? '#FFFFFF' : '#0F172A';
+  const headerSubtextColor = isScreenDark ? '#94A3B8' : '#64748B';
+  const headerIconColor = isScreenDark ? '#FFFFFF' : '#0F172A';
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <GradientBackground />
-      <StatusBar barStyle="light-content" translucent />
+      <StatusBar barStyle={isScreenDark ? "light-content" : "dark-content"} translucent />
       
-      <View style={{ paddingTop: insets.top, backgroundColor: 'transparent' }} className="border-b border-white/5">
+      <View 
+        style={{ 
+          paddingTop: insets.top, 
+          backgroundColor: theme.colors.background,
+          borderBottomColor: isScreenDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+          borderBottomWidth: 1,
+        }}
+      >
         <View className="flex-row items-center justify-between px-6 py-4">
             <View className="flex-row items-center gap-4">
-                <TouchableOpacity onPress={() => safeBack()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
-                    <ArrowLeft size={18} color="white" />
+                <TouchableOpacity 
+                  onPress={() => safeBack()} 
+                  className={`w-10 h-10 rounded-xl items-center justify-center border ${isScreenDark ? 'bg-slate-900 border-white/5' : 'bg-black/5 border-black/5'}`}
+                >
+                    <ArrowLeft size={18} color={headerIconColor} />
                 </TouchableOpacity>
                 <View className="flex-row items-center gap-3">
                     <BrandedAvatar name={coachProfile?.full_name} size={42} imageUrl={coachProfile?.avatar_url} />
                     <View>
-                        <Text className="text-white font-black text-lg tracking-tight">{coachProfile?.full_name || 'Coach Hub'}</Text>
+                        <Text style={{ color: headerTextColor }} className="font-black text-lg tracking-tight">{coachProfile?.full_name || 'Coach'}</Text>
                         <View className="flex-row items-center gap-1.5">
-                            <View className={`w-1.5 h-1.5 rounded-full ${coachUserId && isUserOnline(coachUserId) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
-                            <Text className="text-slate-500 text-[9px] font-black uppercase tracking-[2px]">
+                            <View className={`w-1.5 h-1.5 rounded-full ${coachUserId && isUserOnline(coachUserId) ? 'bg-emerald-500' : (isScreenDark ? 'bg-slate-600' : 'bg-slate-400')}`} />
+                            <Text style={{ color: headerSubtextColor }} className="text-[9px] font-black uppercase tracking-[2px]">
                               {coachUserId && isUserOnline(coachUserId) ? 'Online' : 'Offline'}
                             </Text>
                         </View>
                     </View>
                 </View>
             </View>
-            <TouchableOpacity className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
-                <Shield size={18} color="#64748B" />
+            <TouchableOpacity 
+              className={`w-10 h-10 rounded-xl items-center justify-center border ${isScreenDark ? 'bg-slate-900 border-white/5' : 'bg-black/5 border-black/5'}`}
+            >
+                <Shield size={18} color={headerSubtextColor} />
             </TouchableOpacity>
         </View>
       </View>
@@ -944,7 +961,7 @@ const MessageBubble = ({
                   backgroundColor: isHighlighted ? theme.colors.border : (isMe ? theme.colors.primary : theme.colors.surface) 
               }}
               transition={{ type: 'timing', duration: 100 }}
-              className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
+              className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border'}`}
               style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : theme.colors.surface, borderColor: isMe ? 'transparent' : theme.colors.border }}
           >
           {repliedMsg && (

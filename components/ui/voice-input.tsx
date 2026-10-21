@@ -3,7 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, PanResponder } from 'react-native';
 import { Mic, Trash2, Send, Lock, ChevronLeft, ArrowUp } from 'lucide-react-native';
 import { MotiView } from 'moti';
-import { Audio } from 'expo-av';
+import { 
+  useAudioRecorder, 
+  RecordingPresets, 
+  getRecordingPermissionsAsync, 
+  requestRecordingPermissionsAsync, 
+  setAudioModeAsync 
+} from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming,
@@ -19,6 +25,11 @@ interface VoiceInputProps {
   style?: any;
 }
 
+const RECORDING_OPTIONS = {
+  ...RecordingPresets.HIGH_QUALITY,
+  isMeteringEnabled: true,
+};
+
 export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }: VoiceInputProps) {
   const colors = useBrandColors();
   const styles = getStyles(colors);
@@ -27,13 +38,15 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   const [time, setTime] = useState(0);
   const [metering, setMetering] = useState<number[]>(new Array(28).fill(-160));
 
+  const recorder = useAudioRecorder(RECORDING_OPTIONS);
+
   // ── Refs for PanResponder closures (always fresh values) ──────────────────
   const isRecordingRef = useRef(false);
   const isLockedRef = useRef(false);
   const isInitializingRef = useRef(false);
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<any>(null);
+  const meteringTimerRef = useRef<any>(null);
+  const holdTimerRef = useRef<any>(null);
   const timeRef = useRef(0);
   const isMountedRef = useRef(true);
 
@@ -44,14 +57,14 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
   useEffect(() => { 
     isMountedRef.current = true;
-    Audio.requestPermissionsAsync(); 
+    requestRecordingPermissionsAsync().catch(() => {}); 
     return () => {
       isMountedRef.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
+      if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
       if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
-        recordingRef.current = null;
+      if (recorder.isRecording) {
+        recorder.stop().catch(() => {});
       }
     };
   }, []);
@@ -61,7 +74,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
   // ── Recording start / stop ────────────────────────────────────────────────
   const startRecording = async () => {
-    if (disabled || recordingRef.current || isInitializingRef.current) return;
+    if (disabled || isRecordingRef.current || isInitializingRef.current) return;
     isInitializingRef.current = true;
 
     isRecordingRef.current = true;
@@ -72,42 +85,47 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const perm = await Audio.getPermissionsAsync();
-      if (perm.status !== 'granted') {
-        const r = await Audio.requestPermissionsAsync();
-        if (r.status !== 'granted') { reset(); return; }
+      const perm = await getRecordingPermissionsAsync();
+      if (!perm.granted) {
+        const r = await requestRecordingPermissionsAsync();
+        if (!r.granted) { reset(); return; }
       }
 
-      // Force-unload any stale recording left over from a previous session
-      if (recordingRef.current) {
-        try { await recordingRef.current.stopAndUnloadAsync(); } catch {}
-        recordingRef.current = null;
+      if (recorder.isRecording) {
+        try { await recorder.stop(); } catch {}
       }
 
-      // Release then re-acquire the audio session so iOS allows a new recording
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true,  playsInSilentModeIOS: true });
+      // Configure audio session for recording
+      try {
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+        });
+      } catch {}
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        (s) => {
-          if (isMountedRef.current && s.metering !== undefined) {
-            setMetering(prev => [...prev.slice(1), s.metering ?? -160]);
-          }
-        },
-        50,
-      );
+      await recorder.prepareToRecordAsync();
+      recorder.record();
 
       if (!isMountedRef.current) {
-        recording.stopAndUnloadAsync().catch(() => {});
+        recorder.stop().catch(() => {});
         return;
       }
 
-      recordingRef.current = recording;
       onStart?.();
       timerRef.current = setInterval(() => {
         if (isMountedRef.current) setTime(t => t + 1);
       }, 1000);
+
+      meteringTimerRef.current = setInterval(() => {
+        if (isMountedRef.current) {
+          try {
+            const st = recorder.getStatus();
+            if (st.metering !== undefined) {
+              setMetering(prev => [...prev.slice(1), st.metering ?? -160]);
+            }
+          } catch {}
+        }
+      }, 100);
     } catch (e) {
       console.error('startRecording error', e);
       reset();
@@ -117,19 +135,17 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   };
 
   const stopRecording = async (shouldSend: boolean) => {
-    if (!isRecordingRef.current && !recordingRef.current) return;
+    if (!isRecordingRef.current && !recorder.isRecording) return;
     if (timerRef.current) clearInterval(timerRef.current);
+    if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
 
-    const rec = recordingRef.current;
-    recordingRef.current = null;
     const dur = timeRef.current;
-
     reset();
 
     try {
-      if (rec) {
-        await rec.stopAndUnloadAsync();
-        const uri = rec.getURI();
+      if (recorder.isRecording) {
+        await recorder.stop();
+        const uri = recorder.uri;
         if (shouldSend && uri && dur >= 1) {
           onStop?.(uri, dur);
         } else {
@@ -142,9 +158,10 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       console.error('stopRecording error', e);
       onCancel?.();
     }
-    // Release the iOS audio session so the next recording can start cleanly
+
+    // Release the audio session so normal playback/system audio behaves properly
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     } catch {}
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
@@ -153,6 +170,8 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     isRecordingRef.current = false;
     isLockedRef.current = false;
     isInitializingRef.current = false; // never leave this stuck
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
     if (!isMountedRef.current) return;
     setIsRecording(false);
     setIsLocked(false);

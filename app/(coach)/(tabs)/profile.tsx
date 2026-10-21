@@ -89,9 +89,12 @@ export default function CoachProfileScreen() {
     ].filter(Boolean) as any);
   };
 
+  const theme = useTheme();
+  const isDarkMode = theme.isDarkMode;
+
   return (
-    <View style={{ flex: 1 }} className="bg-slate-950">
-      <StatusBar barStyle="light-content" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
           <ScrollView 
               style={{ flex: 1 }}
@@ -104,39 +107,40 @@ export default function CoachProfileScreen() {
             {/* Profile Overview */}
             <MotiView from={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="items-center pt-10 pb-10 px-6">
               <View className="relative">
-                <View className="p-2 rounded-full border border-white/5 shadow-2xl">
+                <View className="p-2 rounded-full border shadow-2xl" style={{ borderColor: colors.border }}>
                   <BrandedAvatar name={profile?.full_name || 'Coach'} size={140} imageUrl={profile?.avatar_url} useBrandColor={true} />
                 </View>
                 <TouchableOpacity
                   onPress={handleEditPhoto}
                   disabled={uploading}
-                  className="absolute bottom-2 right-2 w-12 h-12 bg-blue-600 rounded-full items-center justify-center shadow-xl shadow-blue-500/40 border-4 border-slate-950"
+                  className="absolute bottom-2 right-2 w-12 h-12 rounded-full items-center justify-center shadow-xl border-4"
+                  style={{ backgroundColor: colors.primary, borderColor: colors.background }}
                 >
                   {uploading ? <ActivityIndicator size="small" color="white" /> : <Camera size={18} color="white" />}
                 </TouchableOpacity>
               </View>
 
-              <Text className="text-white text-3xl font-black mt-8 tracking-tight">{profile?.full_name}</Text>
+              <Text className="text-3xl font-black mt-8 tracking-tight" style={{ color: colors.text }}>{profile?.full_name}</Text>
               {user?.email && (
-                <Text className="text-slate-400 text-sm font-medium mt-1">{user.email}</Text>
+                <Text className="text-sm font-medium mt-1" style={{ color: colors.textSecondary }}>{user.email}</Text>
               )}
-              <View className="mt-3 bg-slate-900 px-4 py-1.5 rounded-full border border-white/5">
-                <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Professional Coach</Text>
+              <View className="mt-3 px-4 py-1.5 rounded-full border" style={{ backgroundColor: colors.surface, borderColor: colors.border }}>
+                <Text className="text-[10px] font-black uppercase tracking-[3px]" style={{ color: colors.primary }}>Professional Coach</Text>
               </View>
 
               {brand && (
-                <View className="mt-8 bg-slate-900/40 border border-white/5 rounded-[32px] px-8 py-4 flex-row gap-10 items-center justify-center">
+                <View className="mt-8 border rounded-[32px] px-8 py-4 flex-row gap-10 items-center justify-center" style={{ backgroundColor: colors.surface, borderColor: colors.border }}>
                   <View className="items-center">
-                    <Text className="text-white font-black text-lg">{brand.name || 'Personal'}</Text>
-                    <Text className="text-slate-600 text-[9px] font-black uppercase tracking-widest">Team Brand</Text>
+                    <Text className="font-black text-lg" style={{ color: colors.text }}>{brand.name || 'Personal'}</Text>
+                    <Text className="text-[9px] font-black uppercase tracking-widest" style={{ color: colors.textSecondary }}>Team Brand</Text>
                   </View>
-                  <View className="w-px h-6 bg-slate-800" />
+                  <View className="w-px h-6" style={{ backgroundColor: colors.border }} />
                   <View className="items-center">
                     <View className="flex-row items-center gap-2">
                         <View className="w-2 h-2 bg-emerald-500 rounded-full" />
-                        <Text className="text-white font-black text-lg">Active</Text>
+                        <Text className="font-black text-lg" style={{ color: colors.text }}>Active</Text>
                     </View>
-                    <Text className="text-slate-600 text-[9px] font-black uppercase tracking-widest">Status</Text>
+                    <Text className="text-[9px] font-black uppercase tracking-widest" style={{ color: colors.textSecondary }}>Status</Text>
                   </View>
                 </View>
               )}
@@ -144,29 +148,29 @@ export default function CoachProfileScreen() {
 
             {/* Menu Sections */}
             <View className="px-6 space-y-4">
-              <SectionLabel label="Account" />
-              <ProfileMenuItem icon={<User size={20} color={colors.primary} />} label="Personal Information" onPress={() => router.push('/(coach)/personal-information')} />
+              <SectionLabel label="Account" color={colors.primary} />
+              <ProfileMenuItem icon={<User size={20} color={colors.primary} />} label="Personal Information" onPress={() => router.push('/(coach)/personal-information')} colors={colors} />
 
-              <SectionLabel label="Application" />
-              <ProfileMenuItem icon={<Settings size={20} color="#94A3B8" />} label="App Settings" onPress={() => router.push('/(coach)/settings')} />
-              <ProfileMenuItem icon={<BrainCircuit size={20} color="#8B5CF6" />} label="AI Features" sub="Smart scheduling & insights" onPress={() => router.push('/(coach)/(tabs)/ai-brain')} highlighted />
+              <SectionLabel label="Application" color={colors.primary} />
+              <ProfileMenuItem icon={<Settings size={20} color={colors.textSecondary} />} label="App Settings" onPress={() => router.push('/(coach)/settings')} colors={colors} />
+              <ProfileMenuItem icon={<BrainCircuit size={20} color="#8B5CF6" />} label="AI Features" sub="Smart scheduling & insights" onPress={() => router.push('/(coach)/(tabs)/ai-brain')} highlighted colors={colors} />
 
               {canManageBrand && (
                 <>
-                  <SectionLabel label="Management" />
-                  <ProfileMenuItem icon={<Palette size={20} color="#F59E0B" />} label="Brand Settings" sub="Customize app colors & logo" onPress={() => router.push('/(coach)/settings/branding')} highlighted />
-                  <ProfileMenuItem icon={<CreditCard size={20} color="#94A3B8" />} label="Subscription Plan" />
+                  <SectionLabel label="Management" color={colors.primary} />
+                  <ProfileMenuItem icon={<Palette size={20} color="#F59E0B" />} label="Brand Settings" sub="Customize app colors & logo" onPress={() => router.push('/(coach)/settings/branding')} highlighted colors={colors} />
+                  <ProfileMenuItem icon={<CreditCard size={20} color={colors.textSecondary} />} label="Subscription Plan" colors={colors} />
                 </>
               )}
 
-              <SectionLabel label="Clients & Team" />
-              <ProfileMenuItem icon={<UserPlus size={20} color="#94A3B8" />} label="Invite New Client" onPress={() => router.push('/(coach)/invite-client')} />
+              <SectionLabel label="Clients & Team" color={colors.primary} />
+              <ProfileMenuItem icon={<UserPlus size={20} color={colors.textSecondary} />} label="Invite New Client" onPress={() => router.push('/(coach)/invite-client')} colors={colors} />
               {coach?.is_parent_coach && (
-                <ProfileMenuItem icon={<Users size={20} color="#94A3B8" />} label="Team Members" onPress={() => router.push('/(coach)/team')} badge="Admin Control" />
+                <ProfileMenuItem icon={<Users size={20} color={colors.textSecondary} />} label="Team Members" onPress={() => router.push('/(coach)/team')} badge="Admin Control" colors={colors} />
               )}
 
-              <SectionLabel label="Security & Privacy" />
-              <ProfileMenuItem icon={<Bell size={20} color="#94A3B8" />} label="Notifications" />
+              <SectionLabel label="Security & Privacy" color={colors.primary} />
+              <ProfileMenuItem icon={<Bell size={20} color={colors.textSecondary} />} label="Notifications" colors={colors} />
 
               {/* Log Out */}
               <TouchableOpacity
@@ -185,7 +189,7 @@ export default function CoachProfileScreen() {
               </TouchableOpacity>
 
               <View className="mt-16 items-center pb-10">
-                <Text className="text-slate-800 text-[10px] font-black uppercase tracking-[5px]">Version 3.0 • Premium Coaching</Text>
+                <Text className="text-[10px] font-black uppercase tracking-[5px]" style={{ color: colors.textSecondary }}>Version 3.0 • Premium Coaching</Text>
               </View>
             </View>
           </ScrollView>
@@ -194,27 +198,31 @@ export default function CoachProfileScreen() {
   );
 }
 
-const SectionLabel = ({ label }: { label: string }) => (
-  <Text className="text-slate-600 text-[10px] font-black uppercase tracking-[3px] px-1 mt-10 mb-2">{label}</Text>
+const SectionLabel = ({ label, color }: { label: string; color?: string }) => (
+  <Text className="text-[10px] font-black uppercase tracking-[3px] px-1 mt-10 mb-2" style={{ color: color || '#64748B' }}>{label}</Text>
 );
 
-const ProfileMenuItem = ({ icon, label, sub, onPress, badge, highlighted }: any) => (
+const ProfileMenuItem = ({ icon, label, sub, onPress, badge, highlighted, colors }: any) => (
   <TouchableOpacity
     onPress={onPress}
-    className={`flex-row items-center p-5 rounded-[32px] border mb-3 ${highlighted ? 'bg-violet-600/5 border-violet-600/10' : 'bg-slate-900/20 border-white/5'}`}
+    className="flex-row items-center p-5 rounded-[32px] border mb-3"
+    style={{ backgroundColor: colors.surface, borderColor: colors.border }}
   >
-    <View className={`w-12 h-12 rounded-[18px] items-center justify-center mr-4 border ${highlighted ? 'bg-violet-900/20 border-violet-700/20' : 'bg-slate-900 border-white/5'}`}>
+    <View 
+      className="w-12 h-12 rounded-[18px] items-center justify-center mr-4 border"
+      style={{ backgroundColor: colors.background, borderColor: colors.border }}
+    >
       {icon}
     </View>
     <View className="flex-1">
-        <Text className={`font-bold text-base ${highlighted ? 'text-violet-200' : 'text-slate-200'}`}>{label}</Text>
-        {sub && <Text className="text-slate-600 text-[10px] font-medium mt-0.5">{sub}</Text>}
+        <Text className="font-bold text-base" style={{ color: colors.text }}>{label}</Text>
+        {sub && <Text className="text-[10px] font-medium mt-0.5" style={{ color: colors.textSecondary }}>{sub}</Text>}
     </View>
     {badge && (
       <View className="bg-blue-600/10 border border-blue-600/20 px-3 py-1 rounded-full mr-3">
         <Text className="text-blue-500 font-black text-[9px] uppercase">{badge}</Text>
       </View>
     )}
-    <ChevronRight size={18} color="#334155" />
+    <ChevronRight size={18} color={colors.textSecondary} />
   </TouchableOpacity>
 );

@@ -29,6 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { generateInviteCode } from '@/lib/brand-service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { safeBack } from '@/lib/navigation-utils';
 
 export default function InviteClientScreen() {
   const router = useRouter();
@@ -117,7 +118,7 @@ export default function InviteClientScreen() {
         className="px-6 pb-6 flex-row items-center gap-4 border-b border-white/5 bg-slate-950"
       >
         <TouchableOpacity 
-          onPress={() => router.back()} 
+          onPress={() => safeBack('/(coach)/(tabs)')} 
           className="p-2 bg-slate-900 rounded-full border border-white/5"
         >
           <ArrowLeft size={20} color="#94A3B8" />

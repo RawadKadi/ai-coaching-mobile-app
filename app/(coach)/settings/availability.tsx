@@ -8,6 +8,7 @@ import { availabilityService, AvailabilitySlot, DayOfWeek, BlockedDate } from '@
 import { ArrowLeft, Plus, Trash2, Sparkles, Calendar as CalendarIcon, Clock, X, ChevronRight, Zap } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { generateText } from '@/lib/google-ai';
+import { safeBack } from '@/lib/navigation-utils';
 
 const DAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -84,7 +85,7 @@ export default function AvailabilitySettings() {
       const blockPromises = addedDates.map(d => availabilityService.blockDate(coach.id, d.date, d.reason));
       const unblockPromises = removedDates.map(d => d.id ? availabilityService.unblockDate(d.id) : Promise.resolve());
       await Promise.all([...availabilityPromises, ...blockPromises, ...unblockPromises]);
-      router.back();
+      safeBack('/(coach)/settings');
     } catch (e) {
       Alert.alert('Error', 'Save failed');
     } finally {
@@ -179,7 +180,7 @@ export default function AvailabilitySettings() {
     <View className="flex-1 bg-slate-950">
       {/* Header */}
       <View className="px-6 pt-16 pb-6 flex-row items-center justify-between border-b border-slate-900 bg-slate-950">
-        <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full border border-slate-800">
+        <TouchableOpacity onPress={() => safeBack('/(coach)/settings')} className="p-2 bg-slate-900 rounded-full border border-slate-800">
           <ArrowLeft size={20} color="#94A3B8" />
         </TouchableOpacity>
         <Text className="text-white text-xl font-bold">Working Hours</Text>

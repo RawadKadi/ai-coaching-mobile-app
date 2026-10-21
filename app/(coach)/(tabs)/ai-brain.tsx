@@ -1,15 +1,18 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { ArrowLeft, Sparkles, Brain, Zap, Shield, ChevronRight, Save } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { AICoachBrain } from '@/types/database';
+import { safeBack } from '@/lib/navigation-utils';
 
 export default function AIBrainScreen() {
-  const colors = useBrandColors();
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDarkMode = theme.isDark;
   const router = useRouter();
   const { coach } = useAuth();
   
@@ -54,10 +57,10 @@ export default function AIBrainScreen() {
       } else {
         await supabase.from('ai_coach_brains').insert({ coach_id: coach.id, ...updates });
       }
-      Alert.alert('Success', 'AI configuration optimized and stored.');
+      Alert.alert('Saved', 'AI settings updated successfully.');
       loadBrainConfig();
     } catch (e) {
-      Alert.alert('Error', 'Failed to save configuration');
+      Alert.alert('Error', 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -65,20 +68,28 @@ export default function AIBrainScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
       {/* Header */}
-      <View className="px-6 pt-16 pb-6 flex-row items-center gap-4 bg-slate-950 border-b border-slate-900">
-        <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-900 rounded-full border border-slate-800">
-          <ArrowLeft size={20} color="#94A3B8" />
+      <View 
+        className="px-6 pt-16 pb-6 flex-row items-center gap-4 border-b"
+        style={{ backgroundColor: colors.surface, borderBottomColor: colors.border }}
+      >
+        <TouchableOpacity 
+          onPress={() => safeBack('/(coach)/(tabs)/profile')} 
+          className="p-2 rounded-full border"
+          style={{ backgroundColor: colors.background, borderColor: colors.border }}
+        >
+          <ArrowLeft size={20} color={colors.text} />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">Engine Configuration</Text>
+        <Text className="text-xl font-bold" style={{ color: colors.text }}>AI Setup</Text>
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }}>
@@ -86,20 +97,21 @@ export default function AIBrainScreen() {
           <MotiView 
             from={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="mx-6 mt-8 p-10 rounded-[48px] bg-indigo-600/10 border border-indigo-500/20 items-center overflow-hidden"
+            className="mx-6 mt-8 p-10 rounded-[48px] border items-center overflow-hidden"
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
           >
-              <View className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16" />
               <MotiView 
                 from={{ scale: 1 }}
-                animate={{ scale: 1.1 }}
+                animate={{ scale: 1.05 }}
                 transition={{ loop: true, type: 'timing', duration: 2000 }}
-                className="w-24 h-24 bg-indigo-600 rounded-[32px] items-center justify-center shadow-2xl shadow-indigo-500/50 mb-8"
+                className="w-20 h-20 rounded-[28px] items-center justify-center mb-6"
+                style={{ backgroundColor: colors.primary }}
               >
-                 <Brain size={48} color="white" />
+                 <Brain size={40} color="#FFFFFF" />
               </MotiView>
-              <Text className="text-white text-2xl font-bold text-center">AI Logic Core</Text>
-              <Text className="text-slate-400 text-center mt-3 text-sm leading-5 px-4 font-medium">
-                Customize the neural parameters that define how your AI persona interacts with and motivates your clients.
+              <Text className="text-2xl font-bold text-center" style={{ color: colors.text }}>AI Assistant Style</Text>
+              <Text className="text-center mt-3 text-sm leading-5 px-4 font-medium" style={{ color: colors.textSecondary }}>
+                Choose how your AI talks to clients, gives advice, and motivates them.
               </Text>
           </MotiView>
 
@@ -107,44 +119,52 @@ export default function AIBrainScreen() {
           <View className="px-6 mt-10">
               <ConfigSection 
                 title="Tone of Voice" 
-                desc="The personality of your AI assistant"
+                desc="How your AI should sound"
                 value={tone}
                 onChange={setTone}
-                placeholder="Professional, encouraging, and direct"
+                placeholder="Friendly, motivating, and clear"
                 icon={<Sparkles size={18} color="#818CF8" />}
+                colors={colors}
               />
               <ConfigSection 
-                title="Support Style" 
-                desc="How the AI handles feedback and guidance"
+                title="Coaching Style" 
+                desc="How the AI guides clients"
                 value={style}
                 onChange={setStyle}
-                placeholder="Supportive and results-driven"
+                placeholder="Supportive and action-focused"
                 icon={<Shield size={18} color="#10B981" />}
+                colors={colors}
               />
               <ConfigSection 
-                title="Core Philosophy" 
-                desc="The principles the AI should enforce"
+                title="Key Rules & Philosophy" 
+                desc="Core coaching rules to follow"
                 value={philosophy}
                 onChange={setPhilosophy}
-                placeholder="Focus on consistency and incremental progress..."
+                placeholder="Consistency first, celebrate small wins..."
                 icon={<Zap size={18} color="#F59E0B" />}
                 multiline
+                colors={colors}
               />
               <ConfigSection 
-                title="Specialty Domain" 
-                desc="Primary area of expertise for the AI"
+                title="Specialty Focus" 
+                desc="Main area of training expertise"
                 value={specialtyFocus}
                 onChange={setSpecialtyFocus}
-                placeholder="Hypertrophy and nutrition optimization"
+                placeholder="Strength training and nutrition"
                 icon={<ChevronRight size={18} color={colors.primary} />}
+                colors={colors}
               />
           </View>
       </ScrollView>
 
       {/* Save Action */}
-      <View className="absolute bottom-0 w-full p-6 bg-slate-950/90 border-t border-slate-900">
+      <View 
+        className="absolute bottom-0 w-full p-6 border-t"
+        style={{ backgroundColor: colors.surface, borderTopColor: colors.border }}
+      >
           <TouchableOpacity 
-            className={`h-16 rounded-2xl flex-row items-center justify-center gap-3 bg-indigo-600 shadow-xl shadow-indigo-500/20`}
+            className="h-16 rounded-2xl flex-row items-center justify-center gap-3 shadow-lg"
+            style={{ backgroundColor: colors.primary }}
             onPress={handleSave}
             disabled={saving}
           >
@@ -153,7 +173,7 @@ export default function AIBrainScreen() {
               ) : (
                   <>
                     <Save size={22} color="white" />
-                    <Text className="text-white font-bold text-lg">Save Parameters</Text>
+                    <Text className="text-white font-bold text-lg">Save Settings</Text>
                   </>
               )}
           </TouchableOpacity>
@@ -162,21 +182,29 @@ export default function AIBrainScreen() {
   );
 }
 
-const ConfigSection = ({ title, desc, value, onChange, placeholder, icon, multiline }: any) => (
+const ConfigSection = ({ title, desc, value, onChange, placeholder, icon, multiline, colors }: any) => (
   <View className="mb-8">
       <View className="flex-row items-center gap-3 mb-2">
-         <View className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 items-center justify-center">
+         <View 
+            className="w-8 h-8 rounded-lg border items-center justify-center"
+            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+         >
             {icon}
          </View>
          <View>
-            <Text className="text-white font-bold">{title}</Text>
-            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{desc}</Text>
+            <Text className="font-bold" style={{ color: colors.text }}>{title}</Text>
+            <Text className="text-[10px] font-bold uppercase tracking-widest" style={{ color: colors.textSecondary }}>{desc}</Text>
          </View>
       </View>
       <TextInput 
-         className={`bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-white font-medium ${multiline ? 'min-h-[120px] text-top' : ''}`}
+         className={`border rounded-2xl px-5 py-4 font-medium ${multiline ? 'min-h-[120px]' : ''}`}
+         style={{ 
+           backgroundColor: colors.surface, 
+           borderColor: colors.border, 
+           color: colors.text 
+         }}
          placeholder={placeholder}
-         placeholderTextColor="#475569"
+         placeholderTextColor={colors.textTertiary || '#94A3B8'}
          value={value}
          onChangeText={onChange}
          multiline={multiline}

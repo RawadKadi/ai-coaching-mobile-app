@@ -559,7 +559,7 @@ function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media
   };
 
   return (
-    <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: 'rgba(16, 185, 129, 0.2)' }]}>
+    <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
       {media.imageUrl && (
         <TouchableOpacity 
           activeOpacity={0.9} 
@@ -579,13 +579,13 @@ function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media
           <Text style={[styles.challengeTitle, { fontFamily: theme.typography.fontFamily }]}>Challenge Completed</Text>
         </View>
         <View style={styles.challengeBody}>
-          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Daily Mission'}</Text>
+          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text }]} numberOfLines={2}>{media.taskName || 'Daily Mission'}</Text>
           <View style={styles.challengeDetailsRow}>
-             <View style={styles.challengeDetailItem}><Target size={12} color="#94A3B8" /><Text style={styles.challengeDetailText}>{media.focusType || 'Training'}</Text></View>
-             <View style={[styles.challengeDetailItem, { marginLeft: 12 }]}><Zap size={12} color={intensityColor(media.intensity)} /><Text style={[styles.challengeDetailText, { color: intensityColor(media.intensity) }]}>{media.intensity || 'Normal'}</Text></View>
+             <View style={[styles.challengeDetailItem, { backgroundColor: theme.colors.background }]}><Target size={12} color={theme.colors.textSecondary} /><Text style={[styles.challengeDetailText, { color: theme.colors.textSecondary }]}>{media.focusType || 'Training'}</Text></View>
+             <View style={[styles.challengeDetailItem, { marginLeft: 12, backgroundColor: theme.colors.background }]}><Zap size={12} color={intensityColor(media.intensity)} /><Text style={[styles.challengeDetailText, { color: intensityColor(media.intensity) }]}>{media.intensity || 'Normal'}</Text></View>
           </View>
         </View>
-        <View style={styles.challengeFooter}><Text style={styles.challengeFooterText}>Completed at {media.completedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
+        <View style={[styles.challengeFooter, { borderTopColor: theme.colors.border }]}><Text style={[styles.challengeFooterText, { color: theme.colors.textSecondary }]}>Completed at {media.completedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
         
         {onPressDetails && (
           <TouchableOpacity 
@@ -598,7 +598,7 @@ function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media
               marginTop: 12, 
               paddingTop: 12, 
               borderTopWidth: 1, 
-              borderTopColor: 'rgba(255, 255, 255, 0.08)',
+              borderTopColor: theme.colors.border,
               gap: 4
             }}
           >
@@ -615,7 +615,7 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
   const theme = useTheme();
   const styles = getStyles(theme.colors);
   return (
-    <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: 'rgba(59, 130, 246, 0.2)' }]}>
+    <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
       {media.imageUrl && (
         <TouchableOpacity 
           activeOpacity={0.9} 
@@ -635,9 +635,9 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
           <Text style={[styles.challengeTitle, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Task Completed</Text>
         </View>
         <View style={styles.challengeBody}>
-          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.taskName || 'Daily Task'}</Text>
+          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text }]} numberOfLines={2}>{media.taskName || 'Daily Task'}</Text>
         </View>
-        <View style={styles.challengeFooter}><Text style={styles.challengeFooterText}>Completed at {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
+        <View style={[styles.challengeFooter, { borderTopColor: theme.colors.border }]}><Text style={[styles.challengeFooterText, { color: theme.colors.textSecondary }]}>Completed at {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
       </View>
     </View>
   );
@@ -663,14 +663,14 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
     const icon = isPostponed ? <Clock size={18} color={accentColor} /> : isCancelled ? <X size={18} color={accentColor} /> : <RefreshCw size={18} color={accentColor} />;
     
     return (
-      <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: `${accentColor}33`, minWidth: 260 }]}>
+      <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: `${accentColor}40`, minWidth: 260 }]}>
         <View style={{ padding: 16 }}>
           <View style={styles.challengeHeader}>
             <View style={[styles.challengeIconBox, { backgroundColor: `${accentColor}26` }]}>{icon}</View>
             <Text style={[styles.challengeTitle, { color: accentColor, fontFamily: theme.typography.fontFamily }]}>{title}</Text>
           </View>
           <View style={styles.challengeBody}>
-            <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: '#94A3B8' }]}>
+            <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text }]}>
               {isPostponed
                 ? (isOwn ? 'You postponed this session' : 'Coach postponed this session')
                 : isCancelled 
@@ -679,13 +679,13 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
               }
             </Text>
             {(isCancelled || isPostponed) && media.cancellation_reason && (
-              <View style={{ marginTop: 8, backgroundColor: isPostponed ? 'rgba(234, 179, 8, 0.05)' : 'rgba(239, 68, 68, 0.05)', padding: 10, borderRadius: 8 }}>
-                <Text style={{ color: '#F8FAFC', fontSize: 12, fontStyle: 'italic' }}>"{media.cancellation_reason}"</Text>
+              <View style={{ marginTop: 8, backgroundColor: isPostponed ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)', padding: 10, borderRadius: 8 }}>
+                <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontStyle: 'italic' }}>"{media.cancellation_reason}"</Text>
               </View>
             )}
             {isRescheduled && (
               <TouchableOpacity 
-                onPress={() => router.push('/(client)/(tabs)/calendar')}
+                onPress={() => router.push('/(client)/(tabs)/calendar' as any)}
                 style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}
               >
                 <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '700' }}>View New Schedule</Text>
@@ -699,18 +699,18 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
   }
 
   return (
-    <View style={[styles.challengeCard, { backgroundColor: '#0F172A', borderColor: 'rgba(16, 185, 129, 0.2)', minWidth: 260 }]}>
+    <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, minWidth: 260 }]}>
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
           <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}><LucideVideo size={18} color="#10B981" /></View>
           <Text style={[styles.challengeTitle, { color: '#10B981', fontFamily: theme.typography.fontFamily }]}>Session Invitation</Text>
         </View>
         <View style={styles.challengeBody}>
-          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily }]} numberOfLines={2}>{media.description || 'Live Coaching Session'}</Text>
+          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text }]} numberOfLines={2}>{media.description || 'Live Coaching Session'}</Text>
           <View style={styles.challengeDetailsRow}>
-             <View style={styles.challengeDetailItem}>
-                <Clock size={12} color="#94A3B8" />
-                <Text style={styles.challengeDetailText}>
+             <View style={[styles.challengeDetailItem, { backgroundColor: theme.colors.background }]}>
+                <Clock size={12} color={theme.colors.textSecondary} />
+                <Text style={[styles.challengeDetailText, { color: theme.colors.textSecondary }]}>
                   {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : 'Now'}
                 </Text>
              </View>
@@ -727,7 +727,7 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
             marginTop: 12 
           }}
         >
-          <Text style={{ color: '#0F172A', fontWeight: '900', fontSize: 14 }}>Join Session</Text>
+          <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 14 }}>Join Session</Text>
         </TouchableOpacity>
 
         {isOwn && (
@@ -736,15 +736,15 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
               onPress={() => onReschedule?.(media.sessionId)}
               style={{ 
                 flex: 1,
-                backgroundColor: 'rgba(255, 255, 255, 0.05)', 
+                backgroundColor: theme.colors.background, 
                 borderRadius: 12, 
                 paddingVertical: 10, 
                 alignItems: 'center',
                 borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.1)'
+                borderColor: theme.colors.border
               }}
             >
-              <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 13 }}>Reschedule</Text>
+              <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 13 }}>Reschedule</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               onPress={() => onCancel?.(media.sessionId)}
@@ -1006,6 +1006,12 @@ function VoiceNotePlayer({
     ? senderName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : '?';
 
+  const isBgDark = isOwn ? isDarkColor(theme.colors.primary) : isDarkColor(theme.colors.surface);
+  const textColor = isBgDark ? '#FFFFFF' : '#0F172A';
+  const mutedTextColor = isBgDark ? 'rgba(255,255,255,0.7)' : 'rgba(15, 23, 42, 0.6)';
+  const trackBg = isBgDark ? (isOwn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)') : 'rgba(15, 23, 42, 0.12)';
+  const speedBadgeBg = isBgDark ? (isOwn ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)') : 'rgba(15, 23, 42, 0.08)';
+
   // Avatar/speed slot — extracted so it can be placed before or after the main content
   const avatarOrSpeedSlot = (
     <TouchableOpacity
@@ -1034,19 +1040,19 @@ function VoiceNotePlayer({
             // Fallback initials circle
             <View style={{
               width: 44, height: 44, borderRadius: 22,
-              backgroundColor: isOwn ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.12)',
+              backgroundColor: isOwn ? 'rgba(255,255,255,0.25)' : (isBgDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.08)'),
               justifyContent: 'center', alignItems: 'center',
             }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{initials}</Text>
+              <Text style={{ color: textColor, fontSize: 14, fontWeight: '700' }}>{initials}</Text>
             </View>
           )}
           {/* Mic badge bottom-right */}
           <View style={{
             position: 'absolute', bottom: -2, right: -2,
             width: 20, height: 20, borderRadius: 10,
-            backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+            backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
             borderWidth: 2,
-            borderColor: isOwn ? theme.colors.primary : '#0F172A',
+            borderColor: isOwn ? theme.colors.primary : theme.colors.border,
             justifyContent: 'center', alignItems: 'center',
           }}>
             <Text style={{ fontSize: 9 }}>🎤</Text>
@@ -1058,12 +1064,12 @@ function VoiceNotePlayer({
           minWidth: 40,
           height: 28,
           borderRadius: 8,
-          backgroundColor: isOwn ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)',
+          backgroundColor: speedBadgeBg,
           justifyContent: 'center',
           alignItems: 'center',
           paddingHorizontal: 6,
         }}>
-          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800', letterSpacing: -0.3 }}>
+          <Text style={{ color: textColor, fontSize: 11, fontWeight: '800', letterSpacing: -0.3 }}>
             {playbackSpeed === 1 ? '1×' : `${playbackSpeed}×`}
           </Text>
         </View>
@@ -1090,11 +1096,11 @@ function VoiceNotePlayer({
           }}
         >
           {isLoading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color={textColor} />
           ) : isPlaying ? (
-            <Pause size={22} color="#FFFFFF" fill="#FFFFFF" />
+            <Pause size={22} color={textColor} fill={textColor} />
           ) : (
-            <Play size={22} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 3 }} />
+            <Play size={22} color={textColor} fill={textColor} style={{ marginLeft: 3 }} />
           )}
         </TouchableOpacity>
 
@@ -1112,8 +1118,8 @@ function VoiceNotePlayer({
               style={{ height: 28, justifyContent: 'center' }}
             >
               {/* Track background */}
-              <View style={{ height: 4, backgroundColor: isOwn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
-                <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: '#FFFFFF' }} />
+              <View style={{ height: 4, backgroundColor: trackBg, borderRadius: 2, overflow: 'hidden' }}>
+                <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: textColor }} />
               </View>
               
               {/* Draggable thumb/knob */}
@@ -1125,7 +1131,7 @@ function VoiceNotePlayer({
                   width: 16, 
                   height: 16, 
                   borderRadius: 8, 
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: textColor,
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.3,
@@ -1152,14 +1158,14 @@ function VoiceNotePlayer({
         paddingLeft: isOwn ? 100 : 56,
         paddingRight: isOwn ? 12 : 64,
       }}>
-        <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>
+        <Text style={{ fontSize: 9, color: mutedTextColor, fontWeight: '700' }}>
           {formatTime(totalDuration)}
         </Text>
         {createdAt && (
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={{ 
               fontSize: 9, 
-              color: 'rgba(255,255,255,0.7)', 
+              color: mutedTextColor, 
               fontWeight: '700' 
             }}>
               {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1167,7 +1173,7 @@ function VoiceNotePlayer({
             {isOwn && (
               isRead 
                 ? <CheckCheck size={11} color="#10B981" style={{ marginLeft: 3 }} /> 
-                : <Check size={11} color="rgba(255,255,255,0.6)" style={{ marginLeft: 3 }} />
+                : <Check size={11} color={mutedTextColor} style={{ marginLeft: 3 }} />
             )}
           </View>
         )}
@@ -1367,10 +1373,10 @@ const ChatMediaMessage: React.FC<Props> = ({
       <View style={[
         isOwn ? styles.myBubble : styles.theirBubble, 
         { 
-          backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+          backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
           borderRadius: 20,
           borderWidth: isOwn ? 0 : 1,
-          borderColor: 'rgba(255,255,255,0.08)',
+          borderColor: isOwn ? 'transparent' : theme.colors.border,
           paddingHorizontal: 12,
           paddingVertical: 10,
           minWidth: 240,
@@ -1404,10 +1410,10 @@ const ChatMediaMessage: React.FC<Props> = ({
         isOwn ? styles.myBubble : styles.theirBubble, 
         { 
           width: currentWidth, 
-          backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+          backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
           borderRadius: 20,
           borderWidth: isOwn ? 0 : 1,
-          borderColor: 'rgba(255,255,255,0.08)',
+          borderColor: isOwn ? 'transparent' : theme.colors.border,
           overflow: 'visible'
         }
       ]}>
@@ -1884,18 +1890,18 @@ const getStyles = (colors: any) => StyleSheet.create({
   docHint: { fontSize: 11, marginTop: 2 },
   timeBadgeContainer: { position: 'absolute', bottom: 6, right: 6, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 12 },
   timeBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '500' },
-  challengeCard: { width: 260, borderRadius: 24, borderWidth: 1, overflow: 'hidden', backgroundColor: '#0F172A', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
+  challengeCard: { width: 260, borderRadius: 24, borderWidth: 1, overflow: 'hidden', backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
   challengeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   challengeIconBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(16, 185, 129, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   challengeTitle: { color: '#10B981', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },
   challengeBody: { marginBottom: 16 },
-  challengeTaskName: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', lineHeight: 24, marginBottom: 8 },
+  challengeTaskName: { color: colors.text, fontSize: 18, fontWeight: '800', lineHeight: 24, marginBottom: 8 },
   challengeDetailsRow: { flexDirection: 'row', alignItems: 'center' },
-  challengeDetailItem: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.03)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  challengeDetailText: { color: '#94A3B8', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  challengeFooter: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 },
-  challengeFooterText: { color: '#475569', fontSize: 10, fontWeight: '600' },
-  cardImageContainer: { width: '100%', height: 180, overflow: 'hidden', backgroundColor: '#1E293B' },
+  challengeDetailItem: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  challengeDetailText: { color: colors.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+  challengeFooter: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
+  challengeFooterText: { color: colors.textTertiary || colors.textSecondary, fontSize: 10, fontWeight: '600' },
+  cardImageContainer: { width: '100%', height: 180, overflow: 'hidden', backgroundColor: colors.background },
 });
 
 export default ChatMediaMessage;

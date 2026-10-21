@@ -144,7 +144,7 @@ export default function CoachChallengesDashboard() {
 
   if (loading && !refreshing) {
     return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
+      <View className="flex-1 justify-center items-center" style={{ backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -157,49 +157,52 @@ export default function CoachChallengesDashboard() {
       : historyChallenges;
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View className="px-6 pt-20 pb-6 flex-row items-center gap-4 bg-slate-950 shadow-2xl z-10">
+      <View style={{ backgroundColor: colors.background, borderBottomColor: colors.border }} className="px-6 pt-20 pb-6 flex-row items-center gap-4 border-b shadow-2xl z-10">
         <TouchableOpacity 
           onPress={() => router.back()}
-          className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5"
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+          className="w-10 h-10 rounded-full items-center justify-center border"
         >
-          <ArrowLeft size={20} color="white" />
+          <ArrowLeft size={20} color={colors.text} />
         </TouchableOpacity>
         <View>
-          <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Growth Tracking</Text>
-          <Text className="text-white text-3xl font-black mt-0.5 tracking-tight">Challenges</Text>
+          <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest">Growth Tracking</Text>
+          <Text style={{ color: colors.text }} className="text-3xl font-black mt-0.5 tracking-tight">Challenges</Text>
         </View>
       </View>
 
-      {/* Tabs / Filters (Directly identical to Screenshot 2 layout) */}
+      {/* Tabs / Filters */}
       <View className="px-6 py-4 flex-row justify-between items-center mb-4">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1 mr-4">
           <View className="flex-row gap-6">
             <TouchableOpacity onPress={() => setActiveTab('all')}>
-              <Text className={`text-2xl font-black ${activeTab === 'all' ? 'text-white' : 'text-slate-700'}`}>All</Text>
+              <Text style={{ color: activeTab === 'all' ? colors.text : colors.textTertiary }} className="text-2xl font-black">All</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setActiveTab('active')}>
-              <Text className={`text-2xl font-black ${activeTab === 'active' ? 'text-white' : 'text-slate-700'}`}>Active</Text>
+              <Text style={{ color: activeTab === 'active' ? colors.text : colors.textTertiary }} className="text-2xl font-black">Active</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setActiveTab('history')}>
-              <Text className={`text-2xl font-black ${activeTab === 'history' ? 'text-white' : 'text-slate-700'}`}>History</Text>
+              <Text style={{ color: activeTab === 'history' ? colors.text : colors.textTertiary }} className="text-2xl font-black">History</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
         <View className="flex-row gap-2">
           <TouchableOpacity 
             onPress={() => router.push('/(coach)/challenges/suggest')} 
-            className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5 shadow-lg shadow-violet-500/20"
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="w-10 h-10 rounded-full items-center justify-center border shadow-lg"
           >
-            <Sparkles size={18} color="#A78BFA" />
+            <Sparkles size={18} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => router.push('/(coach)/challenges/create')} 
-            className="h-10 px-4 bg-blue-600 rounded-full flex-row items-center gap-2 shadow-lg shadow-blue-500/20"
+            style={{ backgroundColor: colors.primary }}
+            className="h-10 px-4 rounded-full flex-row items-center gap-2 shadow-lg"
           >
-            <Plus size={16} color="white" />
-            <Text className="text-white font-black text-xs uppercase">Create</Text>
+            <Plus size={16} color={colors.textOnPrimary || 'white'} />
+            <Text style={{ color: colors.textOnPrimary || 'white' }} className="font-black text-xs uppercase">Create</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -216,21 +219,22 @@ export default function CoachChallengesDashboard() {
               animate={{ opacity: 1, scale: 1 }}
               className="px-6 mt-12 items-center"
             >
-              <View className="w-20 h-20 bg-slate-900 rounded-full items-center justify-center border border-slate-800 mb-6">
-                <Target size={32} color="#475569" />
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="w-20 h-20 rounded-full items-center justify-center border mb-6">
+                <Target size={32} color={colors.textSecondary} />
               </View>
-              <Text className="text-white text-xl font-bold mb-2">No {activeTab} challenges</Text>
-              <Text className="text-slate-500 text-center px-8 leading-5">
+              <Text style={{ color: colors.text }} className="text-xl font-bold mb-2">No {activeTab} challenges</Text>
+              <Text style={{ color: colors.textSecondary }} className="text-center px-8 leading-5">
                 {activeTab === 'active' 
                   ? "Start an AI-assisted training plan to keep your clients engaged." 
                   : "Completed plans will appear in your history tab."
                 }
               </Text>
               <TouchableOpacity 
-                className="mt-8 bg-slate-900 border border-slate-800 py-3 px-8 rounded-2xl"
+                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                className="mt-8 border py-3 px-8 rounded-2xl"
                 onPress={() => router.push('/(coach)/challenges/create')}
               >
-                <Text className="text-white font-bold">Create Manually</Text>
+                <Text style={{ color: colors.text }} className="font-bold">Create Manually</Text>
               </TouchableOpacity>
             </MotiView>
           ) : (
@@ -251,6 +255,7 @@ export default function CoachChallengesDashboard() {
 }
 
 const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: any, index: number, isEditing?: boolean, onDelete?: () => void }) => {
+    const colors = useBrandColors();
     const router = useRouter();
     const [showMenu, setShowMenu] = useState(false);
     const totalSubs = Number(challenge.total_subs || 0);
@@ -290,9 +295,10 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                 from={{ opacity: 0, scale: 0.95 }} 
                 animate={{ opacity: 1, scale: 1 }} 
                 transition={{ delay: index * 100 }}
-                className={`mx-6 ${isFailed || isCompleted ? 'bg-slate-950' : 'bg-slate-900'} border ${isFailed ? 'border-red-500/50' : isCompleted ? 'border-emerald-500/30' : isWarning ? 'border-amber-500/30' : 'border-white/5'} rounded-[40px] p-8 mb-6 overflow-hidden`}
+                style={{ backgroundColor: colors.surface, borderColor: isFailed ? '#ef444480' : isCompleted ? '#10b98150' : isWarning ? '#f59e0b50' : colors.border }}
+                className="mx-6 border rounded-[40px] p-8 mb-6 overflow-hidden"
             >
-                <View className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl -mr-16 -mt-16" />
+                <View style={{ backgroundColor: colors.primary + '10' }} className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-16 -mt-16" />
                 
                 <TouchableOpacity
                     activeOpacity={0.8}
@@ -302,11 +308,14 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                         <View className={`flex-row items-center gap-3 ${isFailed || isCompleted ? 'opacity-50' : ''}`}>
                             <BrandedAvatar name={challenge.client_name || 'Client'} size={32} imageUrl={challenge.client_avatar} />
                             <View>
-                                <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Client</Text>
-                                <Text className="text-white font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>
+                                <Text style={{ color: colors.textSecondary }} className="text-[8px] font-black uppercase tracking-widest">Client</Text>
+                                <Text style={{ color: colors.text }} className="font-bold text-sm tracking-tight">{challenge.client_name || 'Individual'}</Text>
                             </View>
                         </View>
-                        <View className={`px-3 py-1.5 rounded-full border ${isFailed ? 'bg-red-950 border-red-900/50' : isCompleted ? 'bg-emerald-500/10 border-emerald-500/30' : isWarning ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-950 border-blue-600/20'}`}>
+                        <View 
+                            className={`px-3 py-1.5 rounded-full border ${isFailed ? 'bg-red-950 border-red-900/50' : isCompleted ? 'bg-emerald-500/10 border-emerald-500/30' : isWarning ? 'bg-amber-500/10 border-amber-500/30' : ''}`}
+                            style={!isFailed && !isCompleted && !isWarning ? { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` } : undefined}
+                        >
                             {isFailed ? (
                                 <Text className="text-red-500 text-[8px] font-black uppercase tracking-[2px]">❌ Failed Plan</Text>
                             ) : isCompleted ? (
@@ -314,16 +323,16 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                             ) : isWarning ? (
                                 <Text className="text-amber-500 text-[8px] font-black uppercase tracking-[2px]">⚠️ {missedSubs} Missed</Text>
                             ) : (
-                                <Text className="text-blue-500 text-[8px] font-black uppercase tracking-[2px]">High Intensity</Text>
+                                <Text style={{ color: colors.primary }} className="text-[8px] font-black uppercase tracking-[2px]">Active</Text>
                             )}
                         </View>
                     </View>
 
-                    <Text className={`text-white text-2xl font-black mb-4 tracking-tight ${isFailed || isCompleted ? 'opacity-50' : ''}`}>{challenge.name}</Text>
+                    <Text style={{ color: colors.text }} className={`text-2xl font-black mb-4 tracking-tight ${isFailed || isCompleted ? 'opacity-50' : ''}`}>{challenge.name}</Text>
                     
                     <View className={`flex-row items-center gap-2 mb-2 ${isFailed || isCompleted ? 'opacity-50' : ''}`}>
-                        <CalendarIcon size={14} color="#64748B" />
-                        <Text className="text-slate-400 text-[11px] font-bold">
+                        <CalendarIcon size={14} color={colors.textSecondary} />
+                        <Text style={{ color: colors.textSecondary }} className="text-[11px] font-bold">
                             {isEnded 
                                 ? `${totalDays}-Day Plan (Completed) • ${new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
                                 : `Day ${Math.min(currentDay, totalDays)} of ${totalDays} • ${new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
@@ -331,41 +340,42 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                         </Text>
                     </View>
 
-                    <View className={`flex-row items-center justify-between mb-8 bg-slate-950/50 p-4 rounded-3xl border border-white/5 ${isFailed || isCompleted ? 'opacity-50' : ''}`}>
-                        <View className="items-center flex-1 border-r border-white/5">
-                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Done</Text>
-                            <Text className={`text-xl font-black ${completedSubs > 0 ? 'text-emerald-500' : 'text-white'}`}>{completedSubs}</Text>
+                    <View style={{ backgroundColor: colors.background, borderColor: colors.border }} className={`flex-row items-center justify-between mb-8 p-4 rounded-3xl border ${isFailed || isCompleted ? 'opacity-50' : ''}`}>
+                        <View style={{ borderColor: colors.border }} className="items-center flex-1 border-r">
+                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-1">Done</Text>
+                            <Text className={`text-xl font-black ${completedSubs > 0 ? 'text-emerald-500' : ''}`} style={completedSubs === 0 ? { color: colors.text } : undefined}>{completedSubs}</Text>
                         </View>
-                        <View className="items-center flex-1 border-r border-white/5">
-                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Missed</Text>
-                            <Text className={`text-xl font-black ${missedSubs > 0 ? (isFailed ? 'text-red-500' : 'text-amber-500') : 'text-white'}`}>{missedSubs}</Text>
+                        <View style={{ borderColor: colors.border }} className="items-center flex-1 border-r">
+                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-1">Missed</Text>
+                            <Text className={`text-xl font-black ${missedSubs > 0 ? (isFailed ? 'text-red-500' : 'text-amber-500') : ''}`} style={missedSubs === 0 ? { color: colors.text } : undefined}>{missedSubs}</Text>
                         </View>
                         <View className="items-center flex-1">
-                            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Left</Text>
-                            <Text className="text-white text-xl font-black">{remainingSubs}</Text>
+                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-1">Left</Text>
+                            <Text style={{ color: colors.text }} className="text-xl font-black">{remainingSubs}</Text>
                         </View>
                     </View>
 
                     <View className="flex-row justify-between items-end mb-3">
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Progress</Text>
-                        <Text className="text-white text-xl font-black tracking-tight">{completionRate}%</Text>
+                        <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest">Progress</Text>
+                        <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight">{completionRate}%</Text>
                     </View>
 
-                    <View className={`w-full h-2 rounded-full overflow-hidden mb-10 ${isFailed ? 'bg-red-950/30' : 'bg-slate-950'}`}>
-                        <View className={`h-full rounded-full ${isFailed ? 'bg-red-900/40' : isCompleted ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-blue-600'}`} style={{ width: isFailed ? '100%' : `${completionRate}%` }} />
+                    <View style={{ backgroundColor: colors.background }} className={`w-full h-2 rounded-full overflow-hidden mb-10`}>
+                        <View style={{ width: isFailed ? '100%' : `${completionRate}%`, backgroundColor: isFailed ? '#ef4444' : isCompleted ? '#10b981' : isWarning ? '#f59e0b' : colors.primary }} className="h-full rounded-full" />
                     </View>
                 </TouchableOpacity>
 
                 <View className="flex-row gap-3">
                     <TouchableOpacity 
                         onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-                        className={`flex-1 h-16 rounded-[24px] items-center justify-center shadow-2xl ${
-                            isFailed || isCompleted ? 'bg-slate-800' : 
-                            isWarning ? 'bg-amber-500/10 border border-amber-500/30' : 
-                            'bg-blue-600 shadow-blue-500/20'
-                        }`}
+                        style={{
+                            backgroundColor: isFailed || isCompleted ? colors.background : isWarning ? '#f59e0b1a' : colors.primary,
+                            borderColor: isWarning ? '#f59e0b50' : colors.border,
+                            borderWidth: 1
+                        }}
+                        className="flex-1 h-16 rounded-[24px] items-center justify-center shadow-2xl"
                     >
-                        <Text className={`font-black text-base ${isWarning ? 'text-amber-500' : isFailed || isCompleted ? 'text-slate-300' : 'text-white'}`}>
+                        <Text style={{ color: isWarning ? '#f59e0b' : isFailed || isCompleted ? colors.textSecondary : (colors.textOnPrimary || 'white') }} className="font-black text-base">
                             {isFailed ? 'View History' : isCompleted ? 'View Summary' : isWarning ? 'Review Drops' : 'Manage Plan'}
                         </Text>
                     </TouchableOpacity>
@@ -402,16 +412,16 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                         position: 'absolute',
                                         bottom: 72,
                                         right: 0,
-                                        backgroundColor: '#0F172A',
+                                        backgroundColor: colors.surface,
                                         borderWidth: 1,
-                                        borderColor: 'rgba(255,255,255,0.08)',
+                                        borderColor: colors.border,
                                         borderRadius: 20,
                                         padding: 8,
                                         width: 160,
                                         zIndex: 50,
                                         shadowColor: '#000',
                                         shadowOffset: { width: 0, height: 8 },
-                                        shadowOpacity: 0.5,
+                                        shadowOpacity: 0.15,
                                         shadowRadius: 24,
                                         elevation: 12,
                                     }}
@@ -430,13 +440,13 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                         }}
                                         activeOpacity={0.7}
                                     >
-                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(59,130,246,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '1a', alignItems: 'center', justifyContent: 'center' }}>
                                             <Edit2 size={16} color={colors.primary} />
                                         </View>
-                                        <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Edit</Text>
+                                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>Edit</Text>
                                     </TouchableOpacity>
                                     
-                                    <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginHorizontal: 8, marginVertical: 4 }} />
+                                    <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 8, marginVertical: 4 }} />
                                     
                                     <TouchableOpacity 
                                         onPress={() => {
@@ -472,11 +482,11 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                 borderWidth: 1,
                                 zIndex: 51,
                             }, showMenu
-                                ? { backgroundColor: '#1E293B', borderColor: 'rgba(59,130,246,0.5)' }
-                                : { backgroundColor: '#020617', borderColor: 'rgba(255,255,255,0.05)' }
+                                ? { backgroundColor: colors.surfaceHover || colors.surface, borderColor: colors.primary }
+                                : { backgroundColor: colors.surface, borderColor: colors.border }
                             ]}
                         >
-                            <MoreVertical size={20} color={showMenu ? colors.primary : '#64748B'} />
+                            <MoreVertical size={20} color={showMenu ? colors.primary : colors.textSecondary} />
                         </TouchableOpacity>
                     </View>
                     ) : null}

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChevronLeft, User, Mail, Phone, Globe, Calendar, Activity, Ruler, Target, Trophy, Info, AlertTriangle } from 'lucide-react-native';
+import { safeBack } from '@/lib/navigation-utils';
 
 const InfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | undefined | null }) => (
     <View className="flex-row items-center py-4 border-b border-white/5">
@@ -54,7 +55,7 @@ export default function PersonalInformationScreen() {
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-6 py-4 border-b border-white/5">
                     <TouchableOpacity 
-                        onPress={() => router.back()}
+                        onPress={() => safeBack('/(client)/(tabs)/profile')}
                         className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5"
                     >
                         <ChevronLeft size={20} color="white" />

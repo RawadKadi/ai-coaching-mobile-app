@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, Image, ScrollView, Animated, ActivityIndicator } from 'react-native';
-import { ArrowUp, Mic, Plus, X, Square, Cpu, Activity, Zap } from 'lucide-react-native';
+import { ArrowUp, Mic, Plus, X, Square } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
+import { scaleBorderRadius } from '@/lib/theme-utils';
 
 interface BrandedAIInputProps {
   value: string;
@@ -12,6 +14,10 @@ interface BrandedAIInputProps {
 }
 
 export function BrandedAIInput({ value, onChangeText, onSubmit, placeholder = "Ask anything...", maxLength = 350 }: BrandedAIInputProps) {
+  const colors = useBrandColors();
+  const theme = useTheme();
+  const isDark = theme.isDarkMode;
+
   const [isRecording, setIsRecording] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -51,19 +57,18 @@ export function BrandedAIInput({ value, onChangeText, onSubmit, placeholder = "A
 
   const pickImage = async () => {
     try {
-        let result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsMultipleSelection: true,
-          selectionLimit: 3,
-          quality: 0.8,
-        });
-        if (!result.canceled) {
-          const uris = result.assets.map(a => a.uri);
-          setAttachments(prev => [...prev, ...uris]);
-          setExpanded(true);
-        }
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: 3,
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        const uris = result.assets.map(a => a.uri);
+        setAttachments(prev => [...prev, ...uris]);
+      }
     } catch (e) {
-        console.log("Image picker error", e);
+      console.log("Image picker error", e);
     }
   };
 
@@ -71,15 +76,24 @@ export function BrandedAIInput({ value, onChangeText, onSubmit, placeholder = "A
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  const borderRadius = scaleBorderRadius(20, theme.spacing.borderRadiusScale);
+
   return (
-    <View style={[styles.container, styles.containerExpanded]}>
+    <View style={[
+      styles.container, 
+      { 
+        backgroundColor: colors.surface, 
+        borderColor: colors.border,
+        borderRadius: borderRadius,
+      }
+    ]}>
       {attachments.length > 0 && (
-        <ScrollView horizontal style={styles.attachmentsRow} showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal style={[styles.attachmentsRow, { borderBottomColor: colors.border }]} showsHorizontalScrollIndicator={false}>
           {attachments.map((uri, idx) => (
-            <View key={idx} style={styles.attachmentThumb}>
+            <View key={idx} style={[styles.attachmentThumb, { backgroundColor: colors.surfaceAlt || colors.background }]}>
               <Image source={{ uri }} style={styles.thumbImage} />
               <TouchableOpacity style={styles.removeBtn} onPress={() => removeAttachment(idx)}>
-                <X size={12} color="white" />
+                <X size={12} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           ))}
@@ -87,9 +101,17 @@ export function BrandedAIInput({ value, onChangeText, onSubmit, placeholder = "A
       )}
 
       <TextInput
-        style={[styles.input, { minHeight: 64, maxHeight: 160 }]}
+        style={[
+          styles.input, 
+          { 
+            color: colors.text,
+            minHeight: 80, 
+            maxHeight: 180,
+            fontFamily: theme.typography.fontFamily,
+          }
+        ]}
         placeholder={placeholder}
-        placeholderTextColor="#475569"
+        placeholderTextColor={colors.textTertiary}
         multiline={true}
         maxLength={maxLength}
         value={value}
@@ -98,34 +120,44 @@ export function BrandedAIInput({ value, onChangeText, onSubmit, placeholder = "A
 
       <View style={styles.actionBar}>
         <View style={styles.leftActions}>
-          <TouchableOpacity style={styles.iconBtn} onPress={pickImage}>
-            <Plus size={20} color="#94A3B8" />
+          <TouchableOpacity 
+            style={[styles.iconBtn, { backgroundColor: colors.surfaceAlt || colors.background }]} 
+            onPress={pickImage}
+          >
+            <Plus size={18} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.rightActions}>
-          <Text style={[styles.charCount, value.length >= maxLength ? styles.charLimit : null]}>
+          <Text style={[styles.charCount, { color: value.length >= maxLength ? colors.error : colors.textSecondary }]}>
             {value.length} / {maxLength}
           </Text>
           <TouchableOpacity 
-            activeOpacity={0.9}
+            activeOpacity={0.85}
             onPress={isSubmitting ? undefined : handlePress}
             disabled={isSubmitting}
           >
             <Animated.View style={[
               styles.sendBtn, 
-              hasContent && styles.sendBtnActive,
-              isSubmitting && { backgroundColor: '#475569' },
+              { 
+                backgroundColor: isSubmitting 
+                  ? colors.surfaceAlt 
+                  : isRecording 
+                    ? colors.error 
+                    : hasContent 
+                      ? colors.primary 
+                      : (isDark ? colors.surfaceAlt : colors.border)
+              },
               { transform: [{ scale: scaleAnim }] }
             ]}>
               {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator size="small" color={colors.textSecondary} />
               ) : isRecording ? (
-                <Square size={16} color="white" fill="white" />
+                <Square size={14} color="#FFFFFF" fill="#FFFFFF" />
               ) : hasContent ? (
-                <ArrowUp size={18} color="white" />
+                <ArrowUp size={18} color={colors.textOnPrimary || '#FFFFFF'} />
               ) : (
-                <Mic size={18} color="white" />
+                <Mic size={18} color={colors.textSecondary} />
               )}
             </Animated.View>
           </TouchableOpacity>
@@ -137,19 +169,13 @@ export function BrandedAIInput({ value, onChangeText, onSubmit, placeholder = "A
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#0F172A',
-    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#1E293B',
     overflow: 'hidden',
-  },
-  containerExpanded: {
-    paddingBottom: 16,
+    paddingBottom: 14,
   },
   attachmentsRow: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   attachmentThumb: {
     width: 48,
@@ -158,7 +184,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#1E293B',
   },
   thumbImage: {
     width: '100%',
@@ -173,7 +198,6 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   input: {
-    color: 'white',
     fontSize: 16,
     padding: 16,
     paddingTop: 16,
@@ -186,12 +210,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginTop: 4,
   },
-  hidden: {
-    opacity: 0,
-    height: 0,
-    overflow: 'hidden',
-    marginTop: 0,
-  },
   leftActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -202,40 +220,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  pillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-  },
-  pillText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
   iconBtn: {
-    padding: 6,
-  },
-  charCount: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  charLimit: {
-    color: '#EF4444',
-  },
-  sendBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#334155',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendBtnActive: {
-    backgroundColor: '#2563EB',
-  }
+  charCount: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

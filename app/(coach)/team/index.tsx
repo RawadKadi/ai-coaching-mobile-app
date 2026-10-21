@@ -27,6 +27,7 @@ import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { safeBack } from '@/lib/navigation-utils';
 
 const { width } = Dimensions.get('window');
 
@@ -198,7 +199,7 @@ export default function TeamManagementScreen() {
           This feature is reserved for head coaches managing strategic performance teams.
         </Text>
         <TouchableOpacity 
-           onPress={() => router.back()}
+           onPress={() => safeBack('/(coach)/(tabs)/profile')}
            className="mt-8 px-8 py-4 bg-slate-900 rounded-2xl border border-white/5"
         >
             <Text className="text-white font-black uppercase tracking-widest text-xs">Return Home</Text>
@@ -216,7 +217,7 @@ export default function TeamManagementScreen() {
       >
         <View className="flex-row items-center gap-4">
             <TouchableOpacity 
-              onPress={() => router.back()} 
+              onPress={() => safeBack('/(coach)/(tabs)/profile')} 
               className="p-2 bg-slate-900 rounded-full border border-white/5"
             >
               <ArrowLeft size={20} color="#94A3B8" />

@@ -1,7 +1,22 @@
 import { useBrandColors } from '@/contexts/BrandContext';
 import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, Modal, Dimensions, PanResponder } from 'react-native';
-import Svg, { Path, Defs, LinearGradient, Stop, Rect, Line, Circle } from 'react-native-svg';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  Dimensions,
+  PanResponder,
+} from 'react-native';
+import Svg, {
+  Path,
+  Defs,
+  LinearGradient,
+  Stop,
+  Rect,
+  Line,
+  Circle,
+} from 'react-native-svg';
 import { X, TrendingUp, Users, Award } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -22,11 +37,11 @@ interface AnalyticsDetailedModalProps {
   currentActive: number;
 }
 
-export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({ 
-  visible, 
-  onClose, 
+export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
+  visible,
+  onClose,
   data,
-  currentActive
+  currentActive,
 }) => {
   const colors = useBrandColors();
   const insets = useSafeAreaInsets();
@@ -39,7 +54,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
   // Calculate scales
   const stats = useMemo(() => {
     if (data.length === 0) return { min: 0, max: 10, range: 10 };
-    const allValues = data.flatMap(d => [d.total_roster, d.high_performers]);
+    const allValues = data.flatMap((d) => [d.total_roster, d.high_performers]);
     const min = 0; // Always start from 0 for stacked area
     const max = Math.max(...allValues, 5) * 1.2;
     return { min, max, range: max - min };
@@ -47,32 +62,46 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
 
   const points = useMemo(() => {
     if (data.length < 2) return { roster: [], performers: [] };
-    
+
     const usableWidth = chartWidth - paddingX * 2;
-    
+
     return {
       roster: data.map((d, i) => ({
         x: paddingX + (i / (data.length - 1)) * usableWidth,
-        y: chartHeight - ((d.total_roster - stats.min) / stats.range) * chartHeight
+        y:
+          chartHeight -
+          ((d.total_roster - stats.min) / stats.range) * chartHeight,
       })),
       performers: data.map((d, i) => ({
         x: paddingX + (i / (data.length - 1)) * usableWidth,
-        y: chartHeight - ((d.high_performers - stats.min) / stats.range) * chartHeight
-      }))
+        y:
+          chartHeight -
+          ((d.high_performers - stats.min) / stats.range) * chartHeight,
+      })),
     };
   }, [data, stats, chartWidth, chartHeight]);
 
   const paths = useMemo(() => {
-    if (points.roster.length < 2) return { rosterLine: '', rosterArea: '', performersLine: '', performersArea: '' };
+    if (points.roster.length < 2)
+      return {
+        rosterLine: '',
+        rosterArea: '',
+        performersLine: '',
+        performersArea: '',
+      };
 
-    const rosterLine = points.roster.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-    const performersLine = points.performers.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    const rosterLine = points.roster
+      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+      .join(' ');
+    const performersLine = points.performers
+      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+      .join(' ');
 
     return {
       rosterLine,
       rosterArea: `${rosterLine} L ${points.roster[points.roster.length - 1].x} ${chartHeight} L ${points.roster[0].x} ${chartHeight} Z`,
       performersLine,
-      performersArea: `${performersLine} L ${points.performers[points.performers.length - 1].x} ${chartHeight} L ${points.performers[0].x} ${chartHeight} Z`
+      performersArea: `${performersLine} L ${points.performers[points.performers.length - 1].x} ${chartHeight} L ${points.performers[0].x} ${chartHeight} Z`,
     };
   }, [points, chartHeight]);
 
@@ -82,9 +111,11 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
     onPanResponderMove: (evt) => {
       const x = evt.nativeEvent.locationX;
       const usableWidth = chartWidth - paddingX * 2;
-      const index = Math.round(((x - paddingX) / usableWidth) * (data.length - 1));
+      const index = Math.round(
+        ((x - paddingX) / usableWidth) * (data.length - 1),
+      );
       const safeIndex = Math.max(0, Math.min(data.length - 1, index));
-      
+
       if (safeIndex !== activeIndex) {
         setActiveIndex(safeIndex);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -95,7 +126,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
   });
 
   const activeData = activeIndex !== null ? data[activeIndex] : null;
-  
+
   // Calculate growth
   const growth = useMemo(() => {
     if (data.length < 2) return 0;
@@ -106,15 +137,23 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
   }, [data]);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+    >
       <View className="flex-1 bg-slate-950" style={{ paddingTop: insets.top }}>
         {/* Header */}
         <View className="px-6 py-8 flex-row justify-between items-center">
           <View>
-            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-2">Detailed Analytics</Text>
-            <Text className="text-white text-3xl font-black tracking-tighter">Active Performance</Text>
+            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-2">
+              Detailed Analytics
+            </Text>
+            <Text className="text-white text-3xl font-black tracking-tighter">
+              Active Performance
+            </Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={onClose}
             className="w-12 h-12 bg-slate-900 rounded-full items-center justify-center border border-white/5"
           >
@@ -127,16 +166,24 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
           <View className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5">
             <View className="flex-row items-center gap-2 mb-2">
               <Users size={14} color={colors.primary} />
-              <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Total Roster</Text>
+              <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                Total Clients
+              </Text>
             </View>
-            <Text className="text-white text-3xl font-black">{data[data.length - 1]?.total_roster || 0}</Text>
+            <Text className="text-white text-3xl font-black">
+              {data[data.length - 1]?.total_roster || 0}
+            </Text>
           </View>
           <View className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5">
             <View className="flex-row items-center gap-2 mb-2">
               <Award size={14} color="#A855F7" />
-              <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">High Performers</Text>
+              <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                High Performers
+              </Text>
             </View>
-            <Text className="text-white text-3xl font-black">{data[data.length - 1]?.high_performers || 0}</Text>
+            <Text className="text-white text-3xl font-black">
+              {data[data.length - 1]?.high_performers || 0}
+            </Text>
           </View>
         </View>
 
@@ -144,7 +191,11 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
         <View className="px-6 flex-1">
           <View className="bg-slate-900/20 rounded-[40px] border border-white/5 py-6 px-0 h-[270px] justify-center overflow-hidden">
             <View {...panResponder.panHandlers} className="relative">
-              <Svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
+              <Svg
+                width={chartWidth}
+                height={chartHeight}
+                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              >
                 {/* Horizontal Grid Lines */}
                 {[0, 1, 2, 3, 4].map((i) => (
                   <Line
@@ -161,42 +212,72 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
 
                 <Defs>
                   <LinearGradient id="fillRoster" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0%" stopColor={colors.primary} stopOpacity="0.05" />
-                    <Stop offset="100%" stopColor={colors.primary} stopOpacity="0.01" />
+                    <Stop
+                      offset="0%"
+                      stopColor={colors.primary}
+                      stopOpacity="0.05"
+                    />
+                    <Stop
+                      offset="100%"
+                      stopColor={colors.primary}
+                      stopOpacity="0.01"
+                    />
                   </LinearGradient>
-                  <LinearGradient id="fillPerformers" x1="0" y1="0" x2="0" y2="1">
+                  <LinearGradient
+                    id="fillPerformers"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
                     <Stop offset="0%" stopColor="#A855F7" stopOpacity="0.1" />
-                    <Stop offset="100%" stopColor="#A855F7" stopOpacity="0.02" />
+                    <Stop
+                      offset="100%"
+                      stopColor="#A855F7"
+                      stopOpacity="0.02"
+                    />
                   </LinearGradient>
                 </Defs>
 
                 {/* Layer 1: Total Roster */}
                 <Path d={paths.rosterArea} fill="url(#fillRoster)" />
-                <Path d={paths.rosterLine} fill="none" stroke={colors.primary} strokeWidth="2" strokeDasharray="4 4" opacity={0.5} />
+                <Path
+                  d={paths.rosterLine}
+                  fill="none"
+                  stroke={colors.primary}
+                  strokeWidth="2"
+                  strokeDasharray="4 4"
+                  opacity={0.5}
+                />
 
                 {/* Layer 2: High Performers */}
                 <Path d={paths.performersArea} fill="url(#fillPerformers)" />
-                <Path d={paths.performersLine} fill="none" stroke="#A855F7" strokeWidth="3" />
+                <Path
+                  d={paths.performersLine}
+                  fill="none"
+                  stroke="#A855F7"
+                  strokeWidth="3"
+                />
 
                 {/* Scrubber Line */}
                 {activeIndex !== null && (
                   <>
-                    <Line 
-                      x1={points.roster[activeIndex].x} 
-                      y1="0" 
-                      x2={points.roster[activeIndex].x} 
-                      y2={chartHeight} 
-                      stroke="white" 
-                      strokeWidth="1" 
-                      opacity={0.3} 
+                    <Line
+                      x1={points.roster[activeIndex].x}
+                      y1="0"
+                      x2={points.roster[activeIndex].x}
+                      y2={chartHeight}
+                      stroke="white"
+                      strokeWidth="1"
+                      opacity={0.3}
                     />
-                    <Circle 
-                      cx={points.performers[activeIndex].x} 
-                      cy={points.performers[activeIndex].y} 
-                      r="6" 
-                      fill="#A855F7" 
-                      stroke="white" 
-                      strokeWidth="2" 
+                    <Circle
+                      cx={points.performers[activeIndex].x}
+                      cy={points.performers[activeIndex].y}
+                      r="6"
+                      fill="#A855F7"
+                      stroke="white"
+                      strokeWidth="2"
                     />
                   </>
                 )}
@@ -206,7 +287,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
             {/* Tooltip Overlay */}
             <AnimatePresence>
               {activeData && (
-                <MotiView 
+                <MotiView
                   from={{ opacity: 0, translateY: 10 }}
                   animate={{ opacity: 1, translateY: 0 }}
                   exit={{ opacity: 0, translateY: 10 }}
@@ -214,18 +295,32 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
                 >
                   <View>
                     <Text className="text-white/60 text-[8px] font-black uppercase tracking-widest mb-1">
-                      {new Date(activeData.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {new Date(activeData.date).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
                     </Text>
-                    <Text className="text-white font-black text-xs">Snapshot Report</Text>
+                    <Text className="text-white font-black text-xs">
+                      Snapshot Report
+                    </Text>
                   </View>
                   <View className="flex-row gap-4">
                     <View className="items-end">
-                      <Text className="text-blue-400 text-[10px] font-black uppercase">Total</Text>
-                      <Text className="text-white font-black text-lg">{activeData.total_roster}</Text>
+                      <Text className="text-blue-400 text-[10px] font-black uppercase">
+                        Total
+                      </Text>
+                      <Text className="text-white font-black text-lg">
+                        {activeData.total_roster}
+                      </Text>
                     </View>
                     <View className="items-end">
-                      <Text className="text-purple-400 text-[10px] font-black uppercase">Active</Text>
-                      <Text className="text-white font-black text-lg">{activeData.high_performers}</Text>
+                      <Text className="text-purple-400 text-[10px] font-black uppercase">
+                        Active
+                      </Text>
+                      <Text className="text-white font-black text-lg">
+                        {activeData.high_performers}
+                      </Text>
                     </View>
                   </View>
                 </MotiView>
@@ -237,11 +332,15 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
           <View className="flex-row justify-center gap-8 mt-8">
             <View className="flex-row items-center gap-2">
               <View className="w-3 h-3 rounded-full bg-blue-500/50 border border-blue-400" />
-              <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total Growth</Text>
+              <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                Total Growth
+              </Text>
             </View>
             <View className="flex-row items-center gap-2">
               <View className="w-3 h-3 rounded-full bg-purple-600 border border-purple-400" />
-              <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">High Performers</Text>
+              <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                High Performers
+              </Text>
             </View>
           </View>
         </View>
@@ -253,16 +352,22 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
               <TrendingUp size={20} color="#10B981" />
             </View>
             <View>
-              <Text className="text-white font-black text-sm tracking-tight">Trending up by {growth}% this month</Text>
-              <Text className="text-slate-500 text-[10px] font-medium uppercase tracking-widest">Last 30 Days Growth Velocity</Text>
+              <Text className="text-white font-black text-sm tracking-tight">
+                Trending up by {growth}% this month
+              </Text>
+              <Text className="text-slate-500 text-[10px] font-medium uppercase tracking-widest">
+                Last 30 Days Growth Velocity
+              </Text>
             </View>
           </View>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             onPress={onClose}
             className="mt-8 bg-blue-600 py-5 rounded-[24px] items-center justify-center shadow-lg shadow-blue-500/30"
           >
-            <Text className="text-white font-black text-sm uppercase tracking-[2px]">Return to Dashboard</Text>
+            <Text className="text-white font-black text-sm uppercase tracking-[2px]">
+              Return to Dashboard
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

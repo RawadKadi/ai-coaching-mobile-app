@@ -23,6 +23,7 @@ import { availabilityService, DayOfWeek } from '@/lib/availability-service';
 import Step1 from '@/components/onboarding/coach/Step1';
 import Slide1b from '@/components/onboarding/coach/Slide1b';
 import CustomizeAppStep from '@/components/onboarding/coach/CustomizeAppStep';
+import { getFontFamily } from '@/hooks/useAppFonts';
 import Step2 from '@/components/onboarding/coach/Step2';
 import Slide2b from '@/components/onboarding/coach/Slide2b';
 import Step3 from '@/components/onboarding/coach/Step3';
@@ -334,8 +335,14 @@ export default function CoachOnboardingScreen() {
           ]);
         };
 
+        const activeBgColor = values.background_color || '#020617';
+        const activePrimaryColor = values.primary_color || colors.primary || '#2563EB';
+        const activeFontName = values.font_family || 'System';
+        const activeHeadingFont = getFontFamily(activeFontName, '900');
+        const activeBodyFont = getFontFamily(activeFontName, '500');
+
         return (
-          <View style={{ flex: 1, backgroundColor: '#020617' }}>
+          <View style={{ flex: 1, backgroundColor: activeBgColor }}>
             <SafeAreaView style={{ flex: 1 }}>
               {!success && <PersistFormikValues />}
 
@@ -343,16 +350,27 @@ export default function CoachOnboardingScreen() {
               {!success && (
                 <View style={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View>
-                    <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '900' }}>Coaching Setup</Text>
-                    <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 4, marginTop: 4 }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '900', fontFamily: activeHeadingFont }}>
+                      Coaching Setup
+                    </Text>
+                    <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 4, marginTop: 4, fontFamily: activeBodyFont }}>
                       Step {step} of {TOTAL_FORM_STEPS}
                     </Text>
                   </View>
                   <TouchableOpacity
                     onPress={clearDraft}
-                    style={{ width: 48, height: 48, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)' }}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      backgroundColor: activePrimaryColor + '18',
+                      borderRadius: 16,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: activePrimaryColor + '30',
+                    }}
                   >
-                    <Briefcase size={22} color={colors.primary} />
+                    <Briefcase size={22} color={activePrimaryColor} />
                   </TouchableOpacity>
                 </View>
               )}
@@ -363,7 +381,7 @@ export default function CoachOnboardingScreen() {
                   <Animated.View
                     style={{
                       height: '100%',
-                      backgroundColor: colors.primary,
+                      backgroundColor: activePrimaryColor,
                       borderRadius: 4,
                       width: progressAnim.interpolate({
                         inputRange: [0, 1],
@@ -423,7 +441,7 @@ export default function CoachOnboardingScreen() {
 
               {/* Footer — only shown during form steps */}
               {!success && (
-                <View style={{ padding: 24, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <View style={{ padding: 24, backgroundColor: activeBgColor, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
                   {step > 1 && (
                     <TouchableOpacity
                       onPress={goBack}
@@ -443,14 +461,14 @@ export default function CoachOnboardingScreen() {
                       justifyContent: 'center',
                       flexDirection: 'row',
                       gap: 12,
-                      backgroundColor: isDisabled ? '#1E293B' : '#2563EB',
+                      backgroundColor: isDisabled ? '#1E293B' : activePrimaryColor,
                     }}
                   >
                     {loading ? (
                       <ActivityIndicator color="white" />
                     ) : (
                       <>
-                        <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 17 }}>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 17, fontFamily: activeHeadingFont }}>
                           {step === 6 ? 'Activate Workspace' : 'Next'}
                         </Text>
                         <ChevronRight size={20} color="white" />

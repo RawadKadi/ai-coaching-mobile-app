@@ -548,10 +548,10 @@ export function ChatInputBar({
           style={[
             styles.replyPreviewContainer, 
             { 
-              backgroundColor: '#0F172A', // Pure dark for brand consistency
+              backgroundColor: theme.colors.surface,
               opacity: replyAnim,
               borderTopWidth: 1,
-              borderTopColor: 'rgba(255,255,255,0.05)',
+              borderTopColor: theme.colors.border,
               transform: [
                 { translateY: replyAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
                 { scale: replyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }
@@ -564,7 +564,7 @@ export function ChatInputBar({
             <Text style={[styles.replySender, { color: theme.colors.primary }]}>
               {replyingTo.isOwn ? 'You' : (replyingTo.sender_name || 'Coach')}
             </Text>
-            <Text style={[styles.replySnippet, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={1}>
+            <Text style={[styles.replySnippet, { color: theme.colors.textSecondary }]} numberOfLines={1}>
               {(() => {
                 try {
                   const content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
@@ -688,10 +688,10 @@ export function ChatInputBar({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: '#020617', // Keep the actual input area solidly dark so text is readable
+            backgroundColor: theme.colors.background,
             zIndex: -1,
             borderTopWidth: 1,
-            borderTopColor: theme.colors.secondary + '33', // Subtle colored top border
+            borderTopColor: theme.colors.border,
         }} />
 
         {/* Left: Cancel Edit (X) in edit mode, Plus otherwise — hidden while recording */}
@@ -724,19 +724,19 @@ export function ChatInputBar({
         {!isVoiceRecording && (
           <View style={[
             styles.inputWrapper,
-            { backgroundColor: '#0F172A', borderColor: '#1E293B' },
+            { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
           ]}>
           <TextInput
             ref={inputRef}
             style={[
               styles.input,
               {
-                color: '#FFFFFF',
+                color: theme.colors.text,
                 fontFamily: theme.typography.fontFamily,
               },
             ]}
             placeholder={placeholder}
-            placeholderTextColor="#475569"
+            placeholderTextColor={theme.colors.textTertiary || '#94A3B8'}
             value={text}
             onChangeText={(v) => {
               setText(v);
@@ -827,8 +827,8 @@ export function ChatInputBar({
           style={[
             styles.panel,
             {
-              backgroundColor: '#0F172A',
-              borderColor: 'rgba(255,255,255,0.05)',
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
               height: panelHeightAnim,
               marginTop: 8,
             },
@@ -897,12 +897,12 @@ export function ChatInputBar({
           {activePanel === 'emoji' && (
             <View style={{ flex: 1 }}>
               {/* Search bar */}
-              <View style={[styles.searchRow, { backgroundColor: '#020617' }]}>
+              <View style={[styles.searchRow, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, borderWidth: 1 }]}>
                 <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
                 <TextInput
-                  style={[styles.searchInput, { color: '#FFFFFF', fontFamily: theme.typography.fontFamily }]}
+                  style={[styles.searchInput, { color: theme.colors.text, fontFamily: theme.typography.fontFamily }]}
                   placeholder="Search GIFs…"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor={theme.colors.textTertiary || '#94A3B8'}
                   value={gifQuery}
                   onChangeText={(v) => {
                     setGifQuery(v);
@@ -1315,7 +1315,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   editBannerSnippet: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#94A3B8',
   },
   backdrop: {
     position: 'absolute',

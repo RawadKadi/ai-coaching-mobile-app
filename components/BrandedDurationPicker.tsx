@@ -1,7 +1,23 @@
-import { useBrandColors } from '@/contexts/BrandContext';
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Animated,
+  Easing,
+  Dimensions,
+  AccessibilityInfo,
+  Pressable,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronDown, Clock, Check } from 'lucide-react-native';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SLIDE_DISTANCE = Math.min(SCREEN_HEIGHT * 0.7, 500);
 
 interface BrandedDurationPickerProps {
   value: number;
@@ -9,18 +25,86 @@ interface BrandedDurationPickerProps {
   label?: string;
 }
 
-export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ value, onSelect, label = "Duration" }) => {
+export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({
+  value,
+  onSelect,
+  label = "Duration",
+}) => {
   const colors = useBrandColors();
-  const styles = getStyles(colors);
-  const [isOpen, setIsOpen] = useState(false);
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const isDark = theme.isDarkMode;
+  const styles = getStyles(colors, isDark, insets);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(SLIDE_DISTANCE)).current;
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+  }, []);
+
+  const openPicker = () => {
+    setModalVisible(true);
+    fadeAnim.setValue(0);
+    slideAnim.setValue(reduceMotion ? 0 : SLIDE_DISTANCE);
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: reduceMotion ? 0 : 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: reduceMotion ? 0 : 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closePicker = (callback?: () => void) => {
+    if (reduceMotion) {
+      setModalVisible(false);
+      if (callback) callback();
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: SLIDE_DISTANCE,
+        duration: 250,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setModalVisible(false);
+      if (callback) callback();
+    });
+  };
+
+  const handleSelect = (opt: number) => {
+    closePicker(() => {
+      onSelect(opt);
+    });
+  };
+
   const options = Array.from({ length: 12 }, (_, i) => i + 3); // 3-14 days
 
   return (
     <View>
       <Text style={styles.headerLabel}>{label}</Text>
-      
-      <TouchableOpacity 
-        onPress={() => setIsOpen(true)}
+
+      <TouchableOpacity
+        onPress={openPicker}
         activeOpacity={0.8}
         style={styles.pickerButton}
       >
@@ -33,27 +117,39 @@ export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ va
             <Text style={styles.subText}>Length</Text>
           </View>
         </View>
-        <ChevronDown size={20} color="#475569" />
+        <ChevronDown size={20} color={colors.textSecondary} />
       </TouchableOpacity>
 
       <Modal
-        visible={isOpen}
+        visible={modalVisible}
         transparent={true}
-        animationType="fade"
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => closePicker()}
       >
-        <TouchableOpacity 
-          activeOpacity={1} 
-          onPress={() => setIsOpen(false)}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
+        <View style={styles.modalRoot}>
+          {/* Fading dark background */}
+          <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => closePicker()} />
+          </Animated.View>
+
+          {/* Sliding sheet */}
+          <Animated.View
+            style={[
+              styles.modalContent,
+              { transform: [{ translateY: slideAnim }] },
+            ]}
+          >
+            {/* Drag Handle */}
+            <View style={styles.handleBar} />
+
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Select Duration</Text>
                 <Text style={styles.modalSubtitle}>Days Range: 3-14</Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => setIsOpen(false)}
+              <TouchableOpacity
+                onPress={() => closePicker()}
                 style={styles.doneButton}
               >
                 <Text style={styles.doneButtonText}>Done</Text>
@@ -65,186 +161,221 @@ export const BrandedDurationPicker: React.FC<BrandedDurationPickerProps> = ({ va
                 {options.map((opt) => (
                   <TouchableOpacity
                     key={opt}
-                    onPress={() => {
-                      onSelect(opt);
-                      setIsOpen(false);
-                    }}
+                    onPress={() => handleSelect(opt)}
                     style={[
                       styles.gridOption,
-                      value === opt ? styles.gridOptionActive : styles.gridOptionInactive
+                      value === opt
+                        ? styles.gridOptionActive
+                        : styles.gridOptionInactive,
                     ]}
                   >
                     <View style={styles.optionRow}>
-                        <Text style={[
+                      <Text
+                        style={[
                           styles.optionText,
-                          value === opt ? styles.optionTextActive : styles.optionTextInactive
-                        ]}>{opt}</Text>
-                        {value === opt && <Check size={14} color="white" />}
+                          value === opt
+                            ? styles.optionTextActive
+                            : styles.optionTextInactive,
+                        ]}
+                      >
+                        {opt}
+                      </Text>
+                      {value === opt && (
+                        <Check
+                          size={14}
+                          color={colors.textOnPrimary || 'white'}
+                          strokeWidth={3}
+                        />
+                      )}
                     </View>
-                    <Text style={[
-                      styles.optionLabel,
-                      value === opt ? styles.optionLabelActive : styles.optionLabelInactive
-                    ]}>Days</Text>
+                    <Text
+                      style={[
+                        styles.optionLabel,
+                        value === opt
+                          ? styles.optionLabelActive
+                          : styles.optionLabelInactive,
+                      ]}
+                    >
+                      Days
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </ScrollView>
-          </View>
-        </TouchableOpacity>
+          </Animated.View>
+        </View>
       </Modal>
     </View>
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
-  headerLabel: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginBottom: 12,
-    marginLeft: 4,
-  },
-  pickerButton: {
-    height: 80,
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 28,
-    paddingHorizontal: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  pickerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.2)',
-    marginRight: 16,
-  },
-  daysText: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-    fontSize: 20,
-  },
-  subText: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#020617',
-    borderTopLeftRadius: 48,
-    borderTopRightRadius: 48,
-    borderTopWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 32,
-    paddingBottom: 48,
-    maxHeight: '60%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  modalTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '900',
-  },
-  modalSubtitle: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginTop: 4,
-  },
-  doneButton: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#0F172A',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  doneButtonText: {
-    color: '#94A3B8',
-    fontWeight: '700',
-  },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  gridOption: {
-    width: '31%',
-    height: 64,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  gridOptionActive: {
-    backgroundColor: '#2563EB',
-    borderColor: colors.primary,
-  },
-  gridOptionInactive: {
-    backgroundColor: '#0F172A',
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  optionText: {
-    fontSize: 20,
-    fontWeight: '900',
-    marginRight: 4,
-  },
-  optionTextActive: {
-    color: '#FFFFFF',
-  },
-  optionTextInactive: {
-    color: '#94A3B8',
-  },
-  optionLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  optionLabelActive: {
-    color: '#BFDBFE',
-  },
-  optionLabelInactive: {
-    color: '#475569',
-  },
-});
+const getStyles = (colors: any, isDark: boolean, insets: any) =>
+  StyleSheet.create({
+    headerLabel: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 2,
+      marginBottom: 12,
+      marginLeft: 4,
+    },
+    pickerButton: {
+      height: 80,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 20,
+      paddingHorizontal: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: colors.border,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.06,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    pickerContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    iconContainer: {
+      width: 44,
+      height: 44,
+      backgroundColor: isDark
+        ? 'rgba(255, 255, 255, 0.06)'
+        : `${colors.primary}15`,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: `${colors.primary}33`,
+      marginRight: 16,
+    },
+    daysText: {
+      color: colors.text,
+      fontWeight: '900',
+      fontSize: 20,
+    },
+    subText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      marginTop: 2,
+    },
+    modalRoot: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalContent: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 36,
+      borderTopRightRadius: 36,
+      borderTopWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 24,
+      paddingTop: 16,
+      paddingBottom: Math.max(insets.bottom + 16, 36),
+      maxHeight: '65%',
+    },
+    handleBar: {
+      width: 44,
+      height: 5,
+      backgroundColor: colors.border,
+      borderRadius: 999,
+      alignSelf: 'center',
+      marginBottom: 20,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    modalTitle: {
+      color: colors.text,
+      fontSize: 22,
+      fontWeight: '900',
+      letterSpacing: -0.5,
+    },
+    modalSubtitle: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 2,
+      marginTop: 4,
+    },
+    doneButton: {
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      backgroundColor: colors.background,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    doneButtonText: {
+      color: colors.text,
+      fontWeight: '700',
+      fontSize: 13,
+    },
+    gridContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+    },
+    gridOption: {
+      width: '31%',
+      height: 64,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    gridOptionActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    gridOptionInactive: {
+      backgroundColor: colors.background,
+      borderColor: colors.border,
+    },
+    optionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    optionText: {
+      fontSize: 20,
+      fontWeight: '900',
+      marginRight: 4,
+    },
+    optionTextActive: {
+      color: colors.textOnPrimary || '#FFFFFF',
+    },
+    optionTextInactive: {
+      color: colors.text,
+    },
+    optionLabel: {
+      fontSize: 9,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
+    optionLabelActive: {
+      color: colors.textOnPrimary || '#FFFFFF',
+      opacity: 0.85,
+    },
+    optionLabelInactive: {
+      color: colors.textSecondary,
+    },
+  });

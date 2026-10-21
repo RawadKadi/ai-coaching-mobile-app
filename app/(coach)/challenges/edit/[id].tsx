@@ -269,26 +269,26 @@ export default function EditChallengeScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-slate-950 items-center justify-center">
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header */}
         <View style={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <TouchableOpacity 
             onPress={handleBack} 
-            style={{ padding: 12, backgroundColor: '#0f172a', borderRadius: 16, borderWidth: 1, borderColor: '#1e293b' }}
+            style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}
           >
-            <ArrowLeft size={20} color="#94A3B8" />
+            <ArrowLeft size={20} color={colors.text} />
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Edit Challenge</Text>
-              <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>Refine Protocol</Text>
+              <Text style={{ color: colors.text, fontSize: 20, fontWeight: 'bold' }}>Edit Challenge</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>Plan Details</Text>
           </View>
           <View style={{ width: 48 }} />
         </View>
@@ -307,22 +307,22 @@ export default function EditChallengeScreen() {
             <View>
                 {/* Client Read-only */}
                 <View style={{ marginTop: 24 }}>
-                    <Text style={{ color: '#64748b', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Recipient</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Recipient</Text>
                     <View 
                         style={{ 
-                            backgroundColor: '#0f172a', 
+                            backgroundColor: colors.surface, 
                             padding: 16, 
                             borderRadius: 16, 
                             borderWidth: 1, 
-                            borderColor: '#1e293b',
+                            borderColor: colors.border,
                             flexDirection: 'row',
                             alignItems: 'center',
-                            opacity: 0.7
+                            opacity: 0.85
                         }}
                     >
                         <BrandedAvatar size={36} name={selectedClient?.full_name || '?'} imageUrl={selectedClient?.avatar_url} />
                         <View style={{ marginLeft: 12 }}>
-                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: 'white' }}>
+                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text }}>
                                 {selectedClient?.full_name}
                             </Text>
                         </View>
@@ -332,11 +332,11 @@ export default function EditChallengeScreen() {
                 {/* Details */}
                 <View style={{ marginTop: 32 }}>
                     <View>
-                        <Text style={{ color: '#64748b', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Plan Identity</Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Plan Name</Text>
                         <TextInput 
-                            style={{ backgroundColor: '#0f172a', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: errors.name ? '#ef444466' : '#1e293b', color: 'white', fontWeight: 'bold', fontSize: 18 }}
+                            style={{ backgroundColor: colors.surface, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: errors.name ? '#ef444466' : colors.border, color: colors.text, fontWeight: 'bold', fontSize: 18 }}
                             placeholder="Challenge Name" 
-                            placeholderTextColor="#334155"
+                            placeholderTextColor={colors.textTertiary}
                             value={name} 
                             onChangeText={(t) => { setName(t); setErrors(prev => ({ ...prev, name: '' })); }}
                         />
@@ -344,11 +344,11 @@ export default function EditChallengeScreen() {
                     </View>
 
                     <View style={{ marginTop: 24 }}>
-                        <Text style={{ color: '#64748b', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Protocol Objectives</Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Description</Text>
                         <TextInput 
-                            style={{ backgroundColor: '#0f172a', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#1e293b', color: 'white', fontWeight: '500', minHeight: 100 }}
+                            style={{ backgroundColor: colors.surface, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: colors.border, color: colors.text, fontWeight: '500', minHeight: 100 }}
                             placeholder="Briefly describe the focus of this challenge..." 
-                            placeholderTextColor="#334155"
+                            placeholderTextColor={colors.textTertiary}
                             multiline 
                             value={description} 
                             onChangeText={setDescription}
@@ -358,32 +358,32 @@ export default function EditChallengeScreen() {
                 </View>
             </View>
 
-            {/* Phase 2: Daily Missions */}
+            {/* Phase 2: Daily Tasks */}
             <View style={{ marginTop: 48 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24, paddingHorizontal: 4 }}>
                     <View>
-                        <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Daily Missions</Text>
-                        <Text style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>Configure each day's requirements</Text>
+                        <Text style={{ color: colors.text, fontSize: 20, fontWeight: 'bold' }}>Daily Tasks</Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4 }}>Configure each day's requirements</Text>
                     </View>
                 </View>
 
                 {subChallenges.map((sub, i) => (
                     <View 
                         key={sub.id || i} 
-                        style={{ backgroundColor: '#0f172a', padding: 20, borderRadius: 28, borderWidth: 1, borderColor: '#1e293b', marginBottom: 24 }}
+                        style={{ backgroundColor: colors.surface, padding: 20, borderRadius: 28, borderWidth: 1, borderColor: colors.border, marginBottom: 24 }}
                     >
                         {/* Day Header */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#1e293b80', paddingBottom: 12 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 12 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: sub.completed ? '#10b981' : '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
-                                    {sub.completed ? <Check size={14} color="white" /> : <Text style={{ color: 'white', fontSize: 10, fontWeight: '900' }}>{i + 1}</Text>}
+                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: sub.completed ? '#10b981' : colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                    {sub.completed ? <Check size={14} color="white" /> : <Text style={{ color: colors.textOnPrimary || 'white', fontSize: 10, fontWeight: '900' }}>{i + 1}</Text>}
                                 </View>
                                 <Text style={{ color: sub.completed ? '#10b981' : colors.primary, fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Day {i + 1}</Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.6 }}>
-                                    <Calendar size={10} color="#64748B" />
-                                    <Text style={{ color: '#64748b', fontWeight: '500', fontSize: 10 }}>{sub.assigned_date}</Text>
+                                    <Calendar size={10} color={colors.textSecondary} />
+                                    <Text style={{ color: colors.textSecondary, fontWeight: '500', fontSize: 10 }}>{sub.assigned_date}</Text>
                                 </View>
                                 <TouchableOpacity 
                                     onPress={() => handleDeleteSubChallenge(i)}
@@ -394,20 +394,20 @@ export default function EditChallengeScreen() {
                             </View>
                         </View>
 
-                        {/* Mission Name */}
+                        {/* Task Name */}
                         <TextInput 
-                            style={{ backgroundColor: '#1e293b80', padding: 16, borderRadius: 12, color: 'white', fontWeight: 'bold', fontSize: 16, marginBottom: 12 }}
-                            placeholder="Mission Name" 
-                            placeholderTextColor="#475569"
+                            style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, padding: 16, borderRadius: 12, color: colors.text, fontWeight: 'bold', fontSize: 16, marginBottom: 12 }}
+                            placeholder="Task Name" 
+                            placeholderTextColor={colors.textTertiary}
                             value={sub.name} 
                             onChangeText={(v) => updateSubChallenge(i, 'name', v)}
                         />
 
-                        {/* Mission Description */}
+                        {/* Task Description */}
                         <TextInput 
-                            style={{ backgroundColor: '#1e293b80', padding: 16, borderRadius: 12, color: '#cbd5e1', fontWeight: '500', fontSize: 14, marginBottom: 16, minHeight: 60 }}
+                            style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, padding: 16, borderRadius: 12, color: colors.text, fontWeight: '500', fontSize: 14, marginBottom: 16, minHeight: 60 }}
                             placeholder="Add specific instructions for this day..." 
-                            placeholderTextColor="#475569"
+                            placeholderTextColor={colors.textTertiary}
                             multiline
                             value={sub.description} 
                             onChangeText={(v) => updateSubChallenge(i, 'description', v)}
@@ -415,7 +415,7 @@ export default function EditChallengeScreen() {
                         />
                         
                         {/* Focus Type Tags */}
-                        <Text style={{ color: '#64748b', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Focus Area</Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Focus Area</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginBottom: 16 }}>
                             {(['training', 'nutrition', 'recovery', 'consistency'] as ChallengeFocusType[]).map((f) => {
                                 const isActive = sub.focus_type === f;
@@ -429,22 +429,22 @@ export default function EditChallengeScreen() {
                                             borderRadius: 12, 
                                             borderWidth: 1, 
                                             marginRight: 8,
-                                            backgroundColor: isActive ? '#2563eb' : '#020617',
-                                            borderColor: isActive ? '#60a5fa' : '#1e293b'
+                                            backgroundColor: isActive ? colors.primary : colors.background,
+                                            borderColor: isActive ? colors.primary : colors.border
                                         }}
                                     >
-                                        <Text style={{ fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', color: isActive ? 'white' : '#64748b' }}>{f}</Text>
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', color: isActive ? (colors.textOnPrimary || 'white') : colors.textSecondary }}>{f}</Text>
                                     </TouchableOpacity>
                                 );
                             })}
                         </ScrollView>
 
                         {/* Intensity Level */}
-                        <Text style={{ color: '#64748b', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Intensity Level</Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Intensity Level</Text>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             {(['low', 'medium', 'high'] as const).map((int) => {
                                 const isActive = sub.intensity === int;
-                                let color = '#64748B';
+                                let color = colors.textSecondary;
                                 if (isActive) {
                                     if (int === 'low') color = '#10B981';
                                     if (int === 'medium') color = '#F59E0B';
@@ -464,12 +464,12 @@ export default function EditChallengeScreen() {
                                             flexDirection: 'row',
                                             justifyContent: 'center',
                                             gap: 6,
-                                            backgroundColor: '#020617',
-                                            borderColor: isActive ? color : '#1e293b'
+                                            backgroundColor: isActive ? (color + '15') : colors.background,
+                                            borderColor: isActive ? color : colors.border
                                         }}
                                     >
-                                        <Flame size={12} color={isActive ? color : '#334155'} />
-                                        <Text style={{ fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', color: isActive ? 'white' : '#64748b' }}>{int}</Text>
+                                        <Flame size={12} color={isActive ? color : colors.textTertiary} />
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', color: isActive ? color : colors.textSecondary }}>{int}</Text>
                                     </TouchableOpacity>
                                 );
                             })}
@@ -480,14 +480,14 @@ export default function EditChallengeScreen() {
           </ScrollView>
 
           {/* Action Bar */}
-          <View style={{ paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: '#0f172a' }}>
+          <View style={{ paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
               <TouchableOpacity 
                 onPress={handleSave} 
                 disabled={saving}
                 style={{ 
                     height: 64, 
                     borderRadius: 24, 
-                    backgroundColor: saving ? '#1e293b' : '#2563eb',
+                    backgroundColor: saving ? colors.surface : colors.primary,
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -502,13 +502,13 @@ export default function EditChallengeScreen() {
               >
                 {saving ? (
                     <>
-                        <ActivityIndicator color="white" />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Saving Changes...</Text>
+                        <ActivityIndicator color={colors.textOnPrimary || 'white'} />
+                        <Text style={{ color: colors.textOnPrimary || 'white', fontWeight: 'bold', fontSize: 18 }}>Saving Changes...</Text>
                     </>
                 ) : (
                     <>
-                        <ShieldCheck size={22} color="white" />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Save Protocol</Text>
+                        <ShieldCheck size={22} color={colors.textOnPrimary || 'white'} />
+                        <Text style={{ color: colors.textOnPrimary || 'white', fontWeight: 'bold', fontSize: 18 }}>Save Challenge</Text>
                     </>
                 )}
               </TouchableOpacity>

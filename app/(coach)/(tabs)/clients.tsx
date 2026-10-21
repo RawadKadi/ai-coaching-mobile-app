@@ -38,8 +38,9 @@ export default function ClientsScreen() {
   const insets = useSafeAreaInsets();
   const { coach } = useAuth();
   const { brand } = useBrand();
-  const { primary, secondary } = useBrandColors();
   const theme = useTheme();
+  const { colors, isDarkMode } = theme;
+  const { primary, secondary } = colors;
   const { handleScroll } = useTabBarScroll();
 
   const [activeTab, setActiveTab] = useState<Tab>('clients');
@@ -155,49 +156,51 @@ export default function ClientsScreen() {
             Alert.alert('Pending Invite', `Email: ${item.email}\n\nToken: ${item.invite_token}`);
           }
         }}
-        className={`p-6 rounded-[32px] border ${item.status === 'pending' ? 'border-dashed border-amber-500/30 bg-amber-500/5' : 'border-white/5 bg-slate-900/40'} flex-row items-center gap-4`}
+        style={{ backgroundColor: item.status === 'pending' ? 'rgba(245, 158, 11, 0.05)' : colors.surface, borderColor: item.status === 'pending' ? 'rgba(245, 158, 11, 0.3)' : colors.border }}
+        className="p-6 rounded-[32px] border flex-row items-center gap-4"
       >
         <BrandedAvatar name={item.full_name} size={56} imageUrl={item.avatar_url} useBrandColor={item.status === 'active'} />
         <View className="flex-1">
           <View className="flex-row items-center justify-between mb-1">
-            <Text className="text-white font-black text-lg tracking-tight" numberOfLines={1}>{item.full_name}</Text>
+            <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight" numberOfLines={1}>{item.full_name}</Text>
             <View className={`px-2 py-1 rounded-md border ${item.status === 'pending' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
               <Text className={`${item.status === 'pending' ? 'text-amber-500' : 'text-emerald-500'} text-[8px] font-black uppercase tracking-widest`}>{item.status}</Text>
             </View>
           </View>
-          <Text className="text-slate-500 text-xs font-medium mb-3" numberOfLines={1}>{item.email}</Text>
+          <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mb-3" numberOfLines={1}>{item.email}</Text>
           <View className="flex-row items-center gap-4">
              <View className="flex-row items-center gap-1.5">
-                <Users size={12} color="#94A3B8" />
-                <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{item.client_count} Clients</Text>
+                <Users size={12} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest">{item.client_count} Clients</Text>
              </View>
-             <View className="w-1 h-1 rounded-full bg-slate-800" />
+             <View style={{ backgroundColor: colors.border }} className="w-1 h-1 rounded-full" />
              <View className="flex-row items-center gap-1.5">
-                <Calendar size={12} color="#94A3B8" />
-                <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{new Date(item.added_at).toLocaleDateString()}</Text>
+                <Calendar size={12} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest">{new Date(item.added_at).toLocaleDateString()}</Text>
              </View>
           </View>
         </View>
-        <ChevronRight size={20} color="#334155" />
+        <ChevronRight size={20} color={colors.textSecondary} />
       </TouchableOpacity>
     </MotiView>
   );
 
   return (
-    <View style={{ flex: 1 }} className="bg-slate-950">
-      <StatusBar barStyle="light-content" translucent />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} translucent />
       
       {/* Header */}
-      <View style={{ paddingTop: insets.top + 16 }} className="px-6 pb-6 flex-row items-center justify-between border-b border-white/5 bg-slate-950">
+      <View style={{ paddingTop: insets.top + 16, backgroundColor: colors.background, borderColor: colors.border }} className="px-6 pb-6 flex-row items-center justify-between border-b">
         <View>
-          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px] mb-1">Management Center</Text>
-          <Text className="text-white text-3xl font-black tracking-tighter">Management</Text>
+          <Text style={{ color: colors.primary }} className="text-[10px] font-black uppercase tracking-[3px] mb-1">Management Center</Text>
+          <Text style={{ color: colors.text }} className="text-3xl font-black tracking-tighter">Management</Text>
         </View>
         <TouchableOpacity
-          className="w-14 h-14 bg-blue-600 rounded-[22px] items-center justify-center shadow-2xl shadow-blue-500/30 border border-white/10"
+          style={{ backgroundColor: colors.primary }}
+          className="w-14 h-14 rounded-[22px] items-center justify-center shadow-2xl border border-white/10"
           onPress={() => activeTab === 'clients' ? router.push('/(coach)/invite-client') : router.push('/(coach)/team/add')}
         >
-          {activeTab === 'clients' ? <UserPlus size={24} color="white" /> : <Plus size={24} color="white" />}
+          {activeTab === 'clients' ? <UserPlus size={24} color={colors.textOnPrimary} /> : <Plus size={24} color={colors.textOnPrimary} />}
         </TouchableOpacity>
       </View>
 
@@ -211,22 +214,22 @@ export default function ClientsScreen() {
       >
         {/* Tab Switch */}
         <View className="px-6 mt-8 mb-8">
-          <View className="flex-row bg-slate-900/50 rounded-[28px] p-1.5 border border-white/5">
+          <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-row rounded-[28px] p-1.5 border">
             <Pressable
               onPress={() => { setActiveTab('clients'); setSearchQuery(''); }}
-              className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'clients' ? 'bg-slate-800' : ''}`}
-              style={activeTab === 'clients' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
+              className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
+              style={activeTab === 'clients' ? { backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 } : {}}
             >
-              <Users size={18} color={activeTab === 'clients' ? theme.colors.primary : '#475569'} />
-              <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'clients' ? 'text-white' : 'text-slate-500'}`}>Clients</Text>
+              <Users size={18} color={activeTab === 'clients' ? colors.primary : colors.textSecondary} />
+              <Text style={{ color: activeTab === 'clients' ? colors.text : colors.textSecondary }} className="font-black text-sm uppercase tracking-widest">Clients</Text>
             </Pressable>
             <Pressable
               onPress={() => { setActiveTab('team'); setSearchQuery(''); }}
-              className={`flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 ${activeTab === 'team' ? 'bg-slate-800' : ''}`}
-              style={activeTab === 'team' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 } : {}}
+              className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
+              style={activeTab === 'team' ? { backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 } : {}}
             >
-              <Zap size={18} color={activeTab === 'team' ? theme.colors.primary : '#475569'} />
-              <Text className={`font-black text-sm uppercase tracking-widest ${activeTab === 'team' ? 'text-white' : 'text-slate-500'}`}>Coaches</Text>
+              <Zap size={18} color={activeTab === 'team' ? colors.primary : colors.textSecondary} />
+              <Text style={{ color: activeTab === 'team' ? colors.text : colors.textSecondary }} className="font-black text-sm uppercase tracking-widest">Coaches</Text>
             </Pressable>
           </View>
         </View>
@@ -235,55 +238,66 @@ export default function ClientsScreen() {
           {activeTab === 'clients' ? (
             <MotiView key="clients-tab" from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} exit={{ opacity: 0, translateY: -10 }}>
               {/* Athletes Hero */}
-              <View className="mx-6 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden">
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mx-6 p-10 rounded-[48px] border items-center overflow-hidden">
                 <View className="absolute top-0 right-0 p-4 opacity-10">
-                  <Activity size={120} color={theme.colors.primary} />
+                  <Activity size={120} color={colors.primary} />
                 </View>
-                <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
-                  <Users size={36} color="white" fill="white" />
+                <View style={{ backgroundColor: colors.primary }} className="w-20 h-20 rounded-[30px] items-center justify-center shadow-2xl mb-6 border-2 border-white/20">
+                  <Users size={36} color={colors.textOnPrimary} fill={colors.textOnPrimary} />
                 </View>
-                <Text className="text-white text-2xl font-black text-center tracking-tighter">Athlete Network</Text>
-                <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
+                <Text style={{ color: colors.text }} className="text-2xl font-black text-center tracking-tighter">Athlete Network</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-center mt-3 leading-5 px-4 text-sm font-medium">
                   Optimize your roster, track check-ins, and elevate collective performance.
                 </Text>
               </View>
 
               {/* Athletes Stats */}
-              <View className="mx-6 mt-8 p-8 rounded-[40px] bg-slate-900/40 border border-white/5">
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mx-6 mt-8 p-8 rounded-[40px] border">
                 <View className="flex-row items-center gap-2 mb-8">
-                  <View className="w-8 h-8 rounded-xl bg-slate-950 items-center justify-center border border-white/5">
-                    <TrendingUp size={16} color={theme.colors.primary} />
+                  <View style={{ backgroundColor: colors.background, borderColor: colors.border }} className="w-8 h-8 rounded-xl items-center justify-center border">
+                    <TrendingUp size={16} color={colors.primary} />
                   </View>
-                  <Text className="text-white font-black text-lg tracking-tight">Active Performance</Text>
+                  <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight">Active Performance</Text>
                 </View>
                 <View className="flex-row">
-                  <StatItem label="Active" value={activeCount.toString()} icon={<Users size={14} color={theme.colors.primary} />} />
-                  <View className="w-px h-12 bg-white/5 mx-2 self-center" />
+                  <StatItem label="Active" value={activeCount.toString()} icon={<Users size={14} color={colors.primary} />} />
+                  <View style={{ backgroundColor: colors.border }} className="w-px h-12 mx-2 self-center" />
                   <StatItem label="Pending" value={pendingCount.toString()} icon={<MessageSquare size={14} color="#F59E0B" />} />
-                  <View className="w-px h-12 bg-white/5 mx-2 self-center" />
+                  <View style={{ backgroundColor: colors.border }} className="w-px h-12 mx-2 self-center" />
                   <StatItem label="Checked In" value={checkedInTodayCount.toString()} icon={<Activity size={14} color="#10B981" />} isLast />
                 </View>
               </View>
 
               {/* Search Bar */}
               <View className="px-6 mt-10 mb-6 flex-row gap-3">
-                <View className="flex-1 flex-row items-center bg-slate-900/40 border border-white/5 rounded-[28px] px-6 py-4">
-                  <Search size={20} color="#475569" />
-                  <TextInput className="flex-1 ml-4 text-white font-bold text-base" placeholder="Find an athlete..." placeholderTextColor="#1e293b" value={searchQuery} onChangeText={setSearchQuery} />
+                <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 flex-row items-center border rounded-[28px] px-6 py-4">
+                  <Search size={20} color={colors.textSecondary} />
+                  <TextInput 
+                    style={{ color: colors.text }} 
+                    className="flex-1 ml-4 font-bold text-base" 
+                    placeholder="Find an athlete..." 
+                    placeholderTextColor={colors.textTertiary} 
+                    value={searchQuery} 
+                    onChangeText={setSearchQuery} 
+                  />
                 </View>
               </View>
 
               {/* Athletes List */}
               <View className="px-6">
-                {loading ? <ActivityIndicator className="mt-10" color={theme.colors.primary} /> : filteredClients.length === 0 ? (
+                {loading ? <ActivityIndicator className="mt-10" color={colors.primary} /> : filteredClients.length === 0 ? (
                   <View className="py-20 items-center">
-                    <Users size={48} color="#1E293B" />
-                    <Text className="text-slate-500 font-bold mt-4">No athletes found</Text>
+                    <Users size={48} color={colors.border} />
+                    <Text style={{ color: colors.textSecondary }} className="font-bold mt-4">No athletes found</Text>
                   </View>
                 ) : (
                   filteredClients.map((client, i) => (
                     <MotiView key={client.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: i * 50 }} className="mb-4">
-                      <TouchableOpacity onPress={() => router.push(`/(coach)/clients/${client.id}`)} className="bg-slate-900/40 p-6 rounded-[40px] border border-white/5 flex-row items-center justify-between shadow-xl">
+                      <TouchableOpacity 
+                        onPress={() => router.push(`/(coach)/clients/${client.id}`)} 
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        className="p-6 rounded-[40px] border flex-row items-center justify-between shadow-sm"
+                      >
                         <View className="flex-row items-center gap-5 flex-1">
                           <View className="relative">
                             <BrandedAvatar size={60} name={client.profiles?.full_name} imageUrl={client.profiles?.avatar_url} useBrandColor={true} />
@@ -291,13 +305,13 @@ export default function ClientsScreen() {
                           </View>
                           <View className="flex-1">
                             <View className="flex-row items-center gap-2">
-                                <Text className="text-white font-black text-lg tracking-tight">{client.profiles?.full_name}</Text>
+                                <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight">{client.profiles?.full_name}</Text>
                             </View>
-                            <Text className="text-slate-600 text-[10px] font-black uppercase tracking-[2px] mt-1" numberOfLines={1}>{client.goal || 'Elite Performance'} • {client.experience_level || 'Pro'}</Text>
+                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[2px] mt-1" numberOfLines={1}>{client.goal || 'Elite Performance'} • {client.experience_level || 'Pro'}</Text>
                             {client.checkedInToday && <View className="flex-row items-center gap-1 mt-2"><View className="w-1.5 h-1.5 rounded-full bg-emerald-500" /><Text className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Checked In</Text></View>}
                           </View>
                         </View>
-                        <ChevronRight size={18} color="#334155" />
+                        <ChevronRight size={18} color={colors.textSecondary} />
                       </TouchableOpacity>
                     </MotiView>
                   ))
@@ -308,58 +322,65 @@ export default function ClientsScreen() {
             <MotiView key="team-tab" from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} exit={{ opacity: 0, translateY: -10 }}>
               {/* Coaches Tab Content */}
               {!coach?.is_parent_coach ? (
-                <View className="mx-6 py-20 items-center justify-center bg-slate-900/20 rounded-[40px] border border-white/5 border-dashed">
-                  <Award size={64} color="#1E293B" />
-                  <Text className="text-white text-xl font-black text-center mt-6 tracking-tighter">Parent Coach Required</Text>
-                  <Text className="text-slate-500 text-center mt-3 leading-5 px-10 font-medium">This section is for head coaches managing performance teams.</Text>
+                <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mx-6 py-20 items-center justify-center rounded-[40px] border border-dashed">
+                  <Award size={64} color={colors.textSecondary} />
+                  <Text style={{ color: colors.text }} className="text-xl font-black text-center mt-6 tracking-tighter">Parent Coach Required</Text>
+                  <Text style={{ color: colors.textSecondary }} className="text-center mt-3 leading-5 px-10 font-medium">This section is for head coaches managing performance teams.</Text>
                 </View>
               ) : (
                 <>
                   {/* Coaches Hero */}
-                  <View className="mx-6 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden">
+                  <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mx-6 p-10 rounded-[48px] border items-center overflow-hidden">
                     <View className="absolute top-0 right-0 p-4 opacity-10">
-                      <Shield size={120} color={theme.colors.primary} />
+                      <Shield size={120} color={colors.primary} />
                     </View>
-                    <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
-                      <Zap size={36} color="white" fill="white" />
+                    <View style={{ backgroundColor: colors.primary }} className="w-20 h-20 rounded-[30px] items-center justify-center shadow-2xl mb-6 border-2 border-white/20">
+                      <Zap size={36} color={colors.textOnPrimary} fill={colors.textOnPrimary} />
                     </View>
-                    <Text className="text-white text-2xl font-black text-center tracking-tighter">Command Center</Text>
-                    <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
+                    <Text style={{ color: colors.text }} className="text-2xl font-black text-center tracking-tighter">Command Center</Text>
+                    <Text style={{ color: colors.textSecondary }} className="text-center mt-3 leading-5 px-4 text-sm font-medium">
                       Oversee your team, track metrics, and optimize your coaching output.
                     </Text>
                   </View>
 
                   {/* Coaches Stats */}
-                  <View className="mx-6 mt-8 p-8 rounded-[40px] bg-slate-900/40 border border-white/5">
+                  <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mx-6 mt-8 p-8 rounded-[40px] border">
                     <View className="flex-row items-center gap-2 mb-8">
-                      <View className="w-8 h-8 rounded-xl bg-slate-950 items-center justify-center border border-white/5">
+                      <View style={{ backgroundColor: colors.background, borderColor: colors.border }} className="w-8 h-8 rounded-xl items-center justify-center border">
                         <TrendingUp size={16} color="#10B981" />
                       </View>
-                      <Text className="text-white font-black text-lg tracking-tight">{brand?.name || 'Network Stats'}</Text>
+                      <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight">{brand?.name || 'Network Stats'}</Text>
                     </View>
                     <View className="flex-row">
-                      <StatItem label="Coaches" value={subCoaches.length.toString()} icon={<Users size={14} color={theme.colors.primary} />} />
-                      <View className="w-px h-12 bg-white/5 mx-2 self-center" />
+                      <StatItem label="Coaches" value={subCoaches.length.toString()} icon={<Users size={14} color={colors.primary} />} />
+                      <View style={{ backgroundColor: colors.border }} className="w-px h-12 mx-2 self-center" />
                       <StatItem label="Total Depth" value={totalTeamClients.toString()} icon={<Zap size={14} color="#10B981" />} />
-                      <View className="w-px h-12 bg-white/5 mx-2 self-center" />
+                      <View style={{ backgroundColor: colors.border }} className="w-px h-12 mx-2 self-center" />
                       <StatItem label="Assigned" value={subCoaches.reduce((sum, c) => sum + (c.client_count || 0), 0).toString()} icon={<Shield size={14} color="#F59E0B" />} isLast />
                     </View>
                   </View>
 
                   {/* Search Bar */}
                   <View className="px-6 mt-10 mb-6 flex-row gap-3">
-                    <View className="flex-1 flex-row items-center bg-slate-900/40 border border-white/5 rounded-[28px] px-6 py-4">
-                      <Search size={20} color="#475569" />
-                      <TextInput className="flex-1 ml-4 text-white font-bold text-base" placeholder="Find a coach..." placeholderTextColor="#1e293b" value={searchQuery} onChangeText={setSearchQuery} />
+                    <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 flex-row items-center border rounded-[28px] px-6 py-4">
+                      <Search size={20} color={colors.textSecondary} />
+                      <TextInput 
+                        style={{ color: colors.text }} 
+                        className="flex-1 ml-4 font-bold text-base" 
+                        placeholder="Find a coach..." 
+                        placeholderTextColor={colors.textTertiary} 
+                        value={searchQuery} 
+                        onChangeText={setSearchQuery} 
+                      />
                     </View>
                   </View>
 
                   {/* Coaches List */}
                   <View className="px-6">
-                    {loading ? <ActivityIndicator className="mt-10" color={theme.colors.primary} /> : filteredCoaches.length === 0 ? (
+                    {loading ? <ActivityIndicator className="mt-10" color={colors.primary} /> : filteredCoaches.length === 0 ? (
                       <View className="py-20 items-center">
-                        <Users size={48} color="#1E293B" />
-                        <Text className="text-slate-500 font-bold mt-4">No coaches found</Text>
+                        <Users size={48} color={colors.border} />
+                        <Text style={{ color: colors.textSecondary }} className="font-bold mt-4">No coaches found</Text>
                       </View>
                     ) : (
                       filteredCoaches.map((item, index) => renderCoachCard(item, index))
@@ -375,12 +396,15 @@ export default function ClientsScreen() {
   );
 }
 
-const StatItem = ({ label, value, icon, isLast }: any) => (
-  <View className={`flex-1 items-center ${isLast ? '' : 'border-r border-white/5'}`}>
-      <View className="flex-row items-center gap-1.5 mb-1">
-          {icon}
-          <Text className="text-slate-500 text-[8px] font-black uppercase tracking-[2px]">{label}</Text>
-      </View>
-      <Text className="text-white text-2xl font-black tracking-tighter">{value}</Text>
-  </View>
-);
+const StatItem = ({ label, value, icon, isLast }: any) => {
+  const { colors } = useTheme();
+  return (
+    <View className={`flex-1 items-center ${isLast ? '' : 'border-r border-white/5'}`}>
+        <View className="flex-row items-center gap-1.5 mb-1">
+            {icon}
+            <Text style={{ color: colors.textSecondary }} className="text-[8px] font-black uppercase tracking-[2px]">{label}</Text>
+        </View>
+        <Text style={{ color: colors.text }} className="text-2xl font-black tracking-tighter">{value}</Text>
+    </View>
+  );
+};

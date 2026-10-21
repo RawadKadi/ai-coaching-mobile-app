@@ -100,6 +100,10 @@ export default function CoachChatScreen() {
   const { user, profile } = useAuth();
   const theme = useTheme();
   const styles = getStyles(theme.colors);
+  const isScreenDark = isDarkColor(theme.colors.background || '#020617');
+  const headerTextColor = isScreenDark ? '#FFFFFF' : '#0F172A';
+  const headerSubtextColor = isScreenDark ? '#94A3B8' : '#64748B';
+  const headerIconColor = isScreenDark ? '#F8FAFC' : '#0F172A';
   const insets = useSafeAreaInsets();
   const { refreshUnreadCount } = useUnread();
   const { suppressToast } = useNotification();
@@ -1091,19 +1095,32 @@ export default function CoachChatScreen() {
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <GradientBackground />
 
-      <StatusBar barStyle="light-content" />
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]} className="border-b border-white/5 bg-[#020617]/60">
+      <StatusBar barStyle={isScreenDark ? "light-content" : "dark-content"} />
+      <View 
+        style={[
+          styles.header, 
+          { 
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: theme.colors.background,
+            borderBottomColor: isScreenDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            borderBottomWidth: 1,
+          }
+        ]}
+      >
         <View className="flex-row items-center justify-between px-4 pb-4">
           <View className="flex-row items-center gap-3">
-             <TouchableOpacity onPress={() => safeBack()} className="w-10 h-10 items-center justify-center rounded-full bg-white/5">
-                <ArrowLeft size={20} color="#94A3B8" />
+             <TouchableOpacity 
+                onPress={() => safeBack()} 
+                className={`w-10 h-10 items-center justify-center rounded-full ${isScreenDark ? 'bg-white/10' : 'bg-black/5'}`}
+             >
+                <ArrowLeft size={20} color={headerIconColor} />
              </TouchableOpacity>
              <View className="flex-row items-center gap-3">
                  <TouchableOpacity 
                     onPress={() => setEnlargedAvatar(clientProfile?.profiles?.avatar_url || 'default')}
                     activeOpacity={0.7}
                  >
-                    <BrandedAvatar imageUrl={clientProfile?.profiles?.avatar_url} name={clientProfile?.profiles?.full_name || 'Protocol Hub'} size={40} />
+                    <BrandedAvatar imageUrl={clientProfile?.profiles?.avatar_url} name={clientProfile?.profiles?.full_name || 'Client'} size={40} />
                  </TouchableOpacity>
                  
                  <TouchableOpacity 
@@ -1112,10 +1129,12 @@ export default function CoachChatScreen() {
                     activeOpacity={0.7}
                  >
                     <View>
-                        <Text className="text-white font-bold text-base">{clientProfile?.profiles?.full_name || 'Protocol Hub'}</Text>
+                        <Text style={{ color: headerTextColor }} className="font-bold text-base">
+                          {clientProfile?.profiles?.full_name || 'Client'}
+                        </Text>
                         <View className="flex-row items-center gap-1.5">
-                          <View className={`w-2 h-2 rounded-full ${clientUserId && isUserOnline(clientUserId) ? 'bg-emerald-500' : 'bg-slate-600'}`} />
-                          <Text className="text-slate-400 text-[10px] font-medium">
+                          <View className={`w-2 h-2 rounded-full ${clientUserId && isUserOnline(clientUserId) ? 'bg-emerald-500' : (isScreenDark ? 'bg-slate-600' : 'bg-slate-400')}`} />
+                          <Text style={{ color: headerSubtextColor }} className="text-[10px] font-medium">
                             {clientUserId && isUserOnline(clientUserId) ? 'Online' : 'Offline'}
                           </Text>
                         </View>
@@ -1126,12 +1145,17 @@ export default function CoachChatScreen() {
           <View className="flex-row items-center gap-2">
             <TouchableOpacity 
               onPress={() => setSchedulerVisible(true)} 
-              className={`w-10 h-10 items-center justify-center rounded-full ${todaySession ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-white/5'}`}
+              className={`w-10 h-10 items-center justify-center rounded-full ${todaySession ? 'bg-emerald-500/10 border border-emerald-500/20' : (isScreenDark ? 'bg-white/10' : 'bg-black/5')}`}
             >
-              <Calendar size={20} color={todaySession ? '#10B981' : '#F8FAFC'} />
+              <Calendar size={20} color={todaySession ? '#10B981' : headerIconColor} />
               {todaySession && <View className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#0F172A]" />}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setMenuVisible(true)} className="w-10 h-10 items-center justify-center rounded-full bg-white/5"><MoreVertical size={20} color="#94A3B8" /></TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => setMenuVisible(true)} 
+              className={`w-10 h-10 items-center justify-center rounded-full ${isScreenDark ? 'bg-white/10' : 'bg-black/5'}`}
+            >
+              <MoreVertical size={20} color={headerSubtextColor} />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -1575,7 +1599,7 @@ const MessageBubble = ({
                   backgroundColor: isHighlighted ? theme.colors.border : (isMe ? theme.colors.primary : theme.colors.surface) 
               }}
               transition={{ type: 'timing', duration: 100 }}
-              className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border border-white/5 shadow-2xl'}`}
+              className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border'}`}
               style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : theme.colors.surface, borderColor: isMe ? 'transparent' : theme.colors.border }}
           >
           {repliedMsg && (

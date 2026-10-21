@@ -59,11 +59,7 @@ export function getContrastRatio(color1: string, color2: string): number {
  * Ensures WCAG AA compliance (contrast ratio >= 4.5:1)
  */
 export function getContrastColor(backgroundColor: string): string {
-    const whiteContrast = getContrastRatio(backgroundColor, '#FFFFFF');
-    const blackContrast = getContrastRatio(backgroundColor, '#000000');
-
-    // Return color with better contrast
-    return whiteContrast > blackContrast ? '#FFFFFF' : '#000000';
+    return isDarkColor(backgroundColor) ? '#FFFFFF' : '#000000';
 }
 
 /**
@@ -283,12 +279,17 @@ export function generateGradientStyle(startColor: string, endColor: string, dire
 }
 
 /**
- * Check if color is considered "dark"
+ * Check if color is considered "dark" using standard ITU-R BT.709 perceived brightness
  */
 export function isDarkColor(color: string): boolean {
-    const { r, g, b } = hexToRGB(color);
-    const brightness = (r + g + b) / 3;
-    return brightness < 128;
+    if (!color) return true;
+    try {
+        const { r, g, b } = hexToRGB(color);
+        const perceivedBrightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return perceivedBrightness < 160;
+    } catch {
+        return true;
+    }
 }
 
 /**
@@ -326,13 +327,13 @@ export function generateSurfaceColors(backgroundColor: string, isDark: boolean):
             inputBackground: lightenColor(backgroundColor, 0.10),
         };
     } else {
-        // Light mode: keep surfaces white/light
+        // Light mode: keep surfaces clean crisp white with subtle border
         return {
             surface: '#FFFFFF',
             surfaceHover: darkenColor('#FFFFFF', 0.02),
             surfacePressed: darkenColor('#FFFFFF', 0.04),
-            border: '#E5E7EB',
-            inputBackground: '#F9FAFB',
+            border: '#E2E8F0',
+            inputBackground: '#F8FAFC',
         };
     }
 }
@@ -360,10 +361,10 @@ export function generateTextColors(
         };
     } else {
         return {
-            text: '#111827',
-            textSecondary: '#6B7280',
-            textTertiary: '#9CA3AF',
-            textOnSurface: '#111827',
+            text: '#0F172A',
+            textSecondary: '#64748B',
+            textTertiary: '#94A3B8',
+            textOnSurface: '#0F172A',
         };
     }
 }

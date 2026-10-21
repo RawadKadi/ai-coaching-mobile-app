@@ -1,6 +1,14 @@
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, ScrollView, SectionList, ActivityIndicator, TouchableOpacity, StatusBar, RefreshControl } from 'react-native';
+import {
+  View,
+  ScrollView,
+  SectionList,
+  ActivityIndicator,
+  TouchableOpacity,
+  StatusBar,
+  RefreshControl,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { Text } from '@/components/BrandedText';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -8,14 +16,14 @@ import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
-import { 
-  Users, 
-  MessageSquare, 
-  ClipboardCheck, 
-  Trophy, 
-  Dumbbell, 
-  UserPlus, 
-  BarChart3, 
+import {
+  Users,
+  MessageSquare,
+  ClipboardCheck,
+  Trophy,
+  Dumbbell,
+  UserPlus,
+  BarChart3,
   Plus,
   ChevronRight,
   TrendingUp,
@@ -24,7 +32,7 @@ import {
   Smile,
   Activity,
   ArrowUpRight,
-  Check
+  Check,
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import FeedbackModal from '@/components/FeedbackModal';
@@ -45,10 +53,17 @@ const formatActivityDate = (dateString: string) => {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  
-  const checkDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  
+
+  const checkDate = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+  const timeStr = date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   if (checkDate.getTime() === today.getTime()) {
     return `Today, ${timeStr}`;
   } else if (checkDate.getTime() === yesterday.getTime()) {
@@ -74,14 +89,14 @@ export default function CoachDashboard() {
   const [loadingMore, setLoadingMore] = useState(false);
   const { onlineUserIds } = usePresence();
   const [clientUserIds, setClientUserIds] = useState<string[]>([]);
-  const [stats, setStats] = useState({ 
-    totalClients: 0, 
-    activeClients: 0, 
+  const [stats, setStats] = useState({
+    totalClients: 0,
+    activeClients: 0,
     compliantToday: 0,
-    pendingCheckIns: 0, 
+    pendingCheckIns: 0,
     unreadMessages: 0,
     activeChallenges: 0,
-    todaysSessions: 0
+    todaysSessions: 0,
   });
 
   // AI Scheduler State
@@ -133,40 +148,41 @@ export default function CoachDashboard() {
 
   // Calculate real-time active count based on Presence (excluding the coach themselves)
   const realTimeActiveCount = clientUserIds
-    .filter(id => id !== profile?.id)
-    .filter(id => onlineUserIds.has(id)).length;
-    
+    .filter((id) => id !== profile?.id)
+    .filter((id) => onlineUserIds.has(id)).length;
+
   // Display count is stats.activeClients (streak >= 1)
   const displayActiveCount = stats.activeClients;
 
   useEffect(() => {
     if (coach) {
       loadDashboardData();
-      
-      // Use a unique channel name for this mount to avoid "cannot add callbacks after subscribe()" 
+
+      // Use a unique channel name for this mount to avoid "cannot add callbacks after subscribe()"
       // in case of React Strict Mode double-invocation race conditions.
       const channelId = `coach_dashboard_realtime_${Date.now()}_${Math.random()}`;
-      const checkinSubscription = supabase.channel(channelId)
+      const checkinSubscription = supabase
+        .channel(channelId)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'check_ins' },
           () => {
             loadDashboardData();
-          }
+          },
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'habit_logs' },
           () => {
             loadDashboardData();
-          }
+          },
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'sub_challenges' },
           () => {
             loadDashboardData();
-          }
+          },
         )
         .subscribe();
 
@@ -181,20 +197,26 @@ export default function CoachDashboard() {
   const loadDashboardData = async () => {
     if (!coach) return;
     try {
-      const [statsResult, checkinsResult, clientsResult, challengesResult] = await Promise.all([
-        supabase.rpc('get_coach_stats'),
-        supabase.rpc('get_recent_checkins', { p_cursor: null, p_limit: 15 }),
-        supabase.rpc('get_my_clients'),
-        supabase.rpc('get_coach_mother_challenges', { p_coach_id: coach?.id })
-      ]);
+      const [statsResult, checkinsResult, clientsResult, challengesResult] =
+        await Promise.all([
+          supabase.rpc('get_coach_stats'),
+          supabase.rpc('get_recent_checkins', { p_cursor: null, p_limit: 15 }),
+          supabase.rpc('get_my_clients'),
+          supabase.rpc('get_coach_mother_challenges', {
+            p_coach_id: coach?.id,
+          }),
+        ]);
 
-      const activeChallengesCount = (challengesResult?.data || [])
-        .filter((c: any) => c.status === 'active').length;
+      const activeChallengesCount = (challengesResult?.data || []).filter(
+        (c: any) => c.status === 'active',
+      ).length;
 
       if (statsResult.data) {
         // Handle both object and array response (Supabase returns array for RETURNS TABLE)
-        const statsData = Array.isArray(statsResult.data) ? statsResult.data[0] : statsResult.data;
-        
+        const statsData = Array.isArray(statsResult.data)
+          ? statsResult.data[0]
+          : statsResult.data;
+
         setStats({
           totalClients: statsData?.totalClients || 0,
           activeClients: statsData?.activeClients || 0,
@@ -211,7 +233,7 @@ export default function CoachDashboard() {
           .filter((c: any) => c.status === 'active')
           .map((c: any) => c.user_id || c.client_user_id)
           .filter(Boolean);
-        
+
         setClientUserIds(ids);
       }
 
@@ -233,23 +255,31 @@ export default function CoachDashboard() {
     }
   };
 
-  
   const loadMoreCheckins = async () => {
-    if (!coach || loadingMore || !hasMoreCheckins || recentCheckins.length === 0) return;
+    if (
+      !coach ||
+      loadingMore ||
+      !hasMoreCheckins ||
+      recentCheckins.length === 0
+    )
+      return;
     setLoadingMore(true);
     try {
       const lastCheckin = recentCheckins[recentCheckins.length - 1];
-      const result = await supabase.rpc('get_recent_checkins', { 
-        p_cursor: lastCheckin.created_at, 
-        p_limit: 15 
+      const result = await supabase.rpc('get_recent_checkins', {
+        p_cursor: lastCheckin.created_at,
+        p_limit: 15,
       });
-      
+
       const newData = result.data || [];
       if (newData.length > 0) {
-        setRecentCheckins(prev => {
+        setRecentCheckins((prev) => {
           // Avoid duplicates if real-time fired
-          const existingIds = new Set(prev.map(c => c.checkin_id));
-          return [...prev, ...newData.filter((c: any) => !existingIds.has(c.checkin_id))];
+          const existingIds = new Set(prev.map((c) => c.checkin_id));
+          return [
+            ...prev,
+            ...newData.filter((c: any) => !existingIds.has(c.checkin_id)),
+          ];
         });
       }
       setHasMoreCheckins(newData.length === 15);
@@ -262,34 +292,44 @@ export default function CoachDashboard() {
 
   const groupedCheckins = useMemo(() => {
     const groups: { [key: string]: any[] } = {};
-    
-    recentCheckins.forEach(item => {
+
+    recentCheckins.forEach((item) => {
       const date = new Date(item.created_at);
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-      
-      const checkDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      
+
+      const checkDate = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+      );
+
       let headerStr = '';
       if (checkDate.getTime() === today.getTime()) {
         headerStr = `TODAY — ${date.toLocaleDateString([], { month: 'short', day: 'numeric' }).toUpperCase()}`;
       } else if (checkDate.getTime() === yesterday.getTime()) {
         headerStr = `YESTERDAY — ${date.toLocaleDateString([], { month: 'short', day: 'numeric' }).toUpperCase()}`;
       } else {
-        headerStr = date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+        headerStr = date
+          .toLocaleDateString([], {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })
+          .toUpperCase();
       }
-      
+
       if (!groups[headerStr]) {
         groups[headerStr] = [];
       }
       groups[headerStr].push(item);
     });
 
-    return Object.keys(groups).map(key => ({
+    return Object.keys(groups).map((key) => ({
       title: key,
-      data: groups[key]
+      data: groups[key],
     }));
   }, [recentCheckins]);
 
@@ -299,16 +339,21 @@ export default function CoachDashboard() {
     try {
       const [clientsResult, sessionsResult] = await Promise.all([
         supabase.rpc('get_my_clients'),
-        supabase.from('sessions').select('*, client:clients(profiles(full_name, avatar_url))').eq('coach_id', coach?.id)
+        supabase
+          .from('sessions')
+          .select('*, client:clients(profiles(full_name, avatar_url))')
+          .eq('coach_id', coach?.id),
       ]);
-      
+
       if (clientsResult.data) {
-        setClients(clientsResult.data.map((c: any) => ({
-          id: c.client_id,
-          name: c.client_name,
-          avatar: c.client_avatar,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone // Default to current or fetch from profile if available
-        })));
+        setClients(
+          clientsResult.data.map((c: any) => ({
+            id: c.client_id,
+            name: c.client_name,
+            avatar: c.client_avatar,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, // Default to current or fetch from profile if available
+          })),
+        );
       }
       setAllSessions(sessionsResult.data || []);
     } catch (e) {
@@ -326,7 +371,14 @@ export default function CoachDashboard() {
 
   if (loading && !refreshing) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
         <ActivityIndicator color={colors.primary} />
       </View>
     );
@@ -340,199 +392,327 @@ export default function CoachDashboard() {
 
   const textStyle = { color: colors.text };
   const rawFirstName = profile?.full_name?.split(' ')[0] || '';
-  const firstName = rawFirstName ? rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1) : '';
+  const firstName = rawFirstName
+    ? rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1)
+    : '';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} translucent />
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        translucent
+      />
       <SectionList
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: 140 }}
+        contentContainerStyle={{
+          paddingTop: insets.top + 24,
+          paddingBottom: 140,
+        }}
         sections={groupedCheckins}
         keyExtractor={(item, index) => item.checkin_id + index}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={() => { setRefreshing(true); refreshBrand(); loadDashboardData(); }} 
-            tintColor={colors.primary} 
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              refreshBrand();
+              loadDashboardData();
+            }}
+            tintColor={colors.primary}
             progressViewOffset={insets.top + 10}
           />
         }
-            onEndReached={loadMoreCheckins}
-            onEndReachedThreshold={0.5}
-            ListHeaderComponent={
-              <View>
-                {/* Top Brand Bar */}
-                <MotiView 
-                  from={{ opacity: 0, translateY: -8 }} 
-                  animate={{ opacity: 1, translateY: 0 }} 
-                  className="px-6 pb-4 flex-row items-center justify-between"
-                >
-                  <View className="flex-row items-center gap-3.5">
-                    {brand?.logo_url ? (
-                      <Image
-                        source={{ uri: brand.logo_url }}
-                        style={{ width: 56, height: 56, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' }}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View 
-                        style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: colors.primary + '25', borderColor: colors.primary + '40' }}
-                        className="border items-center justify-center shadow-lg"
-                      >
-                        <Text style={{ color: colors.primary }} className="text-2xl font-black">
-                          {brand?.name ? brand.name.charAt(0).toUpperCase() : (coach?.business_name ? coach.business_name.charAt(0).toUpperCase() : 'C')}
-                        </Text>
-                      </View>
-                    )}
-                    <Text className="text-white text-xl font-black tracking-tight" numberOfLines={1}>
-                      {brand?.name || coach?.business_name || ''}
+        onEndReached={loadMoreCheckins}
+        onEndReachedThreshold={0.5}
+        ListHeaderComponent={
+          <View>
+            {/* Top Brand Bar */}
+            <MotiView
+              from={{ opacity: 0, translateY: -8 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              className="px-6 pb-4 flex-row items-center justify-between"
+            >
+              <View className="flex-row items-center gap-3.5">
+                {brand?.logo_url ? (
+                  <Image
+                    source={{ uri: brand.logo_url }}
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.12)',
+                    }}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 16,
+                      backgroundColor: colors.primary + '25',
+                      borderColor: colors.primary + '40',
+                    }}
+                    className="border items-center justify-center shadow-lg"
+                  >
+                    <Text
+                      style={{ color: colors.primary }}
+                      className="text-2xl font-black"
+                    >
+                      {brand?.name
+                        ? brand.name.charAt(0).toUpperCase()
+                        : coach?.business_name
+                          ? coach.business_name.charAt(0).toUpperCase()
+                          : 'C'}
                     </Text>
                   </View>
-
-                  <TouchableOpacity 
-                    onPress={() => router.push('/(coach)/(tabs)/profile')}
-                    className="p-1 rounded-full shadow-2xl relative"
-                    style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}
-                  >
-                    <BrandedAvatar name={profile?.full_name || 'Coach'} imageUrl={profile?.avatar_url} size={44} />
-                    <View 
-                      style={{ backgroundColor: colors.primary }}
-                      className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-slate-900" 
-                    />
-                  </TouchableOpacity>
-                </MotiView>
-
-                {/* Greeting Section */}
-                <MotiView 
-                  from={{ opacity: 0, translateY: -4 }} 
-                  animate={{ opacity: 1, translateY: 0 }} 
-                  transition={{ delay: 80 }}
-                  className="px-6 pb-6"
+                )}
+                <Text
+                  style={{ color: colors.text }}
+                  className="text-xl font-black tracking-tight"
+                  numberOfLines={1}
                 >
-                  <Text className="text-white text-3xl font-black tracking-tighter">Welcome back,</Text>
-                  <Text style={{ color: colors.primary }} className="text-3xl font-black tracking-tighter">
-                    {firstName}
-                  </Text>
-                </MotiView>
+                  {brand?.name || coach?.business_name || ''}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => router.push('/(coach)/(tabs)/profile')}
+                className="p-1 rounded-full shadow-2xl relative"
+                style={{
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                }}
+              >
+                <BrandedAvatar
+                  name={profile?.full_name || 'Coach'}
+                  imageUrl={profile?.avatar_url}
+                  size={44}
+                />
+                <View
+                  style={{ backgroundColor: colors.primary }}
+                  className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-slate-900"
+                />
+              </TouchableOpacity>
+            </MotiView>
+
+            {/* Greeting Section */}
+            <MotiView
+              from={{ opacity: 0, translateY: -4 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ delay: 80 }}
+              className="px-6 pb-6"
+            >
+              <Text
+                style={{ color: colors.text }}
+                className="text-3xl font-black tracking-tighter"
+              >
+                Welcome back,
+              </Text>
+              <Text
+                style={{ color: colors.primary }}
+                className="text-3xl font-black tracking-tighter"
+              >
+                {firstName}
+              </Text>
+            </MotiView>
 
             {/* Strategic Stats Section */}
             <View className="px-6 mb-10">
-                <View className="flex-row gap-4">
-                    <View className="flex-1 rounded-[36px] p-8 shadow-xl" style={cardStyle}>
-                        <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center mb-6 border border-blue-600/20">
-                            <Users size={24} color={colors.primary} />
-                        </View>
-                        <Text style={textStyle} className="text-4xl font-black tracking-tighter">{stats.totalClients}</Text>
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Total Roster</Text>
-                        <View className="flex-row items-center gap-1.5 mt-4">
-                            <TrendingUp size={12} color="#34D399" />
-                            <Text className="text-emerald-500 font-bold text-[10px]">+12% growth</Text>
-                        </View>
-                    </View>
-
-                    <TouchableOpacity 
-                        onPress={() => setShowAnalyticsModal(true)}
-                        className="flex-1 rounded-[36px] p-8 shadow-xl overflow-hidden relative"
-                        style={cardStyle}
-                    >
-                        <View className="w-12 h-12 bg-purple-600/10 rounded-2xl items-center justify-center mb-6 border border-purple-600/20">
-                            <Activity size={24} color="#A855F7" />
-                        </View>
-                        <View className="absolute top-8 right-8">
-                            <ArrowUpRight size={22} color="#475569" />
-                        </View>
-                        
-                        <Text style={textStyle} className="text-4xl font-black tracking-tighter">{displayActiveCount}</Text>
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Now</Text>
-
-                        <View className="h-12 mt-2 opacity-40">
-                          <AnalyticsSparkline 
-                            data={analyticsData} 
-                            heroNumber={displayActiveCount} 
-                            label="Active Now"
-                            loading={loadingAnalytics}
-                            dataKey="high_performers"
-                          />
-                        </View>
-
-                        <View className="flex-row items-center gap-1.5 mt-4">
-                            <TrendingUp size={12} color="#34D399" />
-                            <Text className="text-emerald-500 font-bold text-[10px]">{stats.compliantToday}/{stats.activeClients} Compliant today</Text>
-                        </View>
-                    </TouchableOpacity>
+              <View className="flex-row gap-4">
+                <View
+                  className="flex-1 rounded-[36px] p-8 shadow-xl"
+                  style={cardStyle}
+                >
+                  <View className="w-12 h-12 bg-blue-600/10 rounded-2xl items-center justify-center mb-6 border border-blue-600/20">
+                    <Users size={24} color={colors.primary} />
+                  </View>
+                  <Text
+                    style={textStyle}
+                    className="text-4xl font-black tracking-tighter"
+                  >
+                    {stats.totalClients}
+                  </Text>
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                    Total Clients
+                  </Text>
+                  <View className="flex-row items-center gap-1.5 mt-4">
+                    <TrendingUp size={12} color="#34D399" />
+                    <Text className="text-emerald-500 font-bold text-[10px]">
+                      +12% growth
+                    </Text>
+                  </View>
                 </View>
 
-                {/* New Strategic Stats Row */}
-                <View className="flex-row gap-4 mt-4">
-                    <TouchableOpacity 
-                      onPress={() => router.push({ pathname: '/(coach)/(tabs)/calendar', params: { resetToToday: 'true' } })}
-                      className="flex-1 rounded-[36px] p-8 shadow-xl relative"
-                      style={cardStyle}
-                    >
-                        <View className="w-12 h-12 bg-orange-600/10 rounded-2xl items-center justify-center mb-6 border border-orange-600/20">
-                            <Zap size={24} color="#F59E0B" />
-                        </View>
-                        <View className="absolute top-8 right-8">
-                            <ArrowUpRight size={22} color="#475569" />
-                        </View>
-                        <Text style={textStyle} className="text-4xl font-black tracking-tighter">{stats.todaysSessions}</Text>
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Today's Sessions</Text>
-                        <View className="flex-row items-center gap-1.5 mt-4">
-                            <Text className="text-orange-500 font-bold text-[10px]">{stats.todaysSessions === 0 ? 'Clear Schedule' : 'Live Focus'}</Text>
-                        </View>
-                    </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowAnalyticsModal(true)}
+                  className="flex-1 rounded-[36px] p-8 shadow-xl overflow-hidden relative"
+                  style={cardStyle}
+                >
+                  <View className="w-12 h-12 bg-purple-600/10 rounded-2xl items-center justify-center mb-6 border border-purple-600/20">
+                    <Activity size={24} color="#A855F7" />
+                  </View>
+                  <View className="absolute top-8 right-8">
+                    <ArrowUpRight size={22} color="#475569" />
+                  </View>
 
-                    <TouchableOpacity 
-                      onPress={() => router.push('/(coach)/challenges')}
-                      className="flex-1 rounded-[36px] p-8 shadow-xl relative"
-                      style={cardStyle}
-                    >
-                        <View className="w-12 h-12 bg-emerald-600/10 rounded-2xl items-center justify-center mb-6 border border-emerald-600/20">
-                            <Trophy size={24} color="#10B981" />
-                        </View>
-                        <View className="absolute top-8 right-8">
-                            <ArrowUpRight size={22} color="#475569" />
-                        </View>
-                        <Text style={textStyle} className="text-4xl font-black tracking-tighter">{stats.activeChallenges}</Text>
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Active Challenges</Text>
-                        <View className="flex-row items-center gap-1.5 mt-4">
-                            <TrendingUp size={12} color="#10B981" />
-                            <Text className="text-emerald-500 font-bold text-[10px]">High Engagement</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
+                  <Text
+                    style={textStyle}
+                    className="text-4xl font-black tracking-tighter"
+                  >
+                    {displayActiveCount}
+                  </Text>
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                    Active Now
+                  </Text>
+
+                  <View className="h-12 mt-2 opacity-40">
+                    <AnalyticsSparkline
+                      data={analyticsData}
+                      heroNumber={displayActiveCount}
+                      label="Active Now"
+                      loading={loadingAnalytics}
+                      dataKey="high_performers"
+                    />
+                  </View>
+
+                  <View className="flex-row items-center gap-1.5 mt-4">
+                    <TrendingUp size={12} color="#34D399" />
+                    <Text className="text-emerald-500 font-bold text-[10px]">
+                      {stats.compliantToday}/{stats.activeClients} Compliant
+                      today
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* New Strategic Stats Row */}
+              <View className="flex-row gap-4 mt-4">
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(coach)/(tabs)/calendar',
+                      params: { resetToToday: 'true' },
+                    })
+                  }
+                  className="flex-1 rounded-[36px] p-8 shadow-xl relative"
+                  style={cardStyle}
+                >
+                  <View className="w-12 h-12 bg-orange-600/10 rounded-2xl items-center justify-center mb-6 border border-orange-600/20">
+                    <Zap size={24} color="#F59E0B" />
+                  </View>
+                  <View className="absolute top-8 right-8">
+                    <ArrowUpRight size={22} color="#475569" />
+                  </View>
+                  <Text
+                    style={textStyle}
+                    className="text-4xl font-black tracking-tighter"
+                  >
+                    {stats.todaysSessions}
+                  </Text>
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                    Today's Sessions
+                  </Text>
+                  <View className="flex-row items-center gap-1.5 mt-4">
+                    <Text className="text-orange-500 font-bold text-[10px]">
+                      {stats.todaysSessions === 0
+                        ? 'Clear Schedule'
+                        : 'Live Focus'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => router.push('/(coach)/challenges')}
+                  className="flex-1 rounded-[36px] p-8 shadow-xl relative"
+                  style={cardStyle}
+                >
+                  <View className="w-12 h-12 bg-emerald-600/10 rounded-2xl items-center justify-center mb-6 border border-emerald-600/20">
+                    <Trophy size={24} color="#10B981" />
+                  </View>
+                  <View className="absolute top-8 right-8">
+                    <ArrowUpRight size={22} color="#475569" />
+                  </View>
+                  <Text
+                    style={textStyle}
+                    className="text-4xl font-black tracking-tighter"
+                  >
+                    {stats.activeChallenges}
+                  </Text>
+                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                    Active Challenges
+                  </Text>
+                  <View className="flex-row items-center gap-1.5 mt-4">
+                    <TrendingUp size={12} color="#10B981" />
+                    <Text className="text-emerald-500 font-bold text-[10px]">
+                      High Engagement
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Notification/Status Bar */}
             <View className="mx-6 rounded-[32px] p-1 mb-10" style={cardStyle}>
               <TouchableOpacity className="flex-row items-center p-5">
-                <View className="w-12 h-12 rounded-2xl items-center justify-center mr-5" style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}>
+                <View
+                  className="w-12 h-12 rounded-2xl items-center justify-center mr-5"
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                  }}
+                >
                   <ClipboardCheck size={22} color="#94A3B8" />
                 </View>
                 <View className="flex-1">
-                  <Text style={textStyle} className="font-bold text-sm tracking-tight">Check-ins Required</Text>
-                  <Text className="text-slate-500 text-[10px] font-medium mt-0.5 uppercase tracking-widest">{stats.pendingCheckIns} Athletes pending</Text>
+                  <Text
+                    style={textStyle}
+                    className="font-bold text-sm tracking-tight"
+                  >
+                    Check-ins Required
+                  </Text>
+                  <Text className="text-slate-500 text-[10px] font-medium mt-0.5 uppercase tracking-widest">
+                    {stats.pendingCheckIns} Athletes pending
+                  </Text>
                 </View>
                 <ChevronRight size={18} color="#334155" />
               </TouchableOpacity>
               <View className="h-px bg-white/5 mx-5" />
-              <TouchableOpacity 
+              <TouchableOpacity
                 className="flex-row items-center p-5"
                 onPress={() => router.push('/(coach)/(tabs)/messages')}
               >
-                <View className="w-12 h-12 rounded-2xl items-center justify-center mr-5" style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}>
+                <View
+                  className="w-12 h-12 rounded-2xl items-center justify-center mr-5"
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                  }}
+                >
                   <MessageSquare size={22} color="#94A3B8" />
                 </View>
                 <View className="flex-1">
-                  <Text style={textStyle} className="font-bold text-sm tracking-tight">Communication</Text>
-                  <Text className="text-slate-500 text-[10px] font-medium mt-0.5 uppercase tracking-widest">{stats.unreadMessages === 0 ? 'Clear Inbox' : `${stats.unreadMessages} New Unread`}</Text>
+                  <Text
+                    style={textStyle}
+                    className="font-bold text-sm tracking-tight"
+                  >
+                    Communication
+                  </Text>
+                  <Text className="text-slate-500 text-[10px] font-medium mt-0.5 uppercase tracking-widest">
+                    {stats.unreadMessages === 0
+                      ? 'Clear Inbox'
+                      : `${stats.unreadMessages} New Unread`}
+                  </Text>
                 </View>
                 {stats.unreadMessages > 0 && (
-                    <View className="bg-blue-600 w-2.5 h-2.5 rounded-full mr-4 shadow-lg shadow-blue-500/50" />
+                  <View className="bg-blue-600 w-2.5 h-2.5 rounded-full mr-4 shadow-lg shadow-blue-500/50" />
                 )}
                 <ChevronRight size={18} color="#334155" />
               </TouchableOpacity>
@@ -541,247 +721,370 @@ export default function CoachDashboard() {
             {/* Grid-based Quick Actions */}
             <View className="px-6 mb-10">
               <View className="flex-row justify-between items-end mb-8">
-                  <Text style={textStyle} className="text-3xl font-black tracking-tighter">Actions</Text>
-                  <TouchableOpacity onPress={() => router.push('/(coach)/(tabs)/clients')}>
-                      <Text className="text-blue-500 font-black text-[10px] uppercase tracking-widest">View Roster</Text>
-                  </TouchableOpacity>
+                <Text
+                  style={textStyle}
+                  className="text-3xl font-black tracking-tighter"
+                >
+                  Actions
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/(coach)/(tabs)/clients')}
+                >
+                  <Text className="text-blue-500 font-black text-[10px] uppercase tracking-widest">
+                    View Roster
+                  </Text>
+                </TouchableOpacity>
               </View>
               <View className="flex-row flex-wrap gap-4">
-                <ActionCard 
-                  icon={<Trophy size={28} color="#F59E0B" />} 
-                  title="Challenges" 
-                  desc="Competitions & goals" 
+                <ActionCard
+                  icon={<Trophy size={28} color="#F59E0B" />}
+                  title="Challenges"
+                  desc="Competitions & goals"
                   onPress={() => router.push('/(coach)/challenges')}
                   cardStyle={cardStyle}
                   textStyle={textStyle}
                   colors={colors}
                 />
-                <ActionCard 
-                  icon={<Zap size={28} color="#A855F7" />} 
-                  title="AI Scheduler" 
-                  desc="Smart session planning" 
+                <ActionCard
+                  icon={<Zap size={28} color="#A855F7" />}
+                  title="AI Scheduler"
+                  desc="Smart session planning"
                   onPress={handleOpenAIScheduler}
                   cardStyle={cardStyle}
                   textStyle={textStyle}
                   colors={colors}
                 />
-                <ActionCard 
-                  icon={<UserPlus size={28} color={colors.primary} />} 
-                  title="Onboard Client" 
-                  desc="Invite new athlete" 
+                <ActionCard
+                  icon={<UserPlus size={28} color={colors.primary} />}
+                  title="Onboard Client"
+                  desc="Invite new athlete"
                   onPress={() => router.push('/(coach)/invite-client')}
                   cardStyle={cardStyle}
                   textStyle={textStyle}
                   colors={colors}
                 />
-                <ActionCard 
-                  icon={<BarChart3 size={28} color="#10B981" />} 
-                  title="Analytics" 
-                  desc="Growth & metrics" 
+                <ActionCard
+                  icon={<BarChart3 size={28} color="#10B981" />}
+                  title="Analytics"
+                  desc="Growth & metrics"
                   cardStyle={cardStyle}
                   textStyle={textStyle}
                   colors={colors}
                 />
               </View>
             </View>
-                <View className="px-6 mb-8">
-                  <Text style={textStyle} className="text-2xl font-black tracking-tighter">Current Feed</Text>
-                </View>
+            <View className="px-6 mb-8">
+              <Text
+                style={textStyle}
+                className="text-2xl font-black tracking-tighter"
+              >
+                Current Feed
+              </Text>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
+          <View className="px-6">
+            <View className="p-16 bg-slate-900/20 rounded-[48px] border border-white/5 border-dashed items-center justify-center">
+              <View className="w-16 h-16 bg-slate-900 rounded-[28px] items-center justify-center border border-white/5 mb-6">
+                <TrendingUp size={28} color="#1e293b" />
               </View>
-            }
-            ListEmptyComponent={
-              <View className="px-6">
-                <View className="p-16 bg-slate-900/20 rounded-[48px] border border-white/5 border-dashed items-center justify-center">
-                  <View className="w-16 h-16 bg-slate-900 rounded-[28px] items-center justify-center border border-white/5 mb-6">
-                      <TrendingUp size={28} color="#1e293b" />
+              <Text className="text-slate-700 font-black text-[10px] uppercase tracking-[3px]">
+                Real-time activity
+              </Text>
+              <Text className="text-slate-800 font-medium text-[10px] mt-2 text-center leading-4">
+                Recent events will surface here as they happen.
+              </Text>
+            </View>
+          </View>
+        }
+        renderSectionHeader={({ section: { title } }) => (
+          <View className="px-6 py-2 mb-2">
+            <Text className="text-slate-500 font-black text-[10px] uppercase tracking-widest">
+              {title}
+            </Text>
+          </View>
+        )}
+        renderItem={({ item }) => (
+          <View className="px-6 mb-4">
+            <TouchableOpacity
+              onPress={() =>
+                router.push(`/(coach)/clients/${item.client_id}?tab=checkins`)
+              }
+              className="rounded-[32px] p-5 flex-row items-center"
+              style={cardStyle}
+            >
+              <BrandedAvatar
+                name={item.client_name}
+                imageUrl={item.client_avatar}
+                size={48}
+              />
+              <View className="flex-1 ml-4">
+                <View className="flex-row items-center justify-between">
+                  <Text
+                    style={textStyle}
+                    className="font-bold text-sm tracking-tight"
+                  >
+                    {item.client_name}
+                  </Text>
+                  <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
+                    {formatActivityDate(item.created_at)}
+                  </Text>
+                </View>
+                <Text className="text-blue-500 font-black text-[10px] uppercase tracking-[2px] mt-1">
+                  Daily Check-in Synced
+                </Text>
+                <View className="flex-row items-center gap-3 mt-3">
+                  <View className="flex-row items-center gap-1">
+                    <TrendingUp size={10} color="#94A3B8" />
+                    <Text className="text-slate-400 text-[10px] font-bold">
+                      {item.weight_kg}kg
+                    </Text>
                   </View>
-                  <Text className="text-slate-700 font-black text-[10px] uppercase tracking-[3px]">Real-time activity</Text>
-                  <Text className="text-slate-800 font-medium text-[10px] mt-2 text-center leading-4">Recent events will surface here as they happen.</Text>
+                  <View className="flex-row items-center gap-1">
+                    <Zap size={10} color="#94A3B8" />
+                    <Text className="text-slate-400 text-[10px] font-bold">
+                      Energy {item.energy_level}/10
+                    </Text>
+                  </View>
+                  <View className="flex-row items-center gap-1">
+                    <Smile size={10} color="#94A3B8" />
+                    <Text
+                      className="text-slate-400 text-[10px] font-bold"
+                      numberOfLines={1}
+                    >
+                      {item.mood}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            }
-            renderSectionHeader={({ section: { title } }) => (
-              <View className="px-6 py-2 mb-2">
-                <Text className="text-slate-500 font-black text-[10px] uppercase tracking-widest">{title}</Text>
-              </View>
-            )}
-            renderItem={({ item }) => (
-              <View className="px-6 mb-4">
-                <TouchableOpacity 
-                  onPress={() => router.push(`/(coach)/clients/${item.client_id}?tab=checkins`)}
-                  className="rounded-[32px] p-5 flex-row items-center"
-                  style={cardStyle}
-                >
-                  <BrandedAvatar name={item.client_name} imageUrl={item.client_avatar} size={48} />
-                  <View className="flex-1 ml-4">
-                    <View className="flex-row items-center justify-between">
-                      <Text style={textStyle} className="font-bold text-sm tracking-tight">{item.client_name}</Text>
-                      <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
-                        {formatActivityDate(item.created_at)}
+              <ChevronRight
+                size={16}
+                color="#334155"
+                style={{ marginLeft: 8 }}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+        ListFooterComponent={
+          loadingMore ? (
+            <View className="py-4 items-center justify-center">
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : null
+        }
+      />
+
+      {/* Client Picker Modal */}
+      <Modal
+        visible={showClientPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <View
+            style={{ borderColor: colors.border }}
+            className="px-6 pt-6 pb-4 flex-row justify-between items-center border-b"
+          >
+            <View>
+              <Text
+                style={{ color: colors.text }}
+                className="text-xl font-bold"
+              >
+                Select Athlete
+              </Text>
+              <Text
+                style={{ color: colors.textSecondary }}
+                className="text-xs uppercase tracking-widest font-bold"
+              >
+                Launch AI Scheduler
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowClientPicker(false)}
+              style={{ backgroundColor: colors.surface }}
+              className="p-2 rounded-full"
+            >
+              <X size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <View className="px-6 py-4">
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              }}
+              className="border rounded-2xl px-4 py-3 flex-row items-center"
+            >
+              <Search size={18} color={colors.textSecondary} />
+              <TextInput
+                style={{ color: colors.text }}
+                className="flex-1 ml-3 font-bold"
+                placeholder="Search roster..."
+                placeholderTextColor={colors.textTertiary}
+                value={clientSearch}
+                onChangeText={setClientSearch}
+              />
+            </View>
+          </View>
+
+          {loadingClients ? (
+            <View className="flex-1 justify-center items-center">
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : (
+            <ScrollView className="flex-1 px-6 pt-4">
+              {clients
+                .filter((c) =>
+                  c.name.toLowerCase().includes(clientSearch.toLowerCase()),
+                )
+                .map((client) => (
+                  <TouchableOpacity
+                    key={client.id}
+                    onPress={() => startAIScheduler(client)}
+                    style={{
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    }}
+                    className="p-5 rounded-[28px] border mb-4 flex-row items-center"
+                  >
+                    <BrandedAvatar
+                      name={client.name}
+                      imageUrl={client.avatar}
+                      size={48}
+                    />
+                    <View className="ml-4 flex-1">
+                      <Text
+                        style={{ color: colors.text }}
+                        className="font-bold text-lg"
+                      >
+                        {client.name}
+                      </Text>
+                      <Text
+                        style={{ color: colors.textSecondary }}
+                        className="text-[10px] font-black uppercase tracking-widest mt-0.5"
+                      >
+                        Active Client
                       </Text>
                     </View>
-                    <Text className="text-blue-500 font-black text-[10px] uppercase tracking-[2px] mt-1">Daily Check-in Synced</Text>
-                    <View className="flex-row items-center gap-3 mt-3">
-                      <View className="flex-row items-center gap-1">
-                        <TrendingUp size={10} color="#94A3B8" />
-                        <Text className="text-slate-400 text-[10px] font-bold">{item.weight_kg}kg</Text>
-                      </View>
-                      <View className="flex-row items-center gap-1">
-                        <Zap size={10} color="#94A3B8" />
-                        <Text className="text-slate-400 text-[10px] font-bold">Energy {item.energy_level}/10</Text>
-                      </View>
-                      <View className="flex-row items-center gap-1">
-                        <Smile size={10} color="#94A3B8" />
-                        <Text className="text-slate-400 text-[10px] font-bold" numberOfLines={1}>{item.mood}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <ChevronRight size={16} color="#334155" style={{ marginLeft: 8 }} />
-                </TouchableOpacity>
-              </View>
-            )}
-            ListFooterComponent={
-              loadingMore ? (
-                <View className="py-4 items-center justify-center">
-                  <ActivityIndicator color={colors.primary} />
-                </View>
-              ) : null
-            }
-          />
-
-        
-
-          {/* Client Picker Modal */}
-          <Modal visible={showClientPicker} animationType="slide" presentationStyle="pageSheet">
-            <View className="flex-1 bg-slate-950">
-              <View className="px-6 pt-6 pb-4 flex-row justify-between items-center border-b border-slate-900">
-                <View>
-                  <Text className="text-white text-xl font-bold">Select Athlete</Text>
-                  <Text className="text-slate-500 text-xs uppercase tracking-widest font-bold">Launch AI Scheduler</Text>
-                </View>
-                <TouchableOpacity onPress={() => setShowClientPicker(false)} className="p-2 bg-slate-900 rounded-full">
-                  <X size={20} color="#94A3B8" />
-                </TouchableOpacity>
-              </View>
-
-              <View className="px-6 py-4">
-                <View className="bg-slate-900/50 border border-slate-800 rounded-2xl px-4 py-3 flex-row items-center">
-                  <Search size={18} color="#475569" />
-                  <TextInput 
-                    className="flex-1 ml-3 text-white font-bold"
-                    placeholder="Search roster..."
-                    placeholderTextColor="#475569"
-                    value={clientSearch}
-                    onChangeText={setClientSearch}
-                  />
-                </View>
-              </View>
-
-              {loadingClients ? (
-                <View className="flex-1 justify-center items-center">
-                  <ActivityIndicator color={colors.primary} />
-                </View>
-              ) : (
-                <ScrollView className="flex-1 px-6 pt-4">
-                  {clients
-                    .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
-                    .map((client) => (
-                    <TouchableOpacity 
-                      key={client.id}
-                      onPress={() => startAIScheduler(client)}
-                      className="bg-slate-900/40 p-5 rounded-[28px] border border-white/5 mb-4 flex-row items-center"
+                    <View
+                      style={{
+                        backgroundColor: colors.primary + '15',
+                        borderColor: colors.primary + '30',
+                      }}
+                      className="w-10 h-10 rounded-full items-center justify-center border"
                     >
-                      <BrandedAvatar name={client.name} imageUrl={client.avatar} size={48} />
-                      <View className="ml-4 flex-1">
-                        <Text className="text-white font-bold text-lg">{client.name}</Text>
-                        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-0.5">Active Client</Text>
-                      </View>
-                      <View className="w-10 h-10 bg-blue-600/10 rounded-full items-center justify-center border border-blue-500/20">
-                        <ChevronRight size={18} color={colors.primary} />
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-          </Modal>
-
-          {/* AI Scheduler Modal */}
-          {selectedClientForAI && (
-            <SchedulerModal 
-              visible={showAIScheduler}
-              onClose={() => { setShowAIScheduler(false); setSelectedClientForAI(null); }}
-              onConfirm={async (sessions) => {
-                // Handle session confirmation (similar to calendar.tsx)
-                try {
-                  const { error } = await supabase.from('sessions').insert(
-                    sessions.map(s => ({
-                      coach_id: coach?.id,
-                      client_id: selectedClientForAI.id,
-                      scheduled_at: s.scheduled_at,
-                      duration_minutes: s.duration_minutes,
-                      session_type: s.session_type,
-                      status: 'scheduled'
-                    }))
-                  );
-                  if (error) throw error;
-                  loadDashboardData();
-                } catch (e) {
-                  console.error(e);
-                  throw e;
-                }
-              } }
-              clientContext={{
-                name: selectedClientForAI.name,
-                timezone: selectedClientForAI.timezone,
-                avatar_url: selectedClientForAI.avatar
-              }}
-              targetClientId={selectedClientForAI.id}
-              existingSessions={allSessions}
-            />
+                      <ChevronRight size={18} color={colors.primary} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
           )}
+        </View>
+      </Modal>
 
-          <AnalyticsDetailedModal 
-            visible={showAnalyticsModal}
-            onClose={() => setShowAnalyticsModal(false)}
-            data={analyticsData}
-            currentActive={displayActiveCount}
-          />
-
-          <FeedbackModal
-            visible={showPlanSentModal}
-            onClose={() => setShowPlanSentModal(false)}
-            variant="success"
-            icon={
-              <View style={{ position: 'relative' }}>
-                <BrandedAvatar
-                  name={planSentClientName || 'Client'}
-                  imageUrl={planSentClientAvatar || null}
-                  size={80}
-                />
-                <View className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#10B981] rounded-full border-[3px] border-[#0F172A] items-center justify-center">
-                  <Check size={14} color="white" strokeWidth={4} />
-                </View>
-              </View>
+      {/* AI Scheduler Modal */}
+      {selectedClientForAI && (
+        <SchedulerModal
+          visible={showAIScheduler}
+          onClose={() => {
+            setShowAIScheduler(false);
+            setSelectedClientForAI(null);
+          }}
+          onConfirm={async (sessions) => {
+            // Handle session confirmation (similar to calendar.tsx)
+            try {
+              const { error } = await supabase.from('sessions').insert(
+                sessions.map((s) => ({
+                  coach_id: coach?.id,
+                  client_id: selectedClientForAI.id,
+                  scheduled_at: s.scheduled_at,
+                  duration_minutes: s.duration_minutes,
+                  session_type: s.session_type,
+                  status: 'scheduled',
+                })),
+              );
+              if (error) throw error;
+              loadDashboardData();
+            } catch (e) {
+              console.error(e);
+              throw e;
             }
-            title="Plan Sent!"
-            body={`Weekly plan sent to ${planSentClientName || 'your client'}.`}
-            ctaLabel="Done"
-          />
+          }}
+          clientContext={{
+            name: selectedClientForAI.name,
+            timezone: selectedClientForAI.timezone,
+            avatar_url: selectedClientForAI.avatar,
+          }}
+          targetClientId={selectedClientForAI.id}
+          existingSessions={allSessions}
+        />
+      )}
+
+      <AnalyticsDetailedModal
+        visible={showAnalyticsModal}
+        onClose={() => setShowAnalyticsModal(false)}
+        data={analyticsData}
+        currentActive={displayActiveCount}
+      />
+
+      <FeedbackModal
+        visible={showPlanSentModal}
+        onClose={() => setShowPlanSentModal(false)}
+        variant="success"
+        icon={
+          <View style={{ position: 'relative' }}>
+            <BrandedAvatar
+              name={planSentClientName || 'Client'}
+              imageUrl={planSentClientAvatar || null}
+              size={80}
+            />
+            <View className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#10B981] rounded-full border-[3px] border-[#0F172A] items-center justify-center">
+              <Check size={14} color="white" strokeWidth={4} />
+            </View>
+          </View>
+        }
+        title="Plan Sent!"
+        body={`Weekly plan sent to ${planSentClientName || 'your client'}.`}
+        ctaLabel="Done"
+      />
     </View>
   );
 }
 
-const ActionCard = ({ icon, title, desc, onPress, cardStyle, textStyle, colors }: any) => (
-  <TouchableOpacity 
+const ActionCard = ({
+  icon,
+  title,
+  desc,
+  onPress,
+  cardStyle,
+  textStyle,
+  colors,
+}: any) => (
+  <TouchableOpacity
     onPress={onPress}
     className="p-7 rounded-[40px] w-[47%] shadow-lg shadow-black/20"
     style={cardStyle}
   >
-    <View className="w-14 h-14 rounded-[22px] items-center justify-center mb-8" style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }}>
+    <View
+      className="w-14 h-14 rounded-[22px] items-center justify-center mb-8"
+      style={{
+        backgroundColor: colors.background,
+        borderColor: colors.border,
+        borderWidth: 1,
+      }}
+    >
       {icon}
     </View>
-    <Text style={textStyle} className="font-black text-lg tracking-tight mb-2 leading-5">{title}</Text>
-    <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">{desc}</Text>
+    <Text
+      style={textStyle}
+      className="font-black text-lg tracking-tight mb-2 leading-5"
+    >
+      {title}
+    </Text>
+    <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest">
+      {desc}
+    </Text>
   </TouchableOpacity>
 );

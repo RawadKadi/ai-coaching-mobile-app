@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChevronLeft, User, Phone, Globe, Briefcase, Award, ExternalLink, Mail, Award as TierIcon, Shield } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { safeBack } from '@/lib/navigation-utils';
 
 const InfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | undefined | null }) => (
     <View className="flex-row items-center py-4 border-b border-white/5">
@@ -48,7 +49,7 @@ export default function CoachPersonalInformationScreen() {
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-6 py-4 border-b border-white/5">
                     <TouchableOpacity 
-                        onPress={() => router.back()}
+                        onPress={() => safeBack('/(coach)/(tabs)/profile')}
                         className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-white/5"
                     >
                         <ChevronLeft size={20} color="white" />

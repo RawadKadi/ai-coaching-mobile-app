@@ -84,7 +84,7 @@ export default function ChallengeDetailScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
+      <View className="flex-1 justify-center items-center" style={{ backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -122,26 +122,33 @@ export default function ChallengeDetailScreen() {
   const previousDates = sortedDates.filter(d => d < todayKeyGlobal);
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View className="flex-1" style={{ backgroundColor: colors.background }}>
       {/* Header with Client Profile Picture and Name */}
-      <View className="px-6 pt-16 pb-6 flex-row items-center justify-between bg-slate-950 border-b border-slate-900">
+      <View 
+        className="px-6 pt-16 pb-6 flex-row items-center justify-between border-b"
+        style={{ backgroundColor: colors.surface, borderBottomColor: colors.border }}
+      >
         <View className="flex-row items-center gap-4">
-          <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
-            <ArrowLeft size={20} color="white" />
+          <TouchableOpacity 
+            onPress={() => router.back()} 
+            className="w-10 h-10 rounded-xl items-center justify-center border"
+            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+          >
+            <ArrowLeft size={20} color={colors.text} />
           </TouchableOpacity>
           <BrandedAvatar name={challenge.client_name || 'Client'} size={40} imageUrl={challenge.client_avatar} />
           <View>
-            <Text className="text-white text-lg font-black">{challenge.client_name || 'Client'}</Text>
+            <Text className="text-lg font-black" style={{ color: colors.text }}>{challenge.client_name || 'Client'}</Text>
             {challenge.client_email ? (
-              <Text className="text-slate-500 text-xs font-medium">{challenge.client_email}</Text>
+              <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>{challenge.client_email}</Text>
             ) : (
-              <Text className="text-slate-500 text-xs font-medium">Tracking progress</Text>
+              <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>Tracking progress</Text>
             )}
           </View>
         </View>
         {isFailed ? (
           <View className="px-3 py-1.5 bg-red-950/50 rounded-full border border-red-900/50">
-            <Text className="text-red-500 text-xs font-semibold">⚠️ Closed / Unfulfilled</Text>
+            <Text className="text-red-500 text-xs font-semibold">⚠️ Closed</Text>
           </View>
         ) : isCompleted ? (
           <View className="px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
@@ -153,7 +160,7 @@ export default function ChallengeDetailScreen() {
             className="flex-row items-center gap-1.5 px-3 py-1.5 bg-red-500/10 rounded-full border border-red-500/20"
           >
             <X size={12} color="#EF4444" />
-            <Text className="text-red-500 text-xs font-semibold">cancel plan</Text>
+            <Text className="text-red-500 text-xs font-semibold">Cancel Plan</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -161,9 +168,9 @@ export default function ChallengeDetailScreen() {
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {/* Dynamic Challenge Name/Title in Main Content */}
         <View className="mx-6 mt-8">
-          <Text className="text-white text-2xl font-black tracking-tight">{challenge.name}</Text>
+          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>{challenge.name}</Text>
           {challenge.description && (
-            <Text className="text-slate-500 text-sm font-medium mt-2 leading-5">{challenge.description}</Text>
+            <Text className="text-sm font-medium mt-2 leading-5" style={{ color: colors.textSecondary }}>{challenge.description}</Text>
           )}
         </View>
 
@@ -171,52 +178,82 @@ export default function ChallengeDetailScreen() {
         <MotiView 
           from={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="mx-6 mt-6 bg-slate-900 p-6 rounded-[32px] border border-slate-800"
+          className="mx-6 mt-6 p-6 rounded-[32px] border"
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
         >
           <View className="flex-row justify-between items-center mb-6">
-            <View className={`px-3 py-1 rounded-full border ${isFailed ? 'bg-red-950/30 border-red-900/50' : 'bg-blue-600/10 border-blue-500/20'}`}>
-              <Text className={`${isFailed ? 'text-red-500' : 'text-blue-400'} text-[10px] font-bold uppercase tracking-widest`}>
-                {isFailed ? 'Failed Phase' : 'Active Phase'}
+            <View 
+              className="px-3 py-1 rounded-full border"
+              style={{
+                backgroundColor: isFailed ? 'rgba(239, 68, 68, 0.1)' : `${colors.primary}15`,
+                borderColor: isFailed ? 'rgba(239, 68, 68, 0.3)' : `${colors.primary}30`
+              }}
+            >
+              <Text 
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: isFailed ? '#EF4444' : colors.primary }}
+              >
+                {isFailed ? 'Closed' : 'Active'}
               </Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <Calendar size={14} color="#64748B" />
-              <Text className="text-slate-500 text-xs font-medium">Until {new Date(challenge.end_date).toLocaleDateString()}</Text>
+              <Calendar size={14} color={colors.textSecondary} />
+              <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>Until {new Date(challenge.end_date).toLocaleDateString()}</Text>
             </View>
           </View>
 
           <View className="flex-row items-baseline gap-2 mb-2">
-            <Text className={`text-4xl font-bold ${isFailed ? 'text-red-500' : 'text-white'}`}>{completionRate}%</Text>
-            <Text className="text-slate-500 font-medium">{isFailed ? 'Total Compliance' : 'Compliance'}</Text>
+            <Text 
+              className="text-4xl font-bold"
+              style={{ color: isFailed ? '#EF4444' : colors.text }}
+            >
+              {completionRate}%
+            </Text>
+            <Text className="font-medium" style={{ color: colors.textSecondary }}>Progress</Text>
           </View>
 
-          <View className={`h-2.5 rounded-full overflow-hidden border mb-6 ${isFailed ? 'bg-red-950/30 border-red-900/30' : 'bg-slate-950 border-slate-800'}`}>
-             <View className={`h-full rounded-full ${isFailed ? 'bg-red-900/40' : 'bg-blue-500'}`} style={{ width: isFailed ? '100%' : `${completionRate}%` }} />
+          <View 
+            className="h-2.5 rounded-full overflow-hidden border mb-6"
+            style={{ 
+              backgroundColor: colors.background, 
+              borderColor: colors.border 
+            }}
+          >
+             <View 
+               className="h-full rounded-full" 
+               style={{ 
+                 width: isFailed ? '100%' : `${completionRate}%`,
+                 backgroundColor: isFailed ? '#EF4444' : colors.primary
+               }} 
+             />
           </View>
 
-          <View className="flex-row items-center justify-between bg-slate-950/50 p-4 rounded-3xl border border-white/5">
-              <View className="items-center flex-1 border-r border-white/5">
-                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Done</Text>
-                  <Text className={`text-xl font-black ${completedCount > 0 ? 'text-emerald-500' : 'text-white'}`}>{completedCount}</Text>
+          <View 
+            className="flex-row items-center justify-between p-4 rounded-3xl border"
+            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+          >
+              <View className="items-center flex-1 border-r" style={{ borderRightColor: colors.border }}>
+                  <Text className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: colors.textSecondary }}>Done</Text>
+                  <Text className="text-xl font-black text-emerald-500">{completedCount}</Text>
               </View>
-              <View className="items-center flex-1 border-r border-white/5">
-                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Missed</Text>
-                  <Text className={`text-xl font-black ${missedCount > 0 ? (isFailed ? 'text-red-500' : 'text-amber-500') : 'text-white'}`}>{missedCount}</Text>
+              <View className="items-center flex-1 border-r" style={{ borderRightColor: colors.border }}>
+                  <Text className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: colors.textSecondary }}>Missed</Text>
+                  <Text className={`text-xl font-black ${missedCount > 0 ? 'text-amber-500' : ''}`} style={missedCount === 0 ? { color: colors.text } : undefined}>{missedCount}</Text>
               </View>
               <View className="items-center flex-1">
-                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Left</Text>
-                  <Text className="text-white text-xl font-black">{remainingCount}</Text>
+                  <Text className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: colors.textSecondary }}>Left</Text>
+                  <Text className="text-xl font-black" style={{ color: colors.text }}>{remainingCount}</Text>
               </View>
           </View>
         </MotiView>
 
         {/* Task List */}
         <View className="mt-10 px-6">
-           <Text className="text-white text-lg font-bold mb-6">Daily Breakdown</Text>
+           <Text className="text-lg font-bold mb-6" style={{ color: colors.text }}>Daily Tasks</Text>
            
            {todayDates.length > 0 && (
              <View className="mb-8">
-               <Text className="text-blue-400 text-sm font-black uppercase tracking-widest mb-3 ml-2">Today</Text>
+               <Text className="text-sm font-black uppercase tracking-widest mb-3 ml-2" style={{ color: colors.primary }}>Today</Text>
                {todayDates.map((dateStr: string, index: number) => (
                  <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
                ))}
@@ -225,7 +262,7 @@ export default function ChallengeDetailScreen() {
 
            {upcomingDates.length > 0 && (
              <View className="mb-8">
-               <Text className="text-slate-500 text-sm font-black uppercase tracking-widest mb-3 ml-2">Upcoming</Text>
+               <Text className="text-sm font-black uppercase tracking-widest mb-3 ml-2" style={{ color: colors.textSecondary }}>Upcoming</Text>
                {upcomingDates.map((dateStr: string, index: number) => (
                  <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
                ))}
@@ -234,7 +271,7 @@ export default function ChallengeDetailScreen() {
 
            {previousDates.length > 0 && (
              <View className="mb-8">
-               <Text className="text-slate-500 text-sm font-black uppercase tracking-widest mb-3 ml-2">Previous</Text>
+               <Text className="text-sm font-black uppercase tracking-widest mb-3 ml-2" style={{ color: colors.textSecondary }}>Previous</Text>
                {previousDates.map((dateStr: string, index: number) => (
                  <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
                ))}
@@ -248,11 +285,11 @@ export default function ChallengeDetailScreen() {
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => router.push(`/(coach)/challenges/edit/${id}`)}
-          style={{ position: 'absolute', bottom: 32, right: 24, zIndex: 10 }}
-          className="bg-blue-600 px-4 py-2.5 rounded-full flex-row items-center gap-1.5 shadow-2xl shadow-blue-500/30 border border-blue-500/20"
+          style={{ position: 'absolute', bottom: 32, right: 24, zIndex: 10, backgroundColor: colors.primary }}
+          className="px-4 py-2.5 rounded-full flex-row items-center gap-1.5 shadow-2xl"
         >
-          <Text className="text-white text-xs font-semibold">edit plan</Text>
-          <Edit2 size={12} color="white" />
+          <Text className="text-xs font-semibold" style={{ color: colors.textOnPrimary }}>Edit Challenge</Text>
+          <Edit2 size={12} color={colors.textOnPrimary} />
         </TouchableOpacity>
       )}
     </View>
@@ -260,6 +297,7 @@ export default function ChallengeDetailScreen() {
 }
 
 const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
+  const colors = useBrandColors();
   const [isExpanded, setIsExpanded] = useState(() => {
     const todayKey = new Date().toISOString().split('T')[0];
     return dateStr === todayKey;
@@ -278,16 +316,16 @@ const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
   const isPastDate = dateStr < todayKey;
   const isFutureDate = dateStr > todayKey;
 
-  let tagBg = 'bg-slate-950 border-slate-800';
-  let tagText = 'text-slate-300';
+  let tagBgStyle = { backgroundColor: colors.background, borderColor: colors.border };
+  let tagTextColor = colors.textSecondary;
   
   if (!isFutureDate) {
     if (completedCount > 0) {
-      tagBg = 'bg-emerald-500/10 border-emerald-500/20';
-      tagText = 'text-emerald-500';
+      tagBgStyle = { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.2)' };
+      tagTextColor = '#10B981';
     } else {
-      tagBg = 'bg-amber-500/10 border-amber-500/20';
-      tagText = 'text-amber-500';
+      tagBgStyle = { backgroundColor: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.2)' };
+      tagTextColor = '#F59E0B';
     }
   }
 
@@ -296,15 +334,30 @@ const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
       <TouchableOpacity 
         activeOpacity={0.7} 
         onPress={() => setIsExpanded(!isExpanded)}
-        className={`flex-row items-center p-4 rounded-2xl border ${isToday ? 'bg-blue-950/20 border-blue-500/50' : 'bg-slate-900/50 border-slate-800'} ${isExpanded ? 'mb-4' : ''}`}
+        className={`flex-row items-center p-4 rounded-2xl border ${isExpanded ? 'mb-4' : ''}`}
+        style={{
+          backgroundColor: isToday ? `${colors.primary}12` : colors.surface,
+          borderColor: isToday ? colors.primary : colors.border
+        }}
       >
         <View className="flex-row items-center gap-3">
-          <View className="w-8 h-8 rounded-full bg-slate-800 items-center justify-center">
-            {isExpanded ? <ChevronDown size={16} color="#94A3B8" /> : <ChevronRight size={16} color="#94A3B8" />}
+          <View 
+            className="w-8 h-8 rounded-full items-center justify-center border"
+            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+          >
+            {isExpanded ? <ChevronDown size={16} color={colors.textSecondary} /> : <ChevronRight size={16} color={colors.textSecondary} />}
           </View>
-          <Text className={`font-black text-xl tracking-tight ${isToday ? 'text-blue-400' : 'text-white'}`}>{isToday ? 'Today, ' : ''}{formattedDate}</Text>
-          <View className={`px-3 py-1 rounded-full border ml-1 ${tagBg} ${isPastDate ? 'opacity-50' : ''}`}>
-             <Text className={`text-sm font-bold ${tagText}`}>{completedCount}/{totalCount} Done</Text>
+          <Text 
+            className="font-black text-xl tracking-tight"
+            style={{ color: isToday ? colors.primary : colors.text }}
+          >
+            {isToday ? 'Today, ' : ''}{formattedDate}
+          </Text>
+          <View 
+            className={`px-3 py-1 rounded-full border ml-1 ${isPastDate ? 'opacity-50' : ''}`}
+            style={tagBgStyle}
+          >
+             <Text className="text-sm font-bold" style={{ color: tagTextColor }}>{completedCount}/{totalCount} Done</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -320,64 +373,171 @@ const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
   );
 };
 
+interface ParsedTaskInfo {
+  isJson: boolean;
+  rule?: string;
+  subTasks?: Array<{
+    id?: string;
+    exercise?: string;
+    name?: string;
+    sets?: number;
+    notes?: string;
+  }>;
+  text?: string;
+}
+
+const parseTaskDescription = (desc: any): ParsedTaskInfo => {
+  if (!desc) return { isJson: false, text: '' };
+  if (typeof desc !== 'string') return { isJson: false, text: String(desc) };
+
+  const trimmed = desc.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return { isJson: false, text: trimmed };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === 'object') {
+      const subTasks = Array.isArray(parsed.sub_tasks)
+        ? parsed.sub_tasks
+        : Array.isArray(parsed.exercises)
+          ? parsed.exercises
+          : Array.isArray(parsed)
+            ? parsed
+            : [];
+      const rule = parsed.global_rule || parsed.rule || parsed.instructions || '';
+      return {
+        isJson: true,
+        rule,
+        subTasks,
+      };
+    }
+  } catch {
+    // Parsing error fallback to plain text
+  }
+
+  return { isJson: false, text: trimmed };
+};
+
 const TaskCard = ({ task, index, isFailed, isCompleted }: { task: any, index: number, isFailed?: boolean, isCompleted?: boolean }) => {
+  const colors = useBrandColors();
   const getIcon = (type: string) => {
     switch (type?.toLowerCase()) {
-      case 'training': return <Dumbbell size={24} color={colors.primary} />;
-      case 'nutrition': return <Apple size={24} color="#10B981" />;
-      case 'recovery': return <Moon size={24} color="#8B5CF6" />;
-      default: return <Zap size={24} color="#F59E0B" />;
+      case 'training': return <Dumbbell size={22} color={colors.primary} />;
+      case 'nutrition': return <Apple size={22} color="#10B981" />;
+      case 'recovery': return <Moon size={22} color="#8B5CF6" />;
+      default: return <Zap size={22} color="#F59E0B" />;
     }
   };
 
   const isPast = new Date(task.assigned_date) < new Date(new Date().setHours(0,0,0,0));
+  const parsed = parseTaskDescription(task.description);
 
   return (
     <MotiView
       from={{ opacity: 0, translateX: -20 }}
       animate={{ opacity: 1, translateX: 0 }}
       transition={{ delay: index * 100 }}
-      className={`mb-4 p-5 rounded-[24px] border ${isFailed || (isCompleted && !task.completed) || isPast ? 'bg-slate-900/50 border-slate-800/50 opacity-50' : 'bg-slate-900 border-slate-800'}`}
+      className={`mb-4 p-5 rounded-[24px] border ${isFailed || (isCompleted && !task.completed) || isPast ? 'opacity-60' : ''}`}
+      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
     >
-      <View className="flex-row justify-between items-center mb-4">
-        <View className="flex-row items-center gap-3">
-          <View className="w-10 h-10 bg-slate-950 rounded-xl items-center justify-center border border-slate-800">
+      {/* Card Header: flex-1 on left and flex-shrink-0 on badge prevents badge from overflowing */}
+      <View className="flex-row justify-between items-start mb-3 gap-3">
+        <View className="flex-row items-start gap-3 flex-1 min-w-0">
+          <View 
+            className="w-10 h-10 rounded-xl items-center justify-center border flex-shrink-0 mt-0.5"
+            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+          >
              {getIcon(task.focus_type)}
           </View>
-          <View>
-            <Text className="text-white font-bold text-base">{task.name}</Text>
-            <Text className="text-slate-500 text-xs font-medium capitalize">{task.focus_type} • {task.intensity}</Text>
+          <View className="flex-1 min-w-0">
+            <Text className="font-bold text-base leading-snug" style={{ color: colors.text }} numberOfLines={2}>
+              {task.name}
+            </Text>
+            <Text className="text-xs font-medium capitalize mt-1" style={{ color: colors.textSecondary }}>
+              {task.focus_type} • {task.intensity}
+            </Text>
           </View>
         </View>
-        {isFailed ? (
-          <View className="bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
-             <Text className="text-red-500 text-[10px] font-bold uppercase">Unfulfilled</Text>
-          </View>
-        ) : task.completed ? (
-          <View className="bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-             <Text className="text-emerald-500 text-[10px] font-bold uppercase">Success</Text>
-          </View>
-        ) : isPast ? (
-            <View className="bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
-                <Text className="text-red-500 text-[10px] font-bold uppercase">Missed</Text>
+
+        <View className="flex-shrink-0 pt-0.5">
+          {isFailed ? (
+            <View className="bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20">
+               <Text className="text-red-500 text-[10px] font-bold uppercase">Unfulfilled</Text>
             </View>
-        ) : (
-          <View className="bg-slate-800 px-3 py-1 rounded-full">
-             <Text className="text-slate-400 text-[10px] font-bold uppercase">Pending</Text>
-          </View>
-        )}
+          ) : task.completed ? (
+            <View className="bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+               <Text className="text-emerald-500 text-[10px] font-bold uppercase">Done</Text>
+            </View>
+          ) : isPast ? (
+              <View className="bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20">
+                  <Text className="text-red-500 text-[10px] font-bold uppercase">Missed</Text>
+              </View>
+          ) : (
+            <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+               <Text className="text-[10px] font-bold uppercase" style={{ color: colors.textSecondary }}>Pending</Text>
+            </View>
+          )}
+        </View>
       </View>
 
+      {/* Card Content */}
       <View className="pl-[52px]">
-         <Text className="text-slate-400 text-sm leading-5 mb-4" numberOfLines={2}>{task.description}</Text>
-         <View className="flex-row justify-between items-center pt-4 border-t border-slate-950/50">
+        {parsed.isJson ? (
+          <View className="mb-4">
+            {parsed.rule ? (
+              <Text className="text-sm leading-5 mb-3 font-medium" style={{ color: colors.textSecondary }}>
+                {parsed.rule}
+              </Text>
+            ) : null}
+
+            {parsed.subTasks && parsed.subTasks.length > 0 && (
+              <View className="gap-2">
+                {parsed.subTasks.map((st: any, i: number) => (
+                  <View 
+                    key={st.id || i}
+                    style={{ backgroundColor: colors.background, borderColor: colors.border }}
+                    className="p-3 rounded-xl border flex-row items-center justify-between"
+                  >
+                    <View className="flex-1 mr-2">
+                      <Text className="text-sm font-bold" style={{ color: colors.text }}>
+                        {st.exercise || st.name || `Exercise ${i + 1}`}
+                      </Text>
+                      {st.notes ? (
+                        <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
+                          {st.notes}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {st.sets ? (
+                      <View 
+                        style={{ backgroundColor: `${colors.primary}15` }}
+                        className="px-2.5 py-1 rounded-lg"
+                      >
+                        <Text className="text-xs font-black" style={{ color: colors.primary }}>
+                          {st.sets} {st.sets === 1 ? 'Set' : 'Sets'}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : parsed.text ? (
+          <Text className="text-sm leading-5 mb-4" style={{ color: colors.textSecondary }}>
+            {parsed.text}
+          </Text>
+        ) : null}
+
+        <View className="flex-row justify-between items-center pt-3 border-t" style={{ borderTopColor: colors.border }}>
            <View className="flex-row items-center gap-2">
-              <Clock size={12} color="#475569" />
-              <Text className="text-slate-500 text-[10px] font-bold uppercase">
+              <Clock size={12} color={colors.textTertiary} />
+              <Text className="text-[10px] font-bold uppercase" style={{ color: colors.textTertiary }}>
                 {new Date(task.assigned_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
               </Text>
            </View>
-         </View>
+        </View>
       </View>
     </MotiView>
   );
