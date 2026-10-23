@@ -1,12 +1,11 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, Platform, Text as RNText, StyleSheet } from 'react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { vars } from 'nativewind';
 import { getFontFamily } from '@/hooks/useAppFonts';
-import { Text as RNText, StyleSheet } from 'react-native';
 
 const oldTextRender = (RNText as any).render;
-if (oldTextRender && !(RNText as any).render.__patched) {
+if (Platform.OS !== 'web' && oldTextRender && !(RNText as any).render.__patched) {
   (RNText as any).render = function render(props: any, ref: any) {
     const origin = oldTextRender.call(this, props, ref);
     if (!origin) return origin;
@@ -34,6 +33,23 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
     (global as any).currentBrandFontFamily = theme.typography.fontFamily;
   }, [theme.typography.fontFamily]);
 
+  React.useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const root = document.documentElement;
+      root.style.setProperty('--color-bg', theme.colors.background || '#020617');
+      root.style.setProperty('--color-surface', theme.colors.surface || '#0F172A');
+      root.style.setProperty('--color-border', theme.colors.border || '#1E293B');
+      root.style.setProperty('--color-primary', theme.colors.primary || '#3B82F6');
+      root.style.setProperty('--color-primary-text', theme.colors.primaryHover || '#60A5FA');
+      root.style.setProperty('--color-text-primary', theme.colors.text || '#F1F5F9');
+      root.style.setProperty('--color-text-secondary', theme.colors.textSecondary || '#94A3B8');
+      root.style.setProperty('--color-text-muted', theme.colors.textTertiary || '#475569');
+      root.style.setProperty('--color-accent', theme.colors.accent || '#FBBF24');
+      root.style.setProperty('--color-success', theme.colors.success || '#10B981');
+      root.style.setProperty('--color-error', theme.colors.error || '#EF4444');
+    }
+  }, [theme]);
+
   const themeVars = vars({
     '--color-bg': theme.colors.background || '#020617',
     '--color-surface': theme.colors.surface || '#0F172A',
@@ -49,7 +65,7 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
   });
 
   return (
-    <View style={[themeVars, { flex: 1 }]}>
+    <View style={Platform.OS === 'web' ? { flex: 1 } : [themeVars, { flex: 1 }]}>
       {children}
     </View>
   );

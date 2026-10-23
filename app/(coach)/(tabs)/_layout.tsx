@@ -18,6 +18,8 @@ export default function CoachTabLayout() {
             position: 'absolute',
             backgroundColor: 'transparent',
             borderTopWidth: 0,
+            borderBottomWidth: 0,
+            borderWidth: 0,
             elevation: 0,
             shadowOpacity: 0
           }
@@ -68,7 +70,7 @@ export default function CoachTabLayout() {
           name="profile"
           options={{
             title: 'Profile',
-            tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+            tabBarIcon: ({ color }) => <User size={22} color={color} />,
           }}
         />
         {/* Hidden Screens */}

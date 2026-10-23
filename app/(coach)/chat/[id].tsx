@@ -15,12 +15,14 @@ import {
   Alert, 
   Animated,
   StatusBar,
-  TextInput
+  TextInput,
+  AccessibilityInfo,
+  Easing
 } from 'react-native';
 
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from "@/contexts/BrandContext";
+import { useTheme, useBrandColors } from "@/contexts/BrandContext";
 import { isDarkColor } from "@/lib/theme-utils";
 import { useUnread } from '@/contexts/UnreadContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -118,6 +120,58 @@ export default function CoachChatScreen() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [schedulerVisible, setSchedulerVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const menuFadeAnim = useRef(new Animated.Value(0)).current;
+  const menuSlideAnim = useRef(new Animated.Value(350)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => sub.remove();
+  }, []);
+
+  const openMenu = () => {
+    setMenuVisible(true);
+    menuFadeAnim.setValue(0);
+    menuSlideAnim.setValue(reduceMotion ? 0 : 350);
+    Animated.parallel([
+      Animated.timing(menuFadeAnim, {
+        toValue: 1,
+        duration: reduceMotion ? 0 : 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(menuSlideAnim, {
+        toValue: 0,
+        duration: reduceMotion ? 0 : 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeMenu = (callback?: () => void) => {
+    if (reduceMotion) {
+      setMenuVisible(false);
+      callback?.();
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(menuFadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(menuSlideAnim, {
+        toValue: 350,
+        duration: 250,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setMenuVisible(false);
+      callback?.();
+    });
+  };
   const [todaySession, setTodaySession] = useState<any>(null);
   const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
@@ -1151,7 +1205,7 @@ export default function CoachChatScreen() {
               {todaySession && <View className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#0F172A]" />}
             </TouchableOpacity>
             <TouchableOpacity 
-              onPress={() => setMenuVisible(true)} 
+              onPress={openMenu} 
               className={`w-10 h-10 items-center justify-center rounded-full ${isScreenDark ? 'bg-white/10' : 'bg-black/5'}`}
             >
               <MoreVertical size={20} color={headerSubtextColor} />
@@ -1282,15 +1336,76 @@ export default function CoachChatScreen() {
         reschedulingMessageId={reschedulingMessageId}
       />
       
-      <Modal visible={menuVisible} transparent animationType="slide">
-          <Pressable className="flex-1 bg-black/60 justify-end" onPress={() => setMenuVisible(false)}>
-              <MotiView from={{ translateY: 300 }} animate={{ translateY: 0 }} className="bg-slate-900 rounded-t-[48px] p-8 border-t border-white/10">
-                  <View className="w-12 h-1.5 bg-slate-800 rounded-full self-center mb-8" />
-                  <Text className="text-white text-2xl font-black mb-8 tracking-tight">Channel Actions</Text>
-                  <OptionItem icon={<Calendar size={20} color={theme.colors.primary} />} title="AI Scheduler" sub="Find the next available gap" onPress={() => { setMenuVisible(false); setSchedulerVisible(true); }} />
-                  <OptionItem icon={<Activity size={20} color="#34D399" />} title="Client Dossier" sub="View metrics and protocols" onPress={() => { setMenuVisible(false); router.push(`/(coach)/clients/${id}`); }} />
-              </MotiView>
-          </Pressable>
+      <Modal 
+        visible={menuVisible} 
+        transparent 
+        animationType="none" 
+        statusBarTranslucent
+        onRequestClose={() => closeMenu()}
+      >
+        <View style={StyleSheet.absoluteFill}>
+          {/* Fading darker background: DOES NOT SLIDE */}
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: 'rgba(0, 0, 0, 0.6)', opacity: menuFadeAnim },
+            ]}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => closeMenu()} />
+          </Animated.View>
+
+          {/* Sliding sheet */}
+          <View style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
+            <Animated.View
+              style={{
+                backgroundColor: theme.colors.surface,
+                borderTopColor: theme.colors.border,
+                borderTopWidth: 1,
+                borderTopLeftRadius: 40,
+                borderTopRightRadius: 40,
+                padding: 24,
+                paddingBottom: Math.max(insets.bottom + 16, 32),
+                transform: [{ translateY: menuSlideAnim }],
+              }}
+            >
+              <View 
+                style={{
+                  width: 44,
+                  height: 5,
+                  borderRadius: 3,
+                  backgroundColor: isScreenDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
+                  alignSelf: 'center',
+                  marginBottom: 20,
+                }} 
+              />
+              <Text 
+                style={{ 
+                  color: theme.colors.text, 
+                  fontSize: 22, 
+                  fontWeight: '800', 
+                  marginBottom: 20,
+                  letterSpacing: -0.5,
+                }}
+              >
+                Quick Actions
+              </Text>
+              <OptionItem 
+                theme={theme}
+                icon={<Calendar size={20} color={theme.colors.primary} />} 
+                title="AI Scheduler" 
+                sub="Find the next available gap" 
+                onPress={() => closeMenu(() => setSchedulerVisible(true))} 
+              />
+              <OptionItem 
+                theme={theme}
+                icon={<Activity size={20} color="#10B981" />} 
+                title="Client Dossier" 
+                sub="View client profile and stats" 
+                onPress={() => closeMenu(() => router.push(`/(coach)/clients/${id}`))} 
+              />
+            </Animated.View>
+          </View>
+        </View>
       </Modal>
 
       <MessageOverlay 
@@ -1341,23 +1456,45 @@ export default function CoachChatScreen() {
       >
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <Pressable 
-            className="flex-1 bg-black/80 justify-center items-center px-6"
+            className="flex-1 bg-black/70 justify-center items-center px-6"
             onPress={() => setCancellingSessionId(null)}
           >
             <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%' }}>
               <MotiView
                 from={{ opacity: 0, scale: 0.9, translateY: 20 }}
                 animate={{ opacity: 1, scale: 1, translateY: 0 }}
-                style={{ width: '100%', backgroundColor: '#0F172A', borderRadius: 32, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+                style={{ 
+                  width: '100%', 
+                  backgroundColor: theme.colors.surface, 
+                  borderRadius: 32, 
+                  padding: 24, 
+                  borderWidth: 1, 
+                  borderColor: theme.colors.border,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: isDarkColor(theme.colors.surface) ? 0.4 : 0.12,
+                  shadowRadius: 20,
+                  elevation: 10,
+                }}
               >
-                <View className="flex-row justify-between items-center mb-6">
-                  <Text className="text-white text-xl font-black">Cancel Session</Text>
-                  <TouchableOpacity onPress={() => setCancellingSessionId(null)}>
-                    <X size={24} color="#94A3B8" />
+                <View className="flex-row justify-between items-center mb-3">
+                  <Text style={{ color: theme.colors.text }} className="text-xl font-black">Cancel Session</Text>
+                  <TouchableOpacity 
+                    onPress={() => setCancellingSessionId(null)}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isDarkColor(theme.colors.surface) ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    <X size={20} color={theme.colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
                 
-                <Text className="text-slate-400 mb-6 text-sm font-medium">Why are you cancelling this session?</Text>
+                <Text style={{ color: theme.colors.textSecondary }} className="mb-6 text-sm font-medium">Why are you cancelling this session?</Text>
                 
                 <View className="gap-3 mb-6">
                   {[
@@ -1368,6 +1505,15 @@ export default function CoachChatScreen() {
                     'Other'
                   ].map((reason) => {
                     const isSelected = selectedReason === reason;
+                    const isSurfaceDark = isDarkColor(theme.colors.surface || '#0F172A');
+                    const itemBg = isSelected 
+                      ? `${theme.colors.primary}18` 
+                      : (isSurfaceDark ? 'rgba(255, 255, 255, 0.04)' : (theme.colors.background || '#F8FAFC'));
+                    const itemBorder = isSelected 
+                      ? theme.colors.primary 
+                      : (theme.colors.border || (isSurfaceDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'));
+                    const itemTextColor = isSelected ? theme.colors.primary : theme.colors.text;
+
                     return (
                       <Pressable
                         key={reason}
@@ -1378,18 +1524,18 @@ export default function CoachChatScreen() {
                         style={{
                           padding: 16,
                           borderRadius: 20,
-                          borderWidth: 1,
-                          borderColor: isSelected ? '#10B981' : 'rgba(255,255,255,0.05)',
-                          backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : '#0F172A'
+                          borderWidth: 1.5,
+                          borderColor: itemBorder,
+                          backgroundColor: itemBg,
                         }}
                       >
                         <View className="flex-row items-center justify-between">
                           <Text style={{ 
                             fontSize: 14, 
                             fontWeight: '700', 
-                            color: isSelected ? '#10B981' : '#F8FAFC' 
+                            color: itemTextColor,
                           }}>{reason}</Text>
-                          {isSelected && <Check size={18} color="#10B981" />}
+                          {isSelected && <Check size={18} color={theme.colors.primary} strokeWidth={2.5} />}
                         </View>
                       </Pressable>
                     );
@@ -1397,7 +1543,7 @@ export default function CoachChatScreen() {
                 </View>
 
                 {selectedReason === 'Other' && (
-                  <View style={{ height: 140, marginBottom: 24, overflow: 'hidden' }}>
+                  <View style={{ height: 140, marginBottom: 20, overflow: 'hidden' }}>
                     <MotiView
                       from={{ opacity: 0, translateY: -10 }}
                       animate={{ opacity: 1, translateY: 0 }}
@@ -1405,15 +1551,23 @@ export default function CoachChatScreen() {
                       style={{ flex: 1 }}
                     >
                       <TextInput
-                        className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white text-base flex-1"
+                        style={{
+                          backgroundColor: isDarkColor(theme.colors.surface) ? 'rgba(255, 255, 255, 0.04)' : (theme.colors.background || '#F8FAFC'),
+                          borderColor: theme.colors.border,
+                          borderWidth: 1,
+                          borderRadius: 16,
+                          padding: 16,
+                          color: theme.colors.text,
+                          fontSize: 15,
+                          height: '100%',
+                        }}
                         multiline
                         placeholder="Explain why (optional if obvious)..."
-                        placeholderTextColor="#475569"
+                        placeholderTextColor={theme.colors.textTertiary || theme.colors.textSecondary}
                         value={cancellationReason}
                         onChangeText={setCancellationReason}
                         autoFocus
                         textAlignVertical="top"
-                        style={{ height: '100%' }}
                       />
                     </MotiView>
                   </View>
@@ -1422,12 +1576,27 @@ export default function CoachChatScreen() {
                 <TouchableOpacity 
                   onPress={submitCancellation}
                   disabled={!selectedReason || isSubmittingCancellation}
-                  className={`py-4 rounded-2xl items-center mb-2 ${selectedReason ? 'bg-red-500' : 'bg-slate-800'}`}
+                  style={{
+                    backgroundColor: selectedReason ? '#EF4444' : (isDarkColor(theme.colors.surface) ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                    paddingVertical: 16,
+                    borderRadius: 20,
+                    alignItems: 'center',
+                    marginBottom: 4,
+                  }}
+                  activeOpacity={0.8}
                 >
                   {isSubmittingCancellation ? (
                     <ActivityIndicator color="white" />
                   ) : (
-                    <Text className="text-white font-black text-base">Cancel Session</Text>
+                    <Text 
+                      style={{ 
+                        color: selectedReason ? '#FFFFFF' : (theme.colors.textTertiary || theme.colors.textSecondary),
+                        fontSize: 16,
+                        fontWeight: '900',
+                      }}
+                    >
+                      Cancel Session
+                    </Text>
                   )}
                 </TouchableOpacity>
               </MotiView>
@@ -1439,12 +1608,68 @@ export default function CoachChatScreen() {
   );
 }
 
-const OptionItem = ({ icon, title, sub, onPress }: any) => (
-    <TouchableOpacity onPress={onPress} className="flex-row items-center gap-5 p-5 bg-slate-950 rounded-[32px] border border-white/5 mb-4">
-        <View className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5">{icon}</View>
-        <View><Text className="text-white font-black text-base">{title}</Text><Text className="text-slate-500 text-[11px] font-medium">{sub}</Text></View>
+const OptionItem = ({ icon, title, sub, onPress, theme: propTheme }: any) => {
+  const brandColors = useBrandColors();
+  const theme = propTheme || { colors: brandColors };
+  const isSurfaceDark = isDarkColor(theme.colors.surface || '#0F172A');
+  const cardBg = isSurfaceDark ? 'rgba(255, 255, 255, 0.05)' : (theme.colors.background || '#F8FAFC');
+  const cardBorder = theme.colors.border || (isSurfaceDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)');
+  const iconBoxBg = isSurfaceDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+
+  return (
+    <TouchableOpacity 
+      onPress={onPress} 
+      activeOpacity={0.7}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+        padding: 18,
+        backgroundColor: cardBg,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: cardBorder,
+        marginBottom: 12,
+      }}
+    >
+      <View 
+        style={{
+          width: 44,
+          height: 44,
+          backgroundColor: iconBoxBg,
+          borderRadius: 14,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: cardBorder,
+        }}
+      >
+        {icon}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text 
+          style={{ 
+            color: theme.colors.text, 
+            fontSize: 16, 
+            fontWeight: '700',
+            marginBottom: 2,
+          }}
+        >
+          {title}
+        </Text>
+        <Text 
+          style={{ 
+            color: theme.colors.textSecondary, 
+            fontSize: 12, 
+            fontWeight: '500',
+          }}
+        >
+          {sub}
+        </Text>
+      </View>
     </TouchableOpacity>
-);
+  );
+};
 
 const getStyles = (colors: any) => StyleSheet.create({ header: { backgroundColor: colors.background } });
 

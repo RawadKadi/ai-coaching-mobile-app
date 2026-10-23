@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { useTheme } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 
 export interface SparklineData {
   total_roster: number;
@@ -22,12 +24,19 @@ export const AnalyticsSparkline: React.FC<AnalyticsSparklineProps> = ({
   loading = false,
   dataKey = 'total_roster'
 }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDark = isDarkColor(colors.background);
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor = colors.textSecondary || (isDark ? 'rgba(255, 255, 255, 0.7)' : '#64748B');
+  const borderColor = colors.border || (isDark ? '#1E293B' : '#E2E8F0');
+
   if (loading || data.length < 2) {
     return (
       <View className="flex-1 justify-end">
-        <Text className="text-white text-4xl font-black tracking-tighter mb-1">{heroNumber}</Text>
-        <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{label}</Text>
-        <View className="h-8 border-b border-slate-800 border-dashed mt-2" />
+        <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter mb-1">{heroNumber}</Text>
+        <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-widest">{label}</Text>
+        <View style={{ borderColor }} className="h-8 border-b border-dashed mt-2" />
       </View>
     );
   }
@@ -46,11 +55,11 @@ export const AnalyticsSparkline: React.FC<AnalyticsSparklineProps> = ({
   const points = values.map((v, i) => {
     let normalizedY = 0;
     if (range === 0) {
-       // If all values are the same, draw the line in the middle if > 0, 
-       // or at the bottom if 0 (but with padding)
-       normalizedY = v === 0 ? 0 : 0.5;
+      // If all values are the same, draw the line in the middle if > 0, 
+      // or at the bottom if 0 (but with padding)
+      normalizedY = v === 0 ? 0 : 0.5;
     } else {
-       normalizedY = (v - min) / range;
+      normalizedY = (v - min) / range;
     }
 
     return {
@@ -70,7 +79,7 @@ export const AnalyticsSparkline: React.FC<AnalyticsSparklineProps> = ({
           <Defs>
             <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor="#A855F7" stopOpacity="0.4" />
-              <Stop offset="1" stopColor="#A855F7" stopOpacity="0" />
+              <Stop offset="100%" stopColor="#A855F7" stopOpacity="0" />
             </LinearGradient>
           </Defs>
           <Path

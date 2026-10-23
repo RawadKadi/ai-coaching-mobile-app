@@ -19,6 +19,8 @@ export default function ClientTabLayout() {
           position: 'absolute',
           backgroundColor: 'transparent',
           borderTopWidth: 0,
+          borderBottomWidth: 0,
+          borderWidth: 0,
           elevation: 0,
           shadowOpacity: 0
         }

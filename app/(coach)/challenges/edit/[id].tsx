@@ -6,13 +6,20 @@ import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChallengeFocusType } from '@/types/database';
-import { X, Plus, Calendar, Target, Trash2, ArrowLeft, ChevronDown, Check, Info, Flame, Zap, ShieldCheck } from 'lucide-react-native';
+import { X, Plus, Minus, Calendar, Target, Trash2, ArrowLeft, ChevronDown, Check, Info, Flame, Zap, ShieldCheck } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 interface Client {
   id: string;
   full_name: string;
   avatar_url?: string;
+}
+
+interface ExerciseItem {
+  id: string;
+  exercise: string;
+  sets: number;
+  notes: string;
 }
 
 interface SubChallenge {
@@ -23,7 +30,74 @@ interface SubChallenge {
   focus_type: ChallengeFocusType;
   intensity: 'low' | 'medium' | 'high';
   completed?: boolean;
+  isStructured: boolean;
+  rule: string;
+  exercises: ExerciseItem[];
 }
+
+const parseDayContent = (rawDescription: string) => {
+  if (!rawDescription || typeof rawDescription !== 'string') {
+    return {
+      isStructured: false,
+      rule: '',
+      exercises: [] as ExerciseItem[],
+    };
+  }
+
+  const trimmed = rawDescription.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') {
+        const subTasksList = Array.isArray(parsed.sub_tasks)
+          ? parsed.sub_tasks
+          : Array.isArray(parsed.exercises)
+            ? parsed.exercises
+            : Array.isArray(parsed)
+              ? parsed
+              : null;
+
+        if (subTasksList && subTasksList.length > 0) {
+          const rule = parsed.global_rule || parsed.rule || parsed.instructions || '';
+          const exercises: ExerciseItem[] = subTasksList.map((st: any, i: number) => ({
+            id: st.id || `ex_${Date.now()}_${i}`,
+            exercise: st.exercise || st.name || '',
+            sets: typeof st.sets === 'number' ? st.sets : (Number(st.sets) || 1),
+            notes: st.notes || '',
+          }));
+          return {
+            isStructured: true,
+            rule,
+            exercises,
+          };
+        }
+      }
+    } catch {
+      // not JSON
+    }
+  }
+
+  return {
+    isStructured: false,
+    rule: '',
+    exercises: [] as ExerciseItem[],
+  };
+};
+
+const serializeDayContent = (sub: SubChallenge): string => {
+  if (sub.isStructured) {
+    return JSON.stringify({
+      global_rule: (sub.rule || '').trim(),
+      sub_tasks: sub.exercises.map((ex, i) => ({
+        id: ex.id || `ex_${i + 1}`,
+        exercise: ex.exercise.trim(),
+        sets: Number(ex.sets) || 1,
+        notes: (ex.notes || '').trim(),
+      })),
+    });
+  }
+  return (sub.description || '').trim();
+};
 
 export default function EditChallengeScreen() {
   const colors = useBrandColors();
@@ -88,11 +162,28 @@ export default function EditChallengeScreen() {
         .order('assigned_date', { ascending: true });
 
       if (subsError) throw subsError;
-      setSubChallenges(subs || []);
+
+      const formattedSubs: SubChallenge[] = (subs || []).map((sub: any) => {
+        const parsed = parseDayContent(sub.description);
+        return {
+          id: sub.id,
+          name: sub.name,
+          description: sub.description || '',
+          assigned_date: sub.assigned_date,
+          focus_type: sub.focus_type,
+          intensity: sub.intensity,
+          completed: sub.completed,
+          isStructured: parsed.isStructured,
+          rule: parsed.rule,
+          exercises: parsed.exercises,
+        };
+      });
+
+      setSubChallenges(formattedSubs);
       setInitialData({
         name: mother.name,
         description: mother.description || '',
-        subChallenges: subs ? JSON.parse(JSON.stringify(subs)) : []
+        subChallenges: JSON.parse(JSON.stringify(formattedSubs))
       });
 
     } catch (e: any) {
@@ -119,9 +210,9 @@ export default function EditChallengeScreen() {
       const initial = initialData.subChallenges[i];
       if (!initial) return true;
       if ((current.name || '').trim() !== (initial.name || '').trim()) return true;
-      if ((current.description || '').trim() !== (initial.description || '').trim()) return true;
       if (current.focus_type !== initial.focus_type) return true;
       if (current.intensity !== initial.intensity) return true;
+      if (serializeDayContent(current) !== serializeDayContent(initial)) return true;
     }
     
     return false;
@@ -166,6 +257,90 @@ export default function EditChallengeScreen() {
     const updated = [...subChallenges];
     updated[index] = { ...updated[index], [field]: value };
     setSubChallenges(updated);
+  };
+
+  const updateSubChallengeRule = (dayIndex: number, rule: string) => {
+    setSubChallenges(prev => {
+      const next = [...prev];
+      next[dayIndex] = { ...next[dayIndex], rule };
+      return next;
+    });
+  };
+
+  const updateExercise = (dayIndex: number, exIndex: number, field: keyof ExerciseItem, value: any) => {
+    setSubChallenges(prev => {
+      const next = [...prev];
+      const targetDay = { ...next[dayIndex] };
+      const exercises = [...targetDay.exercises];
+      exercises[exIndex] = { ...exercises[exIndex], [field]: value };
+      targetDay.exercises = exercises;
+      next[dayIndex] = targetDay;
+      return next;
+    });
+  };
+
+  const addExercise = (dayIndex: number) => {
+    setSubChallenges(prev => {
+      const next = [...prev];
+      const targetDay = { ...next[dayIndex] };
+      targetDay.exercises = [
+        ...targetDay.exercises,
+        {
+          id: `ex_${Date.now()}_${targetDay.exercises.length + 1}`,
+          exercise: '',
+          sets: 1,
+          notes: '',
+        },
+      ];
+      targetDay.isStructured = true;
+      next[dayIndex] = targetDay;
+      return next;
+    });
+  };
+
+  const removeExercise = (dayIndex: number, exIndex: number) => {
+    setSubChallenges(prev => {
+      const next = [...prev];
+      const targetDay = { ...next[dayIndex] };
+      targetDay.exercises = targetDay.exercises.filter((_, i) => i !== exIndex);
+      next[dayIndex] = targetDay;
+      return next;
+    });
+  };
+
+  const toggleDayFormat = (dayIndex: number) => {
+    setSubChallenges(prev => {
+      const next = [...prev];
+      const targetDay = { ...next[dayIndex] };
+      if (targetDay.isStructured) {
+        // Convert to plain text note
+        const textParts: string[] = [];
+        if (targetDay.rule) textParts.push(targetDay.rule);
+        targetDay.exercises.forEach(ex => {
+          const parts = [ex.exercise];
+          if (ex.sets) parts.push(`(${ex.sets} ${ex.sets === 1 ? 'set' : 'sets'})`);
+          if (ex.notes) parts.push(`- ${ex.notes}`);
+          textParts.push(parts.join(' '));
+        });
+        targetDay.description = textParts.join('\n');
+        targetDay.isStructured = false;
+      } else {
+        // Convert to structured exercises
+        targetDay.isStructured = true;
+        if (targetDay.exercises.length === 0) {
+          targetDay.exercises = [
+            {
+              id: `ex_${Date.now()}_1`,
+              exercise: targetDay.description.trim(),
+              sets: 1,
+              notes: '',
+            },
+          ];
+        }
+      }
+      next[dayIndex] = targetDay;
+      return next;
+    });
   };
 
   const handleDeleteSubChallenge = (index: number) => {
@@ -243,13 +418,23 @@ export default function EditChallengeScreen() {
 
       if (motherUpdateError) throw motherUpdateError;
 
-      // Update Sub Challenges
-      // For simplicity, we'll upsert them
-      const subsToUpsert = subChallenges.map(sub => ({
-        ...sub,
-        mother_challenge_id: id,
-        updated_at: new Date().toISOString()
-      }));
+      // Update Sub Challenges with properly serialized description
+      const subsToUpsert = subChallenges.map(sub => {
+        const payload: any = {
+          mother_challenge_id: id,
+          name: sub.name.trim(),
+          description: serializeDayContent(sub),
+          assigned_date: sub.assigned_date,
+          focus_type: sub.focus_type,
+          intensity: sub.intensity,
+          completed: sub.completed ?? false,
+          updated_at: new Date().toISOString()
+        };
+        if (sub.id) {
+          payload.id = sub.id;
+        }
+        return payload;
+      });
 
       const { error: subsUpdateError } = await supabase
         .from('sub_challenges')
@@ -403,16 +588,218 @@ export default function EditChallengeScreen() {
                             onChangeText={(v) => updateSubChallenge(i, 'name', v)}
                         />
 
-                        {/* Task Description */}
-                        <TextInput 
-                            style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, padding: 16, borderRadius: 12, color: colors.text, fontWeight: '500', fontSize: 14, marginBottom: 16, minHeight: 60 }}
-                            placeholder="Add specific instructions for this day..." 
-                            placeholderTextColor={colors.textTertiary}
-                            multiline
-                            value={sub.description} 
-                            onChangeText={(v) => updateSubChallenge(i, 'description', v)}
-                            textAlignVertical="top"
-                        />
+                        {/* Task Content: Structured Exercises or Plain Note */}
+                        {sub.isStructured ? (
+                          <View style={{ marginBottom: 16 }}>
+                            {/* Daily Note / Instructions */}
+                            <View style={{ marginBottom: 14 }}>
+                              <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 6, marginLeft: 4 }}>
+                                Instructions
+                              </Text>
+                              <TextInput
+                                style={{
+                                  backgroundColor: colors.background,
+                                  borderWidth: 1,
+                                  borderColor: colors.border,
+                                  padding: 14,
+                                  borderRadius: 14,
+                                  color: colors.text,
+                                  fontSize: 14,
+                                  fontWeight: '500',
+                                  minHeight: 50,
+                                }}
+                                placeholder="Optional daily guidance (e.g. Complete before breakfast)..."
+                                placeholderTextColor={colors.textTertiary}
+                                multiline
+                                value={sub.rule}
+                                onChangeText={(v) => updateSubChallengeRule(i, v)}
+                                textAlignVertical="top"
+                              />
+                            </View>
+
+                            {/* Exercises Section */}
+                            <View>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4 }}>
+                                <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.2 }}>
+                                  Exercises {sub.exercises.length > 0 ? `(${sub.exercises.length})` : ''}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() => addExercise(i)}
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 5,
+                                    borderRadius: 12,
+                                    backgroundColor: `${colors.primary}18`,
+                                    borderWidth: 1,
+                                    borderColor: `${colors.primary}35`,
+                                  }}
+                                >
+                                  <Plus size={12} color={colors.primary} />
+                                  <Text style={{ color: colors.primary, fontSize: 11, fontWeight: 'bold' }}>Add Exercise</Text>
+                                </TouchableOpacity>
+                              </View>
+
+                              {sub.exercises.map((ex, exIdx) => (
+                                <View
+                                  key={ex.id || exIdx}
+                                  style={{
+                                    backgroundColor: colors.background,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    borderRadius: 16,
+                                    padding: 14,
+                                    marginBottom: 10,
+                                  }}
+                                >
+                                  {/* Exercise Name and Delete */}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                                    <View
+                                      style={{
+                                        width: 22,
+                                        height: 22,
+                                        borderRadius: 11,
+                                        backgroundColor: `${colors.primary}20`,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '900' }}>
+                                        {exIdx + 1}
+                                      </Text>
+                                    </View>
+                                    <TextInput
+                                      style={{
+                                        flex: 1,
+                                        color: colors.text,
+                                        fontWeight: 'bold',
+                                        fontSize: 15,
+                                        paddingVertical: 2,
+                                      }}
+                                      placeholder="Exercise name"
+                                      placeholderTextColor={colors.textTertiary}
+                                      value={ex.exercise}
+                                      onChangeText={(v) => updateExercise(i, exIdx, 'exercise', v)}
+                                    />
+                                    {sub.exercises.length > 1 && (
+                                      <TouchableOpacity
+                                        onPress={() => removeExercise(i, exIdx)}
+                                        style={{ padding: 4 }}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                      >
+                                        <Trash2 size={15} color="#EF4444" />
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+
+                                  {/* Sets & Notes Row */}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    {/* Sets Stepper */}
+                                    <View
+                                      style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: colors.surface,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        paddingHorizontal: 4,
+                                        paddingVertical: 2,
+                                      }}
+                                    >
+                                      <TouchableOpacity
+                                        onPress={() => updateExercise(i, exIdx, 'sets', Math.max(1, (ex.sets || 1) - 1))}
+                                        style={{ padding: 6 }}
+                                      >
+                                        <Minus size={12} color={colors.text} />
+                                      </TouchableOpacity>
+                                      <Text
+                                        style={{
+                                          color: colors.text,
+                                          fontWeight: 'bold',
+                                          fontSize: 11,
+                                          minWidth: 44,
+                                          textAlign: 'center',
+                                        }}
+                                      >
+                                        {ex.sets || 1} {ex.sets === 1 ? 'Set' : 'Sets'}
+                                      </Text>
+                                      <TouchableOpacity
+                                        onPress={() => updateExercise(i, exIdx, 'sets', (ex.sets || 1) + 1)}
+                                        style={{ padding: 6 }}
+                                      >
+                                        <Plus size={12} color={colors.text} />
+                                      </TouchableOpacity>
+                                    </View>
+
+                                    {/* Notes / Targets */}
+                                    <TextInput
+                                      style={{
+                                        flex: 1,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        borderRadius: 10,
+                                        paddingHorizontal: 10,
+                                        paddingVertical: 6,
+                                        fontSize: 12,
+                                        color: colors.text,
+                                        fontWeight: '500',
+                                      }}
+                                      placeholder="Notes (reps, tempo, etc.)"
+                                      placeholderTextColor={colors.textTertiary}
+                                      value={ex.notes}
+                                      onChangeText={(v) => updateExercise(i, exIdx, 'notes', v)}
+                                    />
+                                  </View>
+                                </View>
+                              ))}
+
+                              <TouchableOpacity
+                                onPress={() => toggleDayFormat(i)}
+                                style={{ alignSelf: 'flex-end', marginTop: 2, paddingVertical: 4, paddingHorizontal: 2 }}
+                              >
+                                <Text style={{ color: colors.textTertiary, fontSize: 11, fontWeight: '600' }}>
+                                  Switch to simple note
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={{ marginBottom: 16 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, paddingHorizontal: 4 }}>
+                              <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.2 }}>
+                                Instructions
+                              </Text>
+                              <TouchableOpacity onPress={() => toggleDayFormat(i)}>
+                                <Text style={{ color: colors.primary, fontSize: 11, fontWeight: 'bold' }}>
+                                  + Switch to exercises
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                            <TextInput
+                              style={{
+                                backgroundColor: colors.background,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: 16,
+                                borderRadius: 14,
+                                color: colors.text,
+                                fontWeight: '500',
+                                fontSize: 14,
+                                minHeight: 80,
+                              }}
+                              placeholder="Add instructions for this day..."
+                              placeholderTextColor={colors.textTertiary}
+                              multiline
+                              value={sub.description}
+                              onChangeText={(v) => updateSubChallenge(i, 'description', v)}
+                              textAlignVertical="top"
+                            />
+                          </View>
+                        )}
                         
                         {/* Focus Type Tags */}
                         <Text style={{ color: colors.textSecondary, fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Focus Area</Text>

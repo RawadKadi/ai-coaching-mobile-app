@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { 
   UserPlus, 
@@ -22,6 +23,7 @@ import {
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrandColors } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import { supabase } from '@/lib/supabase';
 import { sendSubCoachInvite } from '@/lib/brevo-service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,7 +34,8 @@ export default function AddSubCoachScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { coach } = useAuth();
-  const { primary, secondary } = useBrandColors();
+  const colors = useBrandColors();
+  const isDarkMode = isDarkColor(colors.background || '#010417');
   
   const [email, setEmail] = useState('');
   const [searchState, setSearchState] = useState<SearchState>('idle');
@@ -145,20 +148,32 @@ export default function AddSubCoachScreen() {
   };
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+      {/* Header */}
       <View 
-        style={{ paddingTop: insets.top + 16 }} 
-        className="px-6 pb-6 flex-row items-center gap-4 border-b border-white/5 bg-slate-950"
+        style={{ 
+          paddingTop: insets.top + 16,
+          backgroundColor: colors.background,
+          borderBottomColor: colors.border,
+        }} 
+        className="px-6 pb-6 flex-row items-center gap-4 border-b"
       >
         <TouchableOpacity 
           onPress={() => router.back()} 
-          className="p-2 bg-slate-900 rounded-full border border-white/5"
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+          className="p-2.5 rounded-full border"
+          activeOpacity={0.7}
         >
-          <ArrowLeft size={20} color="#94A3B8" />
+          <ArrowLeft size={20} color={colors.text} />
         </TouchableOpacity>
         <View>
-            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Growth Center</Text>
-            <Text className="text-white text-xl font-black tracking-tight">Expand Your Team</Text>
+          <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[3px]">
+            Team
+          </Text>
+          <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight">
+            Add Coach
+          </Text>
         </View>
       </View>
 
@@ -166,28 +181,42 @@ export default function AddSubCoachScreen() {
         <MotiView
           from={{ opacity: 0, translateY: 20 }}
           animate={{ opacity: 1, translateY: 0 }}
-          className="mx-6 mt-8 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden"
+          style={{ 
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          }}
+          className="mx-6 mt-8 p-8 rounded-[40px] border items-center overflow-hidden shadow-sm"
         >
-            <View className="absolute top-0 right-0 p-4 opacity-10">
-                <UserPlus size={120} color={primary} />
-            </View>
-            <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
-                <Send size={36} color="white" fill="white" />
-            </View>
-            <Text className="text-white text-2xl font-black text-center tracking-tighter">Invite Collaborator</Text>
-            <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
-                Onboard a new coach into your ecosystem to distribute client load and scale your collective performance.
-            </Text>
+          <View className="absolute top-0 right-0 p-4 opacity-10">
+            <UserPlus size={120} color={colors.primary} />
+          </View>
+          <View 
+            style={{ backgroundColor: colors.primary }}
+            className="w-16 h-16 rounded-[24px] items-center justify-center mb-5 shadow-lg"
+          >
+            <Send size={28} color={colors.textOnPrimary} fill={colors.textOnPrimary} />
+          </View>
+          <Text style={{ color: colors.text }} className="text-2xl font-black text-center tracking-tight">
+            Invite Coach
+          </Text>
+          <Text style={{ color: colors.textSecondary }} className="text-center mt-2.5 leading-5 px-4 text-sm font-medium">
+            Invite a coach to join your coaching team.
+          </Text>
         </MotiView>
 
-        <View className="px-6 mt-10">
-          <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Engagement Detail</Text>
-          <View className="flex-row items-center h-18 rounded-[24px] border-2 border-slate-800 bg-slate-900/50 px-5 mb-6">
-            <Mail size={20} color="#94A3B8" />
+        <View className="px-6 mt-8">
+          <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-3 ml-1">
+            Coach Email
+          </Text>
+          <View 
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="flex-row items-center h-16 rounded-[22px] border-2 px-5 mb-5"
+          >
+            <Mail size={20} color={colors.textSecondary} />
             <TextInput
-              style={{ fontSize: 16 }}
-              className=" ml-4 h-20 text-white  font-bold"
-              placeholder="coach@performance.ai"
+              style={{ fontSize: 16, color: colors.text }}
+              className="ml-3 flex-1 font-bold"
+              placeholder="coach@example.com"
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -195,7 +224,7 @@ export default function AddSubCoachScreen() {
               }}
               keyboardType="email-address"
               autoCapitalize="none"
-              placeholderTextColor="#475569"
+              placeholderTextColor={colors.textTertiary}
               editable={!loading && searchState !== 'searching'}
             />
           </View>
@@ -203,53 +232,80 @@ export default function AddSubCoachScreen() {
           {searchState === 'idle' && (
             <TouchableOpacity
               onPress={handleSearch}
-              className="h-16 bg-blue-600 rounded-[22px] flex-row items-center justify-center gap-3 shadow-xl shadow-blue-500/30 border border-white/10"
+              style={{ backgroundColor: colors.primary }}
+              className="h-16 rounded-[22px] flex-row items-center justify-center gap-3 shadow-lg"
+              activeOpacity={0.85}
             >
-              <SearchIcon size={20} color="white" strokeWidth={2.5} />
-              <Text className="text-white font-black text-lg tracking-tight">Analyze Identifier</Text>
+              <SearchIcon size={20} color={colors.textOnPrimary} strokeWidth={2.5} />
+              <Text style={{ color: colors.textOnPrimary }} className="font-black text-base tracking-tight">
+                Find Coach
+              </Text>
             </TouchableOpacity>
           )}
 
           {searchState === 'searching' && (
             <View className="py-6 items-center flex-row justify-center gap-3">
-              <ActivityIndicator color={primary} />
-              <Text className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Querying Neural Roster...</Text>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={{ color: colors.textSecondary }} className="font-bold uppercase tracking-widest text-[10px]">
+                Searching for coach...
+              </Text>
             </View>
           )}
 
           <AnimatePresence>
             {searchState === 'found' && foundCoach && (
               <MotiView
-                from={{ opacity: 0, scale: 0.9 }}
+                from={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="mt-4 p-8 rounded-[40px] bg-emerald-500/10 border border-emerald-500/20"
+                style={{ 
+                  backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : '#F0FDF4',
+                  borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#BBF7D0',
+                }}
+                className="mt-4 p-7 rounded-[36px] border shadow-sm"
               >
-                <View className="flex-row items-center gap-3 mb-6">
-                    <View className="w-10 h-10 rounded-2xl bg-emerald-500 items-center justify-center shadow-lg shadow-emerald-500/50">
-                        <Check size={20} color="white" strokeWidth={3} />
-                    </View>
-                    <Text className="text-white font-black text-xl tracking-tight">Identity Verified</Text>
+                <View className="flex-row items-center gap-3 mb-5">
+                  <View 
+                    style={{ backgroundColor: colors.success || '#10B981' }}
+                    className="w-10 h-10 rounded-2xl items-center justify-center shadow-md"
+                  >
+                    <Check size={20} color="white" strokeWidth={3} />
+                  </View>
+                  <Text style={{ color: colors.text }} className="font-black text-xl tracking-tight">
+                    Coach Found
+                  </Text>
                 </View>
                 
-                <View className="mb-8">
-                  <Text className="text-white font-black text-2xl tracking-tighter mb-1">{foundCoach.full_name}</Text>
-                  <Text className="text-slate-400 font-medium mb-4">{foundCoach.email}</Text>
+                <View className="mb-6">
+                  <Text style={{ color: colors.text }} className="font-black text-2xl tracking-tight mb-1">
+                    {foundCoach.full_name}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary }} className="font-medium mb-3">
+                    {foundCoach.email}
+                  </Text>
                   <View className="flex-row items-center gap-2">
-                    <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Platform Veteran</Text>
+                    <View style={{ backgroundColor: colors.success || '#10B981' }} className="w-2 h-2 rounded-full" />
+                    <Text style={{ color: colors.success || '#10B981' }} className="text-[10px] font-black uppercase tracking-widest">
+                      Active Coach
+                    </Text>
                   </View>
                 </View>
 
                 <TouchableOpacity
                   onPress={() => handleInvite(true)}
                   disabled={loading}
-                  className="h-16 bg-emerald-600 rounded-[22px] flex-row items-center justify-center gap-3 shadow-xl shadow-emerald-500/30 border border-white/10"
+                  style={{ backgroundColor: colors.success || '#10B981' }}
+                  className="h-16 rounded-[22px] flex-row items-center justify-center gap-3 shadow-lg"
+                  activeOpacity={0.85}
                 >
-                  {loading ? <ActivityIndicator color="white" /> : (
-                      <>
-                        <Send size={18} color="white" strokeWidth={2.5} />
-                        <Text className="text-white font-black text-lg tracking-tight">Transmit Team Invite</Text>
-                      </>
+                  {loading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <>
+                      <Send size={18} color="white" strokeWidth={2.5} />
+                      <Text className="text-white font-black text-base tracking-tight">
+                        Send Team Invite
+                      </Text>
+                    </>
                   )}
                 </TouchableOpacity>
               </MotiView>
@@ -257,61 +313,82 @@ export default function AddSubCoachScreen() {
 
             {searchState === 'not_found' && (
               <MotiView
-                from={{ opacity: 0, scale: 0.9 }}
+                from={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="mt-4 p-8 rounded-[40px] bg-amber-500/10 border border-amber-500/20"
+                style={{ 
+                  backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB',
+                  borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A',
+                }}
+                className="mt-4 p-7 rounded-[36px] border shadow-sm"
               >
-                <View className="flex-row items-center gap-3 mb-6">
-                    <View className="w-10 h-10 rounded-2xl bg-amber-500 items-center justify-center shadow-lg shadow-amber-500/50">
-                        <AlertTriangle size={20} color="white" strokeWidth={3} />
-                    </View>
-                    <Text className="text-white font-black text-xl tracking-tight">External Identity</Text>
+                <View className="flex-row items-center gap-3 mb-5">
+                  <View className="w-10 h-10 rounded-2xl bg-amber-500 items-center justify-center shadow-md">
+                    <AlertTriangle size={20} color="white" strokeWidth={3} />
+                  </View>
+                  <Text style={{ color: colors.text }} className="font-black text-xl tracking-tight">
+                    New Coach
+                  </Text>
                 </View>
                 
-                <Text className="text-slate-400 font-medium leading-5 mb-8">
-                  This entity is not yet registered in the core database. Would you like to transmit a registration invitation?
+                <Text style={{ color: colors.textSecondary }} className="font-medium leading-5 mb-6">
+                  This coach doesn't have an account yet. Send them an invite to create an account and join your team.
                 </Text>
 
                 <TouchableOpacity
                   onPress={() => handleInvite(false)}
                   disabled={loading}
-                  className="h-16 bg-amber-600 rounded-[22px] flex-row items-center justify-center gap-3 shadow-xl shadow-amber-500/30 border border-white/10"
+                  style={{ backgroundColor: colors.primary }}
+                  className="h-16 rounded-[22px] flex-row items-center justify-center gap-3 shadow-lg"
+                  activeOpacity={0.85}
                 >
-                  {loading ? <ActivityIndicator color="white" /> : (
-                      <>
-                        <Send size={18} color="white" strokeWidth={2.5} />
-                        <Text className="text-white font-black text-lg tracking-tight">Deploy Registration</Text>
-                      </>
+                  {loading ? (
+                    <ActivityIndicator color={colors.textOnPrimary} />
+                  ) : (
+                    <>
+                      <Send size={18} color={colors.textOnPrimary} strokeWidth={2.5} />
+                      <Text style={{ color: colors.textOnPrimary }} className="font-black text-base tracking-tight">
+                        Send Invite
+                      </Text>
+                    </>
                   )}
                 </TouchableOpacity>
               </MotiView>
             )}
           </AnimatePresence>
 
-          {/* Strategic Info Box */}
+          {/* Info Box */}
           <MotiView 
-            transition={{ delay: 500 }}
+            transition={{ delay: 300 }}
             from={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="mt-12 p-8 rounded-[40px] bg-slate-900/40 border border-white/5 mb-12"
+            style={{ 
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            }}
+            className="mt-10 p-7 rounded-[36px] border mb-12 shadow-sm"
           >
-            <Text className="text-white font-black text-lg tracking-tight mb-6">Onboarding Lifecycle</Text>
+            <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight mb-6">
+              How it works
+            </Text>
             
             <OnboardingStep 
-                num="01" 
-                title="Transmit Link" 
-                desc="A secure neural handshake is dispatched via encrypted email." 
+              num="01" 
+              title="Send invite" 
+              desc="We email the coach a link to join your team." 
+              colors={colors}
             />
             <OnboardingStep 
-                num="02" 
-                title="Identity Sync" 
-                desc="Tapping the link establishes identity and brand alignment." 
+              num="02" 
+              title="Coach accepts" 
+              desc="The coach opens the link and accepts your invite." 
+              colors={colors}
             />
             <OnboardingStep 
-                num="03" 
-                title="Full Integration" 
-                desc="The coach is unified with your roster, ready for deployment." 
-                isLast
+              num="03" 
+              title="Joined to team" 
+              desc="They join your team and you can assign clients to them." 
+              colors={colors}
+              isLast
             />
           </MotiView>
         </View>
@@ -320,17 +397,20 @@ export default function AddSubCoachScreen() {
   );
 }
 
-const OnboardingStep = ({ num, title, desc, isLast }: any) => (
-    <View className={`flex-row gap-5 ${isLast ? '' : 'mb-8'}`}>
-        <View className="items-center">
-            <View className="w-10 h-10 bg-slate-900 rounded-xl items-center justify-center border border-white/5">
-                <Text className="text-blue-500 font-black text-xs">{num}</Text>
-            </View>
-            {!isLast && <View className="w-px flex-1 bg-slate-800 my-2" />}
-        </View>
-        <View className="flex-1">
-            <Text className="text-white font-black text-base tracking-tight mb-1">{title}</Text>
-            <Text className="text-slate-500 text-xs font-medium leading-4">{desc}</Text>
-        </View>
+const OnboardingStep = ({ num, title, desc, isLast, colors }: any) => (
+  <View className={`flex-row gap-5 ${isLast ? '' : 'mb-6'}`}>
+    <View className="items-center">
+      <View 
+        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        className="w-10 h-10 rounded-xl items-center justify-center border"
+      >
+        <Text style={{ color: colors.primary }} className="font-black text-xs">{num}</Text>
+      </View>
+      {!isLast && <View style={{ backgroundColor: colors.border }} className="w-px flex-1 my-2" />}
     </View>
+    <View className="flex-1 mt-0.5">
+      <Text style={{ color: colors.text }} className="font-black text-base tracking-tight mb-1">{title}</Text>
+      <Text style={{ color: colors.textSecondary }} className="text-xs font-medium leading-4">{desc}</Text>
+    </View>
+  </View>
 );

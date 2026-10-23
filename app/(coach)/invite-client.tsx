@@ -9,6 +9,7 @@ import {
   Share,
   TextInput,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
@@ -26,7 +27,8 @@ import {
   Users
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
+import { useBrand, useBrandColors } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import { generateInviteCode } from '@/lib/brand-service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { safeBack } from '@/lib/navigation-utils';
@@ -36,8 +38,8 @@ export default function InviteClientScreen() {
   const insets = useSafeAreaInsets();
   const { coach } = useAuth();
   const { brand } = useBrand();
-  const { primary, secondary } = useBrandColors();
-  const theme = useTheme();
+  const colors = useBrandColors();
+  const isDarkMode = isDarkColor(colors.background || '#010417');
   
   const [loading, setLoading] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
@@ -111,21 +113,32 @@ export default function InviteClientScreen() {
   };
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
       {/* Header */}
       <View 
-        style={{ paddingTop: insets.top + 16 }} 
-        className="px-6 pb-6 flex-row items-center gap-4 border-b border-white/5 bg-slate-950"
+        style={{ 
+          paddingTop: insets.top + 16,
+          backgroundColor: colors.background,
+          borderBottomColor: colors.border,
+        }} 
+        className="px-6 pb-6 flex-row items-center gap-4 border-b"
       >
         <TouchableOpacity 
           onPress={() => safeBack('/(coach)/(tabs)')} 
-          className="p-2 bg-slate-900 rounded-full border border-white/5"
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+          className="p-2.5 rounded-full border"
+          activeOpacity={0.7}
         >
-          <ArrowLeft size={20} color="#94A3B8" />
+          <ArrowLeft size={20} color={colors.text} />
         </TouchableOpacity>
         <View>
-            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px]">Growth Center</Text>
-            <Text className="text-white text-xl font-black tracking-tight">Invite New Athlete</Text>
+          <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-[3px]">
+            Invites
+          </Text>
+          <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight">
+            Invite Athlete
+          </Text>
         </View>
       </View>
 
@@ -138,60 +151,101 @@ export default function InviteClientScreen() {
         <MotiView
           from={{ opacity: 0, translateY: 20 }}
           animate={{ opacity: 1, translateY: 0 }}
-          className="mx-6 mt-8 p-10 rounded-[48px] bg-blue-600/10 border border-blue-500/20 items-center overflow-hidden"
+          style={{ 
+            backgroundColor: colors.surface, 
+            borderColor: colors.border,
+          }}
+          className="mx-6 mt-8 p-8 rounded-[40px] border items-center overflow-hidden shadow-sm"
         >
-            <View className="absolute top-0 right-0 p-4 opacity-10">
-                <Users size={120} color={theme.colors.primary} />
-            </View>
-            <View className="w-20 h-20 bg-blue-600 rounded-[30px] items-center justify-center shadow-2xl shadow-blue-500/50 mb-6 border-2 border-white/20">
-                <Zap size={36} color="white" fill="white" />
-            </View>
-            <Text className="text-white text-2xl font-black text-center tracking-tighter">Expand Your Roster</Text>
-            <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
-                Generate a secure, personalized invite link to onboard new clients directly into your performance ecosystem.
-            </Text>
+          <View className="absolute top-0 right-0 p-4 opacity-10">
+            <Users size={120} color={colors.primary} />
+          </View>
+          <View 
+            style={{ backgroundColor: colors.primary }}
+            className="w-16 h-16 rounded-[24px] items-center justify-center mb-5 shadow-lg"
+          >
+            <Zap size={30} color={colors.textOnPrimary} fill={colors.textOnPrimary} />
+          </View>
+          <Text style={{ color: colors.text }} className="text-2xl font-black text-center tracking-tight">
+            Invite New Athlete
+          </Text>
+          <Text style={{ color: colors.textSecondary }} className="text-center mt-2.5 leading-5 px-4 text-sm font-medium">
+            Create a private link for your athlete to join your coaching program.
+          </Text>
         </MotiView>
 
         {/* Invite Settings Card */}
         <MotiView
-           from={{ opacity: 0, scale: 0.95 }}
-           animate={{ opacity: 1, scale: 1 }}
-           transition={{ delay: 100 }}
-           className="mx-6 mt-8 p-8 rounded-[40px] bg-slate-900/40 border border-white/5 shadow-2xl"
+          from={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 100 }}
+          style={{ 
+            backgroundColor: colors.surface, 
+            borderColor: colors.border,
+          }}
+          className="mx-6 mt-6 p-7 rounded-[36px] border shadow-sm"
         >
-          <View className="flex-row items-center gap-2 mb-8">
-            <View className="w-8 h-8 rounded-xl bg-slate-950 items-center justify-center border border-white/5">
-                <Smartphone size={16} color={theme.colors.primary} />
+          <View className="flex-row items-center gap-3 mb-6">
+            <View 
+              style={{ backgroundColor: colors.background, borderColor: colors.border }}
+              className="w-9 h-9 rounded-xl items-center justify-center border"
+            >
+              <Smartphone size={16} color={colors.primary} />
             </View>
-            <Text className="text-white text-lg font-black tracking-tight">Access Control</Text>
+            <Text style={{ color: colors.text }} className="text-lg font-black tracking-tight">
+              Link Settings
+            </Text>
           </View>
           
           {/* Max Uses Selector */}
-          <View className="mb-8">
-            <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Maximum Redemptions</Text>
-                {unlimited && <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">∞ Unlimited</Text>}
+          <View className="mb-6">
+            <View className="flex-row justify-between items-center mb-3">
+              <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest">
+                Max Uses
+              </Text>
+              {unlimited && (
+                <Text style={{ color: colors.primary }} className="text-[10px] font-black uppercase tracking-widest">
+                  ∞ Unlimited
+                </Text>
+              )}
             </View>
             
             <View className="flex-row gap-3">
-              <View className={`flex-1 flex-row items-center h-16 rounded-2xl border-2 px-4 transition-all ${unlimited ? 'border-slate-800 bg-slate-950/50' : 'border-blue-600/50 bg-slate-950'}`}>
+              <View 
+                style={{ 
+                  backgroundColor: unlimited 
+                    ? (isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)')
+                    : colors.background,
+                  borderColor: unlimited ? colors.border : colors.primary,
+                }}
+                className="flex-1 flex-row items-center h-14 rounded-2xl border-2 px-4"
+              >
                 <TextInput
                   value={maxUses}
                   onChangeText={setMaxUses}
                   keyboardType="number-pad"
                   editable={!unlimited}
                   placeholder="1"
-                  placeholderTextColor="#475569"
-                  className={`flex-1 font-black text-xl ${unlimited ? 'text-slate-700' : 'text-white'}`}
+                  placeholderTextColor={colors.textTertiary}
+                  style={{ color: unlimited ? colors.textTertiary : colors.text }}
+                  className="flex-1 font-black text-xl"
                 />
-                {!unlimited && <Users size={20} color={theme.colors.primary} />}
+                {!unlimited && <Users size={20} color={colors.primary} />}
               </View>
               
               <TouchableOpacity
                 onPress={() => setUnlimited(!unlimited)}
-                className={`w-32 h-16 rounded-2xl items-center justify-center border-2 ${unlimited ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-500/30' : 'bg-slate-950 border-slate-800'}`}
+                style={{ 
+                  backgroundColor: unlimited ? colors.primary : colors.background,
+                  borderColor: unlimited ? colors.primary : colors.border,
+                }}
+                className="w-32 h-14 rounded-2xl items-center justify-center border-2"
+                activeOpacity={0.8}
               >
-                <Text className={`font-black text-xs uppercase tracking-widest ${unlimited ? 'text-white' : 'text-slate-500'}`}>
+                <Text 
+                  style={{ color: unlimited ? colors.textOnPrimary : colors.textSecondary }}
+                  className="font-black text-xs uppercase tracking-widest"
+                >
                   Unlimited
                 </Text>
               </TouchableOpacity>
@@ -199,33 +253,45 @@ export default function InviteClientScreen() {
           </View>
 
           {/* Expiration Settings */}
-          <View className="mb-10">
-            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4">Link Longevity (Days)</Text>
-            <View className="flex-row items-center h-16 rounded-2xl border-2 border-slate-800 bg-slate-950 px-4">
+          <View className="mb-8">
+            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-3">
+              Expires In (Days)
+            </Text>
+            <View 
+              style={{ backgroundColor: colors.background, borderColor: colors.border }}
+              className="flex-row items-center h-14 rounded-2xl border-2 px-4"
+            >
               <TextInput
                 value={expiresInDays}
                 onChangeText={setExpiresInDays}
                 keyboardType="number-pad"
                 placeholder="7"
-                placeholderTextColor="#475569"
-                className="flex-1 font-black text-xl text-white"
+                placeholderTextColor={colors.textTertiary}
+                style={{ color: colors.text }}
+                className="flex-1 font-black text-xl"
               />
-              <Calendar size={20} color="#94A3B8" />
+              <Calendar size={20} color={colors.textSecondary} />
             </View>
           </View>
 
-          {/* Strategic Action Button */}
+          {/* Action Button */}
           <TouchableOpacity
             onPress={handleGenerate}
             disabled={loading}
-            className={`h-18 py-5 rounded-[24px] flex-row items-center justify-center gap-3 ${loading ? 'bg-slate-800' : 'bg-blue-600 shadow-2xl shadow-blue-500/50'}`}
+            style={{ 
+              backgroundColor: loading ? (colors.surfaceAlt || colors.border) : colors.primary 
+            }}
+            className="h-16 rounded-[22px] flex-row items-center justify-center gap-3 shadow-lg"
+            activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color={colors.textOnPrimary} />
             ) : (
               <>
-                <QrCode size={22} color="white" strokeWidth={2.5} />
-                <Text className="text-white font-black text-lg tracking-tight">Deploy Invite Link</Text>
+                <QrCode size={22} color={colors.textOnPrimary} strokeWidth={2.5} />
+                <Text style={{ color: colors.textOnPrimary }} className="font-black text-base tracking-tight">
+                  Create Invite Link
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -235,105 +301,135 @@ export default function InviteClientScreen() {
         <AnimatePresence>
           {inviteCode && (
             <MotiView
-              from={{ opacity: 0, translateY: 20, scale: 0.9 }}
+              from={{ opacity: 0, translateY: 20, scale: 0.95 }}
               animate={{ opacity: 1, translateY: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="mx-6 mt-8 rounded-[48px] overflow-hidden"
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="mx-6 mt-6"
             >
-              <View className="p-1 bg-white/5 border border-white/10 rounded-[48px]">
-                <View className="bg-slate-900 rounded-[44px] p-8 border border-white/5">
-                  <View className="flex-row items-center justify-between mb-8">
-                     <View className="flex-row items-center gap-3">
-                        <View className="w-10 h-10 rounded-2xl bg-emerald-500/10 items-center justify-center border border-emerald-500/20">
-                            <LinkIcon size={20} color="#10B981" />
-                        </View>
-                        <View>
-                            <Text className="text-white font-black text-base tracking-tight">Live Invite Link</Text>
-                            <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Active & Ready</Text>
-                        </View>
-                     </View>
-                     <View className="bg-slate-950 px-3 py-1.5 rounded-full border border-white/5">
-                        <Text className="text-slate-500 font-mono text-xs">{inviteCode}</Text>
-                     </View>
+              <View 
+                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                className="rounded-[36px] p-7 border shadow-sm"
+              >
+                <View className="flex-row items-center justify-between mb-6">
+                  <View className="flex-row items-center gap-3">
+                    <View 
+                      style={{ 
+                        backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7',
+                        borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#86EFAC',
+                      }}
+                      className="w-10 h-10 rounded-2xl items-center justify-center border"
+                    >
+                      <LinkIcon size={20} color={colors.success || '#10B981'} />
+                    </View>
+                    <View>
+                      <Text style={{ color: colors.text }} className="font-black text-base tracking-tight">
+                        Your Invite Link
+                      </Text>
+                      <Text style={{ color: colors.success || '#10B981' }} className="text-[10px] font-black uppercase tracking-widest">
+                        Ready to share
+                      </Text>
+                    </View>
                   </View>
-
-                  {/* Copy Link Terminal Style */}
-                  <TouchableOpacity 
-                    onPress={handleCopyLink}
-                    className="bg-slate-950 p-6 rounded-3xl border border-white/5 mb-8 flex-row items-center justify-between"
+                  <View 
+                    style={{ backgroundColor: colors.background, borderColor: colors.border }}
+                    className="px-3 py-1.5 rounded-full border"
                   >
-                    <Text className="text-slate-400 font-mono text-xs flex-1 mr-4" numberOfLines={1}>
-                        {getInviteLink()}
-                    </Text>
-                    <MotiView animate={{ scale: copied ? 1.2 : 1 }}>
-                        {copied ? <Check size={20} color="#10B981" /> : <Copy size={20} color={theme.colors.primary} />}
-                    </MotiView>
-                  </TouchableOpacity>
-
-                  {/* High Intensity Share Grid */}
-                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 ml-1">Distribution Channels</Text>
-                  <View className="flex-row gap-3">
-                    <ShareButton 
-                       icon={<MessageCircle size={24} color="white" fill="#25D366" />} 
-                       bg="bg-emerald-600/10"
-                       borderColor="border-emerald-500/20"
-                       onPress={() => shareInvite('whatsapp')} 
-                    />
-                    <ShareButton 
-                       icon={<Mail size={24} color="#F87171" />} 
-                       bg="bg-red-500/10"
-                       borderColor="border-red-500/20"
-                       onPress={() => shareInvite('email')} 
-                    />
-                    <ShareButton 
-                       icon={<MessageCircle size={24} color={theme.colors.primary} />} 
-                       bg="bg-blue-600/10"
-                       borderColor="border-blue-500/20"
-                       onPress={() => shareInvite('sms')} 
-                    />
-                  </View>
-
-                  <View className="h-px bg-white/5 my-8" />
-
-                  <View className="flex-row items-center gap-4 px-2">
-                    <Calendar size={18} color="#475569" />
-                    <Text className="text-slate-500 font-black text-[10px] uppercase tracking-widest flex-1">
-                      {unlimited ? 'Infinite capacity' : `Limit: ${maxUses} Uses`} • Valid for {expiresInDays} Days
+                    <Text style={{ color: colors.textSecondary }} className="font-mono text-xs font-bold">
+                      {inviteCode}
                     </Text>
                   </View>
+                </View>
+
+                {/* Copy Link Row */}
+                <TouchableOpacity 
+                  onPress={handleCopyLink}
+                  style={{ backgroundColor: colors.background, borderColor: colors.border }}
+                  className="p-4 rounded-2xl border mb-6 flex-row items-center justify-between"
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: colors.textSecondary }} className="font-mono text-xs flex-1 mr-4" numberOfLines={1}>
+                    {getInviteLink()}
+                  </Text>
+                  <MotiView animate={{ scale: copied ? 1.2 : 1 }}>
+                    {copied ? (
+                      <Check size={20} color={colors.success || '#10B981'} />
+                    ) : (
+                      <Copy size={20} color={colors.primary} />
+                    )}
+                  </MotiView>
+                </TouchableOpacity>
+
+                {/* Share Buttons */}
+                <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-3 ml-1">
+                  Share via
+                </Text>
+                <View className="flex-row gap-3">
+                  <ShareButton 
+                    icon={<MessageCircle size={22} color="#25D366" />} 
+                    bg={colors.background}
+                    borderColor={colors.border}
+                    onPress={() => shareInvite('whatsapp')} 
+                  />
+                  <ShareButton 
+                    icon={<Mail size={22} color="#EF4444" />} 
+                    bg={colors.background}
+                    borderColor={colors.border}
+                    onPress={() => shareInvite('email')} 
+                  />
+                  <ShareButton 
+                    icon={<MessageCircle size={22} color={colors.primary} />} 
+                    bg={colors.background}
+                    borderColor={colors.border}
+                    onPress={() => shareInvite('sms')} 
+                  />
+                </View>
+
+                <View style={{ backgroundColor: colors.border }} className="h-px my-6" />
+
+                <View className="flex-row items-center gap-3 px-1">
+                  <Calendar size={16} color={colors.textTertiary} />
+                  <Text style={{ color: colors.textSecondary }} className="font-bold text-[11px] uppercase tracking-wider flex-1">
+                    {unlimited ? 'Unlimited uses' : `Limit: ${maxUses} uses`} • Valid for {expiresInDays} days
+                  </Text>
                 </View>
               </View>
             </MotiView>
           )}
         </AnimatePresence>
 
-        {/* Onboarding Logic Section */}
-        <View className="px-6 mt-12 mb-12">
-          <View className="flex-row items-end justify-between mb-8">
-            <Text className="text-white text-2xl font-black tracking-tighter">Onboarding Process</Text>
-            <View className="w-12 h-0.5 bg-blue-600 rounded-full mb-3" />
+        {/* How It Works Section */}
+        <View className="px-6 mt-10 mb-8">
+          <View className="flex-row items-center justify-between mb-6">
+            <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight">
+              How it works
+            </Text>
+            <View style={{ backgroundColor: colors.primary }} className="w-10 h-0.5 rounded-full" />
           </View>
           
           <StepItem 
             number="01" 
-            title="Configure Secure Token" 
-            desc="Set usage limits and expiration parameters for client link." 
+            title="Set link limits" 
+            desc="Choose how many athletes can use the link and when it expires." 
+            colors={colors}
           />
           <StepItem 
             number="02" 
-            title="Strategic Deployment" 
-            desc="Share the personalized link via high-conversion channels." 
+            title="Share with athlete" 
+            desc="Send the link through WhatsApp, email, or text." 
+            colors={colors}
           />
           <StepItem 
             number="03" 
-            title="Neural Sync" 
-            desc="Athlete creates identity and automatically syncs to your roster." 
+            title="Athlete signs up" 
+            desc="They open the link, create their account, and link to you." 
+            colors={colors}
           />
           <StepItem 
             number="04" 
-            title="Ready for Performance" 
-            desc="Commence tracking, strategy generation, and performance coaching." 
+            title="Start coaching" 
+            desc="Assign workouts, chat, and track progress together." 
             isLast
+            colors={colors}
           />
         </View>
       </ScrollView>
@@ -342,25 +438,30 @@ export default function InviteClientScreen() {
 }
 
 const ShareButton = ({ icon, onPress, bg, borderColor }: any) => (
-    <TouchableOpacity 
-      onPress={onPress}
-      className={`flex-1 h-16 rounded-[22px] items-center justify-center border ${bg} ${borderColor}`}
-    >
-      {icon}
-    </TouchableOpacity>
+  <TouchableOpacity 
+    onPress={onPress}
+    style={{ backgroundColor: bg, borderColor: borderColor }}
+    className="flex-1 h-14 rounded-2xl items-center justify-center border"
+    activeOpacity={0.7}
+  >
+    {icon}
+  </TouchableOpacity>
 );
 
-const StepItem = ({ number, title, desc, isLast }: any) => (
-    <View className="flex-row gap-6 mb-8 flex-1">
-        <View className="items-center">
-            <View className="w-12 h-12 bg-slate-900 rounded-2xl items-center justify-center border border-white/5">
-                <Text className="text-blue-500 font-black text-base">{number}</Text>
-            </View>
-            {!isLast && <View className="w-0.5 flex-1 bg-slate-900 my-2" />}
-        </View>
-        <View className="flex-1 mt-1">
-            <Text className="text-white font-black text-lg tracking-tight mb-1">{title}</Text>
-            <Text className="text-slate-500 text-sm font-medium leading-5">{desc}</Text>
-        </View>
+const StepItem = ({ number, title, desc, isLast, colors }: any) => (
+  <View className="flex-row gap-5 mb-6 flex-1">
+    <View className="items-center">
+      <View 
+        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        className="w-11 h-11 rounded-2xl items-center justify-center border"
+      >
+        <Text style={{ color: colors.primary }} className="font-black text-sm">{number}</Text>
+      </View>
+      {!isLast && <View style={{ backgroundColor: colors.border }} className="w-0.5 flex-1 my-2" />}
     </View>
+    <View className="flex-1 mt-0.5">
+      <Text style={{ color: colors.text }} className="font-black text-base tracking-tight mb-1">{title}</Text>
+      <Text style={{ color: colors.textSecondary }} className="text-xs font-medium leading-5">{desc}</Text>
+    </View>
+  </View>
 );

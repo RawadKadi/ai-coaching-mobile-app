@@ -1,6 +1,6 @@
-import { useBrandColors } from '@/contexts/BrandContext';
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar } from 'react-native';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { safeBack } from '@/lib/navigation-utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HERO_HEIGHT = 750;
 
 type MealDetails = {
   id: string;
@@ -35,13 +36,33 @@ type MealDetails = {
 };
 
 export default function MealDetailsScreen() {
-  const colors = useBrandColors();
-  const styles = getStyles(colors);
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDark = theme.isDarkMode;
+  const styles = getStyles(colors, isDark);
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [meal, setMeal] = useState<MealDetails | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Stretchy pull-to-expand hero animation:
+  // When pulling down (scrollY < 0), the image scales gracefully and stays anchored with zero gaps
+  const imageScale = scrollY.interpolate({
+    inputRange: [-300, 0],
+    outputRange: [1.35, 1],
+    extrapolateLeft: 'extend',
+    extrapolateRight: 'clamp',
+  });
+
+  const imageTranslateY = scrollY.interpolate({
+    inputRange: [-300, 0, 300],
+    outputRange: [0, 0, -80],
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
 
   useEffect(() => {
     fetchMealDetails();
@@ -88,7 +109,7 @@ export default function MealDetailsScreen() {
   if (!meal) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <Info size={48} color="#64748b" />
+        <Info size={48} color={colors.textTertiary} />
         <Text style={styles.errorText}>Analysis not found</Text>
         <TouchableOpacity onPress={() => safeBack()} style={styles.errorButton}>
           <Text style={styles.errorButtonText}>Go Back</Text>
@@ -101,18 +122,30 @@ export default function MealDetailsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
-      {/* Fixed Background Image */}
+      {/* Background Image with Stretchy Expansion */}
       {meal.photo_url && (
-        <View style={styles.fixedImageContainer}>
+        <Animated.View 
+          pointerEvents="none"
+          style={[
+            styles.fixedImageContainer,
+            {
+              transform: [
+                { translateY: imageTranslateY },
+                { scale: imageScale },
+              ],
+            },
+          ]}
+        >
           <Image 
             source={{ uri: meal.photo_url }} 
             style={styles.image} 
             contentFit="cover" 
+            contentPosition="top"
             transition={200} 
             cachePolicy="disk"
           />
           <View style={styles.imageOverlay} />
-        </View>
+        </Animated.View>
       )}
 
       {/* Floating Header */}
@@ -125,15 +158,19 @@ export default function MealDetailsScreen() {
           <ChevronLeft size={24} color="#F8FAFC" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerSubtitle}>Meal Analysis</Text>
+          <Text style={styles.headerSubtitle}>Meal Details</Text>
         </View>
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView 
+      <Animated.ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[]}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
       >
         {/* Spacer to show the fixed image */}
         <View style={styles.imageSpacer} />
@@ -195,7 +232,7 @@ export default function MealDetailsScreen() {
               <View style={styles.sectionIcon}>
                 <Utensils size={16} color={colors.primary} />
               </View>
-              <Text style={styles.sectionTitle}>Protocol Ingredients</Text>
+              <Text style={styles.sectionTitle}>Ingredients</Text>
             </View>
             
             <View style={styles.ingredientsCard}>
@@ -208,16 +245,16 @@ export default function MealDetailsScreen() {
                   </Text>
                 </View>
               )) : (
-                <Text style={styles.emptyText}>No ingredients listed for this analysis.</Text>
+                <Text style={styles.emptyText}>No ingredients listed.</Text>
               )}
             </View>
           </View>
 
-          {/* AI Insight Section */}
+          {/* Coach Insight Section */}
           {meal.ai_notes && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
+                <View style={styles.sectionIcon}>
                   <Zap size={16} color={colors.primary} fill={colors.primary} />
                 </View>
                 <Text style={styles.sectionTitle}>Coach Insights</Text>
@@ -228,7 +265,7 @@ export default function MealDetailsScreen() {
             </View>
           )}
         </MotiView>
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -246,10 +283,10 @@ function MacroTile({ label, value, unit, icon, styles }: { label: string; value:
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#020617', // slate-950
+    backgroundColor: colors.background,
   },
   centerContent: {
     justifyContent: 'center',
@@ -261,8 +298,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 400,
-    backgroundColor: '#0f172a',
+    height: HERO_HEIGHT,
     zIndex: 0,
   },
   imageSpacer: {
@@ -280,13 +316,12 @@ const getStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', // semi-transparent
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -301,12 +336,15 @@ const getStyles = (colors: any) => StyleSheet.create({
     letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 2,
     marginBottom: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   scrollContent: {
     paddingBottom: 40,
@@ -316,25 +354,29 @@ const getStyles = (colors: any) => StyleSheet.create({
     height: '100%',
   },
   imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(2, 6, 23, 0.1)',
+    ...StyleSheet.absoluteFill,
+    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.15)',
   },
   mainContent: {
-    backgroundColor: '#020617',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
     paddingHorizontal: 24,
-    paddingTop: 40,
+    paddingTop: 36,
     minHeight: 800,
     zIndex: 1,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -20 },
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: isDark ? 0.35 : 0.08,
+    shadowRadius: 24,
     elevation: 20,
   },
   titleSection: {
-    marginBottom: 32,
+    marginBottom: 28,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -346,149 +388,153 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    paddingHorizontal: 10,
+    backgroundColor: `${colors.primary}15`,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.2)',
+    borderColor: `${colors.primary}30`,
   },
   categoryText: {
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
     color: colors.primary,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   dateText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   mealName: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -1,
-    marginBottom: 12,
+    color: colors.text,
+    letterSpacing: -0.5,
+    marginBottom: 10,
+    lineHeight: 34,
   },
   description: {
-    fontSize: 16,
-    color: '#94a3b8',
-    lineHeight: 24,
+    fontSize: 15,
+    color: colors.textSecondary,
+    lineHeight: 22,
     fontWeight: '500',
   },
   macrosGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 32,
+    marginBottom: 28,
   },
   macroTile: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: colors.border,
   },
   macroTileLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#64748b',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8,
+    letterSpacing: 0.8,
+    marginBottom: 6,
   },
   macroTileValueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
   },
   macroTileValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: colors.text,
     marginRight: 4,
   },
   macroTileUnit: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 28,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sectionIcon: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: `${colors.primary}18`,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: `${colors.primary}30`,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
   ingredientsCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 32,
-    padding: 24,
+    backgroundColor: colors.background,
+    borderRadius: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: colors.border,
   },
   ingredientRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
+    borderBottomColor: colors.border,
   },
   noBorder: {
     borderBottomWidth: 0,
   },
   dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.primary,
-    marginRight: 16,
+    marginRight: 14,
   },
   ingredientText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
   },
   ingredientQuantity: {
-    fontWeight: '900',
-    color: '#FFFFFF',
+    fontWeight: '800',
+    color: colors.text,
   },
   ingredientName: {
     fontWeight: '500',
-    color: '#94a3b8',
+    color: colors.textSecondary,
   },
   aiInsightCard: {
-    backgroundColor: 'rgba(59, 130, 246, 0.03)',
-    borderRadius: 32,
-    padding: 24,
+    backgroundColor: `${colors.primary}10`,
+    borderRadius: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.1)',
+    borderColor: `${colors.primary}25`,
   },
   aiText: {
-    fontSize: 16,
-    color: '#F1F5F9',
-    lineHeight: 26,
+    fontSize: 15,
+    color: colors.text,
+    lineHeight: 24,
     fontWeight: '500',
   },
   errorText: {
-    color: '#94a3b8',
+    color: colors.textSecondary,
     fontSize: 16,
     fontWeight: '600',
     marginTop: 16,
@@ -501,13 +547,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 16,
   },
   errorButtonText: {
-    color: '#FFFFFF',
+    color: colors.textOnPrimary || '#FFFFFF',
     fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   emptyText: {
-    color: '#64748b',
+    color: colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
     fontStyle: 'italic',

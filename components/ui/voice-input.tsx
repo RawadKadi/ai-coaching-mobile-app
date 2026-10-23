@@ -1,4 +1,5 @@
 import { useBrandColors } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, PanResponder } from 'react-native';
 import { Mic, Trash2, Send, Lock, ChevronLeft, ArrowUp } from 'lucide-react-native';
@@ -63,8 +64,10 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       if (timerRef.current) clearInterval(timerRef.current);
       if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
       if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
-      if (recorder.isRecording) {
-        recorder.stop().catch(() => {});
+      if (isRecordingRef.current) {
+        try {
+          recorder.stop().catch(() => {});
+        } catch {}
       }
     };
   }, []);
@@ -91,9 +94,11 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         if (!r.granted) { reset(); return; }
       }
 
-      if (recorder.isRecording) {
-        try { await recorder.stop(); } catch {}
-      }
+      try {
+        if (recorder.isRecording) {
+          await recorder.stop();
+        }
+      } catch {}
 
       // Configure audio session for recording
       try {
@@ -107,7 +112,9 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       recorder.record();
 
       if (!isMountedRef.current) {
-        recorder.stop().catch(() => {});
+        try {
+          recorder.stop().catch(() => {});
+        } catch {}
         return;
       }
 
@@ -135,7 +142,15 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   };
 
   const stopRecording = async (shouldSend: boolean) => {
-    if (!isRecordingRef.current && !recorder.isRecording) return;
+    let wasRecording = isRecordingRef.current;
+    if (!wasRecording) {
+      try {
+        wasRecording = !!recorder.isRecording;
+      } catch {
+        wasRecording = false;
+      }
+    }
+    if (!wasRecording) return;
     if (timerRef.current) clearInterval(timerRef.current);
     if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
 
@@ -143,9 +158,19 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     reset();
 
     try {
-      if (recorder.isRecording) {
+      let isRec = false;
+      try {
+        isRec = !!recorder.isRecording;
+      } catch {
+        isRec = false;
+      }
+
+      if (isRec) {
         await recorder.stop();
-        const uri = recorder.uri;
+        let uri = null;
+        try {
+          uri = recorder.uri;
+        } catch {}
         if (shouldSend && uri && dur >= 1) {
           onStop?.(uri, dur);
         } else {
@@ -434,7 +459,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   timerText: {
-    color: '#FFFFFF',
+    color: colors.text || '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
     minWidth: 34,
@@ -461,14 +486,14 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexShrink: 0,
   },
   slideCancelText: {
-    color: '#64748B',
+    color: colors.textSecondary || '#64748B',
     fontSize: 12,
   },
   actionBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: isDarkColor(colors.surface || colors.background || '#0F172A') ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,

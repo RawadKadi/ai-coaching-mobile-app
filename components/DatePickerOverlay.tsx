@@ -1,4 +1,5 @@
 import { useBrandColors } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import React, { useState, useEffect } from 'react';
 import {
   Modal,
@@ -50,7 +51,8 @@ export const DatePickerOverlay: React.FC<DatePickerOverlayProps> = ({
   onClose,
 }) => {
   const colors = useBrandColors();
-  const styles = getStyles(colors);
+  const isDark = isDarkColor(colors.surface || colors.background || '#0F172A');
+  const styles = getStyles(colors, isDark);
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
   );
@@ -171,13 +173,13 @@ export const DatePickerOverlay: React.FC<DatePickerOverlayProps> = ({
 
             <View style={styles.navButtons}>
               <Pressable onPress={handlePrev} style={styles.navBtn}>
-                <ChevronLeft size={16} color="#94A3B8" />
+                <ChevronLeft size={16} color={colors.textSecondary} />
               </Pressable>
               <Pressable onPress={handleNext} style={styles.navBtn}>
-                <ChevronRight size={16} color="#94A3B8" />
+                <ChevronRight size={16} color={colors.textSecondary} />
               </Pressable>
               <Pressable onPress={onClose} style={[styles.navBtn, styles.closeBtn]}>
-                <X size={14} color="#64748B" />
+                <X size={14} color={colors.textSecondary} />
               </Pressable>
             </View>
           </View>
@@ -231,7 +233,7 @@ export const DatePickerOverlay: React.FC<DatePickerOverlayProps> = ({
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   overlayContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -240,20 +242,20 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 24,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   card: {
     width: '100%',
-    backgroundColor: '#0F172A', // slate-950
+    backgroundColor: colors.surface,
     borderRadius: 32,
     padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: colors.border,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.5,
+        shadowOpacity: isDark ? 0.5 : 0.1,
         shadowRadius: 32,
       },
       android: { elevation: 20 },
@@ -268,13 +270,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginBottom: 24,
   },
   monthTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.5,
   },
   yearLabel: {
-    color: '#334155',
+    color: colors.textSecondary,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 2,
@@ -288,12 +290,12 @@ const getStyles = (colors: any) => StyleSheet.create({
   navBtn: {
     width: 36,
     height: 36,
-    backgroundColor: '#1E293B',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : (colors.background || '#F8FAFC'),
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: colors.border,
   },
   closeBtn: {
     marginLeft: 4,
@@ -306,7 +308,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   weekLabel: {
     flex: 1,
     textAlign: 'center',
-    color: '#475569',
+    color: colors.textSecondary,
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
@@ -330,33 +332,35 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(30,41,59,0.5)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : (colors.background || '#F8FAFC'),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
+    borderColor: isDark ? 'rgba(255,255,255,0.06)' : colors.border,
   },
   daySelected: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
   dayToday: {
-    backgroundColor: 'rgba(37,99,235,0.12)',
-    borderColor: 'rgba(59,130,246,0.35)',
+    backgroundColor: `${colors.primary}18`,
+    borderColor: colors.primary,
   },
   dayText: {
-    color: '#64748B',
+    color: colors.text,
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   dayTextSelected: {
-    color: '#FFFFFF',
+    color: colors.textOnPrimary || '#FFFFFF',
+    fontWeight: '900',
   },
   dayTextToday: {
-    color: '#60A5FA',
+    color: colors.primary,
+    fontWeight: '900',
   },
   // Divider
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.border,
     marginVertical: 16,
   },
   // Presets
@@ -368,28 +372,28 @@ const getStyles = (colors: any) => StyleSheet.create({
   presetBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#1E293B',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : (colors.background || '#F8FAFC'),
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
     marginRight: 10,
     marginBottom: 10,
   },
   presetBtnPressed: {
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.surfaceHover || colors.background,
     opacity: 0.8,
   },
   presetBtnSelected: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
   presetText: {
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '800',
   },
   presetTextSelected: {
-    color: '#FFFFFF',
+    color: colors.textOnPrimary || '#FFFFFF',
     fontWeight: '900',
   },
 });

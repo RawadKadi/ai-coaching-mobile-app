@@ -1,4 +1,5 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import React, { useState, useMemo } from 'react';
 import {
   View,
@@ -7,13 +8,13 @@ import {
   Modal,
   Dimensions,
   PanResponder,
+  StatusBar,
 } from 'react-native';
 import Svg, {
   Path,
   Defs,
   LinearGradient,
   Stop,
-  Rect,
   Line,
   Circle,
 } from 'react-native-svg';
@@ -21,6 +22,7 @@ import { X, TrendingUp, Users, Award } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { MotiView, AnimatePresence } from 'moti';
+import { useReducedMotion } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -43,9 +45,22 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
   data,
   currentActive,
 }) => {
-  const colors = useBrandColors();
+  const theme = useTheme();
+  const colors = theme.colors;
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const isDark = isDarkColor(colors.background);
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? 'rgba(255, 255, 255, 0.7)' : '#64748B');
+  const cardBg = colors.surface || (isDark ? 'rgba(15, 23, 42, 0.6)' : '#FFFFFF');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const primaryColor = colors.primary || '#3B82F6';
+  const buttonTextColor =
+    colors.textOnPrimary || (isDarkColor(primaryColor) ? '#FFFFFF' : '#0F172A');
 
   const chartWidth = SCREEN_WIDTH - 48;
   const chartHeight = 200;
@@ -53,7 +68,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
 
   // Calculate scales
   const stats = useMemo(() => {
-    if (data.length === 0) return { min: 0, max: 10, range: 10 };
+    if (!data || data.length === 0) return { min: 0, max: 10, range: 10 };
     const allValues = data.flatMap((d) => [d.total_roster, d.high_performers]);
     const min = 0; // Always start from 0 for stacked area
     const max = Math.max(...allValues, 5) * 1.2;
@@ -61,7 +76,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
   }, [data]);
 
   const points = useMemo(() => {
-    if (data.length < 2) return { roster: [], performers: [] };
+    if (!data || data.length < 2) return { roster: [], performers: [] };
 
     const usableWidth = chartWidth - paddingX * 2;
 
@@ -109,6 +124,7 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderMove: (evt) => {
+      if (!data || data.length < 2) return;
       const x = evt.nativeEvent.locationX;
       const usableWidth = chartWidth - paddingX * 2;
       const index = Math.round(
@@ -125,11 +141,11 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
     onPanResponderTerminate: () => setActiveIndex(null),
   });
 
-  const activeData = activeIndex !== null ? data[activeIndex] : null;
+  const activeData = activeIndex !== null && data ? data[activeIndex] : null;
 
   // Calculate growth
   const growth = useMemo(() => {
-    if (data.length < 2) return 0;
+    if (!data || data.length < 2) return 0;
     const start = data[0].total_roster;
     const end = data[data.length - 1].total_roster;
     if (start === 0) return end > 0 ? 100 : 0;
@@ -141,55 +157,118 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
+      onRequestClose={onClose}
     >
-      <View className="flex-1 bg-slate-950" style={{ paddingTop: insets.top }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+        }}
+      >
+        <StatusBar
+          barStyle={isDark ? 'light-content' : 'dark-content'}
+          backgroundColor={colors.background}
+        />
+
         {/* Header */}
-        <View className="px-6 py-8 flex-row justify-between items-center">
+        <View className="px-6 py-6 flex-row justify-between items-center">
           <View>
-            <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[4px] mb-2">
-              Detailed Analytics
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-xs font-bold uppercase tracking-wider mb-1"
+            >
+              Analytics
             </Text>
-            <Text className="text-white text-3xl font-black tracking-tighter">
-              Active Performance
+            <Text
+              style={{ color: textColor }}
+              className="text-3xl font-black tracking-tight"
+            >
+              Client Activity
             </Text>
           </View>
           <TouchableOpacity
             onPress={onClose}
-            className="w-12 h-12 bg-slate-900 rounded-full items-center justify-center border border-white/5"
+            accessibilityRole="button"
+            accessibilityLabel="Close analytics"
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder,
+              borderWidth: 1,
+            }}
+            className="w-11 h-11 rounded-full items-center justify-center"
           >
-            <X size={20} color="#94A3B8" />
+            <X size={20} color={textSecondaryColor} />
           </TouchableOpacity>
         </View>
 
         {/* Hero Stats */}
-        <View className="px-6 flex-row gap-4 mb-10">
-          <View className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5">
+        <View className="px-6 flex-row gap-4 mb-8">
+          <View
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder,
+              borderWidth: 1,
+            }}
+            className="flex-1 p-6 rounded-[28px]"
+          >
             <View className="flex-row items-center gap-2 mb-2">
-              <Users size={14} color={colors.primary} />
-              <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
+              <Users size={16} color={primaryColor} />
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-[11px] font-bold uppercase tracking-wider"
+              >
                 Total Clients
               </Text>
             </View>
-            <Text className="text-white text-3xl font-black">
-              {data[data.length - 1]?.total_roster || 0}
+            <Text
+              style={{ color: textColor }}
+              className="text-3xl font-black"
+            >
+              {data && data.length > 0
+                ? data[data.length - 1]?.total_roster || 0
+                : 0}
             </Text>
           </View>
-          <View className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5">
+
+          <View
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder,
+              borderWidth: 1,
+            }}
+            className="flex-1 p-6 rounded-[28px]"
+          >
             <View className="flex-row items-center gap-2 mb-2">
-              <Award size={14} color="#A855F7" />
-              <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                High Performers
+              <Award size={16} color="#A855F7" />
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-[11px] font-bold uppercase tracking-wider"
+              >
+                Active Clients
               </Text>
             </View>
-            <Text className="text-white text-3xl font-black">
-              {data[data.length - 1]?.high_performers || 0}
+            <Text
+              style={{ color: textColor }}
+              className="text-3xl font-black"
+            >
+              {data && data.length > 0
+                ? data[data.length - 1]?.high_performers || 0
+                : currentActive}
             </Text>
           </View>
         </View>
 
         {/* Chart Container */}
         <View className="px-6 flex-1">
-          <View className="bg-slate-900/20 rounded-[40px] border border-white/5 py-6 px-0 h-[270px] justify-center overflow-hidden">
+          <View
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder,
+              borderWidth: 1,
+            }}
+            className="rounded-[32px] py-6 px-0 h-[280px] justify-center overflow-hidden"
+          >
             <View {...panResponder.panHandlers} className="relative">
               <Svg
                 width={chartWidth}
@@ -204,9 +283,9 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
                     y1={(chartHeight / 4) * i}
                     x2={chartWidth}
                     y2={(chartHeight / 4) * i}
-                    stroke="#ffffff"
+                    stroke={isDark ? '#FFFFFF' : '#000000'}
                     strokeWidth="0.5"
-                    opacity={0.05}
+                    opacity={isDark ? 0.08 : 0.06}
                   />
                 ))}
 
@@ -214,13 +293,13 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
                   <LinearGradient id="fillRoster" x1="0" y1="0" x2="0" y2="1">
                     <Stop
                       offset="0%"
-                      stopColor={colors.primary}
-                      stopOpacity="0.05"
+                      stopColor={primaryColor}
+                      stopOpacity={isDark ? 0.12 : 0.2}
                     />
                     <Stop
                       offset="100%"
-                      stopColor={colors.primary}
-                      stopOpacity="0.01"
+                      stopColor={primaryColor}
+                      stopOpacity={0.01}
                     />
                   </LinearGradient>
                   <LinearGradient
@@ -230,11 +309,15 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
                     x2="0"
                     y2="1"
                   >
-                    <Stop offset="0%" stopColor="#A855F7" stopOpacity="0.1" />
+                    <Stop
+                      offset="0%"
+                      stopColor="#A855F7"
+                      stopOpacity={isDark ? 0.2 : 0.25}
+                    />
                     <Stop
                       offset="100%"
                       stopColor="#A855F7"
-                      stopOpacity="0.02"
+                      stopOpacity={0.02}
                     />
                   </LinearGradient>
                 </Defs>
@@ -244,10 +327,10 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
                 <Path
                   d={paths.rosterLine}
                   fill="none"
-                  stroke={colors.primary}
+                  stroke={primaryColor}
                   strokeWidth="2"
                   strokeDasharray="4 4"
-                  opacity={0.5}
+                  opacity={0.6}
                 />
 
                 {/* Layer 2: High Performers */}
@@ -260,23 +343,23 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
                 />
 
                 {/* Scrubber Line */}
-                {activeIndex !== null && (
+                {activeIndex !== null && points.roster[activeIndex] && (
                   <>
                     <Line
                       x1={points.roster[activeIndex].x}
                       y1="0"
                       x2={points.roster[activeIndex].x}
                       y2={chartHeight}
-                      stroke="white"
+                      stroke={textColor}
                       strokeWidth="1"
-                      opacity={0.3}
+                      opacity={0.35}
                     />
                     <Circle
                       cx={points.performers[activeIndex].x}
                       cy={points.performers[activeIndex].y}
                       r="6"
                       fill="#A855F7"
-                      stroke="white"
+                      stroke={colors.background}
                       strokeWidth="2"
                     />
                   </>
@@ -288,37 +371,68 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
             <AnimatePresence>
               {activeData && (
                 <MotiView
-                  from={{ opacity: 0, translateY: 10 }}
+                  from={{ opacity: 0, translateY: reduceMotion ? 0 : 8 }}
                   animate={{ opacity: 1, translateY: 0 }}
-                  exit={{ opacity: 0, translateY: 10 }}
-                  className="absolute top-4 left-6 right-6 bg-white/10 p-4 rounded-2xl backdrop-blur-md border border-white/10 flex-row justify-between items-center"
+                  exit={{ opacity: 0, translateY: reduceMotion ? 0 : 8 }}
+                  transition={{
+                    type: 'timing',
+                    duration: reduceMotion ? 0 : 150,
+                  }}
+                  style={{
+                    backgroundColor: isDark
+                      ? 'rgba(15, 23, 42, 0.95)'
+                      : 'rgba(255, 255, 255, 0.95)',
+                    borderColor: cardBorder,
+                    borderWidth: 1,
+                    shadowColor: '#000000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: isDark ? 0.3 : 0.1,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                  className="absolute top-4 left-6 right-6 p-4 rounded-2xl flex-row justify-between items-center"
                 >
                   <View>
-                    <Text className="text-white/60 text-[8px] font-black uppercase tracking-widest mb-1">
+                    <Text
+                      style={{ color: textSecondaryColor }}
+                      className="text-[10px] font-bold uppercase tracking-wider mb-0.5"
+                    >
                       {new Date(activeData.date).toLocaleDateString(undefined, {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
                       })}
                     </Text>
-                    <Text className="text-white font-black text-xs">
-                      Snapshot Report
+                    <Text
+                      style={{ color: textColor }}
+                      className="font-black text-xs"
+                    >
+                      Daily Activity
                     </Text>
                   </View>
                   <View className="flex-row gap-4">
                     <View className="items-end">
-                      <Text className="text-blue-400 text-[10px] font-black uppercase">
+                      <Text
+                        style={{ color: primaryColor }}
+                        className="text-[10px] font-bold uppercase"
+                      >
                         Total
                       </Text>
-                      <Text className="text-white font-black text-lg">
+                      <Text
+                        style={{ color: textColor }}
+                        className="font-black text-lg"
+                      >
                         {activeData.total_roster}
                       </Text>
                     </View>
                     <View className="items-end">
-                      <Text className="text-purple-400 text-[10px] font-black uppercase">
+                      <Text className="text-purple-500 text-[10px] font-bold uppercase">
                         Active
                       </Text>
-                      <Text className="text-white font-black text-lg">
+                      <Text
+                        style={{ color: textColor }}
+                        className="font-black text-lg"
+                      >
                         {activeData.high_performers}
                       </Text>
                     </View>
@@ -329,44 +443,82 @@ export const AnalyticsDetailedModal: React.FC<AnalyticsDetailedModalProps> = ({
           </View>
 
           {/* Legend */}
-          <View className="flex-row justify-center gap-8 mt-8">
+          <View className="flex-row justify-center gap-8 mt-6">
             <View className="flex-row items-center gap-2">
-              <View className="w-3 h-3 rounded-full bg-blue-500/50 border border-blue-400" />
-              <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                Total Growth
+              <View
+                style={{
+                  backgroundColor: primaryColor,
+                  opacity: 0.8,
+                }}
+                className="w-3 h-3 rounded-full"
+              />
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-xs font-bold"
+              >
+                Total Clients
               </Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="w-3 h-3 rounded-full bg-purple-600 border border-purple-400" />
-              <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                High Performers
+              <View className="w-3 h-3 rounded-full bg-purple-600" />
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-xs font-bold"
+              >
+                Active Clients
               </Text>
             </View>
           </View>
         </View>
 
         {/* Footer */}
-        <View className="px-6 py-10 border-t border-white/5 bg-slate-900/20">
+        <View
+          style={{
+            borderTopColor: cardBorder,
+            borderTopWidth: 1,
+            backgroundColor: cardBg,
+            paddingBottom: Math.max(insets.bottom, 24),
+          }}
+          className="px-6 pt-6"
+        >
           <View className="flex-row items-center gap-3">
             <View className="w-10 h-10 bg-emerald-500/10 rounded-full items-center justify-center border border-emerald-500/20">
               <TrendingUp size={20} color="#10B981" />
             </View>
             <View>
-              <Text className="text-white font-black text-sm tracking-tight">
-                Trending up by {growth}% this month
+              <Text
+                style={{ color: textColor }}
+                className="font-bold text-sm tracking-tight"
+              >
+                {growth >= 0
+                  ? `Up ${growth}% this month`
+                  : `Down ${Math.abs(growth)}% this month`}
               </Text>
-              <Text className="text-slate-500 text-[10px] font-medium uppercase tracking-widest">
-                Last 30 Days Growth Velocity
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-xs font-medium"
+              >
+                Past 30 days
               </Text>
             </View>
           </View>
 
           <TouchableOpacity
             onPress={onClose}
-            className="mt-8 bg-blue-600 py-5 rounded-[24px] items-center justify-center shadow-lg shadow-blue-500/30"
+            accessibilityRole="button"
+            accessibilityLabel="Close analytics"
+            style={{
+              backgroundColor: primaryColor,
+            }}
+            className="mt-6 py-4 rounded-2xl items-center justify-center shadow-lg"
           >
-            <Text className="text-white font-black text-sm uppercase tracking-[2px]">
-              Return to Dashboard
+            <Text
+              style={{
+                color: buttonTextColor,
+              }}
+              className="font-black text-sm uppercase tracking-wider"
+            >
+              Back to Dashboard
             </Text>
           </TouchableOpacity>
         </View>

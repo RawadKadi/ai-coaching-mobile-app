@@ -29,8 +29,9 @@ interface SchedulerModalProps {
 }
 
 export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId, reschedulingMessageId }: SchedulerModalProps) {
-  const { primary } = useBrandColors();
-  const colors = { primary };
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDark = theme.isDarkMode;
     const { coach, profile } = useAuth();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -169,7 +170,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
             const d = new Date(s.scheduled_at);
             const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
             const sessionClientId = s.client_id;
-            const isTargetClient = sessionClientId === clientContext?.id;
+            const isTargetClient = sessionClientId === targetClientId;
 
             // 1. Always show target client sessions if we are filtering by day/time
             if (isFiltering) {
@@ -666,8 +667,15 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-            <View style={{ flex: 1, backgroundColor: '#020617' }}>
-                <View className="px-6 pt-6 pb-4 flex-row justify-between items-center border-b border-slate-900 bg-slate-950/80">
+            <View style={{ flex: 1, backgroundColor: colors.background }}>
+                <View 
+                    style={{ 
+                        backgroundColor: colors.surface, 
+                        borderBottomColor: colors.border, 
+                        borderBottomWidth: 1 
+                    }} 
+                    className="px-6 pt-6 pb-4 flex-row justify-between items-center"
+                >
                     <View className="flex-row items-center gap-3">
                         {step !== 'input' && (
                            <TouchableOpacity onPress={() => {
@@ -680,12 +688,12 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                    ]
                                );
                            }}>
-                               <ChevronLeft size={24} color="#94A3B8" />
+                               <ChevronLeft size={24} color={colors.textSecondary} />
                            </TouchableOpacity>
                         )}
                         <View>
-                            <Text className="text-white text-xl font-bold">AI Scheduler</Text>
-                            <Text className="text-slate-500 text-xs">Setup sessions with {clientContext?.name || 'Athlete'}</Text>
+                            <Text style={{ color: colors.text }} className="text-xl font-bold">AI Scheduler</Text>
+                            <Text style={{ color: colors.textSecondary }} className="text-xs">Setup sessions with {clientContext?.name || 'Athlete'}</Text>
                         </View>
                     </View>
                     <TouchableOpacity 
@@ -705,9 +713,9 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 onClose();
                             }
                         }} 
-                        style={{ padding: 8, backgroundColor: '#0F172A', borderRadius: 9999 }}
+                        style={{ padding: 8, backgroundColor: colors.background, borderRadius: 9999, borderWidth: 1, borderColor: colors.border }}
                     >
-                        <X size={20} color="#94A3B8" />
+                        <X size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
 
@@ -728,13 +736,13 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 style={{
                                     width: 96,
                                     height: 96,
-                                    backgroundColor: '#2563EB',
+                                    backgroundColor: colors.primary,
                                     borderRadius: 32,
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     marginBottom: 32,
                                     borderWidth: 2,
-                                    borderColor: 'rgba(255,255,255,0.2)',
+                                    borderColor: 'rgba(255,255,255,0.25)',
                                     shadowColor: colors.primary,
                                     shadowOffset: { width: 0, height: 20 },
                                     shadowOpacity: 0.5,
@@ -742,10 +750,10 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                     elevation: 15
                                 }}
                             >
-                                <Sparkles size={40} color="white" fill="white" />
+                                <Sparkles size={40} color={colors.textOnPrimary || 'white'} fill={colors.textOnPrimary || 'white'} />
                             </MotiView>
-                            <Text className="text-white text-3xl font-black text-center tracking-tighter mb-4">Validating Plan</Text>
-                            <Text className="text-slate-400 text-center leading-6 text-sm font-medium px-8">
+                            <Text style={{ color: colors.text }} className="text-3xl font-black text-center tracking-tighter mb-4">Validating Plan</Text>
+                            <Text style={{ color: colors.textSecondary }} className="text-center leading-6 text-sm font-medium px-8">
                                 Checking calendar availability and analyzing schedule constraints...
                             </Text>
                         </MotiView>
@@ -759,7 +767,14 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                           className="flex-1"
                         >
                         <ScrollView className="flex-1 px-6 pt-8" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
-                            <View className="p-8 rounded-[40px] bg-blue-600/10 border border-blue-500/20 items-center mb-8">
+                            <View 
+                                style={{ 
+                                    backgroundColor: `${colors.primary}15`, 
+                                    borderColor: `${colors.primary}30`, 
+                                    borderWidth: 1 
+                                }} 
+                                className="p-8 rounded-[40px] items-center mb-8"
+                            >
                                 <View className="absolute top-0 right-0 p-4 opacity-10">
                                     <Sparkles size={120} color={colors.primary} />
                                 </View>
@@ -770,23 +785,37 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                         imageUrl={clientContext?.avatar_url} 
                                         size={80} 
                                     />
-                                    <View className="absolute -bottom-2 -right-2 bg-blue-600 rounded-full p-2 border-[3px] border-[#020617]">
-                                        <Sparkles size={16} color="white" fill="white" />
+                                    <View 
+                                        style={{ 
+                                            backgroundColor: colors.primary, 
+                                            borderColor: colors.surface 
+                                        }} 
+                                        className="absolute -bottom-2 -right-2 rounded-full p-2 border-[3px]"
+                                    >
+                                        <Sparkles size={16} color={colors.textOnPrimary || 'white'} fill={colors.textOnPrimary || 'white'} />
                                     </View>
                                 </View>
 
-                                <Text className="text-white text-2xl font-black text-center tracking-tighter">AI Scheduling</Text>
-                                <Text className="text-slate-400 text-center mt-3 leading-5 px-4 text-sm font-medium">
+                                <Text style={{ color: colors.text }} className="text-2xl font-black text-center tracking-tighter">AI Scheduling</Text>
+                                <Text style={{ color: colors.textSecondary }} className="text-center mt-3 leading-5 px-4 text-sm font-medium">
                                     Describe your plan for {(clientContext?.name || 'the athlete').split(' ')[0]}. Our AI handles times, dates, and conflict checks.
                                 </Text>
                             </View>
                             
-                            <View className="bg-slate-900/50 rounded-[40px] border border-slate-800 p-8 min-h-[220px] mb-20">
+                            <View 
+                                style={{ 
+                                    backgroundColor: colors.surface, 
+                                    borderColor: colors.border, 
+                                    borderWidth: 1 
+                                }} 
+                                className="rounded-[40px] p-8 min-h-[220px] mb-20"
+                            >
                                 <TextInput
-                                    className="text-white text-lg leading-7 font-medium"
+                                    style={{ color: colors.text }}
+                                    className="text-lg leading-7 font-medium"
                                     multiline
                                     placeholder="e.g., 'Weekly sessions every Monday at 2pm'"
-                                    placeholderTextColor="#1e293b"
+                                    placeholderTextColor={colors.textTertiary}
                                     value={input}
                                     onChangeText={setInput}
                                     textAlignVertical="top"
@@ -795,14 +824,29 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                     <MotiView
                                         from={{ opacity: 0, translateY: 10 }}
                                         animate={{ opacity: 1, translateY: 0 }}
-                                        className="mt-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex-row items-center gap-3"
+                                        style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.25)', borderWidth: 1 }}
+                                        className="mt-4 p-4 rounded-2xl flex-row items-center gap-3"
                                     >
                                         <AlertTriangle size={18} color="#EF4444" />
                                         <Text className="text-red-400 text-xs font-bold flex-1 leading-4">{draftConflict.message}</Text>
                                     </MotiView>
                                 )}
-                                <View className="flex-row justify-between items-center mt-8 pt-6 border-t border-white/5">
-                                    <TouchableOpacity style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B' }}>
+                                <View 
+                                    style={{ borderTopColor: colors.border }} 
+                                    className="flex-row justify-between items-center mt-8 pt-6 border-t"
+                                >
+                                    <TouchableOpacity 
+                                        style={{ 
+                                            width: 56, 
+                                            height: 56, 
+                                            borderRadius: 28, 
+                                            backgroundColor: colors.background, 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center', 
+                                            borderWidth: 1, 
+                                            borderColor: colors.border 
+                                        }}
+                                    >
                                         <Mic size={24} color={colors.primary} />
                                     </TouchableOpacity>
                                     
@@ -814,11 +858,13 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                             paddingVertical: 16,
                                             paddingHorizontal: 32,
                                             borderRadius: 24,
-                                            backgroundColor: input.trim() ? '#2563EB' : '#1E293B',
+                                            backgroundColor: input.trim() ? colors.primary : colors.background,
+                                            borderWidth: input.trim() ? 0 : 1,
+                                            borderColor: colors.border,
                                             ...(input.trim() ? {
                                                 shadowColor: colors.primary,
                                                 shadowOffset: { width: 0, height: 10 },
-                                                shadowOpacity: 0.4,
+                                                shadowOpacity: 0.35,
                                                 shadowRadius: 20,
                                                 elevation: 10
                                             } : {})
@@ -827,11 +873,18 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                         disabled={!input.trim() || loading}
                                     >
                                         {loading ? (
-                                            <ActivityIndicator color="white" />
+                                            <ActivityIndicator color={colors.textOnPrimary || 'white'} />
                                         ) : (
                                             <>
-                                                <Sparkles size={20} color="white" />
-                                                <Text className="text-white font-black text-base uppercase tracking-widest">Draft Plan</Text>
+                                                <Sparkles size={20} color={input.trim() ? (colors.textOnPrimary || 'white') : colors.textTertiary} />
+                                                <Text 
+                                                    style={{ 
+                                                        color: input.trim() ? (colors.textOnPrimary || 'white') : colors.textTertiary 
+                                                    }} 
+                                                    className="font-black text-base uppercase tracking-widest"
+                                                >
+                                                    Draft Plan
+                                                </Text>
                                             </>
                                         )}
                                     </TouchableOpacity>
@@ -841,7 +894,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             <View className="mb-12">
                                 <View className="flex-row items-center justify-between mb-4">
                                     <View className="flex-row items-center gap-3">
-                                        <Text className="text-white text-lg font-black tracking-tight">Your Agenda</Text>
+                                        <Text style={{ color: colors.text }} className="text-lg font-black tracking-tight">Your Agenda</Text>
                                         {isAgendaThinking && (
                                             <MotiView
                                                 from={{ opacity: 0, scale: 0.5, rotate: '0deg' }}
@@ -849,16 +902,20 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                 transition={{
                                                     opacity: { type: 'timing', duration: 300 },
                                                     scale: { type: 'spring', damping: 10 },
-                                                    rotate: { type: 'timing', duration: 2000, loop: true, ease: 'linear' }
+                                                    rotate: { type: 'timing', duration: 2000, loop: true }
                                                 }}
-                                                className="w-6 h-6 rounded-full bg-blue-600/20 border border-blue-500/30 items-center justify-center"
+                                                style={{ backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}35`, borderWidth: 1 }}
+                                                className="w-6 h-6 rounded-full items-center justify-center"
                                             >
                                                 <Sparkles size={12} color={colors.primary} fill={colors.primary} />
                                             </MotiView>
                                         )}
                                     </View>
-                                    <View className="px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
-                                        <Text className="text-blue-400 text-[10px] font-black uppercase tracking-widest">
+                                    <View 
+                                        style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30`, borderWidth: 1 }} 
+                                        className="px-3 py-1 rounded-full"
+                                    >
+                                        <Text style={{ color: colors.primary }} className="text-[10px] font-black uppercase tracking-widest">
                                             {isAgendaThinking ? "Thinking..." : (agendaContext.days.length > 0 || agendaContext.times.length > 0 ? "Filtered" : "Next 3 Days")}
                                         </Text>
                                     </View>
@@ -894,13 +951,13 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                             return (
                                                 <MotiView
                                                     key={session.id}
-                                                    from={{ opacity: isFar ? 0.3 : 1, scale: 1, borderColor: 'rgba(255,255,255,0.05)', borderWidth: 1 }}
+                                                    from={{ opacity: isFar ? 0.3 : 1, scale: 1, borderColor: colors.border, borderWidth: 1 }}
                                                     animate={{ 
                                                         opacity: isFar ? 0.3 : 1,
-                                                        borderColor: isConflicted ? '#EF4444' : 'rgba(255,255,255,0.05)',
+                                                        borderColor: isConflicted ? '#EF4444' : colors.border,
                                                         borderWidth: 1,
                                                         scale: isConflicted ? [1, 1.02, 1] : 1,
-                                                        backgroundColor: isConflicted ? 'rgba(239, 68, 68, 0.05)' : 'rgba(15, 23, 42, 0.4)'
+                                                        backgroundColor: isConflicted ? 'rgba(239, 68, 68, 0.08)' : colors.surface
                                                     }}
                                                     transition={isConflicted ? {
                                                         type: 'timing',
@@ -910,16 +967,23 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                     className="p-4 rounded-2xl flex-row items-center justify-between"
                                                 >
                                                     <View className="flex-row items-center gap-4 flex-1">
-                                                        <View className={`w-10 h-10 rounded-xl items-center justify-center ${isConflicted ? 'bg-red-500/10' : 'bg-slate-800'}`}>
+                                                        <View 
+                                                            style={{ 
+                                                                backgroundColor: isConflicted ? 'rgba(239, 68, 68, 0.12)' : colors.background,
+                                                                borderWidth: 1,
+                                                                borderColor: isConflicted ? 'rgba(239, 68, 68, 0.25)' : colors.border
+                                                            }}
+                                                            className="w-10 h-10 rounded-xl items-center justify-center"
+                                                        >
                                                             {isConflicted ? (
                                                                 <AlertTriangle size={18} color="#EF4444" />
                                                             ) : (
-                                                                <Calendar size={18} color="#94A3B8" />
+                                                                <Calendar size={18} color={colors.textSecondary} />
                                                             )}
                                                         </View>
                                                         <View className="flex-1">
                                                             <View className="flex-row items-center justify-between pr-2">
-                                                                <Text className="text-white font-bold text-sm">
+                                                                <Text style={{ color: colors.text }} className="font-bold text-sm">
                                                                     {session.client?.profiles?.full_name || 'Client'}
                                                                 </Text>
                                                                 {isConflicted && (
@@ -929,7 +993,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                                     </View>
                                                                 )}
                                                             </View>
-                                                            <Text className="text-slate-500 text-[11px] font-bold mt-0.5">
+                                                            <Text style={{ color: colors.textSecondary }} className="text-[11px] font-bold mt-0.5">
                                                                 {sessionDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} • {sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             </Text>
                                                         </View>
@@ -939,12 +1003,23 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                         })}
                                     </View>
                                 ) : (
-                                    <View className="py-12 items-center bg-slate-900/20 rounded-[32px] border border-dashed border-slate-800 px-8">
-                                        <View className="w-16 h-16 bg-slate-800/50 rounded-2xl items-center justify-center mb-4">
-                                            <Calendar size={32} color="#475569" />
+                                    <View 
+                                        style={{ 
+                                            backgroundColor: colors.surface, 
+                                            borderColor: colors.border, 
+                                            borderWidth: 1, 
+                                            borderStyle: 'dashed' 
+                                        }} 
+                                        className="py-12 items-center rounded-[32px] px-8"
+                                    >
+                                        <View 
+                                            style={{ backgroundColor: colors.background }} 
+                                            className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
+                                        >
+                                            <Calendar size={32} color={colors.textTertiary} />
                                         </View>
-                                        <Text className="text-white text-base font-black tracking-tight text-center">Your schedule is clear</Text>
-                                        <Text className="text-slate-500 text-xs font-medium mt-2 text-center leading-5">
+                                        <Text style={{ color: colors.text }} className="text-base font-black tracking-tight text-center">Your schedule is clear</Text>
+                                        <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mt-2 text-center leading-5">
                                             No sessions match your current request or target client. You're free to schedule!
                                         </Text>
                                     </View>
@@ -963,25 +1038,31 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         >
                             <ScrollView showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
                                 <View className="mb-8 flex-row items-center gap-4">
-                                    <View className="w-12 h-12 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20">
+                                    <View 
+                                        style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.25)', borderWidth: 1 }} 
+                                        className="w-12 h-12 rounded-2xl items-center justify-center"
+                                    >
                                         <Info size={24} color="#F59E0B" />
                                     </View>
                                     <View className="flex-1">
-                                        <Text className="text-white text-xl font-black tracking-tight leading-7">
+                                        <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight leading-7">
                                             {originallyMissingDays && originallyMissingTime ? "Days & Time Needed" : 
                                              originallyMissingDays ? "You didn't mention the days" :
                                              originallyMissingTime ? "You didn't mention the time" : "Details Needed"}
                                         </Text>
-                                        <Text className="text-slate-500 text-xs font-medium mt-1">
+                                        <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mt-1">
                                             Help the AI by clarifying these specific details below.
                                         </Text>
                                     </View>
                                 </View>
 
-                                <View className="bg-slate-900/50 p-7 rounded-[32px] border border-slate-800">
+                                <View 
+                                    style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }} 
+                                    className="p-7 rounded-[32px]"
+                                >
                                     {originallyMissingDays && (
                                         <View className="mb-8">
-                                            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4">Days Needed</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase tracking-widest mb-4">Days Needed</Text>
                                             <View className="flex-row flex-wrap gap-2.5">
                                                 {DAYS.map(day => {
                                                     const isSelected = formDates.includes(day);
@@ -993,13 +1074,13 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                                 paddingHorizontal: 16,
                                                                 paddingVertical: 10,
                                                                 borderRadius: 14,
-                                                                backgroundColor: isSelected ? '#2563EB' : '#020617',
+                                                                backgroundColor: isSelected ? colors.primary : colors.background,
                                                                 borderWidth: 1,
-                                                                borderColor: isSelected ? colors.primary : '#1E293B',
+                                                                borderColor: isSelected ? colors.primary : colors.border,
                                                             }}
                                                         >
                                                             <Text style={{
-                                                                color: isSelected ? 'white' : '#64748B',
+                                                                color: isSelected ? (colors.textOnPrimary || 'white') : colors.textSecondary,
                                                                 fontSize: 13,
                                                                 fontWeight: '800',
                                                                 textTransform: 'capitalize'
@@ -1013,42 +1094,52 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                                     {originallyMissingTime && (
                                         <View className="mb-8">
-                                            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4">Time Needed</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase tracking-widest mb-4">Time Needed</Text>
                                             <TextInput
-                                                className="bg-slate-950 p-5 rounded-2xl text-white font-bold border border-slate-800"
+                                                style={{ backgroundColor: colors.background, borderColor: colors.border, color: colors.text }}
+                                                className="p-5 rounded-2xl font-bold border"
                                                 placeholder="e.g., '10am' or '2:30pm'"
-                                                placeholderTextColor="#334155"
+                                                placeholderTextColor={colors.textTertiary}
                                                 value={formTime}
                                                 onChangeText={setFormTime}
                                             />
                                         </View>
                                     )}
 
-                                    <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4">Frequency</Text>
+                                    <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase tracking-widest mb-4">Frequency</Text>
                                     <View className="flex-row gap-3">
                                         <TouchableOpacity 
                                             onPress={() => setFormRecurrence('once')}
-                                            className={`flex-1 p-5 rounded-2xl border flex-row items-center justify-center gap-3 ${formRecurrence === 'once' ? 'bg-blue-600 border-blue-500' : 'bg-slate-950 border-slate-800'}`}
+                                            style={{
+                                                backgroundColor: formRecurrence === 'once' ? colors.primary : colors.background,
+                                                borderColor: formRecurrence === 'once' ? colors.primary : colors.border
+                                            }}
+                                            className="flex-1 p-5 rounded-2xl border flex-row items-center justify-center gap-3"
                                         >
-                                            <Calendar size={18} color={formRecurrence === 'once' ? 'white' : '#475569'} />
-                                            <Text className={`font-bold text-sm ${formRecurrence === 'once' ? 'text-white' : 'text-slate-500'}`}>One-time</Text>
+                                            <Calendar size={18} color={formRecurrence === 'once' ? (colors.textOnPrimary || 'white') : colors.textSecondary} />
+                                            <Text style={{ color: formRecurrence === 'once' ? (colors.textOnPrimary || 'white') : colors.textSecondary }} className="font-bold text-sm">One-time</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity 
                                             onPress={() => setFormRecurrence('weekly')}
-                                            className={`flex-1 p-5 rounded-2xl border flex-row items-center justify-center gap-3 ${formRecurrence === 'weekly' ? 'bg-blue-600 border-blue-500' : 'bg-slate-950 border-slate-800'}`}
+                                            style={{
+                                                backgroundColor: formRecurrence === 'weekly' ? colors.primary : colors.background,
+                                                borderColor: formRecurrence === 'weekly' ? colors.primary : colors.border
+                                            }}
+                                            className="flex-1 p-5 rounded-2xl border flex-row items-center justify-center gap-3"
                                         >
-                                            <Repeat size={18} color={formRecurrence === 'weekly' ? 'white' : '#475569'} />
-                                            <Text className={`font-bold text-sm ${formRecurrence === 'weekly' ? 'text-white' : 'text-slate-500'}`}>Weekly</Text>
+                                            <Repeat size={18} color={formRecurrence === 'weekly' ? (colors.textOnPrimary || 'white') : colors.textSecondary} />
+                                            <Text style={{ color: formRecurrence === 'weekly' ? (colors.textOnPrimary || 'white') : colors.textSecondary }} className="font-bold text-sm">Weekly</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
 
                                 <TouchableOpacity 
-                                    className="mt-8 bg-blue-600 p-6 rounded-[28px] items-center flex-row justify-center gap-3 shadow-xl shadow-blue-500/30"
+                                    style={{ backgroundColor: colors.primary }}
+                                    className="mt-8 p-6 rounded-[28px] items-center flex-row justify-center gap-3 shadow-xl"
                                     onPress={handleAnalyze}
                                 >
-                                    <Sparkles size={20} color="white" />
-                                    <Text className="text-white font-black text-base uppercase tracking-widest">Re-Draft Plan</Text>
+                                    <Sparkles size={20} color={colors.textOnPrimary || 'white'} />
+                                    <Text style={{ color: colors.textOnPrimary || 'white' }} className="font-black text-base uppercase tracking-widest">Re-Draft Plan</Text>
                                 </TouchableOpacity>
                             </ScrollView>
                         </MotiView>
@@ -1063,12 +1154,15 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             style={{ overflow: 'visible' }}
                         >
                             <View className="mb-8 flex-row items-center gap-4">
-                                <View className="w-12 h-12 bg-green-500/10 rounded-2xl items-center justify-center border border-green-500/20">
+                                <View 
+                                    style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.25)', borderWidth: 1 }} 
+                                    className="w-12 h-12 rounded-2xl items-center justify-center"
+                                >
                                     <Check size={24} color="#10B981" />
                                 </View>
                                 <View className="flex-1">
-                                    <Text className="text-white text-xl font-black tracking-tight leading-7">Review Schedule</Text>
-                                    <Text className="text-slate-500 text-xs font-medium mt-1">
+                                    <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight leading-7">Review Schedule</Text>
+                                    <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mt-1">
                                         I've drafted {proposedSessions.length} session{proposedSessions.length !== 1 ? 's' : ''} based on your request.
                                     </Text>
                                 </View>
@@ -1076,13 +1170,23 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
 
                             <ScrollView className="flex-1" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
                                 {proposedSessions.some(s => checkConflict(s)?.type === 'daily_limit') && (
-                                    <View className="mb-6 p-5 rounded-[28px] bg-blue-600/10 border border-blue-500/20 flex-row gap-4 items-start">
-                                        <View className="w-10 h-10 rounded-xl bg-blue-600/20 items-center justify-center border border-blue-500/30">
+                                    <View 
+                                        style={{ 
+                                            backgroundColor: `${colors.primary}12`, 
+                                            borderColor: `${colors.primary}25`, 
+                                            borderWidth: 1 
+                                        }} 
+                                        className="mb-6 p-5 rounded-[28px] flex-row gap-4 items-start"
+                                    >
+                                        <View 
+                                            style={{ backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}30`, borderWidth: 1 }} 
+                                            className="w-10 h-10 rounded-xl items-center justify-center"
+                                        >
                                             <Sparkles size={20} color={colors.primary} fill={colors.primary} />
                                         </View>
                                         <View className="flex-1">
-                                            <Text className="text-white text-sm font-black tracking-tight">AI Assistant Tip</Text>
-                                            <Text className="text-slate-300 text-xs font-medium mt-1 leading-5">
+                                            <Text style={{ color: colors.text }} className="text-sm font-black tracking-tight">AI Assistant Tip</Text>
+                                            <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mt-1 leading-5">
                                                 {(() => {
                                                     const conf = proposedSessions.map(s => checkConflict(s)).find(c => c && c.type === 'daily_limit');
                                                     if (!conf) return '';
@@ -1118,10 +1222,24 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                     }}
                                                 />
                                             )}
-                                            <View className={`bg-slate-900 p-6 rounded-[32px] border ${conflict ? 'border-red-500/50' : 'border-slate-800'}`}>
+                                            <View 
+                                                style={{ 
+                                                    backgroundColor: colors.surface, 
+                                                    borderColor: conflict ? 'rgba(239, 68, 68, 0.4)' : colors.border, 
+                                                    borderWidth: 1 
+                                                }} 
+                                                className="p-6 rounded-[32px]"
+                                            >
                                                 <View className="flex-row justify-between items-start mb-6">
                                                     <View className="flex-row gap-4 flex-1">
-                                                        <View className={`w-12 h-12 rounded-2xl items-center justify-center border ${conflict ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-600/10 border-blue-500/10'}`}>
+                                                        <View 
+                                                            style={{ 
+                                                                backgroundColor: conflict ? 'rgba(239, 68, 68, 0.12)' : `${colors.primary}15`,
+                                                                borderColor: conflict ? 'rgba(239, 68, 68, 0.25)' : `${colors.primary}30`,
+                                                                borderWidth: 1
+                                                            }} 
+                                                            className="w-12 h-12 rounded-2xl items-center justify-center"
+                                                        >
                                                             {conflict ? (
                                                                 <AlertTriangle size={24} color="#EF4444" />
                                                             ) : (
@@ -1129,33 +1247,40 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                             )}
                                                         </View>
                                                         <View className="flex-1">
-                                                            <Text className="text-white font-black text-lg tracking-tight capitalize">
+                                                            <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight capitalize">
                                                                 {session.session_type}
                                                             </Text>
-                                                            <Text className="text-slate-400 text-sm mt-0.5 font-medium capitalize">
+                                                            <Text style={{ color: colors.textSecondary }} className="text-sm mt-0.5 font-medium capitalize">
                                                                 {session.day_of_week}, {' '}{new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             </Text>
                                                         </View>
                                                     </View>
                                                     <TouchableOpacity 
-                                                        className="w-8 h-8 rounded-full bg-slate-800 items-center justify-center"
+                                                        style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }} 
+                                                        className="w-8 h-8 rounded-full items-center justify-center"
                                                         onPress={() => setProposedSessions(prev => prev.filter((_, i) => i !== index))}
                                                     >
-                                                        <X size={16} color="#94A3B8" />
+                                                        <X size={16} color={colors.textSecondary} />
                                                     </TouchableOpacity>
                                                 </View>
 
-                                                <View className="flex-row bg-slate-950 p-1.5 rounded-2xl border border-slate-800/50">
+                                                <View 
+                                                    style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }} 
+                                                    className="flex-row p-1.5 rounded-2xl"
+                                                >
                                                     <TouchableOpacity 
                                                         onPress={() => {
                                                             const newSessions = [...proposedSessions];
                                                             newSessions[index] = { ...session, recurrence: 'once', aiRecurrenceDetected: false };
                                                             setProposedSessions(newSessions);
                                                         }}
-                                                        className={`flex-1 py-3.5 rounded-xl items-center justify-center flex-row gap-2 ${session.recurrence === 'once' ? 'bg-slate-800' : ''}`}
+                                                        style={{
+                                                            backgroundColor: session.recurrence === 'once' ? (isDark ? 'rgba(255, 255, 255, 0.1)' : colors.surface) : 'transparent'
+                                                        }}
+                                                        className="flex-1 py-3.5 rounded-xl items-center justify-center flex-row gap-2"
                                                     >
-                                                        <Calendar size={14} color={session.recurrence === 'once' ? 'white' : '#475569'} />
-                                                        <Text className={`text-xs font-black uppercase tracking-widest ${session.recurrence === 'once' ? 'text-white' : 'text-slate-500'}`}>One-time</Text>
+                                                        <Calendar size={14} color={session.recurrence === 'once' ? colors.text : colors.textSecondary} />
+                                                        <Text style={{ color: session.recurrence === 'once' ? colors.text : colors.textSecondary }} className="text-xs font-black uppercase tracking-widest">One-time</Text>
                                                     </TouchableOpacity>
                                                     <TouchableOpacity 
                                                         onPress={() => {
@@ -1163,16 +1288,20 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                                             newSessions[index] = { ...session, recurrence: 'weekly', aiRecurrenceDetected: false };
                                                             setProposedSessions(newSessions);
                                                         }}
-                                                        className={`flex-1 py-3.5 rounded-xl items-center justify-center flex-row gap-2 ${session.recurrence === 'weekly' ? 'bg-slate-800' : ''}`}
+                                                        style={{
+                                                            backgroundColor: session.recurrence === 'weekly' ? (isDark ? 'rgba(255, 255, 255, 0.1)' : colors.surface) : 'transparent'
+                                                        }}
+                                                        className="flex-1 py-3.5 rounded-xl items-center justify-center flex-row gap-2"
                                                     >
-                                                        <Repeat size={14} color={session.recurrence === 'weekly' ? 'white' : '#475569'} />
-                                                        <Text className={`text-xs font-black uppercase tracking-widest ${session.recurrence === 'weekly' ? 'text-white' : 'text-slate-500'}`}>Weekly</Text>
+                                                        <Repeat size={14} color={session.recurrence === 'weekly' ? colors.text : colors.textSecondary} />
+                                                        <Text style={{ color: session.recurrence === 'weekly' ? colors.text : colors.textSecondary }} className="text-xs font-black uppercase tracking-widest">Weekly</Text>
                                                     </TouchableOpacity>
                                                 </View>
 
                                                 {conflict && (
                                                     <TouchableOpacity 
-                                                        className="mt-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex-row items-center gap-3"
+                                                        style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.25)', borderWidth: 1 }}
+                                                        className="mt-4 p-4 rounded-2xl flex-row items-center gap-3"
                                                         onPress={() => handleConflictDetected(session, conflict)}
                                                     >
                                                         <AlertTriangle size={16} color="#EF4444" />
@@ -1186,13 +1315,21 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                                 })}
                             </ScrollView>
 
-                            <View className="absolute bottom-0 left-0 right-0 p-8 pt-0 bg-[#020617]">
+                            <View 
+                                style={{ 
+                                    backgroundColor: colors.background, 
+                                    borderTopColor: colors.border, 
+                                    borderTopWidth: 1 
+                                }} 
+                                className="absolute bottom-0 left-0 right-0 p-6 pt-4"
+                            >
                                 <TouchableOpacity 
-                                    className="bg-blue-600 p-6 rounded-[32px] items-center flex-row justify-center gap-3 shadow-2xl shadow-blue-500/50"
-                                    onPress={handleFinalConfirm}
+                                    style={{ backgroundColor: colors.primary }}
+                                    className="p-5 rounded-2xl items-center flex-row justify-center gap-3 shadow-xl"
+                                    onPress={() => handleFinalConfirm()}
                                 >
-                                    <Send size={20} color="white" />
-                                    <Text className="text-white font-black text-lg uppercase tracking-widest">
+                                    <Send size={20} color={colors.textOnPrimary || 'white'} />
+                                    <Text style={{ color: colors.textOnPrimary || 'white' }} className="font-black text-base uppercase tracking-widest">
                                         Send {proposedSessions.length} Session Invite{proposedSessions.length !== 1 ? 's' : ''}
                                     </Text>
                                 </TouchableOpacity>

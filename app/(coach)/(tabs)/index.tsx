@@ -538,7 +538,10 @@ export default function CoachDashboard() {
                   >
                     {stats.totalClients}
                   </Text>
-                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                  <Text
+                    style={{ color: colors.textSecondary }}
+                    className="text-[10px] font-black uppercase tracking-widest mt-1"
+                  >
                     Total Clients
                   </Text>
                   <View className="flex-row items-center gap-1.5 mt-4">
@@ -558,7 +561,7 @@ export default function CoachDashboard() {
                     <Activity size={24} color="#A855F7" />
                   </View>
                   <View className="absolute top-8 right-8">
-                    <ArrowUpRight size={22} color="#475569" />
+                    <ArrowUpRight size={22} color={colors.textSecondary} />
                   </View>
 
                   <Text
@@ -567,7 +570,10 @@ export default function CoachDashboard() {
                   >
                     {displayActiveCount}
                   </Text>
-                  <Text className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                  <Text
+                    style={{ color: colors.textSecondary }}
+                    className="text-[10px] font-black uppercase tracking-widest mt-1"
+                  >
                     Active Now
                   </Text>
 
@@ -755,18 +761,19 @@ export default function CoachDashboard() {
                   colors={colors}
                 />
                 <ActionCard
-                  icon={<UserPlus size={28} color={colors.primary} />}
-                  title="Onboard Client"
-                  desc="Invite new athlete"
-                  onPress={() => router.push('/(coach)/invite-client')}
+                  icon={<Users size={28} color="#3B82F6" />}
+                  title="Team"
+                  desc="Coaches & staff"
+                  onPress={() => router.push('/(coach)/team')}
                   cardStyle={cardStyle}
                   textStyle={textStyle}
                   colors={colors}
                 />
                 <ActionCard
-                  icon={<BarChart3 size={28} color="#10B981" />}
-                  title="Analytics"
-                  desc="Growth & metrics"
+                  icon={<UserPlus size={28} color={colors.primary} />}
+                  title="Invite Client"
+                  desc="Send invite link"
+                  onPress={() => router.push('/(coach)/invite-client')}
                   cardStyle={cardStyle}
                   textStyle={textStyle}
                   colors={colors}

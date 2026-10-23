@@ -1,31 +1,37 @@
-import React, { useEffect, useRef } from 'react';
-import { View, TouchableOpacity, StyleSheet, Animated, Platform, Dimensions } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, TouchableOpacity, StyleSheet, Animated, Platform, useWindowDimensions, LayoutChangeEvent } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-const { width } = Dimensions.get('window');
 const TAB_BAR_MARGIN_WIDE = 16;
-const TAB_BAR_MARGIN_SHRUNK = 32; // Less aggressive shrink
-const TAB_BAR_WIDTH_WIDE = width - (TAB_BAR_MARGIN_WIDE * 2);
-const TAB_BAR_WIDTH_SHRUNK = width - (TAB_BAR_MARGIN_SHRUNK * 2);
+const TAB_BAR_MARGIN_SHRUNK = 32;
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { isShrunk } = useTabBarScroll();
+  const { width: windowWidth } = useWindowDimensions();
+  const [measuredBarWidth, setMeasuredBarWidth] = useState<number>(0);
   const animatedActiveIndex = useRef(new Animated.Value(state.index)).current;
 
   const visibleRoutes = state.routes.filter(route => {
-    const { options } = descriptors[route.key];
+    const { options } = descriptors[route.key] as any;
     if (options.href === null) return false;
     if (options.tabBarItemStyle?.display === 'none') return false;
     if (!options.tabBarIcon && !options.tabBarButton) return false;
     return true;
   });
 
-  const tabWidthWide = TAB_BAR_WIDTH_WIDE / visibleRoutes.length;
-  const tabWidthShrunk = TAB_BAR_WIDTH_SHRUNK / visibleRoutes.length;
+  const numTabs = visibleRoutes.length || 1;
+
+  // Responsive widths based on actual measured width or window dimensions
+  const baseWidthWide = windowWidth - (TAB_BAR_MARGIN_WIDE * 2);
+  const baseWidthShrunk = windowWidth - (TAB_BAR_MARGIN_SHRUNK * 2);
+
+  const tabWidthWide = (measuredBarWidth || baseWidthWide) / numTabs;
+  const tabWidthShrunk = (measuredBarWidth ? (measuredBarWidth - (TAB_BAR_MARGIN_SHRUNK - TAB_BAR_MARGIN_WIDE) * 2) : baseWidthShrunk) / numTabs;
 
   const dynamicTabWidth = isShrunk.interpolate({
     inputRange: [0, 1],
@@ -39,22 +45,21 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
 
   const indicatorPosition = Animated.multiply(animatedActiveIndex, dynamicTabWidth);
 
-  // We find the active index among VISIBLE routes
+  // Find active index among VISIBLE routes
   const activeRouteKey = state.routes[state.index].key;
-  const activeOptions = descriptors[activeRouteKey].options;
+  const activeOptions = descriptors[activeRouteKey]?.options || {};
 
   const safeActiveIndex = visibleRoutes.findIndex(r => r.key === activeRouteKey) >= 0 
     ? visibleRoutes.findIndex(r => r.key === activeRouteKey) 
     : 0;
 
-  // We create animated scale values for each tab icon
+  // Animated scale values for each tab icon
   const scaleValues = useRef(visibleRoutes.map(() => new Animated.Value(1))).current;
   
-  // Use brand theme to dynamically adjust the blur tint
+  // Brand theme for blur and glow colors
   const { isDarkMode, colors } = require('@/contexts/BrandContext').useTheme();
 
   useEffect(() => {
-    // Reset navbar to expanded state when switching tabs
     Animated.spring(isShrunk, {
       toValue: 0,
       useNativeDriver: false,
@@ -69,43 +74,70 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
       tension: 60,
     }).start();
 
-    // Animate icons scaling
     scaleValues.forEach((anim, idx) => {
       Animated.spring(anim, {
-        toValue: idx === safeActiveIndex ? 1.3 : 1,
+        toValue: idx === safeActiveIndex ? 1.15 : 1,
         useNativeDriver: true,
-        friction: 5,
+        friction: 6,
         tension: 80,
       }).start();
     });
   }, [safeActiveIndex]);
 
-  // If the active screen specifically requests to hide the tab bar, return null
-  // We do this here to avoid violating React Hook rules (early returns before hooks)
-  if (activeOptions.tabBarStyle?.display === 'none') {
+  if ((activeOptions.tabBarStyle as any)?.display === 'none') {
     return null;
   }
 
-  // Convert hex to rgba for the overlay
   const hexToRgba = (hex: string, alpha: number) => {
-    const r = parseInt(hex.slice(1, 3), 16) || 2;
-    const g = parseInt(hex.slice(3, 5), 16) || 6;
-    const b = parseInt(hex.slice(5, 7), 16) || 23;
+    if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) {
+      return `rgba(2, 6, 23, ${alpha})`;
+    }
+    const cleanHex = hex.replace('#', '');
+    const r = parseInt(cleanHex.slice(0, 2), 16) || 2;
+    const g = parseInt(cleanHex.slice(2, 4), 16) || 6;
+    const b = parseInt(cleanHex.slice(4, 6), 16) || 23;
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
-  const overlayColor = hexToRgba(colors.surface, 0.4);
+
+  const overlayColor = isDarkMode 
+    ? hexToRgba(colors.surface, 0.65) 
+    : 'rgba(255, 255, 255, 0.68)';
+
+  const handleContainerLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0 && Math.abs(w - measuredBarWidth) > 1) {
+      setMeasuredBarWidth(w);
+    }
+  };
 
   return (
-    <Animated.View style={[styles.container, { left: animatedMargin, right: animatedMargin }]}>
-      {/* Background with rounded corners and clipped glow */}
+    <Animated.View 
+      onLayout={handleContainerLayout}
+      style={[
+        styles.container, 
+        { left: animatedMargin, right: animatedMargin }
+      ]}
+    >
+      {/* Background with frosted glass blur */}
       <BlurView 
-        intensity={40} 
+        intensity={80} 
         tint={isDarkMode ? 'dark' : 'light'} 
-        style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: 'hidden' }]}
+        style={[
+          StyleSheet.absoluteFill, 
+          { 
+            borderRadius: 32, 
+            overflow: 'hidden',
+            backgroundColor: overlayColor,
+            ...Platform.select({
+              web: {
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+              } as any,
+            }),
+          }
+        ]}
       >
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: overlayColor }]} />
-        
-        {/* Glow Indicator (Simulating CSS blur with concentric fading circles) */}
+        {/* Active Tab Glow: Big diffuse ambient blur */}
         <Animated.View
           style={[
             styles.glowIndicatorWrapper,
@@ -113,39 +145,50 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
             { transform: [{ translateX: indicatorPosition }] }
           ]}
         >
-          <View style={styles.glowIndicatorShadow}>
-            {[...Array(8)].map((_, i) => (
-                <Animated.View 
-                  key={i} 
-                  style={[
-                    styles.glowOrb, 
-                    { 
-                      backgroundColor: colors.primary, // Dynamic brand glow
-                      transform: [
-                        { scale: 1.6 - (i * 0.12) },
-                        { 
-                          scaleX: isShrunk.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [1, 0.8]
-                          })
-                        }
-                      ], 
-                      opacity: 0.1 + (i * 0.08) 
-                    }
-                  ]} 
-                />
-            ))}
+          <View 
+            className="nav-glow-blur"
+            style={[
+              styles.glowIndicatorShadow,
+              Platform.OS === 'web' ? ({
+                backgroundImage: `radial-gradient(ellipse at center, ${colors.primary} 0%, ${colors.primary}D9 25%, ${colors.primary}88 50%, ${colors.primary}33 75%, transparent 100%)`,
+                boxShadow: `0 0 28px 12px ${colors.primary}66`,
+              } as any) : {}
+            ]}
+          >
+            {Platform.OS !== 'web' && (
+              <Svg width={76} height={60} viewBox="0 0 76 60">
+                <Defs>
+                  <RadialGradient id="activeTabRadialGlow" cx="50%" cy="50%" rx="50%" ry="50%">
+                    <Stop offset="0%" stopColor={colors.primary} stopOpacity="0.95" />
+                    <Stop offset="30%" stopColor={colors.primary} stopOpacity="0.75" />
+                    <Stop offset="65%" stopColor={colors.primary} stopOpacity="0.35" />
+                    <Stop offset="100%" stopColor={colors.primary} stopOpacity="0" />
+                  </RadialGradient>
+                </Defs>
+                <Rect x="0" y="0" width={76} height={60} fill="url(#activeTabRadialGlow)" />
+              </Svg>
+            )}
           </View>
         </Animated.View>
       </BlurView>
 
       {/* Border overlay */}
-      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, borderWidth: 1, borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)', pointerEvents: 'none' }]} />
+      <View 
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill, 
+          { 
+            borderRadius: 32, 
+            borderWidth: 1, 
+            borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.6)',
+          }
+        ]} 
+      />
 
       {/* Tab Items */}
       <View style={styles.tabsWrapper}>
         {visibleRoutes.map((route, index) => {
-          const { options } = descriptors[route.key];
+          const { options } = descriptors[route.key] as any;
           const isFocused = safeActiveIndex === index;
 
           const onPress = () => {
@@ -167,22 +210,26 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
             });
           };
 
-          // Support custom tabBarButton (like the Log Meal button)
+          // Support custom tabBarButton (e.g., Log Meal button)
           if (options.tabBarButton) {
             return (
-              <Animated.View key={route.key} style={{ width: dynamicTabWidth, alignItems: 'center', justifyContent: 'center' }}>
+              <View 
+                key={route.key} 
+                style={styles.tabButton}
+              >
                 {options.tabBarButton({
+                  children: null,
                   onPress,
                   onLongPress,
                   accessibilityState: isFocused ? { selected: true } : {},
                 })}
-              </Animated.View>
+              </View>
             );
           }
 
           const IconRenderer = options.tabBarIcon;
-          const activeColor = '#FFFFFF'; // White pops best against the brand blue glow
-          const inactiveColor = '#64748B'; // Slate 500
+          const activeColor = '#FFFFFF';
+          const inactiveColor = isDarkMode ? '#94A3B8' : '#64748B';
 
           return (
             <AnimatedTouchableOpacity
@@ -193,20 +240,20 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
               testID={options.tabBarTestID}
               onPress={onPress}
               onLongPress={onLongPress}
-              style={[styles.tabButton, { width: dynamicTabWidth }]}
+              style={styles.tabButton}
               activeOpacity={0.8}
             >
-              <Animated.View style={{ transform: [{ scale: scaleValues[index] }] }}>
+              <Animated.View style={[styles.iconContainer, { transform: [{ scale: scaleValues[index] }] }]}>
                 {IconRenderer ? (
-                  <View>
+                  <View style={styles.iconWrapper}>
                     {IconRenderer({
                       focused: isFocused,
                       color: isFocused ? activeColor : inactiveColor,
-                      size: 24,
+                      size: 22,
                     })}
-                    {/* Optional Badge */}
+                    {/* Badge */}
                     {options.tabBarBadge !== undefined && (
-                      <View style={[styles.badgeContainer, options.tabBarBadgeStyle]}>
+                      <View style={[styles.badgeContainer, options.tabBarBadgeStyle as any]}>
                         <Animated.Text style={styles.badgeText}>
                           {options.tabBarBadge}
                         </Animated.Text>
@@ -230,14 +277,15 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  blurContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.55)', // Slightly more opaque for visible frosting
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+    ...Platform.select({
+      web: {
+        overflow: 'hidden',
+      },
+    }),
   },
   tabsWrapper: {
     position: 'absolute',
@@ -250,26 +298,33 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   glowIndicatorWrapper: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 0,
   },
   glowIndicatorShadow: {
-    width: 56,
-    height: 56,
+    width: 76,
+    height: 60,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  glowOrb: {
-    position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#1E3A8A', // Much darker blue (blue-900)
-  },
   tabButton: {
     flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapper: {
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -279,12 +334,12 @@ const styles = StyleSheet.create({
     right: -10,
     backgroundColor: '#EF4444',
     borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    minWidth: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#020617', // Match navbar background roughly to create a cutout effect
+    borderColor: '#FFFFFF',
     paddingHorizontal: 4,
   },
   badgeText: {
