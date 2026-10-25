@@ -160,6 +160,8 @@ export interface Workout {
     exercises: Exercise[];
     notes?: string;
     completed: boolean;
+    source?: 'manual' | 'health_sync';
+    external_id?: string;
     created_at: string;
 }
 
@@ -198,8 +200,22 @@ export interface Habit {
     unit?: string;
     frequency: string;
     verification_type?: string;
+    sync_metric?: 'steps' | 'active_time' | string;
     is_active: boolean;
     category?: string;
+    created_at: string;
+}
+
+export interface DailyLog {
+    id: string;
+    client_id: string;
+    date: string;
+    steps?: number;
+    sleep_hours?: number;
+    active_minutes?: number;
+    resting_heart_rate?: number;
+    hrv_ms?: number;
+    synced_at?: string;
     created_at: string;
 }
 

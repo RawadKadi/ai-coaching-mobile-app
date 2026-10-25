@@ -29,6 +29,7 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { DatePickerOverlay } from '@/components/DatePickerOverlay';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import CalendarTwoWeekPage from '@/components/CalendarTwoWeekPage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -100,16 +101,6 @@ export default function ClientScheduleTimeline() {
       return d;
     });
 
-  const getSessionsForDate = (date: Date) =>
-    sessions.filter((s) => {
-      const sd = new Date(s.scheduled_at);
-      return (
-        sd.getDate() === date.getDate() &&
-        sd.getMonth() === date.getMonth() &&
-        sd.getFullYear() === date.getFullYear()
-      );
-    });
-
   // ─── Data ───────────────────────────────────────────────────────────────────
 
   useFocusEffect(
@@ -137,6 +128,35 @@ export default function ClientScheduleTimeline() {
     }
   };
 
+  const sessionDatesSet = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const s of sessions) {
+      if (s.scheduled_at) {
+        set.add(new Date(s.scheduled_at).toDateString());
+      }
+    }
+    return set;
+  }, [sessions]);
+
+  const selectedDaySessions = React.useMemo(() => {
+    const targetStr = selectedDate.toDateString();
+    return sessions.filter((s) => new Date(s.scheduled_at).toDateString() === targetStr);
+  }, [sessions, selectedDate]);
+
+  const renderCalendarPage = useCallback(({ item: pageIndex }: { item: number }) => {
+    return (
+      <CalendarTwoWeekPage
+        pageIndex={pageIndex}
+        selectedDate={selectedDate}
+        onSelectDate={(item) => setSelectedDate(item)}
+        viewingMonth={viewingMonth}
+        sessionDatesSet={sessionDatesSet}
+        colors={colors}
+        pageWidth={PAGE_WIDTH}
+      />
+    );
+  }, [selectedDate, viewingMonth, sessionDatesSet, colors]);
+
   // ─── Viewable items handler (updates month header) ──────────────────────────
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
@@ -161,7 +181,6 @@ export default function ClientScheduleTimeline() {
     );
   }
 
-  const selectedDaySessions = getSessionsForDate(selectedDate);
   const now = new Date();
 
   return (
@@ -242,7 +261,7 @@ export default function ClientScheduleTimeline() {
           }),
         }}>
           {/* Day-of-week headers */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, paddingHorizontal: 8 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
             {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, i) => (
               <View key={i} style={{ flex: 1, alignItems: 'center' }}>
                 <Text style={{ color: textSecondaryColor, fontSize: 9, fontWeight: '900' }}>{d}</Text>
@@ -268,74 +287,7 @@ export default function ClientScheduleTimeline() {
             })}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
-            renderItem={({ item: pageIndex }) => {
-              const pageDays = getDaysForPage(pageIndex);
-              const week1 = pageDays.slice(0, 7);
-              const week2 = pageDays.slice(7, 14);
-
-              const renderDay = (item: Date) => {
-                const isSelected = item.toDateString() === selectedDate.toDateString();
-                const isToday = item.toDateString() === now.toDateString();
-                const isPast = item < now && !isToday;
-                const hasSessions = getSessionsForDate(item).length > 0;
-                const isOtherMonth = item.getMonth() !== viewingMonth.getMonth();
-
-                let dayNumberColor = textSecondaryColor;
-                if (isSelected) {
-                  dayNumberColor = colors.textOnPrimary || '#FFFFFF';
-                } else if (isToday) {
-                  dayNumberColor = colors.primary;
-                } else if (isOtherMonth) {
-                  dayNumberColor = isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.18)';
-                } else if (isPast) {
-                  dayNumberColor = isDark ? 'rgba(255, 255, 255, 0.38)' : 'rgba(0, 0, 0, 0.32)';
-                } else {
-                  dayNumberColor = textColor;
-                }
-
-                return (
-                  <View key={item.toISOString()} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <Pressable onPress={() => setSelectedDate(item)} style={{ alignItems: 'center', justifyContent: 'center' }}>
-                      <View style={{
-                        width: 36, height: 36, borderRadius: 18,
-                        alignItems: 'center', justifyContent: 'center',
-                        backgroundColor: isSelected ? colors.primary : isToday ? `${colors.primary}18` : 'transparent',
-                        borderWidth: isToday && !isSelected ? 1 : 0,
-                        borderColor: colors.primary,
-                        shadowColor: isSelected ? colors.primary : 'transparent',
-                        shadowOpacity: isSelected ? 0.4 : 0,
-                        shadowRadius: 6,
-                        elevation: isSelected ? 3 : 0,
-                      }}>
-                        <Text style={{
-                          fontSize: 15,
-                          fontWeight: '900',
-                          color: dayNumberColor,
-                        }}>
-                          {item.getDate()}
-                        </Text>
-                        {hasSessions && (
-                          <View style={{
-                            position: 'absolute',
-                            bottom: 2,
-                            width: 4, height: 4,
-                            borderRadius: 2,
-                            backgroundColor: isSelected ? (colors.textOnPrimary || '#fff') : colors.primary,
-                          }} />
-                        )}
-                      </View>
-                    </Pressable>
-                  </View>
-                );
-              };
-
-              return (
-                <View style={{ width: PAGE_WIDTH }}>
-                  <View style={{ flexDirection: 'row', marginBottom: 16 }}>{week1.map(renderDay)}</View>
-                  <View style={{ flexDirection: 'row' }}>{week2.map(renderDay)}</View>
-                </View>
-              );
-            }}
+            renderItem={renderCalendarPage}
           />
         </View>
 

@@ -194,24 +194,20 @@ export function FuturisticTabBar(props: BottomTabBarProps & { emitter?: any; nav
           const { options } = descriptors[route.key] as any;
           const isFocused = safeActiveIndex === index;
 
-          const emitEvent = (type: 'tabPress' | 'tabLongPress', canPreventDefault?: boolean) => {
-            const eventPayload = {
-              type,
-              target: route.key,
-              canPreventDefault,
-            } as any;
-
-            if (navigation?.emit) {
-              return navigation.emit(eventPayload);
-            }
-            if (props.emitter?.emit) {
-              return props.emitter.emit(eventPayload);
-            }
-            return { defaultPrevented: false };
-          };
-
           const onPress = () => {
-            const event = emitEvent('tabPress', true);
+            const event = navigation?.emit
+              ? navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                })
+              : (props as any)?.emitter?.emit
+                ? (props as any).emitter.emit({
+                    type: 'tabPress',
+                    target: route.key,
+                    canPreventDefault: true,
+                  })
+                : { defaultPrevented: false };
 
             if (!isFocused && !event?.defaultPrevented) {
               if (typeof props.navigateToTab === 'function') {
@@ -219,13 +215,23 @@ export function FuturisticTabBar(props: BottomTabBarProps & { emitter?: any; nav
               } else if (navigation?.navigate) {
                 navigation.navigate({ name: route.name, merge: true, params: {} });
               } else {
-                router.push(`/(client)/(tabs)/${route.name}` as any);
+                router.push(route.name as any);
               }
             }
           };
 
           const onLongPress = () => {
-            emitEvent('tabLongPress');
+            if (navigation?.emit) {
+              navigation.emit({
+                type: 'tabLongPress',
+                target: route.key,
+              });
+            } else if ((props as any)?.emitter?.emit) {
+              (props as any).emitter.emit({
+                type: 'tabLongPress',
+                target: route.key,
+              });
+            }
           };
 
           // Support custom tabBarButton (e.g., Log Meal button)

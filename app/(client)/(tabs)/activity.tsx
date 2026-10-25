@@ -145,8 +145,8 @@ export default function ActivityScreen() {
     height: number;
   } | null>(null);
 
-  const scrollViewRef = useRef<ScrollView>(null);
-  const dailyTasksContainerRef = useRef<View>(null);
+  const scrollViewRef = useRef<any>(null);
+  const dailyTasksContainerRef = useRef<any>(null);
   const logsContainerYRef = useRef<number>(0);
   const dailyTasksLayoutRef = useRef<{
     x: number;
@@ -242,7 +242,7 @@ export default function ActivityScreen() {
       // 3. Measure in window to place spotlight highlight & tooltip perfectly
       setTimeout(() => {
         dailyTasksContainerRef.current?.measureInWindow(
-          (x, y, width, height) => {
+          (x: number, y: number, width: number, height: number) => {
             const screenW = Dimensions.get('window').width;
             if (width > 0 && height > 0) {
               setHighlightLayout({
@@ -1380,13 +1380,12 @@ export default function ActivityScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        translucent
       />
 
       <View style={{ flex: 1, paddingTop: insets.top }}>
         {/* Header Section */}
         <View
-          style={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 24 }}
+          style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 }}
         >
           <View
             style={{
@@ -1460,7 +1459,7 @@ export default function ActivityScreen() {
           ref={scrollViewRef}
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={{ paddingBottom: 140 }}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           refreshControl={
@@ -1471,66 +1470,58 @@ export default function ActivityScreen() {
             />
           }
         >
-          {/* Active Challenges Card (when active challenges exist) */}
-          {activeChallengesCount > 0 && (
-            <View style={{ paddingHorizontal: 24 }}>
-              <ActiveChallengesCard
-                count={activeChallengesCount}
-                onPress={() => router.push('/(client)/challenges' as any)}
+          <View className="px-3">
+            {/* Access Calendar CTA Card */}
+            <AccessCalendarCard
+              onPress={() => router.push('/(client)/schedule-timeline' as any)}
+            />
+
+            {/* Active Challenges Card */}
+            <ActiveChallengesCard
+              count={activeChallengesCount}
+              onPress={() => router.push('/(client)/challenges' as any)}
+            />
+
+            {/* Summary Metric Grid */}
+            <View className="flex-row flex-wrap justify-between gap-4 mb-4">
+              <MetricCard
+                label="Calories"
+                value={totalCalories > 0 ? `${formatCompactNumber(totalCalories)} kcal` : '--'}
+                icon={<Utensils size={20} color="#F59E0B" />}
+                active={totalCalories > 0}
+              />
+              <MetricCard
+                label="Protein"
+                value={totalProtein > 0 ? `${formatCompactNumber(totalProtein)} g` : '--'}
+                icon={<Target size={20} color="#818CF8" />}
+                active={totalProtein > 0}
+              />
+              <MetricCard
+                label="Tasks Done"
+                value={`${completedHabits}/${habits.length}`}
+                icon={<CheckCircle size={20} color="#10B981" />}
+                active={completedHabits === habits.length && habits.length > 0}
+                onPress={() => {
+                  triggerDailyTasksHighlight(
+                    'Finish your daily tasks here not to lose your streak',
+                  );
+                }}
+              />
+              <MetricCard
+                label="Active Time"
+                value={totalWorkoutMinutes > 0 ? `${totalWorkoutMinutes} min` : '0 min'}
+                icon={<Clock size={20} color="#38BDF8" />}
+                active={totalWorkoutMinutes > 0}
               />
             </View>
-          )}
 
-          {/* Access Calendar CTA Card */}
-          <AccessCalendarCard
-            onPress={() => router.push('/(client)/schedule-timeline' as any)}
-          />
-
-          {/* Summary Metric Grid */}
-          <View
-            style={{
-              paddingHorizontal: 24,
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              gap: 16,
-              marginBottom: 40,
-            }}
-          >
-            <MetricCard
-              label="Calories"
-              value={`${formatCompactNumber(totalCalories)} kcal`}
-              icon={<Utensils size={18} color="#F59E0B" />}
-            />
-            <MetricCard
-              label="Protein"
-              value={`${formatCompactNumber(totalProtein)} g`}
-              icon={<Target size={18} color="#818CF8" />}
-            />
-            <MetricCard
-              label="Tasks Done"
-              value={`${completedHabits} / ${habits.length}`}
-              icon={<CheckCircle size={18} color="#10B981" />}
-              onPress={() => {
-                triggerDailyTasksHighlight(
-                  'Finish your daily tasks here not to lose your streak',
-                );
+            {/* Activity Logs Section */}
+            <View
+              onLayout={(e) => {
+                logsContainerYRef.current = e.nativeEvent.layout.y;
               }}
-            />
-            <MetricCard
-              label="Active Time"
-              value={`${totalWorkoutMinutes} min`}
-              icon={<Clock size={18} color="#38BDF8" />}
-            />
-          </View>
-
-          {/* Activity Logs Section */}
-          <View
-            onLayout={(e) => {
-              logsContainerYRef.current = e.nativeEvent.layout.y;
-            }}
-            style={{ paddingHorizontal: 24, paddingBottom: 24 }}
-          >
+              style={{ paddingBottom: 24 }}
+            >
             {/* Daily Tasks (Habits) Section */}
             <View
               ref={dailyTasksContainerRef}
@@ -1539,7 +1530,7 @@ export default function ActivityScreen() {
                 dailyTasksLayoutRef.current = e.nativeEvent.layout;
               }}
             >
-              <View style={{ marginBottom: 16, marginTop: 8 }}>
+              <View style={{ marginBottom: 16, marginTop: 8, paddingHorizontal: 4 }}>
                 <TouchableOpacity
                   onPress={() => toggleCategory('dailyTasks')}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
@@ -1596,16 +1587,8 @@ export default function ActivityScreen() {
               </CollapsibleContent>
             </View>
 
-            {/* Active Challenges Card (when NO active challenges exist) */}
-            {activeChallengesCount === 0 && (
-              <ActiveChallengesCard
-                count={activeChallengesCount}
-                onPress={() => router.push('/(client)/challenges' as any)}
-              />
-            )}
-
             {/* Meals Section */}
-            <View style={{ marginBottom: 16, marginTop: 8 }}>
+            <View style={{ marginBottom: 16, marginTop: 8, paddingHorizontal: 4 }}>
               <TouchableOpacity
                 onPress={() => toggleCategory('nutrition')}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
@@ -1642,7 +1625,7 @@ export default function ActivityScreen() {
             </CollapsibleContent>
 
             {/* Workouts Section */}
-            <View style={{ marginBottom: 16, marginTop: 8 }}>
+            <View style={{ marginBottom: 16, marginTop: 8, paddingHorizontal: 4 }}>
               <TouchableOpacity
                 onPress={() => toggleCategory('performance')}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
@@ -1678,7 +1661,8 @@ export default function ActivityScreen() {
               </View>
             </CollapsibleContent>
           </View>
-        </ScrollView>
+        </View>
+      </ScrollView>
       </View>
 
       {/* Streak Gained — Congratulations popup when finishing daily tasks */}
@@ -2511,7 +2495,9 @@ export default function ActivityScreen() {
               <MotiView
                 from={{ opacity: 0, translateY: 16, scale: 0.95 }}
                 animate={{ opacity: 1, translateY: 0, scale: 1 }}
-                transition={{ type: 'spring', damping: 18, stiffness: 140 }}
+                transition={
+                  { type: 'spring', damping: 18, stiffness: 140 } as any
+                }
                 style={{
                   position: 'absolute',
                   left: 20,
@@ -2776,8 +2762,7 @@ const AccessCalendarCard = ({ onPress }: { onPress: () => void }) => {
       from={{ opacity: 0, translateY: -6 }}
       animate={{ opacity: 1, translateY: 0 }}
       style={{
-        marginHorizontal: 24,
-        marginBottom: 20,
+        marginBottom: 16,
         borderRadius: 28,
         overflow: 'hidden',
         backgroundColor: colors.primary,
@@ -2941,7 +2926,7 @@ const ActiveChallengesCard = ({
             : 'rgba(0, 0, 0, 0.06)',
           paddingHorizontal: 20,
           paddingVertical: 18,
-          marginBottom: 24,
+          marginBottom: 16,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -3022,7 +3007,7 @@ const ActiveChallengesCard = ({
         borderRadius: 28,
         overflow: 'hidden',
         position: 'relative',
-        marginBottom: 24,
+        marginBottom: 16,
         padding: 1.5,
       }}
     >
@@ -3135,63 +3120,51 @@ const MetricCard = ({ label, value, icon, active, onPress }: any) => {
   const theme = useTheme();
   const colors = theme.colors;
   const isDark = isDarkColor(colors.background || '#020617');
-  const cardBg = colors.surface || (isDark ? '#0f172a' : '#ffffff');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
   const cardBorder =
-    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0');
-  const textColor = colors.text || (isDark ? '#ffffff' : '#0f172a');
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondaryColor =
-    colors.textSecondary || (isDark ? '#94a3b8' : '#64748b');
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
 
   return (
     <TouchableOpacity
       activeOpacity={0.7}
       disabled={!onPress}
       onPress={onPress}
+      className={`w-[47%] p-6 rounded-[36px] border-2 transition-all shadow-lg overflow-hidden ${!active ? 'border-dashed' : ''}`}
       style={{
-        width: '47%',
-        backgroundColor: cardBg,
-        padding: 20,
-        borderRadius: 36,
-        borderWidth: 1,
-        borderColor: active ? `${colors.primary}33` : cardBorder,
-        alignItems: 'center',
-        justifyContent: 'center',
+        position: 'relative',
+        backgroundColor: active
+          ? cardBg
+          : isDark
+            ? 'rgba(15, 23, 42, 0.4)'
+            : 'rgba(255, 255, 255, 0.7)',
+        borderColor: active
+          ? cardBorder
+          : isDark
+            ? 'rgba(255, 255, 255, 0.08)'
+            : 'rgba(0, 0, 0, 0.06)',
       }}
     >
       <View
         style={{
-          width: 40,
-          height: 40,
           backgroundColor: colors.background,
-          borderRadius: 12,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderWidth: 1,
           borderColor: cardBorder,
-          marginBottom: 12,
         }}
+        className="w-12 h-12 rounded-2xl items-center justify-center border mb-6 shadow-sm"
       >
         {icon}
       </View>
       <Text
-        style={{
-          color: textColor,
-          fontSize: 20,
-          fontWeight: '900',
-          letterSpacing: -0.5,
-        }}
+        style={{ color: textColor }}
+        className="text-xl font-black tracking-tight"
       >
         {displayValue}
       </Text>
       <Text
-        style={{
-          color: textSecondaryColor,
-          fontSize: 8,
-          fontWeight: '900',
-          textTransform: 'uppercase',
-          letterSpacing: 2,
-          marginTop: 4,
-        }}
+        style={{ color: textSecondaryColor }}
+        className="text-[9px] font-black uppercase tracking-widest mt-1.5"
       >
         {label}
       </Text>
