@@ -39,7 +39,7 @@ import {
   Check,
   X
 } from 'lucide-react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useTheme } from '@/contexts/BrandContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import SchedulerModal from '@/components/SchedulerModal';
@@ -88,7 +88,7 @@ export default function ClientDetailsScreen() {
   const [pastSessionsExpanded, setPastSessionsExpanded] = useState(false);
   const reduceMotion = useReducedMotion();
 
-  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+  const swipeableRefs = useRef<{ [key: string]: any }>({});
 
   useEffect(() => {
     if (coach && id) {

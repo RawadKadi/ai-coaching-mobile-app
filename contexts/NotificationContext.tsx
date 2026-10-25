@@ -99,7 +99,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               }
             }
 
-            let navigateTo = '/messages';
+            let navigateTo = '/(client)/messages';
             if (profile?.role === 'coach') {
               // 1. Try to check if sender is a client
               const { data: clientData } = await supabase

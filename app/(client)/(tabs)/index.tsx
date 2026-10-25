@@ -1,4 +1,5 @@
 import { useBrand, useBrandColors } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Alert, Animated as RNAnimated, Easing } from 'react-native';
 import { Image } from 'expo-image';
@@ -34,6 +35,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isHealthSyncAvailable, requestHealthPermissions, getTodaySteps } from '@/lib/health-service';
 import { FirstTimeHeroCards } from '@/components/client/FirstTimeHeroCards';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
+import { useStreak } from '@/hooks/useStreak';
+import StreakBadge from '@/components/StreakBadge';
 
 export default function ClientDashboard() {
   const colors = useBrandColors();
@@ -42,6 +45,7 @@ export default function ClientDashboard() {
   const insets = useSafeAreaInsets();
   const { profile, client, loading: authLoading } = useAuth();
   const { handleScroll } = useTabBarScroll();
+  const { streak, isCold } = useStreak();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [todayCheckIn, setTodayCheckIn] = useState<CheckIn | null>(null);
@@ -319,19 +323,25 @@ export default function ClientDashboard() {
 
   if (loading && !refreshing) {
     return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
+
+  const isDark = isDarkColor(colors.background || '#010417');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   const completedHabitsCount = todayHabitLogs.filter(log => log.completed).length;
   const rawFirstName = profile?.full_name?.split(' ')[0] || '';
   const firstName = rawFirstName ? rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1) : '';
 
   return (
-    <View style={{ flex: 1 }} className="bg-slate-950">
-      <StatusBar barStyle="light-content" translucent />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent />
       <ScrollView 
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
@@ -346,38 +356,53 @@ export default function ClientDashboard() {
               animate={{ opacity: 1, translateY: 0 }}
               className="px-6 pb-4 flex-row items-center justify-between"
           >
-              <View className="flex-row items-center gap-3.5">
+              <View className="flex-row items-center gap-3.5 flex-1 mr-3">
                 {brand?.logo_url ? (
                   <Image
                     source={{ uri: brand.logo_url }}
-                    style={{ width: 56, height: 56, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' }}
+                    style={{ width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: cardBorder }}
                     contentFit="cover"
                   />
                 ) : (
                   <View 
-                    style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: colors.primary + '25', borderColor: colors.primary + '40' }}
+                    style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary + '25', borderColor: colors.primary + '40' }}
                     className="border items-center justify-center shadow-lg"
                   >
-                    <Text style={{ color: colors.primary }} className="text-2xl font-black">
+                    <Text style={{ color: colors.primary }} className="text-xl font-black">
                       {brand?.name ? brand.name.charAt(0).toUpperCase() : 'C'}
                     </Text>
                   </View>
                 )}
-                <Text className="text-white text-xl font-black tracking-tight" numberOfLines={1}>
+                <Text style={{ color: textColor }} className="text-xl font-black tracking-tight" numberOfLines={1}>
                   {brand?.name || ''}
                 </Text>
               </View>
 
-              <TouchableOpacity
-                onPress={() => router.push('/(client)/(tabs)/profile')}
-                className="p-1 bg-slate-900 rounded-full border border-white/10 shadow-2xl relative"
-              >
-                <BrandedAvatar size={44} name={profile?.full_name || 'U'} imageUrl={profile?.avatar_url} />
-                <View 
-                  style={{ backgroundColor: colors.primary }}
-                  className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-slate-900" 
+              <View className="flex-row items-center gap-2.5">
+                <StreakBadge
+                  streak={streak}
+                  isCold={isCold}
+                  isDark={isDark}
+                  onPress={() => {
+                    router.push({
+                      pathname: '/(client)/(tabs)/activity',
+                      params: { highlightDailyTasks: 'true' },
+                    });
+                  }}
                 />
-              </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => router.push('/(client)/(tabs)/profile')}
+                  style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+                  className="p-1 rounded-full border shadow-2xl relative"
+                >
+                  <BrandedAvatar size={44} name={profile?.full_name || 'U'} imageUrl={profile?.avatar_url} />
+                  <View 
+                    style={{ backgroundColor: colors.primary, borderColor: cardBg }}
+                    className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2" 
+                  />
+                </TouchableOpacity>
+              </View>
           </MotiView>
 
           {/* Client Greeting */}
@@ -387,7 +412,7 @@ export default function ClientDashboard() {
               transition={{ delay: 80 }}
               className="px-6 pb-6"
           >
-              <Text className="text-white text-3xl font-black tracking-tighter">Good morning,</Text>
+              <Text style={{ color: textColor }} className="text-3xl font-black tracking-tighter">Good morning,</Text>
               <Text style={{ color: colors.primary }} className="text-3xl font-black tracking-tighter">
                 {firstName}
               </Text>
@@ -437,7 +462,8 @@ export default function ClientDashboard() {
                   key="checkin-done"
                   from={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="mt-6 overflow-hidden rounded-[40px] bg-slate-900 border border-blue-500/20 shadow-2xl shadow-blue-500/10 relative"
+                  style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+                  className="mt-6 overflow-hidden rounded-[40px] border shadow-2xl relative"
                 >
                   <View className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full" />
                   
@@ -449,8 +475,8 @@ export default function ClientDashboard() {
                         <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Plan Synced</Text>
                       </View>
                       
-                      <Text className="text-white text-3xl font-black tracking-tight leading-8 mb-2">Metrics Logged</Text>
-                      <Text className="text-slate-400 font-medium text-sm leading-6">Your data is securely stored. The AI and your coach are analyzing your progress.</Text>
+                      <Text style={{ color: textColor }} className="text-3xl font-black tracking-tight leading-8 mb-2">Metrics Logged</Text>
+                      <Text style={{ color: textSecondaryColor }} className="font-medium text-sm leading-6">Your data is securely stored. The AI and your coach are analyzing your progress.</Text>
                       
                       <View className="mt-8 flex-row items-center justify-between">
                           <MotiView
@@ -464,10 +490,16 @@ export default function ClientDashboard() {
                           </MotiView>
                           
                           <View className="flex-row items-center">
-                            <View className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-900 items-center justify-center z-20">
+                            <View 
+                              style={{ backgroundColor: colors.background, borderColor: cardBorder }} 
+                              className="w-8 h-8 rounded-full border-2 items-center justify-center z-20"
+                            >
                               <Brain size={14} color="#818CF8" />
                             </View>
-                            <View className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-900 items-center justify-center z-10 -ml-2">
+                            <View 
+                              style={{ backgroundColor: colors.background, borderColor: cardBorder }} 
+                              className="w-8 h-8 rounded-full border-2 items-center justify-center z-10 -ml-2"
+                            >
                               <Zap size={14} color="#F59E0B" />
                             </View>
                           </View>
@@ -481,18 +513,19 @@ export default function ClientDashboard() {
                 <MotiView 
                   from={{ opacity: 0, translateY: 10 }}
                   animate={{ opacity: 1, translateY: 0 }}
-                  className="mt-10 p-8 rounded-[48px] bg-slate-900 border border-white/5 shadow-xl"
+                  style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+                  className="mt-10 p-8 rounded-[48px] border shadow-xl"
                 >
                     <View className="flex-row items-center gap-4 mb-8">
                         <View className="w-12 h-12 bg-blue-600/10 border border-blue-600/20 rounded-2xl items-center justify-center">
                             <Brain size={24} color={colors.primary} />
                         </View>
                         <View>
-                          <Text className="text-white font-black text-lg tracking-tight">Today's Strategy</Text>
-                          <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Feedback Loop</Text>
+                          <Text style={{ color: textColor }} className="font-black text-lg tracking-tight">Today's Strategy</Text>
+                          <Text style={{ color: textSecondaryColor }} className="text-[9px] font-black uppercase tracking-widest">Feedback Loop</Text>
                         </View>
                     </View>
-                    <Text className="text-slate-200 leading-7 font-medium text-lg">
+                    <Text style={{ color: textColor }} className="leading-7 font-medium text-lg">
                         {(() => {
                           const aiAnalysis = todayCheckIn.ai_analysis;
                           if (!aiAnalysis) return '';
@@ -508,16 +541,16 @@ export default function ClientDashboard() {
                           return trimmed;
                         })()}
                     </Text>
-                    <View className="mt-8 pt-8 border-t border-white/5 flex-row items-center gap-2">
+                    <View style={{ borderTopColor: cardBorder }} className="mt-8 pt-8 border-t flex-row items-center gap-2">
                         <Sparkles size={16} color="#818CF8" />
-                        <Text className="text-slate-600 text-[10px] font-black uppercase tracking-[3px]">AI-Assisted Guidance</Text>
+                        <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-[3px]">AI-Assisted Guidance</Text>
                     </View>
                 </MotiView>
             )}
 
             {/* Quick Actions Grid */}
             <View className="mt-12">
-                <Text className="text-white text-2xl font-black tracking-tighter mb-6 px-1">Quick Access</Text>
+                <Text style={{ color: textColor }} className="text-2xl font-black tracking-tighter mb-6 px-1">Quick Access</Text>
 
                 {/* Upcoming Session Card — today only */}
                 {upcomingSession && (
@@ -546,7 +579,10 @@ export default function ClientDashboard() {
 
             {/* Powered by Brand Footer */}
             <View className="items-center pt-8 pb-4">
-              <View className="flex-row items-center gap-2 bg-slate-900/90 px-4 py-2 rounded-full border border-white/10 shadow-sm">
+              <View 
+                style={{ backgroundColor: cardBg, borderColor: cardBorder }} 
+                className="flex-row items-center gap-2 px-4 py-2 rounded-full border shadow-sm"
+              >
                 {brand?.logo_url ? (
                   <Image 
                     source={{ uri: brand.logo_url }} 
@@ -562,8 +598,8 @@ export default function ClientDashboard() {
                     </Text>
                   </View>
                 )}
-                <Text className="text-slate-400 text-xs font-semibold">
-                  Powered by <Text className="text-white font-bold">{brand?.name || 'Your Coach'}</Text>
+                <Text style={{ color: textSecondaryColor }} className="text-xs font-semibold">
+                  Powered by <Text style={{ color: textColor }} className="font-bold">{brand?.name || 'Your Coach'}</Text>
                 </Text>
               </View>
             </View>
@@ -574,10 +610,14 @@ export default function ClientDashboard() {
 }
 
 // ─── Check-In CTA Card ───────────────────────────────────────────────────────
-// Wraps the "Complete Your Check-in" card and injects the native Strands
-// animation as an absolute background layer, faded and using brand colours.
 const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
   const colors = useBrandColors();
+  const primaryIsDark = isDarkColor(colors.primary);
+  const primaryTextColor = primaryIsDark ? '#FFFFFF' : '#0F172A';
+  const primaryTextMuted = primaryIsDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(15, 23, 42, 0.8)';
+  const btnBg = primaryIsDark ? '#FFFFFF' : '#0F172A';
+  const btnText = primaryIsDark ? colors.primary : '#FFFFFF';
+
   return (
     <MotiView
       key="checkin-cta"
@@ -592,16 +632,16 @@ const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
 
       <TouchableOpacity className="p-8 relative z-10" onPress={onPress}>
         <View className="flex-row items-center gap-2 mb-3">
-          <Zap size={14} color="white" />
-          <Text className="text-white/80 text-[10px] font-black uppercase tracking-[3px]">Daily Goal</Text>
+          <Zap size={14} color={primaryTextColor} />
+          <Text style={{ color: primaryTextMuted }} className="text-[10px] font-black uppercase tracking-[3px]">Daily Goal</Text>
         </View>
-        <Text className="text-white text-3xl font-black tracking-tight leading-8">Complete Your Check-in</Text>
-        <Text className="text-white/80 mt-3 font-medium text-sm leading-6">Update your coach on your energy, weight, and meal progress today.</Text>
+        <Text style={{ color: primaryTextColor }} className="text-3xl font-black tracking-tight leading-8">Complete Your Check-in</Text>
+        <Text style={{ color: primaryTextMuted }} className="mt-3 font-medium text-sm leading-6">Update your coach on your energy, weight, and meal progress today.</Text>
         <View className="mt-8 flex-row items-center justify-between">
-          <View className="bg-white px-5 py-2.5 rounded-full">
-            <Text style={{ color: colors.primary }} className="font-black text-xs uppercase tracking-widest">Start Now</Text>
+          <View style={{ backgroundColor: btnBg }} className="px-5 py-2.5 rounded-full">
+            <Text style={{ color: btnText }} className="font-black text-xs uppercase tracking-widest">Start Now</Text>
           </View>
-          <ChevronRight size={24} color="white" opacity={0.5} />
+          <ChevronRight size={24} color={primaryTextColor} opacity={0.6} />
         </View>
       </TouchableOpacity>
     </MotiView>
@@ -610,6 +650,11 @@ const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
 
 const MetricCard = ({ label, value, icon, active, onPress, showGlow = false }: any) => {
     const colors = useBrandColors();
+    const isDark = isDarkColor(colors.background || '#010417');
+    const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+    const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+    const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+    const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
     const displayValue = typeof value === 'number' ? formatCompactNumber(value) : value;
 
     // Auto-pulsing glow: breathes between dim and bright
@@ -649,8 +694,12 @@ const MetricCard = ({ label, value, icon, active, onPress, showGlow = false }: a
         <TouchableOpacity 
             onPress={onPress}
             disabled={!onPress}
-            className={`w-[47%] p-6 rounded-[36px] border-2 transition-all shadow-lg overflow-hidden ${active ? 'bg-slate-900/50 border-white/10' : 'bg-slate-900/20 border-white/5 border-dashed'}`}
-            style={{ position: 'relative' }}
+            className={`w-[47%] p-6 rounded-[36px] border-2 transition-all shadow-lg overflow-hidden ${!active ? 'border-dashed' : ''}`}
+            style={{ 
+              position: 'relative',
+              backgroundColor: active ? cardBg : (isDark ? 'rgba(15, 23, 42, 0.4)' : 'rgba(255, 255, 255, 0.7)'),
+              borderColor: active ? cardBorder : (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)')
+            }}
         >
             {/* Auto-pulsing ambient glow when unsynced */}
             {showGlow && (
@@ -671,11 +720,14 @@ const MetricCard = ({ label, value, icon, active, onPress, showGlow = false }: a
                     pointerEvents="none"
                 />
             )}
-            <View className="w-12 h-12 bg-slate-950 rounded-2xl items-center justify-center border border-white/5 mb-6 shadow-sm">
+            <View 
+              style={{ backgroundColor: colors.background, borderColor: cardBorder }}
+              className="w-12 h-12 rounded-2xl items-center justify-center border mb-6 shadow-sm"
+            >
                 {icon}
             </View>
-            <Text className="text-white text-xl font-black tracking-tight">{displayValue}</Text>
-            <Text className="text-slate-500 text-[9px] font-black uppercase tracking-widest mt-1.5">{label}</Text>
+            <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">{displayValue}</Text>
+            <Text style={{ color: textSecondaryColor }} className="text-[9px] font-black uppercase tracking-widest mt-1.5">{label}</Text>
         </TouchableOpacity>
     );
 };
@@ -683,6 +735,12 @@ const MetricCard = ({ label, value, icon, active, onPress, showGlow = false }: a
 // ─── Upcoming Session Card ───────────────────────────────────────────────────
 const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: number; onJoin: () => void }) => {
   const colors = useBrandColors();
+  const isDark = isDarkColor(colors.background || '#010417');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+
   const sessionTime = new Date(session.scheduled_at).getTime();
   const minutesUntil = (sessionTime - nowMs) / 60_000;
   const canJoin = minutesUntil <= 5;
@@ -706,9 +764,9 @@ const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: 
       transition={{ type: 'timing', duration: 400 }}
       className="mb-6 overflow-hidden rounded-[40px]"
       style={{
-        backgroundColor: canJoin ? '#1D4ED8' : '#0F172A',
+        backgroundColor: canJoin ? '#1D4ED8' : cardBg,
         borderWidth: 1,
-        borderColor: canJoin ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.06)',
+        borderColor: canJoin ? 'rgba(59,130,246,0.5)' : cardBorder,
         shadowColor: canJoin ? colors.primary : '#000',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: canJoin ? 0.35 : 0.2,
@@ -737,12 +795,12 @@ const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={{
               width: 28, height: 28, borderRadius: 8,
-              backgroundColor: canJoin ? 'rgba(255,255,255,0.15)' : 'rgba(59,130,246,0.12)',
+              backgroundColor: canJoin ? 'rgba(255,255,255,0.15)' : `${colors.primary}20`,
               alignItems: 'center', justifyContent: 'center'
             }}>
               <Video size={13} color={canJoin ? '#fff' : colors.primary} />
             </View>
-            <Text style={{ color: canJoin ? 'rgba(255,255,255,0.75)' : '#64748B', fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
+            <Text style={{ color: canJoin ? 'rgba(255,255,255,0.75)' : textSecondaryColor, fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2 }}>
               Live Session
             </Text>
           </View>
@@ -760,10 +818,10 @@ const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: 
         </View>
 
         {/* Session info */}
-        <Text style={{ color: canJoin ? '#fff' : '#F1F5F9', fontSize: 22, fontWeight: '900', letterSpacing: -0.5, marginBottom: 4 }}>
+        <Text style={{ color: canJoin ? '#fff' : textColor, fontSize: 22, fontWeight: '900', letterSpacing: -0.5, marginBottom: 4 }}>
           Session with {coachName.split(' ')[0]}
         </Text>
-        <Text style={{ color: canJoin ? 'rgba(255,255,255,0.6)' : '#64748B', fontSize: 13, fontWeight: '600', marginBottom: 20 }}>
+        <Text style={{ color: canJoin ? 'rgba(255,255,255,0.6)' : textSecondaryColor, fontSize: 13, fontWeight: '600', marginBottom: 20 }}>
           {formatTime(session.scheduled_at)} · {session.duration_minutes || 60} min
         </Text>
 
@@ -774,15 +832,15 @@ const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: 
           style={{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
             paddingVertical: 14, borderRadius: 28,
-            backgroundColor: canJoin ? '#fff' : 'rgba(255,255,255,0.05)',
+            backgroundColor: canJoin ? '#fff' : colors.background,
             borderWidth: canJoin ? 0 : 1,
-            borderColor: 'rgba(255,255,255,0.08)',
+            borderColor: cardBorder,
           }}
         >
-          <Video size={16} color={canJoin ? '#1D4ED8' : '#475569'} />
+          <Video size={16} color={canJoin ? '#1D4ED8' : textSecondaryColor} />
           <Text style={{
             fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1.5,
-            color: canJoin ? '#1D4ED8' : '#475569'
+            color: canJoin ? '#1D4ED8' : textSecondaryColor
           }}>
             {canJoin ? 'Join Now' : 'Join — Opens Soon'}
           </Text>
@@ -792,17 +850,30 @@ const UpcomingSessionCard = ({ session, nowMs, onJoin }: { session: any; nowMs: 
   );
 };
 
-const ActionCard = ({ label, sub, icon, onPress }: any) => (
+const ActionCard = ({ label, sub, icon, onPress }: any) => {
+  const colors = useBrandColors();
+  const isDark = isDarkColor(colors.background || '#010417');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+
+  return (
     <TouchableOpacity 
         onPress={onPress}
-        className="flex-1 bg-slate-900/40 p-8 rounded-[40px] border border-white/5 items-center justify-center gap-4 shadow-xl"
+        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+        className="flex-1 p-8 rounded-[40px] border items-center justify-center gap-4 shadow-xl"
     >
-        <View className="w-16 h-16 bg-slate-950 rounded-[24px] items-center justify-center border border-white/5 shadow-inner">
+        <View 
+          style={{ backgroundColor: colors.background, borderColor: cardBorder }}
+          className="w-16 h-16 rounded-[24px] items-center justify-center border shadow-inner"
+        >
             {icon}
         </View>
         <View className="items-center">
-            <Text className="text-white font-black text-lg tracking-tight">{label}</Text>
-            <Text className="text-slate-600 text-[9px] font-black uppercase tracking-widest mt-1">{sub}</Text>
+            <Text style={{ color: textColor }} className="font-black text-lg tracking-tight">{label}</Text>
+            <Text style={{ color: textSecondaryColor }} className="text-[9px] font-black uppercase tracking-widest mt-1">{sub}</Text>
         </View>
     </TouchableOpacity>
-);
+  );
+};

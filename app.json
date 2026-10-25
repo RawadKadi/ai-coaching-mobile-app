@@ -56,7 +56,12 @@
       "expo-web-browser",
       "@react-native-community/datetimepicker",
       "react-native-health-connect",
-      "expo-audio"
+      "expo-audio",
+      "expo-image",
+      "expo-sharing",
+      "expo-splash-screen",
+      "expo-status-bar",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

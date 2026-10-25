@@ -13,7 +13,7 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import PostponeModal from '@/components/PostponeModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -21,66 +21,171 @@ const CALENDAR_BOX_MARGIN = 24;
 const CALENDAR_BOX_PADDING = 24;
 const PAGE_WIDTH = SCREEN_WIDTH - (CALENDAR_BOX_MARGIN * 2) - (CALENDAR_BOX_PADDING * 2);
 
-interface AnimatedDayButtonProps {
-    item: Date;
-    isSelected: boolean;
-    isToday: boolean;
-    hasSessions: boolean;
-    isOtherMonth: boolean;
-    onPress: () => void;
+interface CalendarTwoWeekPageProps {
+  pageIndex: number;
+  selectedDate: Date;
+  onSelectDate: (date: Date) => void;
+  viewingMonth: Date;
+  sessionDatesSet: Set<string>;
+  colors: any;
+  pageWidth: number;
 }
 
-const AnimatedDayButton = React.memo(({ item, isSelected, isToday, hasSessions, isOtherMonth, onPress }: AnimatedDayButtonProps) => {
-    const colors = useBrandColors();
-    const scaleAnim = useRef(new Animated.Value(1)).current;
+const CalendarTwoWeekPage = React.memo(({
+  pageIndex,
+  selectedDate,
+  onSelectDate,
+  viewingMonth,
+  sessionDatesSet,
+  colors,
+  pageWidth,
+}: CalendarTwoWeekPageProps) => {
+  const colWidth = pageWidth / 7;
+  const daySize = 36;
+  const colOffset = (colWidth - daySize) / 2;
 
-    const handlePressIn = () => {
-        Animated.spring(scaleAnim, {
-            toValue: 0.9,
-            useNativeDriver: true,
-            speed: 50,
-            bounciness: 4
-        }).start();
-    };
+  const pageDays = React.useMemo(() => {
+    return Array.from({ length: 14 }, (_, i) => {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = (day === 0 ? 6 : day - 1);
+      d.setDate(d.getDate() - diff + (pageIndex * 14) + i);
+      return d;
+    });
+  }, [pageIndex]);
 
-    const handlePressOut = () => {
-        Animated.spring(scaleAnim, {
-            toValue: 1.0,
+  const week1 = React.useMemo(() => pageDays.slice(0, 7), [pageDays]);
+  const week2 = React.useMemo(() => pageDays.slice(7, 14), [pageDays]);
+
+  const selectedDateStr = selectedDate.toDateString();
+  const selectedIndex = pageDays.findIndex(d => d.toDateString() === selectedDateStr);
+
+  const targetX = selectedIndex >= 0 ? (selectedIndex % 7) * colWidth + colOffset : 0;
+  const targetY = selectedIndex >= 0 ? (Math.floor(selectedIndex / 7) === 0 ? 4 : 64) : 4;
+
+  const animX = useRef(new Animated.Value(targetX)).current;
+  const animY = useRef(new Animated.Value(targetY)).current;
+  const hasMounted = useRef(false);
+
+  useEffect(() => {
+    if (selectedIndex >= 0) {
+      if (!hasMounted.current) {
+        animX.setValue(targetX);
+        animY.setValue(targetY);
+        hasMounted.current = true;
+      } else {
+        Animated.parallel([
+          Animated.spring(animX, {
+            toValue: targetX,
             useNativeDriver: true,
-            speed: 50,
-            bounciness: 4
-        }).start();
-    };
+            tension: 220,
+            friction: 14,
+          }),
+          Animated.spring(animY, {
+            toValue: targetY,
+            useNativeDriver: true,
+            tension: 220,
+            friction: 14,
+          }),
+        ]).start();
+      }
+    }
+  }, [selectedIndex, targetX, targetY]);
+
+  const renderDay = (item: Date) => {
+    const isS = item.toDateString() === selectedDateStr;
+    const isToday = item.toDateString() === new Date().toDateString();
+    const has = sessionDatesSet.has(item.toDateString());
+    const isOtherMonth = item.getMonth() !== viewingMonth.getMonth();
 
     return (
-        <Pressable 
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            onPress={onPress}
-            className="items-center justify-center flex-1 py-1"
-        >
-            <Animated.View 
-                style={[{ transform: [{ scale: scaleAnim }] }, isSelected ? { backgroundColor: colors.primary } : {}]}
-                className="w-9 h-9 rounded-full items-center justify-center"
-            >
-                <Text style={{ color: isSelected ? colors.textOnPrimary : (isToday ? colors.primary : (isOtherMonth ? colors.textTertiary : colors.text)) }} className="text-base font-black">
-                    {item.getDate()}
-                </Text>
-                {hasSessions && (
-                    <View style={{ backgroundColor: isSelected ? colors.textOnPrimary : colors.primary }} className="absolute -bottom-1 w-1 h-1 rounded-full" />
-                )}
-            </Animated.View>
-        </Pressable>
+      <TouchableOpacity
+        key={item.toISOString()}
+        activeOpacity={0.7}
+        onPress={() => onSelectDate(item)}
+        style={{
+          flex: 1,
+          height: 44,
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2,
+        }}
+      >
+        <View style={{ width: daySize, height: daySize, alignItems: 'center', justifyContent: 'center' }}>
+          <Text
+            style={{
+              color: isS
+                ? (colors.textOnPrimary || '#FFFFFF')
+                : isToday
+                  ? colors.primary
+                  : isOtherMonth
+                    ? colors.textTertiary
+                    : colors.text,
+              fontWeight: isS || isToday ? '900' : '700',
+              fontSize: 16,
+            }}
+          >
+            {item.getDate()}
+          </Text>
+          {has && (
+            <View
+              style={{
+                backgroundColor: isS ? (colors.textOnPrimary || '#FFFFFF') : colors.primary
+              }}
+              className="absolute -bottom-1 w-1.5 h-1.5 rounded-full"
+            />
+          )}
+        </View>
+      </TouchableOpacity>
     );
-}, (prevProps, nextProps) => {
-    return prevProps.isSelected === nextProps.isSelected &&
-           prevProps.isToday === nextProps.isToday &&
-           prevProps.hasSessions === nextProps.hasSessions &&
-           prevProps.isOtherMonth === nextProps.isOtherMonth &&
-           prevProps.item.toDateString() === nextProps.item.toDateString();
+  };
+
+  return (
+    <View style={{ width: pageWidth, position: 'relative' }}>
+      {/* Sliding Active Day Indicator with purple blur */}
+      {selectedIndex >= 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: daySize,
+            height: daySize,
+            borderRadius: daySize / 2,
+            backgroundColor: colors.primary,
+            zIndex: 1,
+            transform: [
+              { translateX: animX },
+              { translateY: animY },
+            ],
+            ...Platform.select({
+              web: {
+                boxShadow: `0 0 8px 2px ${colors.primary}66`,
+              } as any,
+              default: {
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 5,
+                elevation: 3,
+              }
+            })
+          }}
+        />
+      )}
+
+      <View className="flex-row mb-4">
+        {week1.map(renderDay)}
+      </View>
+      <View className="flex-row">
+        {week2.map(renderDay)}
+      </View>
+    </View>
+  );
 });
 
-AnimatedDayButton.displayName = 'AnimatedDayButton';
+CalendarTwoWeekPage.displayName = 'CalendarTwoWeekPage';
 
 interface AnimatedSessionCardProps {
     session: any;
@@ -213,7 +318,7 @@ export default function CalendarScreen() {
   const [initialClientData, setInitialClientData] = useState<any>(null);
   
   // Gesture & Actions states for session management
-  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+  const swipeableRefs = useRef<{ [key: string]: any }>({});
   const [selectedSessionForMenu, setSelectedSessionForMenu] = useState<any>(null);
   const [sessionToEdit, setSessionToEdit] = useState<any>(null);
   const [showPostponeModal, setShowPostponeModal] = useState(false);
@@ -451,14 +556,20 @@ export default function CalendarScreen() {
       if (error) throw error;
       setSessions(data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
-  };
+  };  const sessionDatesSet = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const s of sessions) {
+      if (s.scheduled_at) {
+        set.add(new Date(s.scheduled_at).toDateString());
+      }
+    }
+    return set;
+  }, [sessions]);
 
-  const getSessionsForDate = (date: Date) => {
-    return sessions.filter(s => {
-      const sd = new Date(s.scheduled_at);
-      return sd.getDate() === date.getDate() && sd.getMonth() === date.getMonth() && sd.getFullYear() === date.getFullYear();
-    });
-  };
+  const currentDaySessions = React.useMemo(() => {
+    const targetStr = selectedDate.toDateString();
+    return sessions.filter(s => new Date(s.scheduled_at).toDateString() === targetStr);
+  }, [sessions, selectedDate]);
 
   const getDaysForPage = (pageIndex: number) => {
     return Array.from({ length: 14 }, (_, i) => {
@@ -470,18 +581,36 @@ export default function CalendarScreen() {
     });
   };
 
+  const renderCalendarPage = useCallback(({ item: pageIndex }: { item: number }) => {
+    return (
+      <CalendarTwoWeekPage
+        pageIndex={pageIndex}
+        selectedDate={selectedDate}
+        onSelectDate={(item) => {
+          closeAllSwipes();
+          setSelectedDate(item);
+        }}
+        viewingMonth={viewingMonth}
+        sessionDatesSet={sessionDatesSet}
+        colors={colors}
+        pageWidth={PAGE_WIDTH}
+      />
+    );
+  }, [selectedDate, viewingMonth, sessionDatesSet, colors, closeAllSwipes]);
+
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       const pageIndex = viewableItems[0].item;
       const pageDays = getDaysForPage(pageIndex);
-      // Update the month based on the first day of the visible 2-week block
       setViewingMonth(pageDays[0]);
     }
   }).current;
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50
-  }).current;  if (loading && !refreshing) return <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={primary} /></View>;
+  }).current;  
+  
+  if (loading && !refreshing) return <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={primary} /></View>;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -494,23 +623,20 @@ export default function CalendarScreen() {
                     {viewingMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </Text>
                 {/* Date picker trigger */}
-                <Pressable
-                  onPressIn={() => handlePressIn(calendarBtnScale)}
-                  onPressOut={() => handlePressOut(calendarBtnScale)}
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   onPress={() => setShowDatePicker(true)}
                 >
-                  {({ pressed }) => (
-                      <Animated.View 
-                          style={[{ transform: [{ scale: calendarBtnScale }] }, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                          className="w-10 h-10 rounded-2xl items-center justify-center border mb-2"
-                      >
-                          <CalendarDays size={18} color={colors.primary} />
-                      </Animated.View>
-                  )}
-                </Pressable>
+                  <View 
+                    style={[{ backgroundColor: colors.surface, borderColor: colors.border }]}
+                    className="w-10 h-10 rounded-2xl items-center justify-center border mb-2"
+                  >
+                    <CalendarDays size={18} color={colors.primary} />
+                  </View>
+                </TouchableOpacity>
               </View>
               <Text style={{ color: colors.textSecondary }} className="font-medium">
-                  You have {getSessionsForDate(selectedDate).length} sessions scheduled for today.
+                  You have {currentDaySessions.length} sessions scheduled for today.
               </Text>
           </View>
           <View className="px-8 flex-row justify-end mb-2 opacity-40">
@@ -529,7 +655,6 @@ export default function CalendarScreen() {
                         </View>
                     ))}
                   </View>
-                  
               </View>
               
               <FlatList
@@ -550,43 +675,7 @@ export default function CalendarScreen() {
                   })}
                   onViewableItemsChanged={onViewableItemsChanged}
                   viewabilityConfig={viewabilityConfig}
-                  renderItem={({ item: pageIndex }) => {
-                      const pageDays = getDaysForPage(pageIndex);
-                      const week1 = pageDays.slice(0, 7);
-                      const week2 = pageDays.slice(7, 14);
- 
-                      const renderDay = (item: Date) => {
-                          const isS = item.toDateString() === selectedDate.toDateString();
-                          const isToday = item.toDateString() === new Date().toDateString();
-                          const has = getSessionsForDate(item).length > 0;
-                          const isOtherMonth = item.getMonth() !== viewingMonth.getMonth();
-                          return (
-                              <AnimatedDayButton
-                                  key={item.toISOString()}
-                                  item={item}
-                                  isSelected={isS}
-                                  isToday={isToday}
-                                  hasSessions={has}
-                                  isOtherMonth={isOtherMonth}
-                                  onPress={() => {
-                                      closeAllSwipes();
-                                      setSelectedDate(item);
-                                  }}
-                              />
-                          );
-                      };
-
-                      return (
-                          <View style={{ width: PAGE_WIDTH }}>
-                              <View className="flex-row mb-4">
-                                  {week1.map(renderDay)}
-                              </View>
-                              <View className="flex-row">
-                                  {week2.map(renderDay)}
-                              </View>
-                          </View>
-                      );
-                  }}
+                  renderItem={renderCalendarPage}
               />
           </View>
 
@@ -604,7 +693,7 @@ export default function CalendarScreen() {
               </View>
 
               <View className="space-y-4">
-                  {getSessionsForDate(selectedDate).length === 0 ? (
+                  {currentDaySessions.length === 0 ? (
                       <View style={{ backgroundColor: isDarkMode ? 'rgba(15,23,42,0.2)' : 'rgba(0,0,0,0.02)', borderColor: colors.border }} className="p-16 items-center justify-center rounded-[48px] border border-dashed">
                           <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="w-20 h-20 rounded-[32px] items-center justify-center border mb-6">
                               <CalendarIcon size={32} color={colors.primary} />
@@ -613,11 +702,11 @@ export default function CalendarScreen() {
                           <Text style={{ color: colors.textSecondary }} className="font-medium text-[10px] mt-2 text-center px-6 leading-5">You have no live coaching sessions scheduled for this date.</Text>
                       </View>
                   ) : (
-                      getSessionsForDate(selectedDate).map((session, idx) => {
+                      currentDaySessions.map((session) => {
                           const isPostponed = session.status === 'postponed' || (session.status === 'cancelled' && session.cancellation_reason?.toLowerCase().includes('postpone'));
                           const isCancelled = session.status === 'cancelled' && !isPostponed;
                           return (
-                              <MotiView key={session.id} from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: idx * 50 }} className="mb-4">
+                              <View key={session.id} className="mb-4">
                                   <Swipeable
                                        ref={ref => { if (ref) swipeableRefs.current[session.id] = ref; }}
                                        enabled={!isCancelled && !isPostponed}
@@ -673,10 +762,9 @@ export default function CalendarScreen() {
                                            }}
                                        />
                                    </Swipeable>
-                              </MotiView>
+                              </View>
                           );
                       })
-
                   )}
               </View>
           </ScrollView>
@@ -721,20 +809,16 @@ export default function CalendarScreen() {
               />
           )}
           {/* Date Picker Overlay */}
-          {showDatePicker && (
-            <DatePickerOverlay
-              visible={showDatePicker}
-              selectedDate={selectedDate}
-              onSelect={(date) => {
-                setSelectedDate(date);
-                setViewingMonth(date);
-                setTimeout(() => {
-                  scrollToDate(date);
-                }, 50);
-              }}
-              onClose={() => setShowDatePicker(false)}
-            />
-          )}
+          <DatePickerOverlay
+            visible={showDatePicker}
+            selectedDate={selectedDate}
+            onSelect={(date) => {
+              setSelectedDate(date);
+              setViewingMonth(date);
+              scrollToDate(date);
+            }}
+            onClose={() => setShowDatePicker(false)}
+          />
 
           {/* Bottom Sheet Actions Modal (Long Press / Hold) */}
           <Modal 

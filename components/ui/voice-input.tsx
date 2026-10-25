@@ -31,13 +31,17 @@ const RECORDING_OPTIONS = {
   isMeteringEnabled: true,
 };
 
+const NUM_BARS = 24;
+const MIN_BAR_HEIGHT = 3;
+const MAX_BAR_HEIGHT = 22;
+
 export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }: VoiceInputProps) {
   const colors = useBrandColors();
   const styles = getStyles(colors);
   const [isRecording, setIsRecording] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [time, setTime] = useState(0);
-  const [metering, setMetering] = useState<number[]>(new Array(28).fill(-160));
+  const [metering, setMetering] = useState<number[]>(new Array(NUM_BARS).fill(MIN_BAR_HEIGHT));
 
   const recorder = useAudioRecorder(RECORDING_OPTIONS);
 
@@ -50,6 +54,8 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   const holdTimerRef = useRef<any>(null);
   const timeRef = useRef(0);
   const isMountedRef = useRef(true);
+  const envRef = useRef(0);
+  const startTimeRef = useRef(0);
 
   // ── Reanimated shared values ──────────────────────────────────────────────
   const scale = useSharedValue(1);
@@ -123,16 +129,48 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         if (isMountedRef.current) setTime(t => t + 1);
       }, 1000);
 
+      envRef.current = 0;
+      startTimeRef.current = Date.now();
+
       meteringTimerRef.current = setInterval(() => {
-        if (isMountedRef.current) {
-          try {
-            const st = recorder.getStatus();
-            if (st.metering !== undefined) {
-              setMetering(prev => [...prev.slice(1), st.metering ?? -160]);
-            }
-          } catch {}
-        }
-      }, 100);
+        if (!isMountedRef.current) return;
+        try {
+          const st = recorder.getStatus();
+          let rawLevel = 0;
+          if (st && typeof st.metering === 'number' && !isNaN(st.metering) && st.metering > -100) {
+            // Real microphone decibels: speech typically ranges from -48 dB to -8 dB
+            const clamped = Math.max(-48, Math.min(-8, st.metering));
+            rawLevel = (clamped - (-48)) / 40; // 0.0 to 1.0
+          } else if (recorder.isRecording) {
+            // Live gentle fallback if platform/simulator does not provide hardware dB
+            const t = (Date.now() - startTimeRef.current) / 1000;
+            const synth = 0.5 * Math.sin(t * 9) + 0.3 * Math.sin(t * 14) + 0.2 * Math.sin(t * 22);
+            rawLevel = Math.max(0, 0.12 + 0.16 * synth);
+          }
+
+          // Smooth attack / release envelope for responsive, organic motion
+          const currentEnv = envRef.current;
+          const attack = 0.55;
+          const release = 0.18;
+          const nextEnv = rawLevel > currentEnv
+            ? currentEnv + (rawLevel - currentEnv) * attack
+            : currentEnv + (rawLevel - currentEnv) * release;
+          envRef.current = nextEnv;
+
+          // Subtle organic variance so wave contour is lively and natural
+          const jitter = 0.82 + 0.36 * Math.random();
+          const barHeight = Math.max(
+            MIN_BAR_HEIGHT,
+            Math.min(MAX_BAR_HEIGHT, Math.round(MIN_BAR_HEIGHT + (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT) * nextEnv * jitter))
+          );
+
+          setMetering(prev => {
+            const next = prev.slice(1);
+            next.push(barHeight);
+            return next;
+          });
+        } catch {}
+      }, 65);
     } catch (e) {
       console.error('startRecording error', e);
       reset();
@@ -197,9 +235,11 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     isInitializingRef.current = false; // never leave this stuck
     if (timerRef.current) clearInterval(timerRef.current);
     if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
+    envRef.current = 0;
     if (!isMountedRef.current) return;
     setIsRecording(false);
     setIsLocked(false);
+    setMetering(new Array(NUM_BARS).fill(MIN_BAR_HEIGHT));
     scale.value = withSpring(1);
     lockProgress.value = withTiming(0);
     slideX.value = withSpring(0);
@@ -300,12 +340,16 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
             <Text style={styles.timerText}>{formatTime(time)}</Text>
           </View>
           <View style={styles.waveform}>
-            {metering.map((lvl, i) => (
-              <MotiView
+            {metering.map((barHeight, i) => (
+              <View
                 key={i}
-                animate={{ height: Math.max(3, (lvl + 160) * 0.28) }}
-                transition={{ type: 'timing', duration: 50 }}
-                style={styles.waveBar}
+                style={[
+                  styles.waveBar,
+                  {
+                    height: barHeight,
+                    opacity: Math.max(0.4, Math.min(1, 0.4 + 0.6 * ((barHeight - MIN_BAR_HEIGHT) / (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT)))),
+                  },
+                ]}
               />
             ))}
           </View>
@@ -335,12 +379,16 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
               <Text style={styles.timerText}>{formatTime(time)}</Text>
             </View>
             <View style={styles.waveform}>
-              {metering.map((lvl, i) => (
-                <MotiView
+              {metering.map((barHeight, i) => (
+                <View
                   key={i}
-                  animate={{ height: Math.max(3, (lvl + 160) * 0.28) }}
-                  transition={{ type: 'timing', duration: 50 }}
-                  style={styles.waveBar}
+                  style={[
+                    styles.waveBar,
+                    {
+                      height: barHeight,
+                      opacity: Math.max(0.4, Math.min(1, 0.4 + 0.6 * ((barHeight - MIN_BAR_HEIGHT) / (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT)))),
+                    },
+                  ]}
                 />
               ))}
             </View>
@@ -356,7 +404,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
           </View>
           <MotiView
             animate={{ translateY: [-3, 0, -3] }}
-            transition={{ loop: true, duration: 900, type: 'timing' }}
+            transition={{ loop: true, duration: 900, type: 'timing' } as any}
           >
             <ArrowUp size={11} color="#64748B" strokeWidth={3} />
           </MotiView>

@@ -48,14 +48,14 @@ import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useTheme } from '@/contexts/BrandContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
 import { MotiView, AnimatePresence } from 'moti';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation } from 'react-native-reanimated';
 import { isDarkColor } from '@/lib/theme-utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -128,7 +128,7 @@ export default function ClientMessagesScreen() {
   };
   
   const flatListRef = useRef<FlatList>(null);
-  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+  const swipeableRefs = useRef<{ [key: string]: any }>({});
   const reactionChannelRef = useRef<any>(null);
 
   useEffect(() => {
@@ -571,15 +571,30 @@ export default function ClientMessagesScreen() {
   }, [messages]);
 
 
+function SwipeReplyAction({ progress, color }: { progress: any; color: string }) {
+  const animStyle = useAnimatedStyle(() => {
+    const val = typeof progress === 'object' && progress !== null && 'value' in progress ? progress.value : 0;
+    const scale = interpolate(val, [0, 0.4, 1], [0, 0.5, 1], Extrapolation.CLAMP);
+    const opacity = interpolate(val, [0, 0.15, 1], [0, 0.4, 1], Extrapolation.CLAMP);
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
+  return (
+    <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
+      <Reanimated.View style={animStyle}>
+        <Reply size={24} color={color} />
+      </Reanimated.View>
+    </View>
+  );
+}
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender_id === user?.id;
-    const renderLeftActions = (progress: any, dragX: any) => {
-        const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
-        return (
-            <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
-                <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color={theme.colors.primary} /></Animated.View>
-            </View>
-        );
+    const renderLeftActions = (progress: any) => {
+      return <SwipeReplyAction progress={progress} color={theme.colors.primary} />;
     };
 
     const isMedia = isMediaMessage(item.content);
@@ -693,7 +708,7 @@ export default function ClientMessagesScreen() {
         <View className="flex-row items-center justify-between px-6 py-4">
             <View className="flex-row items-center gap-4">
                 <TouchableOpacity 
-                  onPress={() => safeBack()} 
+                  onPress={() => safeBack('/(client)')} 
                   className={`w-10 h-10 rounded-xl items-center justify-center border ${isScreenDark ? 'bg-slate-900 border-white/5' : 'bg-black/5 border-black/5'}`}
                 >
                     <ArrowLeft size={18} color={headerIconColor} />

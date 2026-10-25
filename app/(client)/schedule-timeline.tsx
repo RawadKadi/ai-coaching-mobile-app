@@ -1,4 +1,5 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -41,9 +42,17 @@ const INITIAL_PAGE_INDEX = 50;
 
 export default function ClientScheduleTimeline() {
   const colors = useBrandColors();
+  const theme = useTheme();
   const { client } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  const isDark = isDarkColor(colors.background || '#020617');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardHoverBg = colors.surfaceHover || (isDark ? '#1E293B' : '#F1F5F9');
 
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,7 +155,7 @@ export default function ClientScheduleTimeline() {
 
   if (loading && !refreshing) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: colors.background || (isDark ? '#020617' : '#F8FAFC'), justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
@@ -156,8 +165,8 @@ export default function ClientScheduleTimeline() {
   const now = new Date();
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
-      <StatusBar barStyle="light-content" translucent />
+    <View style={{ flex: 1, backgroundColor: colors.background || (isDark ? '#020617' : '#F8FAFC') }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent />
       <View style={{ flex: 1, paddingTop: insets.top }}>
 
         {/* ── Header ────────────────────────────────────────────────────────── */}
@@ -168,19 +177,19 @@ export default function ClientScheduleTimeline() {
               onPress={() => router.back()}
               style={{
                 width: 40, height: 40,
-                backgroundColor: '#0F172A',
+                backgroundColor: cardBg,
                 borderRadius: 14,
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.06)',
+                borderColor: cardBorder,
                 marginBottom: 8,
               }}
             >
-              <ChevronLeft size={20} color="#60A5FA" />
+              <ChevronLeft size={20} color={colors.primary} />
             </TouchableOpacity>
 
-            <Text style={{ color: 'white', fontSize: 32, fontWeight: '900', letterSpacing: -1, marginBottom: 8 }}>
+            <Text style={{ color: textColor, fontSize: 32, fontWeight: '900', letterSpacing: -1, marginBottom: 8 }}>
               {viewingMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </Text>
 
@@ -189,47 +198,54 @@ export default function ClientScheduleTimeline() {
               onPress={() => setShowDatePicker(true)}
               style={{
                 width: 40, height: 40,
-                backgroundColor: 'rgba(15,23,42,0.6)',
+                backgroundColor: cardBg,
                 borderRadius: 14,
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.08)',
+                borderColor: cardBorder,
                 marginBottom: 8,
               }}
             >
-              <CalendarDays size={18} color="#60A5FA" />
+              <CalendarDays size={18} color={colors.primary} />
             </Pressable>
           </View>
 
-          <Text style={{ color: '#475569', fontWeight: '600', fontSize: 13 }}>
+          <Text style={{ color: textSecondaryColor, fontWeight: '600', fontSize: 13 }}>
             {sessions.filter((s) => s.status === 'scheduled').length} upcoming sessions scheduled
           </Text>
         </View>
 
         {/* Swipe hint */}
-        <View style={{ paddingHorizontal: 32, flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, opacity: 0.4 }}>
+        <View style={{ paddingHorizontal: 32, flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, opacity: 0.6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <ChevronsLeftRight size={14} color="#64748B" />
-            <Text style={{ color: '#64748B', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' }}>Swipe</Text>
+            <ChevronsLeftRight size={14} color={textSecondaryColor} />
+            <Text style={{ color: textSecondaryColor, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' }}>Swipe</Text>
           </View>
         </View>
 
         {/* ── Calendar Box ─────────────────────────────────────────────────── */}
         <View style={{
-          backgroundColor: 'rgba(15,23,42,0.3)',
-          borderRadius: 48,
+          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : cardBg,
+          borderRadius: 36,
           padding: 24,
           marginHorizontal: 24,
           marginBottom: 16,
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.05)',
+          borderColor: cardBorder,
+          ...(isDark ? {} : {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.05,
+            shadowRadius: 12,
+            elevation: 2,
+          }),
         }}>
           {/* Day-of-week headers */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, paddingHorizontal: 8 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, paddingHorizontal: 8 }}>
             {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, i) => (
               <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ color: '#475569', fontSize: 9, fontWeight: '900' }}>{d}</Text>
+                <Text style={{ color: textSecondaryColor, fontSize: 9, fontWeight: '900' }}>{d}</Text>
               </View>
             ))}
           </View>
@@ -264,40 +280,47 @@ export default function ClientScheduleTimeline() {
                 const hasSessions = getSessionsForDate(item).length > 0;
                 const isOtherMonth = item.getMonth() !== viewingMonth.getMonth();
 
+                let dayNumberColor = textSecondaryColor;
+                if (isSelected) {
+                  dayNumberColor = colors.textOnPrimary || '#FFFFFF';
+                } else if (isToday) {
+                  dayNumberColor = colors.primary;
+                } else if (isOtherMonth) {
+                  dayNumberColor = isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.18)';
+                } else if (isPast) {
+                  dayNumberColor = isDark ? 'rgba(255, 255, 255, 0.38)' : 'rgba(0, 0, 0, 0.32)';
+                } else {
+                  dayNumberColor = textColor;
+                }
+
                 return (
                   <View key={item.toISOString()} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                     <Pressable onPress={() => setSelectedDate(item)} style={{ alignItems: 'center', justifyContent: 'center' }}>
                       <View style={{
                         width: 36, height: 36, borderRadius: 18,
                         alignItems: 'center', justifyContent: 'center',
-                        backgroundColor: isSelected ? '#2563EB' : 'transparent',
+                        backgroundColor: isSelected ? colors.primary : isToday ? `${colors.primary}18` : 'transparent',
+                        borderWidth: isToday && !isSelected ? 1 : 0,
+                        borderColor: colors.primary,
                         shadowColor: isSelected ? colors.primary : 'transparent',
-                        shadowOpacity: isSelected ? 0.5 : 0,
-                        shadowRadius: 8,
-                        elevation: isSelected ? 4 : 0,
+                        shadowOpacity: isSelected ? 0.4 : 0,
+                        shadowRadius: 6,
+                        elevation: isSelected ? 3 : 0,
                       }}>
                         <Text style={{
                           fontSize: 15,
                           fontWeight: '900',
-                          color: isSelected
-                            ? '#fff'
-                            : isOtherMonth
-                              ? '#1E293B'
-                              : isToday
-                                ? colors.primary
-                                : isPast
-                                  ? '#334155'
-                                  : '#94A3B8',
+                          color: dayNumberColor,
                         }}>
                           {item.getDate()}
                         </Text>
                         {hasSessions && (
                           <View style={{
                             position: 'absolute',
-                            bottom: -2,
+                            bottom: 2,
                             width: 4, height: 4,
                             borderRadius: 2,
-                            backgroundColor: isSelected ? '#fff' : colors.primary,
+                            backgroundColor: isSelected ? (colors.textOnPrimary || '#fff') : colors.primary,
                           }} />
                         )}
                       </View>
@@ -329,8 +352,8 @@ export default function ClientScheduleTimeline() {
             />
           }
         >
-          <View style={{ marginBottom: 24, marginTop: 8 }}>
-            <Text style={{ color: 'white', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 }}>
+          <View style={{ marginBottom: 20, marginTop: 8 }}>
+            <Text style={{ color: textColor, fontSize: 22, fontWeight: '900', letterSpacing: -0.5 }}>
               {selectedDate.toDateString() === now.toDateString()
                 ? "Today's Sessions"
                 : selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -339,36 +362,36 @@ export default function ClientScheduleTimeline() {
 
           {selectedDaySessions.length === 0 ? (
             <View style={{
-              padding: 64,
+              padding: 48,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: 'rgba(15,23,42,0.2)',
-              borderRadius: 48,
+              backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : cardBg,
+              borderRadius: 36,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.05)',
+              borderColor: cardBorder,
               borderStyle: 'dashed',
             }}>
               <View style={{
-                width: 72, height: 72,
-                backgroundColor: '#0F172A',
-                borderRadius: 24,
+                width: 64, height: 64,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardHoverBg,
+                borderRadius: 22,
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.05)',
-                marginBottom: 20,
+                borderColor: cardBorder,
+                marginBottom: 16,
               }}>
-                <CalendarIcon size={28} color="#1E293B" />
+                <CalendarIcon size={26} color={textSecondaryColor} />
               </View>
-              <Text style={{ color: '#334155', fontWeight: '900', fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, textAlign: 'center' }}>
+              <Text style={{ color: textSecondaryColor, fontWeight: '900', fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, textAlign: 'center' }}>
                 Day Clear
               </Text>
-              <Text style={{ color: '#1E293B', fontSize: 12, fontWeight: '500', marginTop: 8, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 }}>
+              <Text style={{ color: textSecondaryColor, fontSize: 13, fontWeight: '500', marginTop: 6, textAlign: 'center', lineHeight: 20, paddingHorizontal: 16, opacity: 0.8 }}>
                 No sessions scheduled for this date.
               </Text>
             </View>
           ) : (
-            <View style={{ gap: 16 }}>
+            <View style={{ gap: 14 }}>
               {selectedDaySessions.map((session, idx) => {
                 const isPast = new Date(session.scheduled_at) < now;
                 const coachName = session.coaches?.profiles?.full_name || 'Your Coach';
@@ -382,33 +405,44 @@ export default function ClientScheduleTimeline() {
                     transition={{ delay: idx * 60 }}
                   >
                     <View style={{
-                      backgroundColor: isPast ? 'rgba(15,23,42,0.3)' : 'rgba(15,23,42,0.5)',
+                      backgroundColor: isPast
+                        ? (isDark ? 'rgba(255,255,255,0.025)' : cardBg)
+                        : (isDark ? 'rgba(255,255,255,0.05)' : cardBg),
                       borderWidth: 1,
-                      borderColor: isPast ? 'rgba(255,255,255,0.04)' : 'rgba(59,130,246,0.12)',
-                      borderRadius: 36,
-                      padding: 24,
+                      borderColor: isPast
+                        ? cardBorder
+                        : `${colors.primary}33`,
+                      borderRadius: 28,
+                      padding: 20,
                       flexDirection: 'row',
                       alignItems: 'center',
+                      ...(isDark ? {} : {
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.04,
+                        shadowRadius: 8,
+                        elevation: 1,
+                      }),
                     }}>
                       {/* Left: time */}
-                      <View style={{ alignItems: 'center', marginRight: 16, width: 52 }}>
-                        <Text style={{ color: isPast ? '#334155' : colors.primary, fontWeight: '900', fontSize: 17 }}>
+                      <View style={{ alignItems: 'center', marginRight: 14, width: 52 }}>
+                        <Text style={{ color: isPast ? textSecondaryColor : colors.primary, fontWeight: '900', fontSize: 17 }}>
                           {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                         </Text>
-                        <Text style={{ color: isPast ? '#1E293B' : 'rgba(96,165,250,0.6)', fontWeight: '900', fontSize: 10, textTransform: 'uppercase' }}>
+                        <Text style={{ color: textSecondaryColor, fontWeight: '900', fontSize: 10, textTransform: 'uppercase', opacity: 0.7 }}>
                           {new Date(session.scheduled_at).getHours() >= 12 ? 'PM' : 'AM'}
                         </Text>
                       </View>
 
                       {/* Divider */}
-                      <View style={{ width: 2, height: 48, backgroundColor: isPast ? '#1E293B' : 'rgba(59,130,246,0.3)', borderRadius: 1, marginRight: 20 }} />
+                      <View style={{ width: 2, height: 42, backgroundColor: isPast ? cardBorder : `${colors.primary}33`, borderRadius: 1, marginRight: 16 }} />
 
                       {/* Middle: info */}
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: isPast ? '#475569' : '#F1F5F9', fontWeight: '900', fontSize: 16, letterSpacing: -0.3, marginBottom: 4 }}>
+                        <Text style={{ color: isPast ? textSecondaryColor : textColor, fontWeight: '900', fontSize: 16, letterSpacing: -0.3, marginBottom: 4 }}>
                           {session.session_type === 'video' ? 'Video Call' : 'Live Coaching'}
                         </Text>
-                        <Text style={{ color: '#475569', fontWeight: '700', fontSize: 12 }}>
+                        <Text style={{ color: textSecondaryColor, fontWeight: '600', fontSize: 12 }}>
                           {coachName} · {session.duration_minutes || 60} min
                         </Text>
                       </View>
@@ -419,7 +453,7 @@ export default function ClientScheduleTimeline() {
                           <View style={{
                             width: 32, height: 32,
                             borderRadius: 16,
-                            backgroundColor: 'rgba(16,185,129,0.08)',
+                            backgroundColor: 'rgba(16,185,129,0.12)',
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}>
@@ -429,11 +463,11 @@ export default function ClientScheduleTimeline() {
                           <View style={{
                             width: 32, height: 32,
                             borderRadius: 16,
-                            backgroundColor: 'rgba(34,211,238,0.12)',
+                            backgroundColor: `${colors.primary}18`,
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}>
-                            <Video size={14} color="#22D3EE" />
+                            <Video size={14} color={colors.primary} />
                           </View>
                         )}
                         <BrandedAvatar name={coachName} imageUrl={coachAvatar} size={32} />

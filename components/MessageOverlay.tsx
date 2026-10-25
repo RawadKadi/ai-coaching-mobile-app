@@ -31,13 +31,14 @@ import {
   Copy, 
   Trash2, 
   Forward,
-  Info,
   Star,
   Pencil,
   Calendar,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/BrandContext';
+import { isDarkColor, getContrastColor } from '@/lib/theme-utils';
 
 import { Keyframe } from 'react-native-reanimated';
 
@@ -100,6 +101,14 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
   isCoach
 }) => {
   const { user } = useAuth();
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDark = isDarkColor(colors.surface || colors.background || '#020617');
+  const overlayCardBg = colors.surface || (isDark ? 'rgba(30, 41, 59, 0.95)' : '#FFFFFF');
+  const overlayCardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)');
+  const textColor = colors.text || (isDark ? '#F8FAFC' : '#0F172A');
+  const dividerColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+  const pressBg = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)';
   
   // Local state to keep the message content during the exit animation
   const [activeMsg, setActiveMsg] = React.useState<any>(null);
@@ -204,7 +213,7 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                   <Animated.View 
                     entering={SubtleEmojiBarPop}
                     exiting={FadeOutDown.duration(50)}
-                    style={styles.emojiBar}
+                    style={[styles.emojiBar, { backgroundColor: overlayCardBg, borderColor: overlayCardBorder }]}
                   >
                     {EMOJIS.map((emoji, index) => {
                       let isReacted = false;
@@ -226,9 +235,9 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                               styles.emojiItem,
                               isReacted && {
                                 borderWidth: 2,
-                                borderColor: '#3B82F6',
+                                borderColor: colors.primary,
                                 borderRadius: 999,
-                                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                backgroundColor: `${colors.primary}20`,
                               }
                             ]}
                           >
@@ -261,52 +270,56 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                   <Animated.View 
                     entering={SubtleMenuPop}
                     exiting={FadeOutDown.duration(50)}
-                    style={styles.menuContainer}
+                    style={[styles.menuContainer, { backgroundColor: overlayCardBg, borderColor: overlayCardBorder }]}
                   >
                       <MenuOption 
-                        icon={<Reply size={20} color="#F8FAFC" />} 
+                        icon={<Reply size={20} color={textColor} />} 
                         label="Reply" 
+                        textColor={textColor}
+                        pressBg={pressBg}
                         onPress={() => handleAction('reply')} 
                       />
                       {isCoach && (
                         <>
-                          <MenuDivider />
+                          <MenuDivider color={dividerColor} />
                           <MenuOption 
-                            icon={<Forward size={20} color="#F8FAFC" />} 
+                            icon={<Forward size={20} color={textColor} />} 
                             label="Forward" 
+                            textColor={textColor}
+                            pressBg={pressBg}
                             onPress={() => handleAction('forward')} 
                           />
                         </>
                       )}
-                      <MenuDivider />
+                      <MenuDivider color={dividerColor} />
                       {!isMediaMessage && (
                         <>
                           <MenuOption 
-                            icon={<Copy size={20} color="#F8FAFC" />} 
+                            icon={<Copy size={20} color={textColor} />} 
                             label="Copy" 
+                            textColor={textColor}
+                            pressBg={pressBg}
                             onPress={() => handleAction('copy')} 
                           />
-                          <MenuDivider />
+                          <MenuDivider color={dividerColor} />
                         </>
                       )}
                       <MenuOption 
-                        icon={<Star size={20} color="#F8FAFC" />} 
+                        icon={<Star size={20} color={textColor} />} 
                         label="Star" 
-                        onPress={() => {}} 
-                      />
-                      <MenuDivider />
-                      <MenuOption 
-                        icon={<Info size={20} color="#F8FAFC" />} 
-                        label="Info" 
+                        textColor={textColor}
+                        pressBg={pressBg}
                         onPress={() => {}} 
                       />
                       
                       {canEdit && (
                         <>
-                          <MenuDivider />
+                          <MenuDivider color={dividerColor} />
                           <MenuOption 
-                            icon={<Pencil size={20} color="#60A5FA" />} 
+                            icon={<Pencil size={20} color={colors.primary} />} 
                             label="Edit" 
+                            textColor={textColor}
+                            pressBg={pressBg}
                             onPress={() => handleAction('edit')}
                           />
                         </>
@@ -318,10 +331,12 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
                           if (p.type === 'session_invite' || p.type === 'call_invite') {
                             return (
                               <>
-                                <MenuDivider />
+                                <MenuDivider color={dividerColor} />
                                 <MenuOption 
                                   icon={<Calendar size={20} color="#10B981" />} 
                                   label="Reschedule" 
+                                  textColor={textColor}
+                                  pressBg={pressBg}
                                   onPress={() => handleAction('reschedule')}
                                 />
                               </>
@@ -333,10 +348,12 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
 
                       {isMe && (
                         <>
-                          <MenuDivider />
+                          <MenuDivider color={dividerColor} />
                           <MenuOption 
                             icon={<Trash2 size={20} color="#EF4444" />} 
                             label="Delete" 
+                            textColor={textColor}
+                            pressBg={pressBg}
                             onPress={() => handleAction('delete')}
                             destructive
                           />
@@ -355,12 +372,13 @@ export const MessageOverlay: React.FC<MessageOverlayProps> = ({
   );
 };
 
-const MenuOption = ({ icon, label, onPress, destructive }: any) => {
+const MenuOption = ({ icon, label, onPress, destructive, textColor, pressBg }: any) => {
   const bgOpacity = useSharedValue(0);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      backgroundColor: `rgba(255, 255, 255, ${bgOpacity.value})`,
+      backgroundColor: pressBg ? pressBg : 'rgba(255, 255, 255, 0.1)',
+      opacity: bgOpacity.value,
       width: '100%',
     };
   });
@@ -368,7 +386,7 @@ const MenuOption = ({ icon, label, onPress, destructive }: any) => {
   return (
     <Pressable 
       onPressIn={() => {
-        bgOpacity.value = withTiming(0.12, { duration: 80 });
+        bgOpacity.value = withTiming(1, { duration: 80 });
       }}
       onPressOut={() => {
         bgOpacity.value = withTiming(0, { duration: 150 });
@@ -378,19 +396,22 @@ const MenuOption = ({ icon, label, onPress, destructive }: any) => {
         onPress();
       }} 
     >
-      <Animated.View style={animatedStyle}>
+      <View style={{ width: '100%', position: 'relative' }}>
+        <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]} />
         <View style={styles.menuOptionInternal}>
-          <Text numberOfLines={1} style={[styles.menuLabel, destructive && { color: '#FF453A' }]}>{label}</Text>
+          <Text numberOfLines={1} style={[styles.menuLabel, { color: destructive ? '#EF4444' : (textColor || '#F8FAFC') }]}>{label}</Text>
           <View style={styles.menuIconWrapper}>
             {icon}
           </View>
         </View>
-      </Animated.View>
+      </View>
     </Pressable>
   );
 };
 
-const MenuDivider = () => <View style={styles.divider} />;
+const MenuDivider = ({ color }: { color?: string }) => (
+  <View style={[styles.divider, color ? { backgroundColor: color } : null]} />
+);
 
 const styles = StyleSheet.create({
   container: {

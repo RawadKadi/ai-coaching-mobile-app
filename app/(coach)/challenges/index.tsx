@@ -24,7 +24,7 @@ import {
   Trash2, 
   Edit2 
 } from 'lucide-react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import type { MotherChallengeWithProgress } from '@/types/challenges-v3';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 

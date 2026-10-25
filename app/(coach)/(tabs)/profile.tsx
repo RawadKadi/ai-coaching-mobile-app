@@ -350,13 +350,6 @@ export default function CoachProfileScreen() {
               />
             )}
 
-            <SectionLabel label="Security & Privacy" color={colors.primary} />
-            <ProfileMenuItem
-              icon={<Bell size={20} color={colors.textSecondary} />}
-              label="Notifications"
-              colors={colors}
-            />
-
             {/* Log Out */}
             <TouchableOpacity
               onPress={handleSignOut}

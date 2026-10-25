@@ -59,7 +59,7 @@ export default function ClientTabLayout() {
       />
 
       <Tabs.Screen
-        name="messages"
+        name="messages-tab"
         options={{
           title: 'Direct',
           tabBarIcon: ({ color }) => <MessageCircle size={22} color={color} />,
@@ -76,7 +76,12 @@ export default function ClientTabLayout() {
             lineHeight: 18,
             padding: 0
           },
-          tabBarStyle: { display: 'none' }
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push('/(client)/messages');
+          },
         }}
       />
       <Tabs.Screen

@@ -52,7 +52,7 @@ export const DatePickerOverlay: React.FC<DatePickerOverlayProps> = ({
 }) => {
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.surface || colors.background || '#0F172A');
-  const styles = getStyles(colors, isDark);
+  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
   );
@@ -77,16 +77,12 @@ export const DatePickerOverlay: React.FC<DatePickerOverlayProps> = ({
   const handlePreset = (offset: number) => {
     const newDate = addDays(new Date(), offset);
     onClose();
-    setTimeout(() => {
-      onSelect(newDate);
-    }, 100);
+    onSelect(newDate);
   };
 
   const handleDayPress = (date: Date) => {
     onClose();
-    setTimeout(() => {
-      onSelect(date);
-    }, 100);
+    onSelect(date);
   };
 
   const isPresetSelected = (offset: number) => {

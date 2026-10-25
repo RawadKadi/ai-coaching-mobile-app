@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, TouchableOpacity, StyleSheet, Animated, Platform, useWindowDimensions, LayoutChangeEvent } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -10,7 +11,9 @@ const TAB_BAR_MARGIN_SHRUNK = 32;
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
-export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function FuturisticTabBar(props: BottomTabBarProps & { emitter?: any; navigateToTab?: (key: string) => void }) {
+  const { state, descriptors, navigation } = props;
+  const router = useRouter();
   const { isShrunk } = useTabBarScroll();
   const { width: windowWidth } = useWindowDimensions();
   const [measuredBarWidth, setMeasuredBarWidth] = useState<number>(0);
@@ -191,23 +194,38 @@ export function FuturisticTabBar({ state, descriptors, navigation }: BottomTabBa
           const { options } = descriptors[route.key] as any;
           const isFocused = safeActiveIndex === index;
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
+          const emitEvent = (type: 'tabPress' | 'tabLongPress', canPreventDefault?: boolean) => {
+            const eventPayload = {
+              type,
               target: route.key,
-              canPreventDefault: true,
-            });
+              canPreventDefault,
+            } as any;
 
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate({ name: route.name, merge: true, params: {} });
+            if (navigation?.emit) {
+              return navigation.emit(eventPayload);
+            }
+            if (props.emitter?.emit) {
+              return props.emitter.emit(eventPayload);
+            }
+            return { defaultPrevented: false };
+          };
+
+          const onPress = () => {
+            const event = emitEvent('tabPress', true);
+
+            if (!isFocused && !event?.defaultPrevented) {
+              if (typeof props.navigateToTab === 'function') {
+                props.navigateToTab(route.key);
+              } else if (navigation?.navigate) {
+                navigation.navigate({ name: route.name, merge: true, params: {} });
+              } else {
+                router.push(`/(client)/(tabs)/${route.name}` as any);
+              }
             }
           };
 
           const onLongPress = () => {
-            navigation.emit({
-              type: 'tabLongPress',
-              target: route.key,
-            });
+            emitEvent('tabLongPress');
           };
 
           // Support custom tabBarButton (e.g., Log Meal button)

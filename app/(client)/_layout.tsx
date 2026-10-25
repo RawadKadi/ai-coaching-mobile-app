@@ -30,7 +30,14 @@ export default function ClientLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="challenges" />
-        <Stack.Screen name="chat" />
+        <Stack.Screen 
+          name="messages" 
+          options={{ 
+            gestureEnabled: true,
+            animation: 'slide_from_right',
+          }} 
+        />
+        <Stack.Screen name="coach-details" />
         <Stack.Screen name="check-in" />
         <Stack.Screen name="log-meal" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="onboarding" />

@@ -25,10 +25,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView, AnimatePresence } from 'moti';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { usePresence } from '@/contexts/PresenceContext';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Component as GradientBackground } from '@/components/ui/gradient-backgrounds';
 import BubblePuff from '@/components/ui/BubblePuff';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -86,7 +86,7 @@ export default function CoachToCoachChat() {
 
   const showScrollBottomRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
-  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+  const swipeableRefs = useRef<{ [key: string]: any }>({});
   const typingChannelRef = useRef<any>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -623,15 +623,30 @@ export default function CoachToCoachChat() {
   }, [messages]);
 
 
+function CoachToCoachSwipeReplyAction({ progress, color }: { progress: any; color: string }) {
+  const animStyle = useAnimatedStyle(() => {
+    const val = typeof progress === 'object' && progress !== null && 'value' in progress ? progress.value : 0;
+    const scale = interpolate(val, [0, 0.4, 1], [0, 0.5, 1], Extrapolation.CLAMP);
+    const opacity = interpolate(val, [0, 0.15, 1], [0, 0.4, 1], Extrapolation.CLAMP);
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
+  return (
+    <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
+      <Reanimated.View style={animStyle}>
+        <Reply size={24} color={color} />
+      </Reanimated.View>
+    </View>
+  );
+}
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender_id === user?.id;
-    const renderLeftActions = (progress: any, dragX: any) => {
-        const trans = dragX.interpolate({ inputRange: [0, 100], outputRange: [0, 1], extrapolate: 'clamp' });
-        return (
-            <View style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
-                <Animated.View style={{ transform: [{ scale: trans }] }}><Reply size={24} color={theme.colors.primary} /></Animated.View>
-            </View>
-        );
+    const renderLeftActions = (progress: any) => {
+      return <CoachToCoachSwipeReplyAction progress={progress} color={theme.colors.primary} />;
     };
 
     const isMedia = isMediaMessage(item.content);

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, StatusBar, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, StatusBar, RefreshControl, Animated, useWindowDimensions, Pressable, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,7 +9,6 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
-import { Pressable, Alert } from 'react-native';
 
 interface ClientWithProfile {
   id: string;
@@ -50,6 +49,26 @@ export default function ClientsScreen() {
   const [subCoaches, setSubCoaches] = useState<SubCoach[]>([]);
   const [totalTeamClients, setTotalTeamClients] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const { width: windowWidth } = useWindowDimensions();
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+  const tabAnim = useRef(new Animated.Value(activeTab === 'clients' ? 0 : 1)).current;
+
+  useEffect(() => {
+    Animated.spring(tabAnim, {
+      toValue: activeTab === 'clients' ? 0 : 1,
+      tension: 220,
+      friction: 18,
+      useNativeDriver: true,
+    }).start();
+  }, [activeTab]);
+
+  const effectiveContainerWidth = containerWidth || (windowWidth - 48);
+  const tabWidth = Math.max(0, (effectiveContainerWidth - 12) / 2);
+  const indicatorTranslateX = tabAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, tabWidth],
+  });
 
   useEffect(() => {
     if (coach) {
@@ -214,19 +233,41 @@ export default function ClientsScreen() {
       >
         {/* Tab Switch */}
         <View className="px-6 mt-8 mb-8">
-          <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-row rounded-[28px] p-1.5 border">
+          <View 
+            onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }} 
+            className="flex-row rounded-[28px] p-1.5 border relative overflow-hidden"
+          >
+            {/* Sliding Tab Indicator */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 6,
+                bottom: 6,
+                left: 6,
+                width: tabWidth,
+                borderRadius: 22,
+                backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDarkMode ? 0.3 : 0.15,
+                shadowRadius: 8,
+                elevation: 5,
+                transform: [{ translateX: indicatorTranslateX }],
+              }}
+            />
+
             <Pressable
               onPress={() => { setActiveTab('clients'); setSearchQuery(''); }}
-              className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
-              style={activeTab === 'clients' ? { backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 } : {}}
+              className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 z-10"
             >
               <Users size={18} color={activeTab === 'clients' ? colors.primary : colors.textSecondary} />
               <Text style={{ color: activeTab === 'clients' ? colors.text : colors.textSecondary }} className="font-black text-sm uppercase tracking-widest">Clients</Text>
             </Pressable>
             <Pressable
               onPress={() => { setActiveTab('team'); setSearchQuery(''); }}
-              className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
-              style={activeTab === 'team' ? { backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 } : {}}
+              className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 z-10"
             >
               <Zap size={18} color={activeTab === 'team' ? colors.primary : colors.textSecondary} />
               <Text style={{ color: activeTab === 'team' ? colors.text : colors.textSecondary }} className="font-black text-sm uppercase tracking-widest">Coaches</Text>

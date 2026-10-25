@@ -1,6 +1,6 @@
 import { useBrandColors, useTheme } from '@/contexts/BrandContext';
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, RefreshControl, StatusBar, TextInput, Pressable } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, RefreshControl, StatusBar, TextInput, Pressable, Animated, useWindowDimensions } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,6 +9,7 @@ import { ChevronRight, MessageCircle, Users, Zap, Search, Bell, X } from 'lucide
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
+import * as Haptics from 'expo-haptics';
 
 type ClientPreview = {
   id: string; user_id: string; full_name: string; avatar_url: string | null;
@@ -23,7 +24,7 @@ type Tab = 'clients' | 'team';
 export default function CoachMessagesScreen() {
   const theme = useTheme();
   const colors = theme.colors;
-  const isDarkMode = theme.isDark;
+  const isDarkMode = theme.isDarkMode;
   const router = useRouter();
   const { coach, user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -36,6 +37,26 @@ export default function CoachMessagesScreen() {
   const [teamUnreadCount, setTeamUnreadCount] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const { width: windowWidth } = useWindowDimensions();
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+  const tabAnim = useRef(new Animated.Value(activeTab === 'clients' ? 0 : 1)).current;
+
+  useEffect(() => {
+    Animated.spring(tabAnim, {
+      toValue: activeTab === 'clients' ? 0 : 1,
+      tension: 220,
+      friction: 18,
+      useNativeDriver: true,
+    }).start();
+  }, [activeTab]);
+
+  const effectiveContainerWidth = containerWidth || (windowWidth - 48);
+  const tabWidth = Math.max(0, (effectiveContainerWidth - 12) / 2);
+  const indicatorTranslateX = tabAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, tabWidth],
+  });
 
   const filteredClients = clients.filter(c => c.full_name.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredTeammates = teammates.filter(t => t.full_name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -313,22 +334,59 @@ export default function CoachMessagesScreen() {
 
           {/* Tab Switch */}
           <View className="px-6 mb-8">
-            <View className="flex-row rounded-[28px] p-1.5 border" style={{ backgroundColor: colors.surface, borderColor: colors.border }}>
+            <View 
+              onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }} 
+              className="flex-row rounded-[28px] p-1.5 border relative overflow-hidden"
+            >
+              {/* Sliding Tab Indicator */}
+              <Animated.View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: 6,
+                  bottom: 6,
+                  left: 6,
+                  width: tabWidth,
+                  borderRadius: 22,
+                  backgroundColor: isDarkMode ? '#1E293B' : colors.background || '#FFFFFF',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: isDarkMode ? 0.3 : 0.12,
+                  shadowRadius: 8,
+                  elevation: 4,
+                  transform: [{ translateX: indicatorTranslateX }],
+                }}
+              />
+
               <Pressable
-                onPress={() => setActiveTab('clients')}
-                className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
-                style={activeTab === 'clients' ? { backgroundColor: colors.background, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 } : {}}
+                onPress={() => {
+                  if (activeTab !== 'clients') {
+                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                    setActiveTab('clients');
+                  }
+                }}
+                className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 z-10"
               >
                 <Users size={18} color={activeTab === 'clients' ? colors.primary : colors.textSecondary} />
-                <Text className="font-black text-sm uppercase tracking-widest" style={{ color: activeTab === 'clients' ? colors.text : colors.textSecondary }}>Clients</Text>
+                <Text style={{ color: activeTab === 'clients' ? colors.text : colors.textSecondary }} className="font-black text-sm uppercase tracking-widest">
+                  Clients
+                </Text>
               </Pressable>
+
               <Pressable
-                onPress={() => setActiveTab('team')}
-                className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
-                style={activeTab === 'team' ? { backgroundColor: colors.background, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 } : {}}
+                onPress={() => {
+                  if (activeTab !== 'team') {
+                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                    setActiveTab('team');
+                  }
+                }}
+                className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 z-10"
               >
                 <Zap size={18} color={activeTab === 'team' ? colors.primary : colors.textSecondary} />
-                <Text className="font-black text-sm uppercase tracking-widest" style={{ color: activeTab === 'team' ? colors.text : colors.textSecondary }}>Team</Text>
+                <Text style={{ color: activeTab === 'team' ? colors.text : colors.textSecondary }} className="font-black text-sm uppercase tracking-widest">
+                  Team
+                </Text>
                 {teamUnreadCount > 0 && activeTab !== 'team' && (
                   <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.primary }} />
                 )}

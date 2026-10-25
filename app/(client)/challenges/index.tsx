@@ -1,283 +1,476 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+  StatusBar,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Target, CheckCircle, Circle, Lock, ChevronRight, Zap, Info, MessageSquare, ArrowLeft, Dumbbell, Apple, Moon } from 'lucide-react-native';
+import {
+  Target,
+  CheckCircle,
+  ChevronRight,
+  ArrowLeft,
+  Calendar as CalendarIcon,
+  X,
+} from 'lucide-react-native';
 import { useTheme } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { TodaysSubChallenge } from '@/types/challenges-v3';
-import { NestedTaskCard } from '@/components/NestedTaskCard';
+import MagicRings from '@/components/ui/MagicRings';
 
 export default function ClientChallengesScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const colors = theme.colors;
+  const isDark = isDarkColor(colors.background || '#020617');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [todaysChallenges, setTodaysChallenges] = useState<TodaysSubChallenge[]>([]);
-  const [upcomingChallenges, setUpcomingChallenges] = useState<any[]>([]);
-  const [coachName, setCoachName] = useState('');
-
-  const timeoutRefs = useRef<{ [key: string]: any }>({});
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'history'>('active');
+  const [motherChallenges, setMotherChallenges] = useState<any[]>([]);
 
   useEffect(() => {
-    return () => {
-      Object.values(timeoutRefs.current).forEach((timeout) => clearTimeout(timeout));
-    };
-  }, []);
-
-  useEffect(() => { loadChallenges(); }, []);
-
-  // Real-time listener for sub_challenges updates
-  useEffect(() => {
-    if (!user) return;
-
-    const channelId = `dashboard-challenges-realtime-${user.id}`;
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sub_challenges'
-        },
-        async (payload) => {
-          // Refresh list when any challenge state changes
-          loadChallenges();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    loadChallenges();
   }, [user]);
 
   const loadChallenges = async () => {
     if (!user) return;
     try {
       setLoading(true);
-      const { data: clientData } = await supabase.from('clients').select('id').eq('user_id', user.id).single();
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
       if (!clientData) return;
 
-      const today = new Date().toISOString().split('T')[0];
-      const { data: todaysData } = await supabase.rpc('get_todays_sub_challenges', { p_client_id: clientData.id, p_date: today });
-      setTodaysChallenges(todaysData || []);
-
-      const { data: upcomingData } = await supabase.rpc('get_client_mother_challenges', { p_client_id: clientData.id, p_status: 'upcoming' });
-      setUpcomingChallenges(upcomingData || []);
-
-      if (todaysData?.length > 0) {
-        const { data: motherData } = await supabase.from('mother_challenges').select('coach_id').eq('id', todaysData[0].mother_challenge_id).single();
-        if (motherData) {
-          const { data: coachData } = await supabase.from('coaches').select('profiles:user_id(full_name)').eq('id', motherData.coach_id).single();
-          if (coachData) {
-            const p: any = coachData.profiles;
-            setCoachName(p?.full_name || 'Coach');
-          }
-        }
-      }
-    } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
-  };
-
-  const handleRefresh = () => { setRefreshing(true); loadChallenges(); };
-
-  const sendCompletionMessage = async (task: any) => {
-    try {
-      const { data: link } = await supabase
-        .from('coach_client_links')
-        .select('coach_id')
-        .eq('client_id', (await supabase.from('clients').select('id').eq('user_id', user!.id).single()).data?.id)
-        .eq('status', 'active')
-        .single();
-      
-      if (!link) return;
-
-      const { data: coachProfile } = await supabase
-        .from('coaches')
-        .select('user_id')
-        .eq('id', link.coach_id)
-        .single();
-
-      if (!coachProfile) return;
-
-      await supabase.from('messages').insert({
-        sender_id: user!.id,
-        recipient_id: coachProfile.user_id,
-        content: JSON.stringify({
-          type: 'challenge_completed',
-          title: 'Client finished this task',
-          taskName: task.name,
-          completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          taskDescription: task.description || '',
-          focusType: task.focus_type || '',
-          intensity: task.intensity || '',
+      const [activeResult, completedResult, failedResult] = await Promise.all([
+        supabase.rpc('get_client_mother_challenges', {
+          p_client_id: clientData.id,
+          p_status: 'active',
         }),
-        read: false,
-        ai_generated: false,
-      });
-    } catch (error) {
-      console.error('Error sending automated message:', error);
+        supabase.rpc('get_client_mother_challenges', {
+          p_client_id: clientData.id,
+          p_status: 'completed',
+        }),
+        supabase.rpc('get_client_mother_challenges', {
+          p_client_id: clientData.id,
+          p_status: 'failed',
+        }),
+      ]);
+
+      const combined = [
+        ...(activeResult?.data || []),
+        ...(completedResult?.data || []),
+        ...(failedResult?.data || []),
+      ].sort(
+        (a, b) =>
+          new Date(b.start_date).getTime() - new Date(a.start_date).getTime(),
+      );
+
+      setMotherChallenges(combined);
+    } catch (e) {
+      console.error('Error loading challenges:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const toggleSubChallenge = async (sub: TodaysSubChallenge) => {
-    try {
-      const newCompleted = !sub.completed;
-      setTodaysChallenges(prev => prev.map(s => s.id === sub.id ? { ...s, completed: newCompleted } : s));
-      const { data: cData } = await supabase.from('clients').select('id').eq('user_id', user!.id).single();
-      if (!cData) return;
-      await supabase.rpc('mark_sub_challenge', { p_sub_challenge_id: sub.id, p_client_id: cData.id, p_completed: newCompleted });
-      if (newCompleted) {
-        sendCompletionMessage(sub);
-      }
-    } catch (e) { loadChallenges(); }
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadChallenges();
   };
 
-  if (loading) {
-    return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
-  }
+  const todayMidnight = new Date(new Date().setHours(0, 0, 0, 0));
 
-  const grouped = todaysChallenges.reduce((acc, sub) => {
-    const key = sub.mother_challenge_id;
-    if (!acc[key]) acc[key] = { 
-        motherId: sub.mother_challenge_id, 
-        motherName: sub.mother_name, 
-        subs: [] 
-    };
-    acc[key].subs.push(sub);
-    return acc;
-  }, {} as Record<string, { motherId: string; motherName: string; subs: TodaysSubChallenge[] }>);
-
-  const motherChallenges = Object.values(grouped);
-  const completedCount = todaysChallenges.filter(s => s.completed).length;
-  const totalCount = todaysChallenges.length;
-  const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  const filteredChallenges = motherChallenges.filter((c) => {
+    const isEnded =
+      c.status !== 'active' || new Date(c.end_date) < todayMidnight;
+    if (activeTab === 'active') return !isEnded;
+    if (activeTab === 'history') return isEnded;
+    return true;
+  });
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617', paddingTop: insets.top }}>
-        <ScrollView 
-          style={{ flex: 1 }}
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />}
-          showsVerticalScrollIndicator={false}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent />
+
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 24,
+            paddingTop: 16,
+            paddingBottom: 20,
+          }}
         >
-            {/* Header Content */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 }}>
-                <TouchableOpacity 
-                    onPress={() => router.back()} 
-                    style={{ padding: 12, backgroundColor: '#0f172a', borderRadius: 16, borderWidth: 1, borderColor: '#1e293b', marginRight: 16 }}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.back()}
+            style={{
+              width: 44,
+              height: 44,
+              backgroundColor: cardBg,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: cardBorder,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: 16,
+            }}
+          >
+            <ArrowLeft size={20} color={textColor} />
+          </TouchableOpacity>
+          <View>
+            <Text style={{ color: textColor, fontSize: 24, fontWeight: '900' }}>
+              Challenges
+            </Text>
+            <Text
+              style={{
+                color: theme.colors.primary,
+                fontWeight: 'bold',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: 2,
+                marginTop: 2,
+              }}
+            >
+              Active & History
+            </Text>
+          </View>
+        </View>
+
+        {/* Tab Filters */}
+        <View
+          style={{
+            flexDirection: 'row',
+            paddingHorizontal: 24,
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          {(['all', 'active', 'history'] as const).map((tab) => {
+            const isSelected = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                activeOpacity={0.7}
+                onPress={() => setActiveTab(tab)}
+                style={{
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: isSelected
+                    ? `${theme.colors.primary}20`
+                    : 'transparent',
+                  borderWidth: 1,
+                  borderColor: isSelected
+                    ? `${theme.colors.primary}50`
+                    : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: '900',
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.5,
+                    color: isSelected
+                      ? theme.colors.primary
+                      : textSecondaryColor,
+                  }}
                 >
-                    <ArrowLeft size={20} color="#94A3B8" />
-                </TouchableOpacity>
-                <View>
-                    <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>Daily Missions</Text>
-                    <Text style={{ color: '#64748b', fontWeight: 'bold', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5 }}>
-                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                    </Text>
-                </View>
-            </View>
+                  {tab === 'all' ? 'All' : tab === 'active' ? 'Active' : 'History'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-            {/* Progress Engine Card */}
-            <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
-                <View style={{ backgroundColor: '#0f172a80', borderWidth: 1, borderColor: '#0f172a', borderRadius: 32, padding: 24 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <View style={{ width: 32, height: 32, borderRadius: 12, backgroundColor: `${theme.colors.primary}1a`, alignItems: 'center', justifyContent: 'center' }}>
-                                <Zap size={16} color={theme.colors.primary} />
-                            </View>
-                            <Text style={{ color: 'white', fontWeight: '900' }}>Deployment Status</Text>
-                        </View>
-                        <Text style={{ color: theme.colors.primary, fontWeight: '900', fontSize: 18 }}>{Math.round(progressPercent)}%</Text>
-                    </View>
-                    <View style={{ height: 8, backgroundColor: '#020617', borderRadius: 999, overflow: 'hidden' }}>
-                        <View 
-                            style={{ height: '100%', backgroundColor: '#2563eb', borderRadius: 999, width: `${progressPercent}%` }}
-                        />
-                    </View>
-                    <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 16 }}>
-                        {completedCount} of {totalCount} objectives secured
-                    </Text>
-                </View>
-            </View>
-
-            {/* Mother Groupings */}
-            {motherChallenges.length === 0 ? (
-                <View style={{ marginHorizontal: 24, padding: 48, backgroundColor: '#0f172a4d', borderRadius: 32, borderWidth: 1, borderColor: '#0f172a', alignItems: 'center' }}>
-                    <Target size={48} color="#1E293B" />
-                    <Text style={{ color: '#475569', fontWeight: 'bold', marginTop: 16, fontStyle: 'italic' }}>No tasks active today</Text>
-                </View>
+        {loading && !refreshing ? (
+          <View
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        ) : (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={theme.colors.primary}
+              />
+            }
+          >
+            {filteredChallenges.length === 0 ? (
+              <View
+                style={{
+                  padding: 48,
+                  backgroundColor: cardBg,
+                  borderRadius: 32,
+                  borderWidth: 1,
+                  borderColor: cardBorder,
+                  alignItems: 'center',
+                  marginTop: 20,
+                }}
+              >
+                <Target size={44} color={textSecondaryColor} />
+                <Text
+                  style={{
+                    color: textSecondaryColor,
+                    fontWeight: 'bold',
+                    marginTop: 16,
+                    fontSize: 14,
+                  }}
+                >
+                  {activeTab === 'active'
+                    ? 'No active challenges'
+                    : activeTab === 'history'
+                      ? 'No challenge history'
+                      : 'No challenges found'}
+                </Text>
+              </View>
             ) : (
-                motherChallenges.map((mother, mIdx) => (
-                    <View key={mother.motherId} style={{ marginBottom: 32 }}>
-                        <TouchableOpacity 
-                            onPress={() => router.push(`/(client)/challenges/${mother.motherId}`)}
-                            style={{ paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}
+              filteredChallenges.map((motherChallenge) => {
+                const isEnded =
+                  motherChallenge.status !== 'active' ||
+                  new Date(motherChallenge.end_date) < todayMidnight;
+                const isFailed =
+                  isEnded && (motherChallenge.completed_subs || 0) === 0;
+                const isCompleted =
+                  isEnded && (motherChallenge.completed_subs || 0) > 0;
+
+                const currentDay = Math.max(
+                  1,
+                  Math.floor(
+                    (new Date().getTime() -
+                      new Date(motherChallenge.start_date).getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  ) + 1,
+                );
+
+                const progressPercent = Math.round(
+                  ((motherChallenge.completed_subs || 0) /
+                    Math.max(1, motherChallenge.total_subs || 1)) *
+                    100,
+                );
+
+                return (
+                  <View key={motherChallenge.id} style={{ marginBottom: 16 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() =>
+                        router.push(
+                          `/(client)/challenges/${motherChallenge.id}` as any,
+                        )
+                      }
+                      style={{
+                        backgroundColor: cardBg,
+                        borderRadius: 32,
+                        padding: 24,
+                        borderWidth: 1,
+                        borderColor: isFailed
+                          ? '#ef444450'
+                          : isCompleted
+                            ? '#10b98150'
+                            : cardBorder,
+                        opacity: isFailed || isCompleted ? 0.65 : 1,
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {/* Magic Rings background only for active challenges */}
+                      {!isFailed && !isCompleted && (
+                        <View
+                          style={{
+                            ...(StyleSheet.absoluteFill as any),
+                            opacity: isDark ? 0.25 : 0.12,
+                          }}
+                          pointerEvents="none"
                         >
-                            <View style={{ width: 4, height: 16, backgroundColor: '#2563eb', borderRadius: 999 }} />
-                            <Text style={{ color: '#94a3b8', fontWeight: '900', fontSize: 14, textTransform: 'uppercase', letterSpacing: 1.5, flex: 1 }}>{mother.motherName}</Text>
-                            <ChevronRight size={14} color="#475569" />
-                        </TouchableOpacity>
-                        <View style={{ paddingHorizontal: 24, gap: 12 }}>
-                            {mother.subs.map((sub, sIdx) => (
-                                <NestedTaskCard 
-                                    key={sub.id}
-                                    task={sub}
-                                    index={sIdx}
-                                    onToggleParent={toggleSubChallenge}
-                                    layoutType="feed"
-                                />
-                            ))}
+                          <MagicRings
+                            color={isDark ? '#3B82F6' : '#60a5fa'}
+                            colorTwo={isDark ? '#1d4ed8' : '#3b82f6'}
+                            backgroundColor={cardBg}
+                            ringCount={5}
+                            speed={0.6}
+                            attenuation={9}
+                            lineThickness={2}
+                            baseRadius={0.32}
+                            radiusStep={0.12}
+                            followMouse={false}
+                            clickBurst={false}
+                          />
                         </View>
-                    </View>
-                ))
-            )}
+                      )}
 
-            {/* Upcoming tasks */}
-            {upcomingChallenges.length > 0 && (
-                <View style={{ paddingHorizontal: 24, marginTop: 16 }}>
-                    <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16, paddingHorizontal: 4 }}>Upcoming Sequences</Text>
-                    {upcomingChallenges.map((c, i) => (
-                        <View key={c.id} style={{ padding: 20, backgroundColor: '#0f172a33', borderRadius: 28, borderWidth: 1, borderColor: '#0f172a', marginBottom: 8, opacity: 0.5, flexDirection: 'row', alignItems: 'center' }}>
-                            <Lock size={16} color="#475569" style={{ marginRight: 16 }} />
-                            <Text style={{ color: '#94a3b8', fontWeight: 'bold', flex: 1 }}>{c.name}</Text>
-                            <Text style={{ color: '#475569', fontSize: 10, fontWeight: '900' }}>LOCKED</Text>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: 16,
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                        >
+                          {isFailed ? (
+                            <>
+                              <X size={16} color="#EF4444" />
+                              <Text
+                                style={{
+                                  color: '#EF4444',
+                                  fontSize: 10,
+                                  fontWeight: '900',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: 2,
+                                }}
+                              >
+                                Failed Plan
+                              </Text>
+                            </>
+                          ) : isCompleted ? (
+                            <>
+                              <CheckCircle size={16} color="#10B981" />
+                              <Text
+                                style={{
+                                  color: '#10B981',
+                                  fontSize: 10,
+                                  fontWeight: '900',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: 2,
+                                }}
+                              >
+                                Finished
+                              </Text>
+                            </>
+                          ) : (
+                            <>
+                              <Target size={16} color={theme.colors.primary} />
+                              <Text
+                                style={{
+                                  color: theme.colors.primary,
+                                  fontSize: 10,
+                                  fontWeight: '900',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: 2,
+                                }}
+                              >
+                                Active Challenge
+                              </Text>
+                            </>
+                          )}
                         </View>
-                    ))}
-                </View>
-            )}
+                        <ChevronRight size={16} color={textSecondaryColor} />
+                      </View>
 
-            {/* Coach Signal */}
-            {coachName ? (
-                <View style={{ marginHorizontal: 24, marginTop: 48, marginBottom: 48, padding: 24, backgroundColor: '#2563eb0d', borderRadius: 32, borderWidth: 1, borderColor: '#2563eb1a', flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: '#2563eb1a', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
-                        <MessageSquare size={20} color={theme.colors.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ color: theme.colors.primary, fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>Signal from {coachName}</Text>
-                        <Text style={{ color: '#94a3b8', fontWeight: 'bold', marginTop: 4, fontSize: 14, fontStyle: 'italic' }}>"Complete today's tasks to advance to the next stage."</Text>
-                    </View>
-                </View>
-            ) : null}
-        </ScrollView>
+                      <Text
+                        style={{
+                          color: textColor,
+                          fontSize: 20,
+                          fontWeight: '900',
+                          marginBottom: 12,
+                        }}
+                      >
+                        🔥 {motherChallenge.name}
+                      </Text>
+
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: 20,
+                          gap: 6,
+                        }}
+                      >
+                        <CalendarIcon size={14} color={textSecondaryColor} />
+                        <Text
+                          style={{
+                            color: textSecondaryColor,
+                            fontSize: 12,
+                            fontWeight: '700',
+                          }}
+                        >
+                          Day {currentDay} of {motherChallenge.duration_days} •{' '}
+                          {motherChallenge.total_subs} Total Tasks
+                        </Text>
+                      </View>
+
+                      <View
+                        style={{
+                          height: 12,
+                          backgroundColor: colors.background,
+                          borderRadius: 6,
+                          overflow: 'hidden',
+                          marginBottom: 8,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                        }}
+                      >
+                        <View
+                          style={{
+                            height: '100%',
+                            width: `${Math.min(100, progressPercent)}%`,
+                            backgroundColor: theme.colors.primary,
+                            borderRadius: 6,
+                          }}
+                        />
+                      </View>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'flex-end',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: textColor,
+                            fontSize: 12,
+                            fontWeight: '900',
+                          }}
+                        >
+                          {progressPercent}%
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        )}
+      </View>
     </View>
   );
-}
-
-function getFocusIcon(type: string, completed: boolean) {
-  const color = completed ? theme.colors.primary : '#94a3b8';
-  switch (type?.toLowerCase()) {
-    case 'training': return <Dumbbell size={24} color={color} />;
-    case 'nutrition': return <Apple size={24} color={color} />;
-    case 'recovery': return <Moon size={24} color={color} />;
-    default: return <Zap size={24} color={color} />;
-  }
 }

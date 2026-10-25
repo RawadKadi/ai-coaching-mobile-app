@@ -1,42 +1,132 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, StatusBar, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  StatusBar,
+  RefreshControl,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/BrandContext';
+import { useTheme, useBrandColors } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
-import { LogOut, User, Settings, Camera, Shield, Bell, CreditCard, ChevronRight, Activity } from 'lucide-react-native';
+import {
+  LogOut,
+  User,
+  Settings,
+  Camera,
+  Shield,
+  Bell,
+  CreditCard,
+  ChevronRight,
+  Activity,
+} from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import { useStreak } from '@/hooks/useStreak';
+import StreakBadge from '@/components/StreakBadge';
 
-// Hoist helper components to top
-const SectionLabel = ({ label }: { label: string }) => (
-    <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest px-1 mt-8 mb-3">{label}</Text>
+const SectionLabel = ({ label, color }: { label: string; color?: string }) => (
+  <Text
+    className="text-[10px] font-black uppercase tracking-[3px] px-1 mt-10 mb-2"
+    style={{ color: color || '#64748B' }}
+  >
+    {label}
+  </Text>
 );
 
-const ProfileMenuItem = ({ icon, label, onPress }: { icon: React.ReactNode; label: string; onPress?: () => void }) => (
-    <TouchableOpacity 
-        onPress={onPress}
-        activeOpacity={0.7}
-        className="flex-row items-center p-5 bg-slate-900/40 rounded-[28px] border border-white/5 mb-3 shadow-sm"
+const ProfileMenuItem = ({
+  icon,
+  label,
+  sub,
+  onPress,
+  badge,
+  colors,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sub?: string;
+  onPress?: () => void;
+  badge?: string;
+  colors: any;
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.7}
+    className="flex-row items-center p-5 rounded-[32px] border mb-3"
+    style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+  >
+    <View
+      className="w-12 h-12 rounded-[18px] items-center justify-center mr-4 border"
+      style={{ backgroundColor: colors.background, borderColor: colors.border }}
     >
-        <View className="w-10 h-10 rounded-xl bg-slate-950 items-center justify-center mr-4 border border-white/5 shadow-inner">
-            {icon}
-        </View>
-        <Text className="flex-1 text-slate-200 font-bold text-base tracking-tight">{label}</Text>
-        <ChevronRight size={16} color="#475569" opacity={0.6} />
-    </TouchableOpacity>
+      {icon}
+    </View>
+    <View className="flex-1">
+      <Text className="font-bold text-base" style={{ color: colors.text }}>
+        {label}
+      </Text>
+      {sub && (
+        <Text
+          className="text-[10px] font-medium mt-0.5"
+          style={{ color: colors.textSecondary }}
+        >
+          {sub}
+        </Text>
+      )}
+    </View>
+    {badge && (
+      <View
+        className="px-3 py-1 rounded-full mr-3 border"
+        style={{
+          backgroundColor: `${colors.primary}1a`,
+          borderColor: `${colors.primary}33`,
+        }}
+      >
+        <Text
+          style={{
+            color: colors.primary,
+            fontSize: 9,
+            fontWeight: '900',
+            textTransform: 'uppercase',
+          }}
+        >
+          {badge}
+        </Text>
+      </View>
+    )}
+    <ChevronRight size={18} color={colors.textSecondary} />
+  </TouchableOpacity>
 );
 
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile, signOut, refreshProfile, loading: authLoading, user } = useAuth();
+  const {
+    profile,
+    signOut,
+    refreshProfile,
+    loading: authLoading,
+    user,
+  } = useAuth();
   const { handleScroll } = useTabBarScroll();
   const theme = useTheme();
+  const colors = useBrandColors();
+  const isDark = isDarkColor(colors.background || '#020617');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const { streak, isCold } = useStreak();
+
   const [uploading, setUploading] = useState(false);
   const [stepsSyncEnabled, setStepsSyncEnabled] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,82 +153,82 @@ export default function ProfileScreen() {
   const toggleStepsSync = async () => {
     if (stepsSyncEnabled) {
       Alert.alert(
-        "Disable Steps Sync",
-        "Are you sure you want to stop syncing your steps with your coach?",
+        'Disable Steps Sync',
+        'Are you sure you want to stop syncing your steps with your coach?',
         [
-          { text: "Cancel", style: "cancel" },
-          { 
-            text: "Disable", 
-            style: "destructive", 
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Disable',
+            style: 'destructive',
             onPress: async () => {
               await AsyncStorage.setItem('@steps_sync_enabled', 'false');
               setStepsSyncEnabled(false);
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } 
-          }
-        ]
+              await Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              );
+            },
+          },
+        ],
       );
     } else {
       Alert.alert(
-        "Sync Activity Data",
-        "Would you like to authorize this app to sync your steps automatically? This gives your coach direct access to your physical activity history.",
+        'Sync Steps',
+        'Would you like to sync your steps automatically with your coach?',
         [
-          { text: "Cancel", style: "cancel" },
-          { 
-            text: "Sync", 
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Sync',
             onPress: async () => {
               await AsyncStorage.setItem('@steps_sync_enabled', 'true');
               setStepsSyncEnabled(true);
-              
-              // Seed initial steps if needed
+
               const today = new Date().toISOString().split('T')[0];
               const localStepsKey = `@steps_${today}`;
               const stepsToSync = 8420 + Math.floor(Math.random() * 1200);
               await AsyncStorage.setItem(localStepsKey, stepsToSync.toString());
 
               if (profile?.id) {
-                await supabase.from('daily_logs').upsert({
-                  client_id: profile.id,
-                  date: today,
-                  steps: stepsToSync
-                }, { onConflict: 'client_id,date' });
+                await supabase.from('daily_logs').upsert(
+                  {
+                    client_id: profile.id,
+                    date: today,
+                    steps: stepsToSync,
+                  },
+                  { onConflict: 'client_id,date' },
+                );
               }
 
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert("Success", "Steps auto-sync is active!");
-            } 
-          }
-        ]
+              await Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              );
+              Alert.alert('Success', 'Steps are now syncing!');
+            },
+          },
+        ],
       );
     }
   };
 
   const handleSignOut = async () => {
-    console.log('[Logout] Initiate');
     Alert.alert(
-      'Log Out', 
-      'Are you sure you want to log out of your account?', 
+      'Log Out',
+      'Are you sure you want to log out of your account?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Log Out', 
-          style: 'destructive', 
+        {
+          text: 'Log Out',
+          style: 'destructive',
           onPress: async () => {
             try {
-              console.log('[Logout] Execution started');
               await signOut();
-              console.log('[Logout] signOut successful');
-              // The root layout will automatically handle redirection to login 
-              // because the session is now null. We add a fallback just in case.
               router.replace('/(auth)/login');
             } catch (error) {
-              console.error('Logout error:', error);
               Alert.alert('Error', 'Failed to log out. Please try again.');
             }
-          }
-        }
+          },
+        },
       ],
-      { cancelable: true }
+      { cancelable: true },
     );
   };
 
@@ -151,144 +241,269 @@ export default function ProfileScreen() {
       const response = await fetch(uri);
       const arrayBuffer = await response.arrayBuffer();
 
-      const { error: uploadError } = await supabase.storage.from('chat-media').upload(filePath, arrayBuffer, {
-        contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
-        upsert: true,
-      });
+      const { error: uploadError } = await supabase.storage
+        .from('chat-media')
+        .upload(filePath, arrayBuffer, {
+          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+          upsert: true,
+        });
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(filePath);
-      const { error: updateError } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', profile?.id);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('chat-media').getPublicUrl(filePath);
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', profile?.id);
       if (updateError) throw updateError;
 
       await refreshProfile();
-      Alert.alert('Success', 'Profile updated.');
-    } catch (error) { Alert.alert('Error', 'Failed to update avatar.'); } finally { setUploading(false); }
+      Alert.alert('Success', 'Profile photo updated.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update photo.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleEditPhoto = async () => {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') return Alert.alert('Permission Required', 'Access needed.');
-      
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-
-      if (!result.canceled && result.assets[0].uri) uploadAvatar(result.assets[0].uri);
+    Alert.alert(
+      'Profile Photo',
+      'Update your profile photo',
+      [
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const { status } =
+              await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') return;
+            const r = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+            });
+            if (!r.canceled && r.assets[0]) uploadAvatar(r.assets[0].uri);
+          },
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            const { status } =
+              await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') return;
+            const r = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+            });
+            if (!r.canceled && r.assets[0]) uploadAvatar(r.assets[0].uri);
+          },
+        },
+        profile?.avatar_url
+          ? {
+              text: 'Remove Photo',
+              style: 'destructive',
+              onPress: async () => {
+                setUploading(true);
+                await supabase
+                  .from('profiles')
+                  .update({ avatar_url: null })
+                  .eq('id', profile?.id);
+                await refreshProfile();
+                setUploading(false);
+              },
+            }
+          : null,
+        { text: 'Cancel', style: 'cancel' },
+      ].filter(Boolean) as any,
+    );
   };
 
   if (authLoading) {
     return (
-      <View className="flex-1 bg-slate-950 items-center justify-center">
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-slate-950">
-      <StatusBar barStyle="light-content" translucent />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
-        <ScrollView 
+        <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 140, paddingTop: 20 }}
+          contentContainerStyle={{ paddingBottom: 140 }}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={loadProfileData} tintColor={theme.colors.primary} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={loadProfileData}
+              tintColor={colors.primary}
+            />
           }
         >
-            {/* Header Identity */}
-            <View className="items-center mt-12 mb-10">
-                <View className="relative">
-                    <View className="absolute inset-0 bg-blue-600/30 rounded-full blur-3xl opacity-50" />
-                    <View className="p-1 rounded-full border-2 border-blue-600/30">
-                        <BrandedAvatar 
-                          name={profile?.full_name || 'User'} 
-                          size={130}
-                          imageUrl={profile?.avatar_url}
-                        />
-                    </View>
-                    <TouchableOpacity 
-                        onPress={handleEditPhoto}
-                        disabled={uploading}
-                        className="absolute bottom-1 right-1 w-10 h-10 bg-blue-600 rounded-full items-center justify-center border-4 border-slate-950 shadow-xl shadow-blue-500/40"
-                    >
-                        {uploading ? <ActivityIndicator size="small" color="white" /> : <Camera size={18} color="white" />}
-                    </TouchableOpacity>
-                </View>
-
-                <Text className="text-white text-3xl font-black mt-8 leading-tight tracking-tighter">
-                  {profile?.full_name || 'Member'}
-                </Text>
-                {user?.email && (
-                  <Text className="text-slate-400 text-sm font-medium mt-1">{user.email}</Text>
+          {/* Profile Overview */}
+          <MotiView
+            from={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="items-center pt-10 pb-10 px-6"
+          >
+            <View className="relative">
+              <View
+                className="p-2 rounded-full border shadow-2xl"
+                style={{ borderColor: colors.border }}
+              >
+                <BrandedAvatar
+                  name={profile?.full_name || 'Athlete'}
+                  size={140}
+                  imageUrl={profile?.avatar_url}
+                  useBrandColor={true}
+                />
+              </View>
+              <TouchableOpacity
+                onPress={handleEditPhoto}
+                disabled={uploading}
+                className="absolute bottom-2 right-2 w-12 h-12 rounded-full items-center justify-center shadow-xl border-4"
+                style={{
+                  backgroundColor: colors.primary,
+                  borderColor: colors.background,
+                }}
+              >
+                {uploading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Camera size={18} color="white" />
                 )}
-                <View className="mt-3 bg-blue-600/10 px-4 py-1.5 rounded-full border border-blue-600/20">
-                    <Text className="text-blue-500 text-[10px] font-black uppercase tracking-[3px]">Plan Active</Text>
-                </View>
+              </TouchableOpacity>
             </View>
 
-            {/* Menu Sections */}
-            <View className="pb-12">
-                <SectionLabel label="Account" />
-                <ProfileMenuItem 
-                  icon={<User size={18} color={theme.colors.primary} />} 
-                  label="Personal Information" 
-                  onPress={() => router.push('/(client)/personal-information')}
-                />
-                <ProfileMenuItem icon={<Shield size={18} color={theme.colors.primary} />} label="Security" />
-                
-                <SectionLabel label="Preferences" />
-                <ProfileMenuItem icon={<Bell size={18} color="#34D399" />} label="Notifications" />
-                <ProfileMenuItem icon={<Settings size={18} color="#64748B" />} label="App Settings" />
-                <ProfileMenuItem 
-                  icon={<Activity size={18} color="#6366F1" />} 
-                  label={stepsSyncEnabled ? "Steps Sync: Connected" : "Sync Activity Data"} 
-                  onPress={toggleStepsSync}
-                />
-
-                <SectionLabel label="Billing" />
-                <ProfileMenuItem icon={<CreditCard size={18} color="#F59E0B" />} label="Payments" />
-
-                <SectionLabel label="Developer" />
-                <ProfileMenuItem 
-                  icon={<Shield size={18} color="#F87171" />} 
-                  label="Reset Today's Check-in" 
-                  onPress={async () => {
-                    const { error } = await supabase.rpc('reset_today_checkin');
-                    if (error) {
-                      Alert.alert('Error', error.message);
-                    } else {
-                      Alert.alert('Success', 'Today\'s check-in has been cleared. You can now re-check in from the dashboard.');
-                    }
-                  }} 
-                />
-
-                {/* Logout */}
-                <TouchableOpacity 
-                    onPress={handleSignOut}
-                    activeOpacity={0.6}
-                    className="mt-10 flex-row items-center p-6 bg-red-500/10 rounded-[32px] border border-red-500/20"
-                >
-                    <View className="w-10 h-10 rounded-xl bg-red-500/10 items-center justify-center mr-4">
-                        <LogOut size={20} color="#EF4444" />
-                    </View>
-                    <View className="flex-1">
-                        <Text className="text-red-500 font-black text-base tracking-tight">Logout</Text>
-                        <Text className="text-red-900/60 text-[9px] font-black uppercase tracking-widest mt-0.5">Disconnect Session</Text>
-                    </View>
-                    <ChevronRight size={18} color="#EF4444" opacity={0.4} />
-                </TouchableOpacity>
-
-                <View className="mt-12 items-center">
-                    <Text className="text-slate-800 text-[9px] font-black uppercase tracking-[6px] opacity-50">V3.0.Neural-Sync</Text>
-                </View>
+            <View className="flex-row items-center justify-center gap-2.5 mt-8">
+              <Text
+                className="text-3xl font-black tracking-tight"
+                style={{ color: colors.text }}
+              >
+                {profile?.full_name || 'Member'}
+              </Text>
+              <StreakBadge
+                streak={streak}
+                isCold={isCold}
+                isDark={isDark}
+                onPress={() => {
+                  router.push({
+                    pathname: '/(client)/(tabs)/activity',
+                    params: { highlightDailyTasks: 'true' },
+                  });
+                }}
+              />
             </View>
+            {user?.email && (
+              <Text
+                className="text-sm font-medium mt-1"
+                style={{ color: colors.textSecondary }}
+              >
+                {user.email}
+              </Text>
+            )}
+            <View
+              className="mt-3 px-4 py-1.5 rounded-full border"
+              style={{
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              }}
+            >
+              <Text
+                className="text-[10px] font-black uppercase tracking-[3px]"
+                style={{ color: colors.primary }}
+              >
+                Active Member
+              </Text>
+            </View>
+          </MotiView>
+
+          {/* Menu Sections */}
+          <View className="px-6 space-y-4">
+            <SectionLabel label="Account" color={colors.primary} />
+            <ProfileMenuItem
+              icon={<User size={20} color={colors.primary} />}
+              label="Personal Information"
+              onPress={() => router.push('/(client)/personal-information')}
+              colors={colors}
+            />
+
+            <SectionLabel label="Preferences" color={colors.primary} />
+
+            <ProfileMenuItem
+              icon={<Settings size={20} color={colors.textSecondary} />}
+              label="App Settings"
+              onPress={() => {}}
+              colors={colors}
+            />
+            <ProfileMenuItem
+              icon={<Activity size={20} color={colors.primary} />}
+              label="Sync Steps"
+              sub={stepsSyncEnabled ? 'Connected' : 'Tap to connect'}
+              badge={stepsSyncEnabled ? 'Connected' : undefined}
+              onPress={toggleStepsSync}
+              colors={colors}
+            />
+
+            <SectionLabel label="Options" color={colors.primary} />
+            <ProfileMenuItem
+              icon={<Shield size={20} color="#F87171" />}
+              label="Reset Today's Check-in"
+              onPress={async () => {
+                const { error } = await supabase.rpc('reset_today_checkin');
+                if (error) {
+                  Alert.alert('Error', error.message);
+                } else {
+                  Alert.alert(
+                    'Success',
+                    "Today's check-in has been cleared. You can now check in again.",
+                  );
+                }
+              }}
+              colors={colors}
+            />
+
+            {/* Log Out */}
+            <TouchableOpacity
+              onPress={handleSignOut}
+              activeOpacity={0.6}
+              className="mt-10 flex-row items-center p-6 bg-red-500/5 rounded-[36px] border border-red-500/10"
+            >
+              <View className="w-12 h-12 rounded-2xl bg-red-500/10 items-center justify-center mr-4">
+                <LogOut size={20} color="#EF4444" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-red-500 font-black text-lg">Log Out</Text>
+                <Text className="text-red-900/40 text-[10px] font-bold uppercase tracking-widest mt-0.5">
+                  End current session
+                </Text>
+              </View>
+              <ChevronRight size={20} color="#EF4444" opacity={0.3} />
+            </TouchableOpacity>
+
+            <View className="mt-16 items-center pb-10">
+              <Text
+                className="text-[10px] font-black uppercase tracking-[5px]"
+                style={{ color: colors.textSecondary }}
+              >
+                Version 3.0 • Athlete App
+              </Text>
+            </View>
+          </View>
         </ScrollView>
       </View>
     </View>
