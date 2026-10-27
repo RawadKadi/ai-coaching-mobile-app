@@ -26,6 +26,7 @@ import {
   CreditCard,
   ChevronRight,
   Activity,
+  TrendingUp,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -34,6 +35,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useStreak } from '@/hooks/useStreak';
 import StreakBadge from '@/components/StreakBadge';
+import {
+  isHealthSyncEnabled,
+  requestHealthPermissions,
+  disableHealthSync,
+  syncAllHealthData,
+} from '@/lib/health-service';
 
 const SectionLabel = ({ label, color }: { label: string; color?: string }) => (
   <Text
@@ -113,6 +120,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const {
     profile,
+    client,
     signOut,
     refreshProfile,
     loading: authLoading,
@@ -143,8 +151,8 @@ export default function ProfileScreen() {
 
   const loadSyncStatus = async () => {
     try {
-      const syncEnabledStr = await AsyncStorage.getItem('@steps_sync_enabled');
-      setStepsSyncEnabled(syncEnabledStr === 'true');
+      const isEnabled = await isHealthSyncEnabled();
+      setStepsSyncEnabled(isEnabled);
     } catch (e) {
       console.error(e);
     }
@@ -153,15 +161,15 @@ export default function ProfileScreen() {
   const toggleStepsSync = async () => {
     if (stepsSyncEnabled) {
       Alert.alert(
-        'Disable Steps Sync',
-        'Are you sure you want to stop syncing your steps with your coach?',
+        'Disconnect Health Data',
+        'Stop syncing health and activity data with your coach?',
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Disable',
+            text: 'Disconnect',
             style: 'destructive',
             onPress: async () => {
-              await AsyncStorage.setItem('@steps_sync_enabled', 'false');
+              await disableHealthSync();
               setStepsSyncEnabled(false);
               await Haptics.notificationAsync(
                 Haptics.NotificationFeedbackType.Success,
@@ -171,41 +179,17 @@ export default function ProfileScreen() {
         ],
       );
     } else {
-      Alert.alert(
-        'Sync Steps',
-        'Would you like to sync your steps automatically with your coach?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Sync',
-            onPress: async () => {
-              await AsyncStorage.setItem('@steps_sync_enabled', 'true');
-              setStepsSyncEnabled(true);
-
-              const today = new Date().toISOString().split('T')[0];
-              const localStepsKey = `@steps_${today}`;
-              const stepsToSync = 8420 + Math.floor(Math.random() * 1200);
-              await AsyncStorage.setItem(localStepsKey, stepsToSync.toString());
-
-              if (profile?.id) {
-                await supabase.from('daily_logs').upsert(
-                  {
-                    client_id: profile.id,
-                    date: today,
-                    steps: stepsToSync,
-                  },
-                  { onConflict: 'client_id,date' },
-                );
-              }
-
-              await Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success,
-              );
-              Alert.alert('Success', 'Steps are now syncing!');
-            },
-          },
-        ],
-      );
+      const granted = await requestHealthPermissions();
+      if (granted) {
+        setStepsSyncEnabled(true);
+        if (client?.id) {
+          await syncAllHealthData(client.id);
+        }
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
+        Alert.alert('Connected', 'Health data is now syncing automatically.');
+      }
     }
   };
 
@@ -451,8 +435,15 @@ export default function ProfileScreen() {
               colors={colors}
             />
             <ProfileMenuItem
+              icon={<TrendingUp size={20} color={colors.primary} />}
+              label="Analytics"
+              sub="View trends and activity data"
+              onPress={() => router.push('/(client)/analytics')}
+              colors={colors}
+            />
+            <ProfileMenuItem
               icon={<Activity size={20} color={colors.primary} />}
-              label="Sync Steps"
+              label="Health Sync"
               sub={stepsSyncEnabled ? 'Connected' : 'Tap to connect'}
               badge={stepsSyncEnabled ? 'Connected' : undefined}
               onPress={toggleStepsSync}

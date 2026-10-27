@@ -370,7 +370,10 @@ export default function CoachToCoachChat() {
     try {
       // 2. Upload if local (not a remote URL)
       if (parsedContent.isOptimistic && parsedContent.url && !parsedContent.url.startsWith('http')) {
-        const folder = parsedContent.type === 'video' ? 'videos' : (parsedContent.type === 'document' ? 'documents' : 'images');
+        const folder = 
+          parsedContent.type === 'video' ? 'videos' : 
+          parsedContent.type === 'audio' ? 'audio' :
+          parsedContent.type === 'document' ? 'documents' : 'images';
         
         const publicUrl = await uploadChatMedia(
           parsedContent.url, 

@@ -2,7 +2,8 @@ import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 
-function getMimeType(ext: string): string {
+function getMimeType(ext: string, folder?: string): string {
+    if (folder === 'audio' && ext === 'webm') return 'audio/webm';
     const map: Record<string, string> = {
         jpg: 'image/jpeg',
         jpeg: 'image/jpeg',
@@ -19,6 +20,7 @@ function getMimeType(ext: string): string {
         wav: 'audio/wav',
         caf: 'audio/x-caf',
         aac: 'audio/aac',
+        ogg: 'audio/ogg',
         '3gp': 'video/3gpp',
         mkv: 'video/x-matroska',
         webm: 'video/webm',
@@ -42,7 +44,7 @@ export async function uploadChatMedia(
     // 1. Extract extension safely
     let ext = 'jpg';
     const cleanUri = localUri.split('?')[0].split('#')[0];
-    const match = cleanUri.match(/\.(jpg|jpeg|png|gif|webp|heic|heif|mp4|mov|avi|m4a|mp3|wav|caf|aac|3gp|mkv|webm|pdf|doc|docx|txt)$/i);
+    const match = cleanUri.match(/\.(jpg|jpeg|png|gif|webp|heic|heif|mp4|mov|avi|m4a|mp3|wav|caf|aac|ogg|3gp|mkv|webm|pdf|doc|docx|txt)$/i);
     if (match) {
         ext = match[1].toLowerCase();
     } else if (localUri.startsWith('data:')) {
@@ -52,14 +54,32 @@ export async function uploadChatMedia(
             ext = mime.split('/').pop() || 'jpg';
         }
     } else {
-        if (folder === 'audio') ext = 'm4a';
-        else if (folder === 'videos') ext = 'mp4';
-        else if (folder === 'documents') ext = 'pdf';
-        else ext = 'jpg';
+        if (folder === 'audio') {
+            ext = Platform.OS === 'web' ? 'webm' : 'm4a';
+        } else if (folder === 'videos') {
+            ext = 'mp4';
+        } else if (folder === 'documents') {
+            ext = 'pdf';
+        } else {
+            ext = 'jpg';
+        }
+    }
+
+    // On Web with blob:, detect accurate audio container
+    if (folder === 'audio' && Platform.OS === 'web' && localUri.startsWith('blob:')) {
+        try {
+            const probe = await fetch(localUri);
+            const blob = await probe.blob();
+            if (blob.type) {
+                if (blob.type.includes('webm')) ext = 'webm';
+                else if (blob.type.includes('ogg')) ext = 'ogg';
+                else if (blob.type.includes('mp4') || blob.type.includes('m4a') || blob.type.includes('aac')) ext = 'm4a';
+            }
+        } catch {}
     }
 
     const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
-    const mimeType = getMimeType(ext);
+    const mimeType = getMimeType(ext, folder);
 
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;

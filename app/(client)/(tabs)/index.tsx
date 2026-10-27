@@ -22,7 +22,8 @@ import {
   Utensils,
   Activity,
   Video,
-  Clock
+  Clock,
+  Footprints
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -32,7 +33,7 @@ import { CheckIn, Habit, HabitLog } from '@/types/database';
 import { formatCompactNumber } from '@/lib/format-utils';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isHealthSyncAvailable, requestHealthPermissions, getTodaySteps } from '@/lib/health-service';
+import { isHealthSyncAvailable, requestHealthPermissions, getTodaySteps, isHealthSyncEnabled, syncAllHealthData } from '@/lib/health-service';
 import { FirstTimeHeroCards } from '@/components/client/FirstTimeHeroCards';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import { useStreak } from '@/hooks/useStreak';
@@ -54,6 +55,9 @@ export default function ClientDashboard() {
   
   // Custom synced activity and metrics states
   const [todayCalories, setTodayCalories] = useState<number>(0);
+  const [todayProtein, setTodayProtein] = useState<number>(0);
+  const [targetCalories, setTargetCalories] = useState<number | null>(null);
+  const [targetProtein, setTargetProtein] = useState<number | null>(null);
   const [latestWeight, setLatestWeight] = useState<number | null>(null);
   const [weightDaysAgo, setWeightDaysAgo] = useState<number>(0);
   const [todaySteps, setTodaySteps] = useState<number | null>(null);
@@ -92,7 +96,7 @@ export default function ClientDashboard() {
           table: 'check_ins',
           filter: `client_id=eq.${client.id}`
         },
-        (payload) => {
+        (payload: any) => {
           // If the payload date is today, update the todayCheckIn state
           if (payload.new && payload.new.date === today) {
             setTodayCheckIn(payload.new as CheckIn);
@@ -132,8 +136,7 @@ export default function ClientDashboard() {
       const today = new Date().toISOString().split('T')[0];
       
       // Fetch sync status from local storage
-      const syncEnabledStr = await AsyncStorage.getItem('@steps_sync_enabled');
-      const isSyncEnabled = syncEnabledStr === 'true';
+      const isSyncEnabled = await isHealthSyncEnabled();
       setStepsSyncEnabled(isSyncEnabled);
 
       // Fetch next upcoming session for this client
@@ -156,22 +159,30 @@ export default function ClientDashboard() {
         setUpcomingSession(null);
       }
 
-      const [checkInResult, habitsResult, habitLogsResult, mealsResult, dailyLogResult] = await Promise.all([
+      const [checkInResult, habitsResult, habitLogsResult, mealsResult, mealPlanResult, dailyLogResult] = await Promise.all([
         supabase.from('check_ins').select('*').eq('client_id', client.id).eq('date', today).maybeSingle(),
         supabase.from('habits').select('*').eq('client_id', client.id).eq('is_active', true),
         supabase.from('habit_logs').select('*').eq('client_id', client.id).eq('date', today),
-        supabase.from('meals').select('calories').eq('client_id', client.id).eq('meal_date', today),
+        supabase.from('meals').select('calories, protein_g').eq('client_id', client.id).eq('meal_date', today),
+        supabase.from('meal_plans').select('daily_calories, meals_data').eq('client_id', client.id).eq('status', 'active').maybeSingle(),
         supabase.from('daily_logs').select('steps').eq('client_id', client.id).eq('date', today).maybeSingle(),
       ]);
       
       let checkIn = checkInResult.data;
 
-      // Calculate Calories Eaten Today
+      // Calculate Calories and Protein Eaten Today
       const mealsData = mealsResult.data || [];
       const totalCalories = mealsData.reduce((sum, meal) => sum + (meal.calories || 0), 0);
+      const totalProtein = mealsData.reduce((sum, meal) => sum + (meal.protein_g || 0), 0);
       setTodayCalories(totalCalories);
+      setTodayProtein(totalProtein);
 
-      // Fetch Latest Check-In weight with non-null value (even if from a past date)
+      if (mealPlanResult.data) {
+        setTargetCalories(mealPlanResult.data.daily_calories || null);
+        setTargetProtein(mealPlanResult.data.meals_data?.target_protein || null);
+      }
+
+      // Fetch Latest Check-In weight
       const { data: latestWeightData } = await supabase
         .from('check_ins')
         .select('weight_kg, date')
@@ -193,35 +204,21 @@ export default function ClientDashboard() {
         setWeightDaysAgo(0);
       }
 
-      // Auto-Sync Steps Tracker
-      let syncedSteps: number | null = null;
+      // Silent Health Data Sync
       if (isSyncEnabled) {
-        const localStepsKey = `@steps_${today}`;
-        const storedSteps = await AsyncStorage.getItem(localStepsKey);
-        
-        let stepsToSync = storedSteps ? parseInt(storedSteps) : 0;
-
-        if (await isHealthSyncAvailable()) {
-          const realSteps = await getTodaySteps();
-          if (realSteps !== null) {
-            stepsToSync = realSteps;
-            await AsyncStorage.setItem(localStepsKey, stepsToSync.toString());
-            try {
-              await supabase.from('daily_logs').upsert({
-                client_id: client.id,
-                date: today,
-                steps: stepsToSync
-              }, { onConflict: 'client_id,date' });
-            } catch (dbErr) {
-              console.warn('Upserting steps failed:', dbErr);
-            }
-          }
+        const syncResult = await syncAllHealthData(client.id);
+        if (syncResult.steps !== null) {
+          setTodaySteps(syncResult.steps);
+        } else if (dailyLogResult.data?.steps) {
+          setTodaySteps(dailyLogResult.data.steps);
         }
-        syncedSteps = stepsToSync;
-      } else if (dailyLogResult.data) {
-        syncedSteps = dailyLogResult.data.steps;
+      } else if (dailyLogResult.data?.steps) {
+        setTodaySteps(dailyLogResult.data.steps);
+      } else {
+        // Dev fallback for quick preview
+        const currentSteps = await getTodaySteps();
+        setTodaySteps(currentSteps);
       }
-      setTodaySteps(syncedSteps);
 
       setTodayCheckIn(checkIn);
       setHabits(habitsResult.data || []);
@@ -232,91 +229,25 @@ export default function ClientDashboard() {
   const handleStepsSyncPress = async () => {
     if (stepsSyncEnabled) {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      
-      // Perform active real sync when user requests it
-      const realSteps = await getTodaySteps();
-      if (realSteps !== null) {
-        const today = new Date().toISOString().split('T')[0];
-        const localStepsKey = `@steps_${today}`;
-        await AsyncStorage.setItem(localStepsKey, realSteps.toString());
-        
-        if (client?.id) {
-          try {
-            await supabase.from('daily_logs').upsert({
-              client_id: client.id,
-              date: today,
-              steps: realSteps
-            }, { onConflict: 'client_id,date' });
-          } catch (dbErr) {
-            console.warn('Upserting steps failed:', dbErr);
-          }
+      if (client?.id) {
+        const syncResult = await syncAllHealthData(client.id);
+        if (syncResult.steps !== null) {
+          setTodaySteps(syncResult.steps);
         }
-        
-        setTodaySteps(realSteps);
-        
-        Alert.alert(
-          "Steps Synced",
-          `Today: ${realSteps.toLocaleString()} steps.`,
-          [{ text: "Ok" }]
-        );
-      } else {
-        Alert.alert(
-          "Sync Failed",
-          "Cannot read steps. Please check your Health app settings.",
-          [{ text: "Ok" }]
-        );
       }
-      return;
-    }
-
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      "Share Steps?",
-      "Let this app sync steps from your health app to share progress with your coach?",
-      [
-        { text: "Not Now", style: "cancel" },
-        { 
-          text: "Share Steps", 
-          onPress: async () => {
-            try {
-              const hasPermission = await requestHealthPermissions();
-              if (!hasPermission) {
-                Alert.alert(
-                  "Permission Required",
-                  "Enable permissions in your Health settings to sync steps.",
-                  [{ text: "Ok" }]
-                );
-                return;
-              }
-
-              await AsyncStorage.setItem('@steps_sync_enabled', 'true');
-              setStepsSyncEnabled(true);
-              
-              const today = new Date().toISOString().split('T')[0];
-              const localStepsKey = `@steps_${today}`;
-              const realSteps = await getTodaySteps();
-              const stepsToSync = realSteps !== null ? realSteps : 0;
-              
-              await AsyncStorage.setItem(localStepsKey, stepsToSync.toString());
-
-              if (client?.id && stepsToSync > 0) {
-                await supabase.from('daily_logs').upsert({
-                  client_id: client.id,
-                  date: today,
-                  steps: stepsToSync
-                }, { onConflict: 'client_id,date' });
-              }
-
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert("Connected!", "Your steps are now sharing automatically.");
-              loadDashboardData();
-            } catch (err) {
-              console.error(err);
-            }
+    } else {
+      const granted = await requestHealthPermissions();
+      if (granted) {
+        setStepsSyncEnabled(true);
+        if (client?.id) {
+          const syncResult = await syncAllHealthData(client.id);
+          if (syncResult.steps !== null) {
+            setTodaySteps(syncResult.steps);
           }
         }
-      ]
-    );
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    }
   };
 
   const onRefresh = () => { setRefreshing(true); refreshBrand(); loadDashboardData(); };
@@ -426,29 +357,30 @@ export default function ClientDashboard() {
             <View className="flex-row flex-wrap justify-between gap-4 mb-4">
                 <MetricCard 
                   label="Calories" 
-                  value={todayCalories > 0 ? `${todayCalories} kcal` : '--'} 
+                  value={targetCalories ? `${Math.round(todayCalories)} / ${targetCalories} kcal` : `${Math.round(todayCalories)} kcal`} 
                   icon={<Utensils size={20} color={colors.primary} />} 
                   active={todayCalories > 0}
-                  onPress={() => router.push('/(client)/activity')}
+                  onPress={() => router.push('/(client)/activity' as any)}
+                />
+                <MetricCard 
+                  label="Protein" 
+                  value={targetProtein ? `${Math.round(todayProtein)} / ${targetProtein} g` : `${Math.round(todayProtein)} g`} 
+                  icon={<Target size={20} color="#818CF8" />} 
+                  active={todayProtein > 0}
+                  onPress={() => router.push('/(client)/activity' as any)}
                 />
                 <MetricCard 
                   label="Daily Tasks" 
-                  value={`${completedHabitsCount}/${habits.length}`} 
+                  value={`${completedHabitsCount}/${habits.length || 0}`} 
                   icon={<Award size={20} color="#10B981" />} 
                   active={completedHabitsCount === habits.length && habits.length > 0}
-                />
-                <MetricCard 
-                  label={weightDaysAgo > 5 ? `Weight (${weightDaysAgo}d ago)` : "Weight"} 
-                  value={latestWeight ? `${latestWeight}kg` : '--'} 
-                  icon={<TrendingUp size={20} color={weightDaysAgo > 5 ? "#EF4444" : "#F59E0B"} />} 
-                  active={!!latestWeight}
-                  onPress={() => router.push('/(client)/check-in')}
+                  onPress={() => router.push('/(client)/activity' as any)}
                 />
                 <MetricCard 
                   label={stepsSyncEnabled ? "Steps" : "Sync Steps"} 
-                  value={todaySteps !== null ? `${todaySteps.toLocaleString()}` : 'Click to Sync'} 
-                  icon={<Activity size={20} color={stepsSyncEnabled ? colors.primary : "#64748B"} />} 
-                  active={stepsSyncEnabled}
+                  value={todaySteps !== null ? `${todaySteps.toLocaleString()}` : (stepsSyncEnabled ? '0' : 'Sync Steps')} 
+                  icon={<Footprints size={20} color={stepsSyncEnabled ? colors.primary : "#64748B"} />} 
+                  active={stepsSyncEnabled && (todaySteps ?? 0) > 0}
                   onPress={handleStepsSyncPress}
                   showGlow={!stepsSyncEnabled}
                 />

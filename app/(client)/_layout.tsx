@@ -43,6 +43,20 @@ export default function ClientLayout() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="personal-information" />
         <Stack.Screen name="schedule-timeline" />
+        <Stack.Screen 
+          name="analytics" 
+          options={{ 
+            gestureEnabled: true,
+            animation: 'slide_from_right',
+          }} 
+        />
+        <Stack.Screen 
+          name="analytics-detail" 
+          options={{ 
+            gestureEnabled: true,
+            animation: 'slide_from_right',
+          }} 
+        />
       </Stack>
       
       {(loading || !session || profile?.role !== 'client') && (

@@ -19,7 +19,9 @@ import {
   UIManager,
   TouchableWithoutFeedback,
   Easing as RNEasing,
+  AccessibilityInfo,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, {
   useSharedValue,
@@ -33,11 +35,13 @@ import BlurText from '@/components/ui/BlurText';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
-import { isDarkColor, getContrastColor } from '@/lib/theme-utils';
+import { isDarkColor, getContrastColor, hexToRGB } from '@/lib/theme-utils';
 import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
 import FeedbackModal from '@/components/FeedbackModal';
 import StreakFire from '@/components/StreakFire';
+import { useStreak } from '@/hooks/useStreak';
+import { syncAllHealthData } from '@/lib/health-service';
 import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import streakQuotes from '@/assets/streak_quotes.json';
@@ -127,6 +131,35 @@ function getSpotlightPath(
     `A ${radius} ${radius} 0 0 1 ${x + radius} ${y} ` +
     `Z`
   );
+}
+
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+/** Ensures a color is in valid rgba(r, g, b, a) format for reliable Animated.interpolate color tweening */
+function toRgbaString(color: string, alpha = 1): string {
+  if (!color) return `rgba(0, 0, 0, ${alpha})`;
+  if (color.startsWith('rgba(')) {
+    const parts = color.replace(/rgba\(|\)/g, '').split(',');
+    if (parts.length >= 3) {
+      return `rgba(${parts[0].trim()}, ${parts[1].trim()}, ${parts[2].trim()}, ${alpha})`;
+    }
+    return color;
+  }
+  if (color.startsWith('rgb(')) {
+    const parts = color.replace(/rgb\(|\)/g, '').split(',');
+    if (parts.length >= 3) {
+      return `rgba(${parts[0].trim()}, ${parts[1].trim()}, ${parts[2].trim()}, ${alpha})`;
+    }
+  }
+  try {
+    const rgb = hexToRGB(color);
+    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+  } catch {
+    return `rgba(59, 130, 246, ${alpha})`;
+  }
 }
 
 export default function ActivityScreen() {
@@ -219,56 +252,7 @@ export default function ActivityScreen() {
   };
 
   const triggerDailyTasksHighlight = (customTooltipText?: string) => {
-    if (customTooltipText) {
-      setHighlightTooltipText(customTooltipText);
-    }
-    // 1. Ensure daily tasks is expanded
-    setExpandedCategories((prev) => ({ ...prev, dailyTasks: true }));
-
-    // Reset card visibility
-    setShowTooltipCard(false);
-    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
-
-    // 2. Smoothly scroll down to Daily Tasks
-    setTimeout(() => {
-      const targetScrollY =
-        (logsContainerYRef.current || 0) +
-        (dailyTasksLayoutRef.current?.y || 0);
-      scrollViewRef.current?.scrollTo({
-        y: Math.max(0, targetScrollY - 24),
-        animated: true,
-      });
-
-      // 3. Measure in window to place spotlight highlight & tooltip perfectly
-      setTimeout(() => {
-        dailyTasksContainerRef.current?.measureInWindow(
-          (x: number, y: number, width: number, height: number) => {
-            const screenW = Dimensions.get('window').width;
-            if (width > 0 && height > 0) {
-              setHighlightLayout({
-                x: Math.max(8, x - 8),
-                y: Math.max(insets.top + 10, y - 8),
-                width: width + 16,
-                height: height + 16,
-              });
-            } else {
-              setHighlightLayout({
-                x: 16,
-                y: insets.top + 120,
-                width: screenW - 32,
-                height: (dailyTasksLayoutRef.current?.height || 220) + 16,
-              });
-            }
-            setIsHighlighting(true);
-
-            // Add delay to the tooltip card appearing below the highlight
-            tooltipTimerRef.current = setTimeout(() => {
-              setShowTooltipCard(true);
-            }, 380);
-          },
-        );
-      }, 450);
-    }, 200);
+    setShowDailyTasksListModal(true);
   };
 
   useEffect(() => {
@@ -295,6 +279,7 @@ export default function ActivityScreen() {
   );
 
   const handleDismissHighlight = () => {
+    setShowDailyTasksListModal(false);
     if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
     setShowTooltipCard(false);
     setIsHighlighting(false);
@@ -336,6 +321,7 @@ export default function ActivityScreen() {
   // Task Details Bottom Sheet Drawer Animation state
   const [selectedTask, setSelectedTask] = useState<Habit | null>(null);
   const [showTaskDetailsModal, setShowTaskDetailsModal] = useState(false);
+  const [showDailyTasksListModal, setShowDailyTasksListModal] = useState(false);
   const taskSheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const taskFadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -519,7 +505,12 @@ export default function ActivityScreen() {
   // Ensure data is fresh when user navigates back to this tab
   useFocusEffect(
     useCallback(() => {
-      if (client) loadActivityData();
+      if (client) {
+        loadActivityData();
+        syncAllHealthData(client.id).then(() => {
+          loadActivityData();
+        });
+      }
     }, [client, selectedDate]),
   );
 
@@ -1222,15 +1213,18 @@ export default function ActivityScreen() {
       if (habit.verification_type === 'camera') {
         const existingLog = habitLogs.find((log) => log.habit_id === habit.id);
         if (existingLog && existingLog.completed) {
-          // Delete the log entry for camera tasks to allow fresh resubmission
+          // Optimistically remove
+          setHabitLogs((prev) => prev.filter((l) => l.id !== existingLog.id));
           const { error: deleteError } = await supabase
             .from('habit_logs')
             .delete()
             .eq('id', existingLog.id);
 
-          if (deleteError) throw deleteError;
+          if (deleteError) {
+            setHabitLogs((prev) => [...prev, existingLog]);
+            throw deleteError;
+          }
 
-          setHabitLogs((prev) => prev.filter((l) => l.id !== existingLog.id));
           sendCompletionMessage(
             habit.name,
             false,
@@ -1252,67 +1246,92 @@ export default function ActivityScreen() {
         delete timeoutRefs.current[habit.id];
       }
 
-      let newCompleted = true;
+      const newCompleted = existingLog ? !existingLog.completed : true;
 
+      // 1. Tactile haptic feedback immediately
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+      // 2. Smooth layout transition for list animations
+      if (Platform.OS !== 'web') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+
+      // 3. Optimistic local state update (0ms lag)
+      const previousLogs = [...habitLogs];
+      let optimisticLogs: HabitLog[];
       if (existingLog) {
-        newCompleted = !existingLog.completed;
-        const { data, error } = await supabase
-          .from('habit_logs')
-          .update({ completed: newCompleted })
-          .eq('id', existingLog.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        const updatedLogs = habitLogs.map((log) =>
-          log.id === existingLog.id ? data : log,
+        optimisticLogs = habitLogs.map((log) =>
+          log.id === existingLog.id ? { ...log, completed: newCompleted } : log,
         );
-        setHabitLogs(updatedLogs);
-
-        // Check for total daily completion
-        if (newCompleted) {
-          const allHabitsDone = habits.every(
-            (h) => updatedLogs.find((l) => l.habit_id === h.id)?.completed,
-          );
-          const allChallengesDone = challenges.every((c) => c.completed);
-
-          if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
-            setShowStreakGained(true);
-            setIsCold(false);
-            setStreak((prev) => prev + 1); // Optimistic streak update
-          }
-        }
-        refreshStreak();
       } else {
-        const { data, error } = await supabase
-          .from('habit_logs')
-          .insert({
-            client_id: client?.id,
-            habit_id: habit.id,
-            date: today,
-            completed: true,
-          })
-          .select()
-          .single();
+        const tempLog: HabitLog = {
+          id: `temp-${Date.now()}`,
+          client_id: client?.id || '',
+          habit_id: habit.id,
+          date: today,
+          completed: true,
+          created_at: new Date().toISOString(),
+        } as any;
+        optimisticLogs = [...habitLogs, tempLog];
+      }
+      setHabitLogs(optimisticLogs);
 
-        if (error) throw error;
-
-        const updatedLogs = [...habitLogs, data];
-        setHabitLogs(updatedLogs);
-
-        // Check for total daily completion
+      // 4. Optimistic daily completion check
+      if (newCompleted) {
         const allHabitsDone = habits.every(
-          (h) => updatedLogs.find((l) => l.habit_id === h.id)?.completed,
+          (h) => optimisticLogs.find((l) => l.habit_id === h.id)?.completed,
         );
         const allChallengesDone = challenges.every((c) => c.completed);
 
         if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
           setShowStreakGained(true);
           setIsCold(false);
-          setStreak((prev) => prev + 1); // Optimistic streak update
+          setStreak((prev) => prev + 1);
+        }
+      }
+
+      // 5. Background Supabase sync
+      try {
+        if (existingLog) {
+          const { data, error } = await supabase
+            .from('habit_logs')
+            .update({ completed: newCompleted })
+            .eq('id', existingLog.id)
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          setHabitLogs((current) =>
+            current.map((log) => (log.id === existingLog.id ? data : log)),
+          );
+        } else {
+          const { data, error } = await supabase
+            .from('habit_logs')
+            .insert({
+              client_id: client?.id,
+              habit_id: habit.id,
+              date: today,
+              completed: true,
+            })
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          setHabitLogs((current) =>
+            current.map((log) =>
+              log.id.startsWith('temp-') && log.habit_id === habit.id ? data : log,
+            ),
+          );
         }
         refreshStreak();
+      } catch (syncError) {
+        console.error('Failed to sync habit toggle with database:', syncError);
+        // Rollback state on error
+        setHabitLogs(previousLogs);
+        Alert.alert('Sync Error', 'Could not save task update. Please try again.');
+        return;
       }
 
       // Schedule message check
@@ -1397,9 +1416,9 @@ export default function ActivityScreen() {
           >
             <View>
               <Text
-                style={{ color: textColor, fontSize: 24, fontWeight: '900' }}
+                style={{ color: textColor, fontSize: 28, fontWeight: '900', letterSpacing: -0.5 }}
               >
-                Your Progress
+                Plan
               </Text>
               <Text
                 style={{
@@ -1471,49 +1490,24 @@ export default function ActivityScreen() {
           }
         >
           <View className="px-3">
-            {/* Access Calendar CTA Card */}
-            <AccessCalendarCard
-              onPress={() => router.push('/(client)/schedule-timeline' as any)}
+            {/* 1. HERO CARD: Daily Tasks (Apple Style) */}
+            <DailyTasksHeroCard
+              habits={habits}
+              habitLogs={habitLogs}
+              onPress={() => setShowDailyTasksListModal(true)}
             />
 
-            {/* Active Challenges Card */}
-            <ActiveChallengesCard
-              count={activeChallengesCount}
-              onPress={() => router.push('/(client)/challenges' as any)}
+            {/* 2. BENTO ROW: Calendar & Challenges (Side-by-Side Chunky Cards) */}
+            <BentoActionsRow
+              activeChallengesCount={activeChallengesCount}
+              onPressCalendar={() => router.push('/(client)/schedule-timeline' as any)}
+              onPressChallenges={() => router.push('/(client)/challenges' as any)}
             />
 
-            {/* Summary Metric Grid */}
-            <View className="flex-row flex-wrap justify-between gap-4 mb-4">
-              <MetricCard
-                label="Calories"
-                value={totalCalories > 0 ? `${formatCompactNumber(totalCalories)} kcal` : '--'}
-                icon={<Utensils size={20} color="#F59E0B" />}
-                active={totalCalories > 0}
-              />
-              <MetricCard
-                label="Protein"
-                value={totalProtein > 0 ? `${formatCompactNumber(totalProtein)} g` : '--'}
-                icon={<Target size={20} color="#818CF8" />}
-                active={totalProtein > 0}
-              />
-              <MetricCard
-                label="Tasks Done"
-                value={`${completedHabits}/${habits.length}`}
-                icon={<CheckCircle size={20} color="#10B981" />}
-                active={completedHabits === habits.length && habits.length > 0}
-                onPress={() => {
-                  triggerDailyTasksHighlight(
-                    'Finish your daily tasks here not to lose your streak',
-                  );
-                }}
-              />
-              <MetricCard
-                label="Active Time"
-                value={totalWorkoutMinutes > 0 ? `${totalWorkoutMinutes} min` : '0 min'}
-                icon={<Clock size={20} color="#38BDF8" />}
-                active={totalWorkoutMinutes > 0}
-              />
-            </View>
+            {/* 3. WIDE CARD: Analytics */}
+            <AppleAnalyticsCard
+              onPress={() => router.push('/(client)/analytics' as any)}
+            />
 
             {/* Activity Logs Section */}
             <View
@@ -1933,6 +1927,188 @@ export default function ActivityScreen() {
               )}
             </ScrollView>
           </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Dedicated Daily Tasks Modal / Drawer */}
+      <Modal
+        visible={showDailyTasksListModal}
+        transparent
+        statusBarTranslucent
+        animationType="fade"
+        onRequestClose={() => setShowDailyTasksListModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'flex-end',
+            backgroundColor: isDark ? 'rgba(0,0,0,0.72)' : 'rgba(15, 23, 42, 0.55)',
+          }}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowDailyTasksListModal(false)}>
+            <View style={{ flex: 1 }} />
+          </TouchableWithoutFeedback>
+
+          <View
+            style={{
+              backgroundColor: cardBg,
+              borderTopLeftRadius: 36,
+              borderTopRightRadius: 36,
+              paddingTop: 18,
+              paddingHorizontal: 22,
+              paddingBottom: insets.bottom + 24,
+              maxHeight: '85%',
+              borderTopWidth: 1,
+              borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+            }}
+          >
+            {/* Handle bar */}
+            <View
+              style={{
+                width: 44,
+                height: 5,
+                borderRadius: 3,
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.2)' : '#CBD5E1',
+                alignSelf: 'center',
+                marginBottom: 16,
+              }}
+            />
+
+            {/* Modal Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 14,
+              }}
+            >
+              <View>
+                <Text
+                  style={{
+                    color: textColor,
+                    fontSize: 22,
+                    fontWeight: '900',
+                    letterSpacing: -0.4,
+                  }}
+                >
+                  Daily Tasks
+                </Text>
+                <Text
+                  style={{
+                    color: textSecondaryColor,
+                    fontSize: 13,
+                    fontWeight: '600',
+                    marginTop: 2,
+                  }}
+                >
+                  {habits.length === 0
+                    ? 'No tasks established'
+                    : `${completedHabits} of ${habits.length} completed`}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setShowDailyTasksListModal(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: isDark
+                    ? 'rgba(255, 255, 255, 0.08)'
+                    : '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={18} color={textColor} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Smooth Animated Progress Bar */}
+            {habits.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <SmoothProgressBar
+                  progressPercent={(completedHabits / habits.length) * 100}
+                  isCompleted={completedHabits === habits.length && habits.length > 0}
+                  primaryColor={theme.colors.primary}
+                  completedColor="#10B981"
+                  trackBg={isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9'}
+                  height={8}
+                  borderRadius={4}
+                  showPercentage={true}
+                  percentageColor={textColor}
+                />
+              </View>
+            )}
+
+            {/* All Tasks Done Celebration Badge */}
+            {completedHabits === habits.length && habits.length > 0 && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: isDark
+                    ? 'rgba(16, 185, 129, 0.15)'
+                    : 'rgba(16, 185, 129, 0.1)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(16, 185, 129, 0.3)',
+                  borderRadius: 14,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  marginBottom: 16,
+                }}
+              >
+                <CheckCircle size={18} color="#10B981" />
+                <Text
+                  style={{
+                    color: isDark ? '#A7F3D0' : '#047857',
+                    fontSize: 13,
+                    fontWeight: '800',
+                  }}
+                >
+                  All tasks completed today!
+                </Text>
+              </View>
+            )}
+
+            {/* Habit Items */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            >
+              {habits.length === 0 ? (
+                <EmptyState message="No daily tasks established." />
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {habits.map((habit, idx) => {
+                    const log = habitLogs.find((l) => l.habit_id === habit.id);
+                    const isCompleted = log?.completed || false;
+                    const visuals = getTaskVisuals(habit);
+                    return (
+                      <ActivityCard
+                        key={habit.id}
+                        title={habit.name}
+                        sub={
+                          (habit.category ? `${habit.category.toUpperCase()} • ` : '') +
+                          (habit.verification_type === 'camera'
+                            ? 'Camera Verification Required'
+                            : 'Manual Toggle')
+                        }
+                        completed={isCompleted}
+                        icon={visuals.icon}
+                        iconColor={visuals.color}
+                        onPress={() => openTaskDrawer(habit)}
+                        onToggle={() => toggleHabit(habit)}
+                        delay={idx * 40}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
+          </View>
         </View>
       </Modal>
 
@@ -2744,141 +2920,127 @@ const CategorySummaryCard = ({
   );
 };
 
-// ─── Access Calendar CTA Card ───────────────────────────────────────────────
-const AccessCalendarCard = ({ onPress }: { onPress: () => void }) => {
-  const theme = useTheme();
-  const colors = theme.colors;
-  const primaryIsDark = isDarkColor(colors.primary);
-  const primaryTextColor = primaryIsDark ? '#FFFFFF' : '#0F172A';
-  const primaryTextMuted = primaryIsDark
-    ? 'rgba(255, 255, 255, 0.8)'
-    : 'rgba(15, 23, 42, 0.8)';
-  const btnBg = primaryIsDark ? '#FFFFFF' : '#0F172A';
-  const btnText = primaryIsDark ? colors.primary : '#FFFFFF';
+// ─── Smooth Animated Progress Bar ──────────────────────────────────────────
+const SmoothProgressBar = ({
+  progressPercent,
+  isCompleted,
+  primaryColor,
+  completedColor = '#10B981',
+  trackBg,
+  height = 8,
+  borderRadius = 4,
+  showPercentage = false,
+  percentageColor,
+}: {
+  progressPercent: number;
+  isCompleted: boolean;
+  primaryColor: string;
+  completedColor?: string;
+  trackBg?: string;
+  height?: number;
+  borderRadius?: number;
+  showPercentage?: boolean;
+  percentageColor?: string;
+}) => {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+    return () => sub?.remove?.();
+  }, []);
+
+  const progressAnim = useRef(new Animated.Value(progressPercent)).current;
+  const colorAnim = useRef(new Animated.Value(isCompleted ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progressPercent,
+      duration: reduceMotion ? 0 : 550,
+      easing: RNEasing.bezier(0.25, 0.1, 0.25, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [progressPercent, reduceMotion]);
+
+  useEffect(() => {
+    Animated.timing(colorAnim, {
+      toValue: isCompleted ? 1 : 0,
+      duration: reduceMotion ? 0 : 450,
+      easing: RNEasing.bezier(0.25, 0.1, 0.25, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [isCompleted, reduceMotion]);
+
+  const animatedBarFill = colorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(primaryColor, 1),
+      toRgbaString(completedColor, 1),
+    ],
+  });
 
   return (
-    <MotiView
-      key="calendar-access-cta"
-      from={{ opacity: 0, translateY: -6 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      style={{
-        marginBottom: 16,
-        borderRadius: 28,
-        overflow: 'hidden',
-        backgroundColor: colors.primary,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.15)',
-        position: 'relative',
-      }}
-    >
-      {/* Decorative background shapes matching check-in card */}
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%' }}>
       <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: -24,
-          right: -16,
-          width: 120,
-          height: 120,
-          backgroundColor: 'rgba(255, 255, 255, 0.12)',
-          borderRadius: 60,
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          if (w > 0 && w !== trackWidth) {
+            setTrackWidth(w);
+          }
         }}
-      />
-      <View
-        pointerEvents="none"
         style={{
-          position: 'absolute',
-          bottom: -24,
-          left: -16,
-          width: 90,
-          height: 90,
-          backgroundColor: 'rgba(0, 0, 0, 0.08)',
-          borderRadius: 45,
-        }}
-      />
-
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={onPress}
-        style={{
-          paddingHorizontal: 20,
-          paddingVertical: 18,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          zIndex: 10,
+          flex: 1,
+          height,
+          backgroundColor: trackBg || 'rgba(255, 255, 255, 0.08)',
+          borderRadius,
+          overflow: 'hidden',
         }}
       >
-        <View style={{ flex: 1, marginRight: 12 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 4,
-            }}
-          >
-            <CalendarIcon size={13} color={primaryTextColor} />
-            <Text
-              style={{
-                color: primaryTextMuted,
-                fontSize: 10,
-                fontWeight: '900',
-                textTransform: 'uppercase',
-                letterSpacing: 1.5,
-              }}
-            >
-              Schedule
-            </Text>
-          </View>
-          <Text
-            style={{
-              color: primaryTextColor,
-              fontSize: 18,
-              fontWeight: '900',
-              letterSpacing: -0.3,
-            }}
-          >
-            Access your calendar
-          </Text>
-        </View>
-
-        <View
+        <Animated.View
           style={{
-            backgroundColor: btnBg,
-            paddingHorizontal: 14,
-            paddingVertical: 9,
-            borderRadius: 9999,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 4,
-            flexShrink: 0,
+            height: '100%',
+            width:
+              trackWidth > 0
+                ? progressAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: [0, trackWidth],
+                    extrapolate: 'clamp',
+                  })
+                : `${Math.min(100, Math.max(0, progressPercent))}%`,
+            backgroundColor: animatedBarFill,
+            borderRadius,
+          }}
+        />
+      </View>
+      {showPercentage && (
+        <Text
+          style={{
+            color: percentageColor || (isCompleted ? completedColor : primaryColor),
+            fontSize: 12,
+            fontWeight: '900',
+            minWidth: 36,
+            textAlign: 'right',
           }}
         >
-          <Text
-            style={{
-              color: btnText,
-              fontWeight: '900',
-              fontSize: 11,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-            }}
-          >
-            Check Calendar
-          </Text>
-          <ChevronRight size={13} color={btnText} />
-        </View>
-      </TouchableOpacity>
-    </MotiView>
+          {Math.round(progressPercent)}%
+        </Text>
+      )}
+    </View>
   );
 };
 
-// ─── Active Challenges Card ────────────────────────────────────────────────
-const ActiveChallengesCard = ({
-  count,
+// ─── Apple-Style Daily Tasks Hero Card ───────────────────────────────────────
+const DailyTasksHeroCard = ({
+  habits,
+  habitLogs,
   onPress,
 }: {
-  count: number;
+  habits: Habit[];
+  habitLogs: HabitLog[];
   onPress: () => void;
 }) => {
   const theme = useTheme();
@@ -2887,190 +3049,506 @@ const ActiveChallengesCard = ({
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondaryColor =
     colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = isDark ? '#0F172A' : '#FFFFFF';
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
 
-  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const completedCount = habitLogs.filter((log) => log.completed).length;
+  const totalCount = habits.length;
+  const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  const isAllDone = totalCount > 0 && completedCount === totalCount;
+
+  // Track layout width for pixel-precise smooth layout animation
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  // Brand adaptation when completed
+  const primaryIsDark = isDarkColor(colors.primary);
+  const primaryTextColor = primaryIsDark ? '#FFFFFF' : '#0F172A';
+  const primaryTextMuted = primaryIsDark
+    ? 'rgba(255, 255, 255, 0.85)'
+    : 'rgba(15, 23, 42, 0.85)';
+
+  // Contrast logic for Logo Box and Tag Pill:
+  // If card is dark, badge background is crisp white (#FFFFFF).
+  // If card is light, badge background is dark (#0F172A).
+  const completedBadgeBg = primaryIsDark ? '#FFFFFF' : '#0F172A';
+
+  // Rule: If the badge background is light, content inside MUST be dark.
+  // If the badge background is dark, content inside MUST be light.
+  const completedBadgeContentColor = primaryIsDark
+    ? (isDarkColor(colors.primary) ? colors.primary : '#0F172A')
+    : '#FFFFFF';
+
+  // Default states when not completed:
+  const defaultPillBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9';
+  const defaultPillTextColor = isDark ? '#FFFFFF' : '#0F172A';
+  const defaultIconBoxBg = isDark ? 'rgba(255, 255, 255, 0.08)' : `${colors.primary}18`;
+  const defaultIconColor = colors.primary;
+
+  // Accessibility: Reduce motion check
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+    return () => sub?.remove?.();
+  }, []);
+
+  // 1. Smooth Progress Bar Animation
+  const progressAnim = useRef(new Animated.Value(progressPercent)).current;
+
+  // 2. Smooth Background & Theme Transition Animation
+  const completeAnim = useRef(new Animated.Value(isAllDone ? 1 : 0)).current;
+  const cardScaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (count > 0) {
-      const loop = Animated.loop(
-        Animated.timing(rotateAnim, {
-          toValue: 1,
-          duration: 3500,
-          easing: RNEasing.linear,
-          useNativeDriver: true,
-        }),
-      );
-      loop.start();
-      return () => loop.stop();
-    }
-  }, [count]);
+    Animated.timing(progressAnim, {
+      toValue: progressPercent,
+      duration: reduceMotion ? 0 : 550,
+      easing: RNEasing.bezier(0.25, 0.1, 0.25, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [progressPercent, reduceMotion]);
 
-  const spin = rotateAnim.interpolate({
+  useEffect(() => {
+    Animated.timing(completeAnim, {
+      toValue: isAllDone ? 1 : 0,
+      duration: reduceMotion ? 0 : 550,
+      easing: RNEasing.bezier(0.25, 0.1, 0.25, 1),
+      useNativeDriver: false,
+    }).start();
+
+    if (isAllDone && !reduceMotion) {
+      Animated.sequence([
+        Animated.timing(cardScaleAnim, {
+          toValue: 1.025,
+          duration: 180,
+          easing: RNEasing.out(RNEasing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.spring(cardScaleAnim, {
+          toValue: 1,
+          friction: 5,
+          tension: 75,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+  }, [isAllDone, reduceMotion]);
+
+  // Next up pending tasks for the preview pills
+  const pendingHabits = habits.filter(
+    (h) => !habitLogs.find((l) => l.habit_id === h.id)?.completed,
+  );
+
+  const animatedBg = completeAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+    outputRange: [toRgbaString(cardBg, 1), toRgbaString(colors.primary, 1)],
   });
 
-  if (count === 0) {
-    return (
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={onPress}
-        style={{
-          backgroundColor: isDark
-            ? 'rgba(255, 255, 255, 0.025)'
-            : 'rgba(0, 0, 0, 0.025)',
-          borderRadius: 28,
-          borderWidth: 1,
-          borderColor: isDark
-            ? 'rgba(255, 255, 255, 0.08)'
-            : 'rgba(0, 0, 0, 0.06)',
-          paddingHorizontal: 20,
-          paddingVertical: 18,
-          marginBottom: 16,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <View style={{ flex: 1, marginRight: 12 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 4,
-            }}
-          >
-            <Target size={13} color={textSecondaryColor} />
-            <Text
-              style={{
-                color: textSecondaryColor,
-                fontSize: 10,
-                fontWeight: '900',
-                textTransform: 'uppercase',
-                letterSpacing: 1.5,
-              }}
-            >
-              Challenges
-            </Text>
-          </View>
-          <Text
-            style={{
-              color: textColor,
-              fontSize: 18,
-              fontWeight: '900',
-              letterSpacing: -0.3,
-            }}
-          >
-            Active Challenges
-          </Text>
-        </View>
+  const animatedBorder = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(cardBorder, isDark ? 0.08 : 1),
+      toRgbaString(primaryIsDark ? '#FFFFFF' : '#000000', primaryIsDark ? 0.25 : 0.15),
+    ],
+  });
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 12,
-              backgroundColor: isDark
-                ? 'rgba(255, 255, 255, 0.06)'
-                : 'rgba(0, 0, 0, 0.05)',
-              borderWidth: 1,
-              borderColor: isDark
-                ? 'rgba(255, 255, 255, 0.08)'
-                : 'rgba(0, 0, 0, 0.06)',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text
-              style={{
-                color: textSecondaryColor,
-                fontSize: 15,
-                fontWeight: '900',
-              }}
-            >
-              0
-            </Text>
-          </View>
-          <ChevronRight size={18} color={textSecondaryColor} />
-        </View>
-      </TouchableOpacity>
-    );
-  }
+  const animatedHeadlineColor = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [toRgbaString(textColor, 1), toRgbaString(primaryTextColor, 1)],
+  });
+
+  const animatedLabelColor = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [toRgbaString(colors.primary, 1), toRgbaString(primaryTextMuted, 1)],
+  });
+
+  const animatedPillBackground = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(defaultPillBg, isDark ? 0.08 : 1),
+      toRgbaString(completedBadgeBg, 1),
+    ],
+  });
+
+  const animatedPillTextColor = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(defaultPillTextColor, 1),
+      toRgbaString(completedBadgeContentColor, 1),
+    ],
+  });
+
+  const animatedIconWrapBg = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(defaultIconBoxBg, isDark ? 0.08 : 0.16),
+      toRgbaString(completedBadgeBg, 1),
+    ],
+  });
+
+  const animatedBarBg = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(isDark ? '#FFFFFF' : '#000000', 0.08),
+      toRgbaString(primaryIsDark ? '#FFFFFF' : '#000000', primaryIsDark ? 0.25 : 0.18),
+    ],
+  });
+
+  const animatedBarFill = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [toRgbaString(colors.primary, 1), toRgbaString(primaryTextColor, 1)],
+  });
+
+  const animatedMutedColor = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [toRgbaString(textSecondaryColor, 1), toRgbaString(primaryTextMuted, 1)],
+  });
+
+  const animatedProgressBarWidth =
+    trackWidth > 0
+      ? progressAnim.interpolate({
+          inputRange: [0, 100],
+          outputRange: [0, trackWidth],
+          extrapolate: 'clamp',
+        })
+      : `${Math.min(100, Math.max(0, progressPercent))}%`;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      onPress={onPress}
+    <Animated.View
       style={{
-        borderRadius: 28,
-        overflow: 'hidden',
-        position: 'relative',
-        marginBottom: 16,
-        padding: 1.5,
+        transform: [{ scale: cardScaleAnim }],
+        marginBottom: 14,
       }}
     >
-      <View
-        pointerEvents="none"
-        style={{
-          ...(StyleSheet.absoluteFill as any),
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-        }}
+      <TouchableOpacity
+        activeOpacity={0.88}
+        onPress={onPress}
       >
         <Animated.View
           style={{
-            width: 500,
-            height: 500,
-            transform: [{ rotate: spin }],
+            backgroundColor: animatedBg,
+            borderColor: animatedBorder,
+            borderWidth: 1,
+            borderRadius: 28,
+            padding: 22,
+            shadowColor: isAllDone ? colors.primary : '#000',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: isAllDone ? 0.35 : isDark ? 0.3 : 0.05,
+            shadowRadius: 14,
+            elevation: 4,
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          <LinearGradient
-            colors={['transparent', colors.primary, '#38BDF8', 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ width: '100%', height: '100%' }}
+          {/* Decorative subtle ambient circles */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: -24,
+              right: -24,
+              width: 140,
+              height: 140,
+              backgroundColor: isAllDone
+                ? 'rgba(255, 255, 255, 0.14)'
+                : `${colors.primary}12`,
+              borderRadius: 70,
+            }}
           />
-        </Animated.View>
-      </View>
+          {isAllDone && (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                bottom: -30,
+                left: -20,
+                width: 100,
+                height: 100,
+                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                borderRadius: 50,
+              }}
+            />
+          )}
 
-      <View
-        style={{
-          borderRadius: 26.5,
-          backgroundColor: isDark
-            ? 'rgba(15, 23, 42, 0.88)'
-            : 'rgba(255, 255, 255, 0.88)',
-          paddingHorizontal: 20,
-          paddingVertical: 18,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <View style={{ flex: 1, marginRight: 12 }}>
+          {/* Header Row */}
           <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 6,
-              marginBottom: 4,
+              justifyContent: 'space-between',
+              marginBottom: 14,
             }}
           >
-            <Target size={13} color={colors.primary} />
-            <Text
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Animated.View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 12,
+                  backgroundColor: animatedIconWrapBg,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <CheckCircle
+                  size={18}
+                  color={isAllDone ? completedBadgeContentColor : defaultIconColor}
+                />
+              </Animated.View>
+              <Animated.Text
+                style={{
+                  color: animatedLabelColor,
+                  fontSize: 11,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.4,
+                }}
+              >
+                Daily Tasks
+              </Animated.Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Animated.View
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderRadius: 999,
+                  backgroundColor: animatedPillBackground,
+                }}
+              >
+                <Animated.Text
+                  style={{
+                    color: animatedPillTextColor,
+                    fontSize: 12,
+                    fontWeight: '800',
+                  }}
+                >
+                  {totalCount === 0
+                    ? 'No tasks'
+                    : isAllDone
+                    ? 'All Done 🎉'
+                    : `${completedCount} of ${totalCount}`}
+                </Animated.Text>
+              </Animated.View>
+              <ChevronRight
+                size={18}
+                color={isAllDone ? primaryTextMuted : textSecondaryColor}
+              />
+            </View>
+          </View>
+
+          {/* Main Big Headline */}
+          <Animated.Text
+            style={{
+              color: animatedHeadlineColor,
+              fontSize: 24,
+              fontWeight: '900',
+              letterSpacing: -0.5,
+              marginBottom: 12,
+            }}
+          >
+            {totalCount === 0
+              ? 'No Tasks Today'
+              : isAllDone
+              ? 'All tasks completed!'
+              : `${totalCount - completedCount} tasks left today`}
+          </Animated.Text>
+
+          {/* Apple-style Animated Progress Bar with Percentage */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            <Animated.View
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                if (w > 0 && w !== trackWidth) {
+                  setTrackWidth(w);
+                }
+              }}
               style={{
-                color: colors.primary,
-                fontSize: 10,
-                fontWeight: '900',
-                textTransform: 'uppercase',
-                letterSpacing: 1.5,
+                flex: 1,
+                height: 8,
+                backgroundColor: animatedBarBg,
+                borderRadius: 4,
+                overflow: 'hidden',
               }}
             >
-              Challenges
-            </Text>
+              <Animated.View
+                style={{
+                  height: '100%',
+                  width: animatedProgressBarWidth,
+                  backgroundColor: animatedBarFill,
+                  borderRadius: 4,
+                }}
+              />
+            </Animated.View>
+
+            <Animated.Text
+              style={{
+                color: animatedHeadlineColor,
+                fontSize: 13,
+                fontWeight: '900',
+                minWidth: 38,
+                textAlign: 'right',
+              }}
+            >
+              {Math.round(progressPercent)}%
+            </Animated.Text>
           </View>
+
+          {/* Preview Chips */}
+          {pendingHabits.length > 0 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {pendingHabits.slice(0, 2).map((h) => (
+                <View
+                  key={h.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 12,
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.04)'
+                      : '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: isDark
+                      ? 'rgba(255, 255, 255, 0.06)'
+                      : '#E2E8F0',
+                  }}
+                >
+                  <Circle size={8} color={textSecondaryColor} />
+                  <Text
+                    style={{
+                      color: textColor,
+                      fontSize: 13,
+                      fontWeight: '700',
+                    }}
+                    numberOfLines={1}
+                  >
+                    {h.name}
+                  </Text>
+                </View>
+              ))}
+              {pendingHabits.length > 2 && (
+                <View
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 12,
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.04)'
+                      : '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: isDark
+                      ? 'rgba(255, 255, 255, 0.06)'
+                      : '#E2E8F0',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: textSecondaryColor,
+                      fontSize: 12,
+                      fontWeight: '700',
+                    }}
+                  >
+                    +{pendingHabits.length - 2} more
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <Animated.Text
+              style={{
+                color: animatedMutedColor,
+                fontSize: 13,
+                fontWeight: '600',
+              }}
+            >
+              Tap to view your habits & streak
+            </Animated.Text>
+          )}
+        </Animated.View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// ─── Bento Action Row (Calendar & Challenges) ──────────────────────────────
+const BentoActionsRow = ({
+  activeChallengesCount,
+  onPressCalendar,
+  onPressChallenges,
+}: {
+  activeChallengesCount: number;
+  onPressCalendar: () => void;
+  onPressChallenges: () => void;
+}) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDark = isDarkColor(colors.background || '#020617');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = isDark ? '#0F172A' : '#FFFFFF';
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
+      {/* Calendar Card */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onPressCalendar}
+        style={{
+          flex: 1,
+          backgroundColor: cardBg,
+          borderColor: cardBorder,
+          borderWidth: 1,
+          borderRadius: 26,
+          padding: 18,
+          minHeight: 135,
+          justifyContent: 'space-between',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: isDark ? 0.2 : 0.04,
+          shadowRadius: 8,
+          elevation: 2,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 14,
+              backgroundColor: 'rgba(99, 102, 241, 0.12)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <CalendarIcon size={20} color="#6366F1" />
+          </View>
+          <ChevronRight size={18} color={textSecondaryColor} />
+        </View>
+
+        <View>
           <Text
             style={{
               color: textColor,
@@ -3079,36 +3557,189 @@ const ActiveChallengesCard = ({
               letterSpacing: -0.3,
             }}
           >
-            Active Challenges
+            Calendar
+          </Text>
+          <Text
+            style={{
+              color: textSecondaryColor,
+              fontSize: 12,
+              fontWeight: '600',
+              marginTop: 2,
+            }}
+          >
+            Schedule & calls
           </Text>
         </View>
+      </TouchableOpacity>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      {/* Challenges Card */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onPressChallenges}
+        style={{
+          flex: 1,
+          backgroundColor: cardBg,
+          borderColor: cardBorder,
+          borderWidth: 1,
+          borderRadius: 26,
+          padding: 18,
+          minHeight: 135,
+          justifyContent: 'space-between',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: isDark ? 0.2 : 0.04,
+          shadowRadius: 8,
+          elevation: 2,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <View
             style={{
-              minWidth: 36,
-              height: 36,
-              paddingHorizontal: 8,
+              width: 42,
+              height: 42,
               borderRadius: 14,
-              backgroundColor: `${colors.primary}25`,
-              borderWidth: 1,
-              borderColor: `${colors.primary}60`,
+              backgroundColor: 'rgba(245, 158, 11, 0.12)',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
+            <Target size={20} color="#F59E0B" />
+          </View>
+          <View
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 10,
+              backgroundColor:
+                activeChallengesCount > 0
+                  ? `${colors.primary}20`
+                  : isDark
+                  ? 'rgba(255, 255, 255, 0.06)'
+                  : 'rgba(0, 0, 0, 0.04)',
+            }}
+          >
             <Text
               style={{
-                color: colors.primary,
-                fontSize: 16,
+                color:
+                  activeChallengesCount > 0
+                    ? colors.primary
+                    : textSecondaryColor,
+                fontSize: 11,
                 fontWeight: '900',
               }}
             >
-              {count}
+              {activeChallengesCount} Active
             </Text>
           </View>
-          <ChevronRight size={18} color={colors.primary} />
         </View>
+
+        <View>
+          <Text
+            style={{
+              color: textColor,
+              fontSize: 18,
+              fontWeight: '900',
+              letterSpacing: -0.3,
+            }}
+          >
+            Challenges
+          </Text>
+          <Text
+            style={{
+              color: textSecondaryColor,
+              fontSize: 12,
+              fontWeight: '600',
+              marginTop: 2,
+            }}
+          >
+            Goals & quests
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// ─── Apple-Style Analytics Card ─────────────────────────────────────────────
+const AppleAnalyticsCard = ({ onPress }: { onPress: () => void }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDark = isDarkColor(colors.background || '#020617');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = isDark ? '#0F172A' : '#FFFFFF';
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={onPress}
+      style={{
+        backgroundColor: cardBg,
+        borderColor: cardBorder,
+        borderWidth: 1,
+        borderRadius: 26,
+        padding: 20,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: isDark ? 0.2 : 0.04,
+        shadowRadius: 8,
+        elevation: 2,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 16,
+              backgroundColor: `${colors.primary}15`,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <TrendingUp size={22} color={colors.primary} />
+          </View>
+          <View>
+            <Text
+              style={{
+                color: textColor,
+                fontSize: 18,
+                fontWeight: '900',
+                letterSpacing: -0.3,
+              }}
+            >
+              Analytics
+            </Text>
+            <Text
+              style={{
+                color: textSecondaryColor,
+                fontSize: 13,
+                fontWeight: '600',
+                marginTop: 2,
+              }}
+            >
+              Trends, sleep, steps, and activity
+            </Text>
+          </View>
+        </View>
+
+        <ChevronRight size={20} color={textSecondaryColor} />
       </View>
     </TouchableOpacity>
   );
@@ -3346,108 +3977,228 @@ const ActivityCard = ({
   const textSecondaryColor =
     colors.textSecondary || (isDark ? '#94a3b8' : '#64748b');
 
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+    return () => sub?.remove?.();
+  }, []);
+
+  const completeAnim = useRef(new Animated.Value(completed ? 1 : 0)).current;
+  const checkScale = useRef(new Animated.Value(1)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(completeAnim, {
+      toValue: completed ? 1 : 0,
+      duration: reduceMotion ? 0 : 320,
+      easing: RNEasing.bezier(0.25, 0.1, 0.25, 1),
+      useNativeDriver: false,
+    }).start();
+
+    if (!reduceMotion) {
+      Animated.sequence([
+        Animated.timing(checkScale, {
+          toValue: completed ? 1.25 : 0.85,
+          duration: 90,
+          easing: RNEasing.out(RNEasing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.spring(checkScale, {
+          toValue: 1,
+          friction: 4,
+          tension: 120,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+  }, [completed, reduceMotion]);
+
+  const animatedCardBorder = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(cardBorder, isDark ? 0.08 : 1),
+      toRgbaString(colors.primary, 0.4),
+    ],
+  });
+
+  const animatedIconBg = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(iconColor || colors.background, 0.12),
+      toRgbaString(colors.primary, 0.18),
+    ],
+  });
+
+  const animatedIconBorder = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(iconColor || cardBorder, 0.22),
+      toRgbaString(colors.primary, 0.35),
+    ],
+  });
+
+  const animatedCheckboxBg = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(colors.background, 1),
+      toRgbaString(colors.primary, 1),
+    ],
+  });
+
+  const animatedCheckboxBorder = completeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      toRgbaString(cardBorder, isDark ? 0.18 : 1),
+      toRgbaString(colors.primary, 1),
+    ],
+  });
+
+  const handlePressIn = () => {
+    if (!reduceMotion && onPress) {
+      Animated.spring(cardScale, {
+        toValue: 0.985,
+        friction: 8,
+        tension: 150,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  const handlePressOut = () => {
+    if (!reduceMotion && onPress) {
+      Animated.spring(cardScale, {
+        toValue: 1,
+        friction: 6,
+        tension: 100,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
   return (
     <ScaleFadeIn delay={delay}>
-      <View style={{ marginBottom: 12 }}>
+      <Animated.View
+        style={{
+          transform: [{ scale: cardScale }],
+          marginBottom: 12,
+        }}
+      >
         <TouchableOpacity
-          activeOpacity={0.7}
+          activeOpacity={0.88}
           disabled={!onPress}
           onPress={onPress}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: 20,
-            backgroundColor: cardBg,
-            borderRadius: 32,
-            borderWidth: 1,
-            borderColor: completed ? `${colors.primary}33` : cardBorder,
-          }}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
         >
-          <View
+          <Animated.View
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: 16,
+              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 16,
+              padding: 20,
+              backgroundColor: cardBg,
+              borderRadius: 30,
               borderWidth: 1,
-              backgroundColor: completed
-                ? `${colors.primary}1a`
-                : iconColor
-                  ? `${iconColor}14`
-                  : colors.background,
-              borderColor: completed
-                ? `${colors.primary}33`
-                : iconColor
-                  ? `${iconColor}25`
-                  : cardBorder,
+              borderColor: animatedCardBorder,
             }}
           >
-            <View
+            <Animated.View
               style={{
-                flex: 1,
+                width: 48,
+                height: 48,
+                borderRadius: 16,
                 alignItems: 'center',
                 justifyContent: 'center',
-              }}
-            >
-              {icon}
-            </View>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: 'bold',
-                color: completed ? textColor : textSecondaryColor,
-              }}
-            >
-              {title}
-            </Text>
-            <Text
-              style={{
-                color: textSecondaryColor,
-                fontSize: 10,
-                fontWeight: '900',
-                textTransform: 'uppercase',
-                letterSpacing: 1.5,
-                marginTop: 4,
-              }}
-            >
-              {sub}
-            </Text>
-          </View>
-          {!readOnly && (
-            <TouchableOpacity
-              onPress={(e: any) => {
-                e?.stopPropagation?.();
-                onToggle && onToggle();
-              }}
-              activeOpacity={0.7}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                alignItems: 'center',
-                justifyContent: 'center',
+                marginRight: 16,
                 borderWidth: 1,
-                backgroundColor: completed ? colors.primary : colors.background,
-                borderColor: completed ? colors.primary : cardBorder,
+                backgroundColor: animatedIconBg,
+                borderColor: animatedIconBorder,
               }}
             >
-              {completed ? (
-                <CheckCircle
-                  size={20}
-                  color={getContrastColor(colors.primary)}
-                />
-              ) : (
-                <Circle size={20} color={textSecondaryColor} />
-              )}
-            </TouchableOpacity>
-          )}
-          {readOnly && <ArrowUpRight size={18} color={textSecondaryColor} />}
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {icon}
+              </View>
+            </Animated.View>
+
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: completed ? textSecondaryColor : textColor,
+                }}
+              >
+                {title}
+              </Text>
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 10,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.5,
+                  marginTop: 4,
+                }}
+              >
+                {sub}
+              </Text>
+            </View>
+
+            {!readOnly && (
+              <TouchableOpacity
+                onPress={(e: any) => {
+                  e?.stopPropagation?.();
+                  if (!reduceMotion) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  }
+                  onToggle && onToggle();
+                }}
+                activeOpacity={0.85}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Animated.View
+                  style={{
+                    transform: [{ scale: checkScale }],
+                  }}
+                >
+                  <Animated.View
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 19,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1.5,
+                      backgroundColor: animatedCheckboxBg,
+                      borderColor: animatedCheckboxBorder,
+                    }}
+                  >
+                    {completed ? (
+                      <CheckCircle
+                        size={20}
+                        color={getContrastColor(colors.primary)}
+                      />
+                    ) : (
+                      <Circle size={20} color={textSecondaryColor} />
+                    )}
+                  </Animated.View>
+                </Animated.View>
+              </TouchableOpacity>
+            )}
+
+            {readOnly && <ArrowUpRight size={18} color={textSecondaryColor} />}
+          </Animated.View>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </ScaleFadeIn>
   );
 };

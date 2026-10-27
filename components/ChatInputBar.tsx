@@ -781,7 +781,10 @@ export function ChatInputBar({
         )}
 
         {(!text.trim() && !selectedMedia && !editingMessage) ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={[
+            { flexDirection: 'row', alignItems: 'center', gap: 4 },
+            isVoiceRecording && { flex: 1 }
+          ]}>
             {!isVoiceRecording && (
               <TouchableOpacity 
                 style={styles.iconBtn} 

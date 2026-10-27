@@ -36,7 +36,7 @@ export default function ClientTabLayout() {
       <Tabs.Screen
         name="activity"
         options={{
-          title: 'Stats',
+          title: 'Plan',
           tabBarIcon: ({ color }) => <Activity size={22} color={color} />,
         }}
       />

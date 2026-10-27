@@ -1,8 +1,8 @@
 import { useBrandColors } from '@/contexts/BrandContext';
 import { isDarkColor } from '@/lib/theme-utils';
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, PanResponder } from 'react-native';
-import { Mic, Trash2, Send, Lock, ChevronLeft, ArrowUp } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Platform } from 'react-native';
+import { Mic, Trash2, Send, Lock, ChevronLeft, ChevronUp } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { 
   useAudioRecorder, 
@@ -45,10 +45,13 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
   const recorder = useAudioRecorder(RECORDING_OPTIONS);
 
-  // ── Refs for PanResponder closures (always fresh values) ──────────────────
+  // ── Refs for PanResponder closures & race-condition prevention ─────────────
   const isRecordingRef = useRef(false);
   const isLockedRef = useRef(false);
-  const isInitializingRef = useRef(false);
+  const isPressedRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const pendingActionRef = useRef<'stop' | 'cancel' | null>(null);
+
   const timerRef = useRef<any>(null);
   const meteringTimerRef = useRef<any>(null);
   const holdTimerRef = useRef<any>(null);
@@ -59,7 +62,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
   // ── Reanimated shared values ──────────────────────────────────────────────
   const scale = useSharedValue(1);
-  const lockProgress = useSharedValue(0);
+  const lockDragY = useSharedValue(0);
   const slideX = useSharedValue(0);
 
   useEffect(() => { 
@@ -83,8 +86,10 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
   // ── Recording start / stop ────────────────────────────────────────────────
   const startRecording = async () => {
-    if (disabled || isRecordingRef.current || isInitializingRef.current) return;
-    isInitializingRef.current = true;
+    if (disabled || isRecordingRef.current || isStartingRef.current) return;
+    isStartingRef.current = true;
+    pendingActionRef.current = null;
+    startTimeRef.current = Date.now();
 
     isRecordingRef.current = true;
     setIsRecording(true);
@@ -93,11 +98,27 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     scale.value = withSpring(1.25);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    // Attach global web pointerup so releasing mouse anywhere stops recording
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleWebUp = () => {
+        window.removeEventListener('pointerup', handleWebUp);
+        window.removeEventListener('mouseup', handleWebUp);
+        if (!isLockedRef.current && (isRecordingRef.current || isStartingRef.current)) {
+          handleFingerRelease();
+        }
+      };
+      window.addEventListener('pointerup', handleWebUp);
+      window.addEventListener('mouseup', handleWebUp);
+    }
+
     try {
       const perm = await getRecordingPermissionsAsync();
       if (!perm.granted) {
         const r = await requestRecordingPermissionsAsync();
-        if (!r.granted) { reset(); return; }
+        if (!r.granted) { 
+          reset(); 
+          return; 
+        }
       }
 
       try {
@@ -124,13 +145,21 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         return;
       }
 
+      // Check if user already released their finger while preparation was pending
+      if (!isPressedRef.current || pendingActionRef.current) {
+        const action = pendingActionRef.current || 'stop';
+        pendingActionRef.current = null;
+        isStartingRef.current = false;
+        await stopRecording(action === 'stop');
+        return;
+      }
+
       onStart?.();
       timerRef.current = setInterval(() => {
         if (isMountedRef.current) setTime(t => t + 1);
       }, 1000);
 
       envRef.current = 0;
-      startTimeRef.current = Date.now();
 
       meteringTimerRef.current = setInterval(() => {
         if (!isMountedRef.current) return;
@@ -138,17 +167,14 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
           const st = recorder.getStatus();
           let rawLevel = 0;
           if (st && typeof st.metering === 'number' && !isNaN(st.metering) && st.metering > -100) {
-            // Real microphone decibels: speech typically ranges from -48 dB to -8 dB
             const clamped = Math.max(-48, Math.min(-8, st.metering));
-            rawLevel = (clamped - (-48)) / 40; // 0.0 to 1.0
+            rawLevel = (clamped - (-48)) / 40;
           } else if (recorder.isRecording) {
-            // Live gentle fallback if platform/simulator does not provide hardware dB
             const t = (Date.now() - startTimeRef.current) / 1000;
             const synth = 0.5 * Math.sin(t * 9) + 0.3 * Math.sin(t * 14) + 0.2 * Math.sin(t * 22);
             rawLevel = Math.max(0, 0.12 + 0.16 * synth);
           }
 
-          // Smooth attack / release envelope for responsive, organic motion
           const currentEnv = envRef.current;
           const attack = 0.55;
           const release = 0.18;
@@ -157,7 +183,6 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
             : currentEnv + (rawLevel - currentEnv) * release;
           envRef.current = nextEnv;
 
-          // Subtle organic variance so wave contour is lively and natural
           const jitter = 0.82 + 0.36 * Math.random();
           const barHeight = Math.max(
             MIN_BAR_HEIGHT,
@@ -175,7 +200,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       console.error('startRecording error', e);
       reset();
     } finally {
-      isInitializingRef.current = false;
+      isStartingRef.current = false;
     }
   };
 
@@ -188,11 +213,16 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         wasRecording = false;
       }
     }
-    if (!wasRecording) return;
+    if (!wasRecording) {
+      reset();
+      return;
+    }
+
     if (timerRef.current) clearInterval(timerRef.current);
     if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
 
-    const dur = timeRef.current;
+    const elapsedMs = Date.now() - startTimeRef.current;
+    const durationSeconds = Math.max(1, Math.round(elapsedMs / 1000));
     reset();
 
     try {
@@ -209,8 +239,10 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         try {
           uri = recorder.uri;
         } catch {}
-        if (shouldSend && uri && dur >= 1) {
-          onStop?.(uri, dur);
+
+        // Only send if duration was at least 500ms (avoids accidental quick-tap noise)
+        if (shouldSend && uri && elapsedMs >= 500) {
+          onStop?.(uri, durationSeconds);
         } else {
           onCancel?.();
         }
@@ -222,7 +254,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       onCancel?.();
     }
 
-    // Release the audio session so normal playback/system audio behaves properly
+    // Release audio session back to normal mode
     try {
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     } catch {}
@@ -232,7 +264,9 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   const reset = () => {
     isRecordingRef.current = false;
     isLockedRef.current = false;
-    isInitializingRef.current = false; // never leave this stuck
+    isPressedRef.current = false;
+    isStartingRef.current = false;
+    pendingActionRef.current = null;
     if (timerRef.current) clearInterval(timerRef.current);
     if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
     envRef.current = 0;
@@ -241,11 +275,38 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     setIsLocked(false);
     setMetering(new Array(NUM_BARS).fill(MIN_BAR_HEIGHT));
     scale.value = withSpring(1);
-    lockProgress.value = withTiming(0);
+    lockDragY.value = withTiming(0);
     slideX.value = withSpring(0);
   };
 
-  // ── PanResponder — single, never unmounts ─────────────────────────────────
+  const handleFingerRelease = (dx: number = 0) => {
+    isPressedRef.current = false;
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+      reset();
+      return;
+    }
+
+    // If locked into hands-free mode, releasing finger does nothing
+    if (isLockedRef.current) return;
+
+    // If still in async initialization phase, queue action
+    if (isStartingRef.current) {
+      pendingActionRef.current = dx < -60 ? 'cancel' : 'stop';
+      return;
+    }
+
+    if (!isRecordingRef.current) return;
+
+    if (dx < -60) {
+      stopRecording(false); // cancelled
+    } else {
+      stopRecording(true); // send
+    }
+  };
+
+  // ── PanResponder for WhatsApp-style Hold & Slide ─────────────────────────
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !disabled,
@@ -253,60 +314,51 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
       onPanResponderGrant: () => {
         if (disabled) return;
-        // Hold-to-record: only start after 150 ms still pressed
+        isPressedRef.current = true;
         holdTimerRef.current = setTimeout(() => {
           holdTimerRef.current = null;
           startRecording();
-        }, 150);
+        }, 80);
       },
 
       onPanResponderMove: (_, gs) => {
         if (!isRecordingRef.current || disabled) return;
         if (isLockedRef.current) return;
 
-        // Slide left → cancel hint
-        if (gs.dx < 0) slideX.value = gs.dx;
-
-        // Slide up → lock hint
-        if (gs.dy < -10) {
-          lockProgress.value = interpolate(gs.dy, [0, -20, -80], [0, 0.5, 1], Extrapolate.CLAMP);
+        // Slide left → cancel drag
+        if (gs.dx < 0) {
+          slideX.value = Math.max(-120, gs.dx);
         }
 
-        // Trigger lock
-        if (gs.dy < -80) {
+        // Slide up → track lock drag
+        if (gs.dy < 0) {
+          lockDragY.value = Math.max(-45, gs.dy * 0.5);
+        }
+
+        // Trigger lock if slid up past threshold (-50px)
+        if (gs.dy <= -50) {
           isLockedRef.current = true;
           runOnJS(setIsLocked)(true);
-          lockProgress.value = withTiming(0);
+          lockDragY.value = withTiming(0);
           slideX.value = withSpring(0);
           runOnJS(Haptics.notificationAsync)(Haptics.NotificationFeedbackType.Success);
+          return;
         }
 
-        // Trigger cancel (slide left enough)
-        if (gs.dx < -100) {
+        // Trigger cancel if slid left past threshold (-100px)
+        if (gs.dx <= -100) {
           runOnJS(stopRecording)(false);
         }
       },
 
       onPanResponderRelease: (_, gs) => {
-        // Finger lifted before hold threshold — abort
-        if (holdTimerRef.current) {
-          clearTimeout(holdTimerRef.current);
-          holdTimerRef.current = null;
-          return;
-        }
-        if (isLockedRef.current) return; // locked: user must tap trash/send
-        if (!isRecordingRef.current) return;
-
-        if (gs.dx < -80) {
-          stopRecording(false); // cancel
-        } else {
-          stopRecording(true); // send
-        }
+        handleFingerRelease(gs.dx);
       },
 
       onPanResponderTerminate: () => {
-        if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
-        if (!isLockedRef.current && isRecordingRef.current) stopRecording(false);
+        if (!isLockedRef.current) {
+          handleFingerRelease(0);
+        }
       },
     })
   ).current;
@@ -316,22 +368,26 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     transform: [{ scale: scale.value }],
   }));
 
-  const lockIndicatorStyle = useAnimatedStyle(() => ({
-    opacity: lockProgress.value,
-    transform: [{ translateY: interpolate(lockProgress.value, [0, 1], [8, 0], Extrapolate.CLAMP) }],
+  const lockPillAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: lockDragY.value }],
+  }));
+
+  const slideCancelAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: Math.min(0, slideX.value) }],
   }));
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
-  // ── Render — SINGLE return, PanResponder always on micBtn ─────────────────
+  const isDark = isDarkColor(colors.surface || colors.background || '#0F172A');
+
   return (
     <View style={[styles.root, (isRecording || isLocked) && styles.rootExpanded, style]}>
 
-      {/* ── Recording content (left of mic) ── */}
+      {/* ── Holding mode: [red dot + timer] [waveform] [slide to cancel] ── */}
       {isRecording && !isLocked && (
         <MotiView
-          from={{ opacity: 0, translateX: 20 }}
+          from={{ opacity: 0, translateX: 10 }}
           animate={{ opacity: 1, translateX: 0 }}
           style={styles.recordingContent}
         >
@@ -353,26 +409,31 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
               />
             ))}
           </View>
-          <View style={styles.slideCancel}>
+          <Animated.View style={[styles.slideCancel, slideCancelAnimStyle]}>
             <ChevronLeft size={14} color="#64748B" />
             <Text style={styles.slideCancelText}>Slide to cancel</Text>
-          </View>
+          </Animated.View>
         </MotiView>
       )}
 
-      {/* ── Locked layout: [trash] [timer+waveform] ... [send replaces mic] ── */}
+      {/* ── Locked layout: [Trash] ... [Timer + Waveform] ... [Send replaces Mic] ── */}
       {isLocked && (
         <MotiView
           from={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           style={styles.lockedContent}
         >
-          {/* Trash — leftmost */}
-          <TouchableOpacity onPress={() => stopRecording(false)} style={styles.actionBtn} activeOpacity={0.7}>
+          {/* Trash button on left */}
+          <TouchableOpacity 
+            onPress={() => stopRecording(false)} 
+            style={styles.trashBtn} 
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Trash2 size={20} color="#EF4444" />
           </TouchableOpacity>
 
-          {/* Timer + waveform — center */}
+          {/* Timer + waveform in center */}
           <View style={styles.lockedCenter}>
             <View style={styles.recordingInfo}>
               <View style={styles.redDot} />
@@ -396,27 +457,36 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         </MotiView>
       )}
 
-      {/* ── Lock indicator — floats above mic button ── */}
+      {/* ── WhatsApp-style Lock Pill: Floats directly above mic button while holding ── */}
       {isRecording && !isLocked && (
-        <Animated.View style={[styles.lockIndicator, lockIndicatorStyle]}>
-          <View style={styles.lockIconBox}>
-            <Lock size={13} color="#FFFFFF" strokeWidth={2.5} />
+        <Animated.View 
+          style={[
+            styles.lockPill, 
+            { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)' },
+            lockPillAnimStyle
+          ]} 
+          pointerEvents="none"
+        >
+          <View style={[styles.lockIconBox, { backgroundColor: colors.primary }]}>
+            <Lock size={14} color="#FFFFFF" strokeWidth={2.5} />
           </View>
           <MotiView
-            animate={{ translateY: [-3, 0, -3] }}
-            transition={{ loop: true, duration: 900, type: 'timing' } as any}
+            animate={{ translateY: [-4, 1, -4] }}
+            transition={{ loop: true, duration: 800, type: 'timing' } as any}
+            style={{ alignItems: 'center', marginTop: 3 }}
           >
-            <ArrowUp size={11} color="#64748B" strokeWidth={3} />
+            <ChevronUp size={16} color={colors.primary} strokeWidth={3} />
           </MotiView>
         </Animated.View>
       )}
 
-      {/* ── Mic button — hidden when locked; send button takes its place ── */}
+      {/* ── Mic button — replaced with Send circle when locked ── */}
       {isLocked ? (
         <TouchableOpacity
           onPress={() => stopRecording(true)}
           style={[styles.micBtn, styles.lockedSendCircle]}
           activeOpacity={0.8}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Send size={18} color="#FFFFFF" />
         </TouchableOpacity>
@@ -463,7 +533,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexShrink: 0,
   },
   micBtnActive: {
-    backgroundColor: 'rgba(239,68,68,0.08)',
+    backgroundColor: 'rgba(239,68,68,0.12)',
   },
   pulse: {
     width: 14,
@@ -479,13 +549,15 @@ const getStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    paddingRight: 6,
   },
   lockedContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingRight: 4,
   },
   lockedCenter: {
     flex: 1,
@@ -537,44 +609,40 @@ const getStyles = (colors: any) => StyleSheet.create({
     color: colors.textSecondary || '#64748B',
     fontSize: 12,
   },
-  actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: isDarkColor(colors.surface || colors.background || '#0F172A') ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+  trashBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(239,68,68,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
   },
-  sendBtn: {
-    backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  // Lock indicator — positioned above the mic button
-  lockIndicator: {
+  // WhatsApp-style Lock Pill floating directly above the mic button
+  lockPill: {
     position: 'absolute',
-    right: 6,
-    bottom: 52,
+    right: 4,
+    bottom: 54,
+    width: 36,
+    height: 68,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: 'center',
-    gap: 4,
-    zIndex: 100,
+    justifyContent: 'center',
+    paddingVertical: 6,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
   },
   lockIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 5,
   },
   lockedSendCircle: {
     backgroundColor: colors.primary,

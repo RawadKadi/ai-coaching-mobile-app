@@ -24,6 +24,7 @@ import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/BrandContext';
 import FeedbackModal from '@/components/FeedbackModal';
+import { getLastNightSleep, getLatestWeight } from '@/lib/health-service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -46,6 +47,8 @@ export default function CheckInScreen() {
   // Form State
   const [weight, setWeight] = useState('');
   const [sleep, setSleep] = useState('');
+  const [isWeightFromHealth, setIsWeightFromHealth] = useState(false);
+  const [isSleepFromHealth, setIsSleepFromHealth] = useState(false);
   const [energy, setEnergy] = useState(7);
   const [stress, setStress] = useState(3);
   const [hunger, setHunger] = useState(5);
@@ -59,7 +62,28 @@ export default function CheckInScreen() {
   useEffect(() => {
     checkTodayStatus();
     fetchLastWeight();
+    fetchHealthData();
   }, [client]);
+
+  const fetchHealthData = async () => {
+    try {
+      const [healthSleep, healthWeight] = await Promise.all([
+        getLastNightSleep(),
+        getLatestWeight(),
+      ]);
+
+      if (healthWeight !== null) {
+        setWeight(healthWeight.toString());
+        setIsWeightFromHealth(true);
+      }
+      if (healthSleep !== null) {
+        setSleep(healthSleep.toString());
+        setIsSleepFromHealth(true);
+      }
+    } catch (e) {
+      console.warn('Error fetching health sync data:', e);
+    }
+  };
 
   const fetchLastWeight = async () => {
     if (!client) return;
@@ -214,22 +238,33 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
               </View>
               <Text className="text-white font-bold text-lg">Body Weight</Text>
             </View>
-            {lastWeight && (
-              <TouchableOpacity 
-                onPress={() => {
-                  setWeight(lastWeight);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-                className="bg-slate-800/80 px-3 py-1.5 rounded-full border border-white/10"
-              >
-                <Text className="text-slate-400 text-[10px] font-black uppercase tracking-wider">Same as before</Text>
-              </TouchableOpacity>
-            )}
+            <View className="flex-row items-center gap-2">
+              {isWeightFromHealth && (
+                <View className="bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
+                  <Check size={12} color="#10B981" />
+                  <Text className="text-emerald-400 text-[10px] font-black uppercase tracking-wider">From Health</Text>
+                </View>
+              )}
+              {lastWeight && !isWeightFromHealth && (
+                <TouchableOpacity 
+                  onPress={() => {
+                    setWeight(lastWeight);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  className="bg-slate-800/80 px-3 py-1.5 rounded-full border border-white/10"
+                >
+                  <Text className="text-slate-400 text-[10px] font-black uppercase tracking-wider">Same as before</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
           <View className="flex-row items-center">
             <TextInput
               value={weight}
-              onChangeText={setWeight}
+              onChangeText={(text) => {
+                setWeight(text);
+                if (isWeightFromHealth) setIsWeightFromHealth(false);
+              }}
               placeholder="0.0"
               placeholderTextColor="#334155"
               keyboardType="numeric"
@@ -240,16 +275,27 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
         </View>
 
         <View className="bg-slate-900/40 rounded-[32px] p-6 border border-white/5">
-          <View className="flex-row items-center gap-3 mb-4">
-            <View className="w-10 h-10 bg-indigo-600/10 rounded-xl items-center justify-center border border-indigo-600/20">
-              <Timer size={20} color="#818CF8" />
+          <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-row items-center gap-3">
+              <View className="w-10 h-10 bg-indigo-600/10 rounded-xl items-center justify-center border border-indigo-600/20">
+                <Timer size={20} color="#818CF8" />
+              </View>
+              <Text className="text-white font-bold text-lg">Sleep Duration</Text>
             </View>
-            <Text className="text-white font-bold text-lg">Sleep Duration</Text>
+            {isSleepFromHealth && (
+              <View className="bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
+                <Check size={12} color="#10B981" />
+                <Text className="text-emerald-400 text-[10px] font-black uppercase tracking-wider">From Health</Text>
+              </View>
+            )}
           </View>
           <View className="flex-row items-center">
             <TextInput
               value={sleep}
-              onChangeText={setSleep}
+              onChangeText={(text) => {
+                setSleep(text);
+                if (isSleepFromHealth) setIsSleepFromHealth(false);
+              }}
               placeholder="0.0"
               placeholderTextColor="#334155"
               keyboardType="numeric"
@@ -282,7 +328,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
       className="flex-1 px-8"
     >
       <View className="mb-10">
-        <Text className="text-white text-4xl font-black tracking-tighter">Energy & Stress</Text>
+        <Text className="text-white text-4xl font-black tracking-tighter">Energy & Recovery</Text>
         <Text className="text-slate-500 font-medium text-lg mt-2">How are your internal levels today?</Text>
       </View>
 
@@ -325,7 +371,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
           onPress={() => setCurrentStep('mood')}
           className="flex-1 bg-blue-600 h-20 rounded-[32px] items-center justify-center flex-row gap-3 shadow-2xl shadow-blue-500/30"
         >
-          <Text className="text-white font-black text-lg uppercase tracking-widest">Next Phase</Text>
+          <Text className="text-white font-black text-lg uppercase tracking-widest">Continue</Text>
           <ChevronRight size={20} color="white" strokeWidth={3} />
         </TouchableOpacity>
       </View>
@@ -339,7 +385,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
       className="flex-1 px-8"
     >
       <View className="mb-10">
-        <Text className="text-white text-4xl font-black tracking-tighter">Daily Notes</Text>
+        <Text className="text-white text-4xl font-black tracking-tighter">Mindset & Notes</Text>
         <Text className="text-slate-500 font-medium text-lg mt-2">Capture your mental state and any notes.</Text>
       </View>
 
@@ -356,7 +402,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
         ))}
       </View>
 
-      <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px] mb-4">Debrief Notes</Text>
+      <Text className="text-slate-500 text-[10px] font-black uppercase tracking-[3px] mb-4">Notes for Coach</Text>
       <View className="bg-slate-900/40 rounded-[32px] p-6 border border-white/5 min-h-[160px]">
         <TextInput
           multiline
@@ -386,7 +432,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
             <ActivityIndicator color="white" />
           ) : (
             <>
-              <Text className="text-white font-black text-lg uppercase tracking-widest">Complete Check-in</Text>
+              <Text className="text-white font-black text-lg uppercase tracking-widest">Submit Check-in</Text>
               <Check size={20} color="white" strokeWidth={3} />
             </>
           )}
@@ -432,7 +478,7 @@ Provide exactly 2 short, punchy sentences of encouraging insight or advice based
       <View style={{ flex: 1 }} className="bg-slate-950">
         <StatusBar barStyle="light-content" />
         
-        {currentStep !== 'summary' && renderHeader()}
+        {renderHeader()}
 
         <View className="flex-1">
             {currentStep === 'metrics' && renderMetrics()}

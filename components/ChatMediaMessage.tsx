@@ -8,6 +8,7 @@ import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
 import { Video, ResizeMode, AVPlaybackStatus, VideoFullscreenUpdate, Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -33,8 +34,7 @@ let _cachedSpeed: PlaybackSpeed = 1; // in-memory cache so all mounted players s
 let _speedListeners: Array<(s: PlaybackSpeed) => void> = [];
 
 // Global tracker to ensure only one voice note plays at a time
-let activePlayingSound: Audio.Sound | null = null;
-let activePlayingSetIsPlaying: ((playing: boolean) => void) | null = null;
+let activeGlobalVoiceNoteStopper: (() => void) | null = null;
 
 async function loadGlobalSpeed(): Promise<PlaybackSpeed> {
   try {
@@ -793,16 +793,20 @@ function VoiceNotePlayer({
   createdAt?: string;
   isRead?: boolean;
 }) {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
   const [position, setPosition] = useState(0);
   const [totalDuration, setTotalDuration] = useState(duration ? duration * 1000 : 0);
   const [barWidth, setBarWidth] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(_cachedSpeed);
-  const soundRef = useRef<Audio.Sound | null>(null);
+
+  // Player references
+  const audioWebRef = useRef<any>(null);
+  const nativePlayerRef = useRef<any>(null);
+  const soundAvRef = useRef<Audio.Sound | null>(null);
+  const isDraggingRef = useRef(false);
+  isDraggingRef.current = isDragging;
 
   // Load persisted speed on mount & subscribe to global changes
   useEffect(() => {
@@ -816,146 +820,237 @@ function VoiceNotePlayer({
     };
   }, []);
 
-  // Apply speed whenever it changes while sound is loaded
+  // Update speed when changed
   useEffect(() => {
-    if (soundRef.current && isLoaded) {
-      soundRef.current.setRateAsync(playbackSpeed, true).catch(() => {});
+    if (Platform.OS === 'web' && audioWebRef.current) {
+      audioWebRef.current.playbackRate = playbackSpeed;
+    } else if (nativePlayerRef.current) {
+      try {
+        nativePlayerRef.current.setPlaybackRate(playbackSpeed);
+      } catch {}
+    } else if (soundAvRef.current) {
+      try {
+        soundAvRef.current.setRateAsync(playbackSpeed, true).catch(() => {});
+      } catch {}
     }
-  }, [playbackSpeed, isLoaded]);
+  }, [playbackSpeed]);
 
   const cycleSpeed = useCallback(async () => {
     const next = nextSpeed(playbackSpeed);
     await saveGlobalSpeed(next);
   }, [playbackSpeed]);
 
-
-  // Lazy load sound on demand or during play to avoid exhausting iOS AVFoundation player instances
-  const createAndLoadSound = async (autoPlay: boolean = false) => {
-    if (!uri) return null;
-    try {
-      setIsLoading(true);
-      try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-        });
-      } catch (e) {}
-
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: autoPlay, volume: 1.0, isMuted: false, isLooping: false },
-        (status) => {
-          if (status.isLoaded) {
-            if (!isDragging) {
-              setPosition(status.positionMillis);
-            }
-            if (status.durationMillis) {
-              setTotalDuration(status.durationMillis);
-            }
-            setIsPlaying(status.isPlaying);
-            if (status.didJustFinish) {
-              setIsPlaying(false);
-              setPosition(0);
-              newSound.pauseAsync().catch(() => {});
-              newSound.setPositionAsync(0).catch(() => {});
-              if (activePlayingSound === newSound) {
-                activePlayingSound = null;
-                activePlayingSetIsPlaying = null;
-              }
-            }
-          }
-        }
-      );
-
-      soundRef.current = newSound;
-      setSound(newSound);
-      setIsLoaded(true);
-      setIsLoading(false);
-
-      if (autoPlay) {
-        if (activePlayingSound && activePlayingSound !== newSound) {
-          try {
-            await activePlayingSound.pauseAsync();
-          } catch (e) {}
-          if (activePlayingSetIsPlaying) {
-            activePlayingSetIsPlaying(false);
-          }
-        }
-        await newSound.setRateAsync(playbackSpeed, true).catch(() => {});
-        activePlayingSound = newSound;
-        activePlayingSetIsPlaying = setIsPlaying;
-      }
-      return newSound;
-    } catch (error) {
-      console.warn('Handled sound load error:', error);
-      setIsLoading(false);
-      setIsLoaded(false);
-      return null;
+  const pausePlayback = useCallback(() => {
+    setIsPlaying(false);
+    if (Platform.OS === 'web' && audioWebRef.current) {
+      try { audioWebRef.current.pause(); } catch {}
+    } else if (nativePlayerRef.current) {
+      try { nativePlayerRef.current.pause(); } catch {}
+    } else if (soundAvRef.current) {
+      try { soundAvRef.current.pauseAsync().catch(() => {}); } catch {}
     }
-  };
+  }, []);
 
-  // Cleanup sound instance on unmount or uri change
+  // Cleanup on unmount or uri change
   useEffect(() => {
     return () => {
-      if (soundRef.current) {
-        if (activePlayingSound === soundRef.current) {
-          activePlayingSound = null;
-          activePlayingSetIsPlaying = null;
-        }
-        soundRef.current.unloadAsync().catch(() => {});
+      if (Platform.OS === 'web' && audioWebRef.current) {
+        try {
+          audioWebRef.current.pause();
+          audioWebRef.current.src = '';
+        } catch {}
+        audioWebRef.current = null;
+      }
+      if (nativePlayerRef.current) {
+        try {
+          nativePlayerRef.current.pause();
+          nativePlayerRef.current.remove?.();
+        } catch {}
+        nativePlayerRef.current = null;
+      }
+      if (soundAvRef.current) {
+        try {
+          soundAvRef.current.unloadAsync().catch(() => {});
+        } catch {}
+        soundAvRef.current = null;
       }
     };
   }, [uri]);
 
   const togglePlayback = async () => {
+    if (!uri) return;
+
+    if (isPlaying) {
+      pausePlayback();
+      if (activeGlobalVoiceNoteStopper === pausePlayback) {
+        activeGlobalVoiceNoteStopper = null;
+      }
+      return;
+    }
+
+    // Stop any other currently playing voice note
+    if (activeGlobalVoiceNoteStopper && activeGlobalVoiceNoteStopper !== pausePlayback) {
+      activeGlobalVoiceNoteStopper();
+    }
+    activeGlobalVoiceNoteStopper = pausePlayback;
+
+    // WEB PLATFORM: Direct native HTML5 Audio (flawless for blob & remote URLs)
+    if (Platform.OS === 'web') {
+      try {
+        setIsLoading(true);
+        let audio = audioWebRef.current;
+        if (!audio) {
+          audio = new (window as any).Audio(uri);
+          audioWebRef.current = audio;
+
+          audio.onloadedmetadata = () => {
+            if (audio?.duration && !isNaN(audio.duration) && audio.duration > 0) {
+              setTotalDuration(audio.duration * 1000);
+            }
+          };
+
+          audio.ontimeupdate = () => {
+            if (!isDraggingRef.current && audio) {
+              setPosition(audio.currentTime * 1000);
+            }
+          };
+
+          audio.onended = () => {
+            setIsPlaying(false);
+            setPosition(0);
+            if (activeGlobalVoiceNoteStopper === pausePlayback) {
+              activeGlobalVoiceNoteStopper = null;
+            }
+          };
+
+          audio.onerror = (e: any) => {
+            console.warn('[VoiceNotePlayer Web] Audio error:', e);
+            setIsLoading(false);
+            setIsPlaying(false);
+          };
+        }
+
+        // If at end, rewind to start
+        if (audio.duration && audio.currentTime >= audio.duration - 0.15) {
+          audio.currentTime = 0;
+          setPosition(0);
+        }
+
+        audio.playbackRate = playbackSpeed;
+        await audio.play();
+        setIsPlaying(true);
+        setIsLoading(false);
+      } catch (err) {
+        console.warn('[VoiceNotePlayer Web] Failed to play:', err);
+        setIsLoading(false);
+        setIsPlaying(false);
+      }
+      return;
+    }
+
+    // NATIVE PLATFORM (iOS / Android): Modern expo-audio player with expo-av fallback
     try {
-      if (!soundRef.current || !isLoaded) {
-        await createAndLoadSound(true);
-        return;
+      setIsLoading(true);
+      let player = nativePlayerRef.current;
+      if (!player) {
+        player = createAudioPlayer(uri, { updateInterval: 80 });
+        nativePlayerRef.current = player;
+
+        player.addListener('playbackStatusUpdate', (status: any) => {
+          if (!status) return;
+          setIsPlaying(!!status.playing);
+          if (!isDraggingRef.current && typeof status.currentTime === 'number') {
+            setPosition(status.currentTime * 1000);
+          }
+          if (status.duration && status.duration > 0) {
+            setTotalDuration(status.duration * 1000);
+          }
+          if (status.didJustFinish) {
+            setIsPlaying(false);
+            setPosition(0);
+            try {
+              player.pause();
+              player.seekTo(0);
+            } catch {}
+            if (activeGlobalVoiceNoteStopper === pausePlayback) {
+              activeGlobalVoiceNoteStopper = null;
+            }
+          }
+        });
       }
 
-      if (isPlaying) {
-        await soundRef.current.pauseAsync();
-        if (activePlayingSound === soundRef.current) {
-          activePlayingSound = null;
-          activePlayingSetIsPlaying = null;
-        }
-      } else {
-        // Pause any other playing voice note
-        if (activePlayingSound && activePlayingSound !== soundRef.current) {
-          try {
-            await activePlayingSound.pauseAsync();
-          } catch (e) {
-            console.log('Error pausing previous sound:', e);
-          }
-          if (activePlayingSetIsPlaying) {
-            activePlayingSetIsPlaying(false);
-          }
-        }
-
-        if (position >= totalDuration - 100) {
-          await soundRef.current.setPositionAsync(0);
-        }
-        // Apply current speed before playing
-        await soundRef.current.setRateAsync(playbackSpeed, true);
-        await soundRef.current.playAsync();
-
-        // Track this as the active playing voice note
-        activePlayingSound = soundRef.current;
-        activePlayingSetIsPlaying = setIsPlaying;
+      if (position >= totalDuration - 150) {
+        player.seekTo(0);
+        setPosition(0);
       }
-    } catch (error) {
-      console.warn('Playback error:', error);
+
+      try {
+        player.setPlaybackRate(playbackSpeed);
+      } catch {}
+
+      player.play();
+      setIsPlaying(true);
       setIsLoading(false);
+    } catch (e) {
+      console.warn('[VoiceNotePlayer Native] expo-audio error, trying expo-av fallback:', e);
+      try {
+        let snd = soundAvRef.current;
+        if (!snd) {
+          const { sound: newSound } = await Audio.Sound.createAsync(
+            { uri },
+            { shouldPlay: false, volume: 1.0 },
+            (status) => {
+              if (status.isLoaded) {
+                if (!isDraggingRef.current) setPosition(status.positionMillis);
+                if (status.durationMillis) setTotalDuration(status.durationMillis);
+                setIsPlaying(status.isPlaying);
+                if (status.didJustFinish) {
+                  setIsPlaying(false);
+                  setPosition(0);
+                  newSound.setPositionAsync(0).catch(() => {});
+                  if (activeGlobalVoiceNoteStopper === pausePlayback) {
+                    activeGlobalVoiceNoteStopper = null;
+                  }
+                }
+              }
+            }
+          );
+          snd = newSound;
+          soundAvRef.current = newSound;
+        }
+
+        if (position >= totalDuration - 150) {
+          await snd.setPositionAsync(0);
+          setPosition(0);
+        }
+        await snd.setRateAsync(playbackSpeed, true).catch(() => {});
+        await snd.playAsync();
+        setIsPlaying(true);
+        setIsLoading(false);
+      } catch (err2) {
+        console.warn('[VoiceNotePlayer Fallback] Failed to play:', err2);
+        setIsLoading(false);
+        setIsPlaying(false);
+      }
     }
   };
 
-  const handleSeek = async (progress: number) => {
-    if (!soundRef.current || !isLoaded || totalDuration <= 0) return;
-    const newPosition = progress * totalDuration;
-    setPosition(newPosition);
-    await soundRef.current.setPositionAsync(newPosition);
+  const handleSeek = async (seekProgress: number) => {
+    if (totalDuration <= 0) return;
+    const targetMs = Math.max(0, Math.min(totalDuration, seekProgress * totalDuration));
+    setPosition(targetMs);
+
+    if (Platform.OS === 'web' && audioWebRef.current) {
+      audioWebRef.current.currentTime = targetMs / 1000;
+    } else if (nativePlayerRef.current) {
+      try {
+        nativePlayerRef.current.seekTo(targetMs / 1000);
+      } catch {}
+    } else if (soundAvRef.current) {
+      try {
+        await soundAvRef.current.setPositionAsync(targetMs);
+      } catch {}
+    }
   };
 
   const onGestureEvent = (event: any) => {
