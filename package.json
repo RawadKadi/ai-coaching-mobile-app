@@ -9,7 +9,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "postinstall": "node scripts/patch-rn-text.js"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

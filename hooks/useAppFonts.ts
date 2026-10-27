@@ -26,21 +26,25 @@ export const AVAILABLE_FONTS = [
 
 // Get the font family name for a given display name (handles weight variants)
 export function getFontFamily(displayName: string, weight?: string): string {
-    if (displayName === 'System') return 'System';
+    if (!displayName || displayName === 'System') return 'System';
 
-    const weightSuffix = weight === '500' ? '_500Medium'
-        : weight === '600' ? '_600SemiBold'
-            : weight === '700' ? '_700Bold'
-                : weight === '800' || weight === '900' ? '_700Bold'
-                    : '_400Regular';
+    const w = weight ? String(weight).toLowerCase() : '400';
+    const isBold = w === 'bold' || w === '700' || w === '800' || w === '900';
+    const isSemiBold = w === '600';
+    const isMedium = w === '500';
+
+    const weightSuffix = isMedium ? '_500Medium'
+        : isSemiBold ? '_600SemiBold'
+            : isBold ? '_700Bold'
+                : '_400Regular';
 
     const fontMap: Record<string, string> = {
         'Inter': `Inter${weightSuffix}`,
-        'Roboto': weight === '500' ? 'Roboto_500Medium' : weight === '600' || weight === '700' ? 'Roboto_700Bold' : 'Roboto_400Regular',
+        'Roboto': isMedium ? 'Roboto_500Medium' : (isBold || isSemiBold) ? 'Roboto_700Bold' : 'Roboto_400Regular',
         'Outfit': `Outfit${weightSuffix}`,
         'Montserrat': `Montserrat${weightSuffix}`,
         'Poppins': `Poppins${weightSuffix}`,
-        'Lato': weight === '700' || weight === '600' ? 'Lato_700Bold' : weight === '800' || weight === '900' ? 'Lato_900Black' : 'Lato_400Regular',
+        'Lato': (w === '800' || w === '900') ? 'Lato_900Black' : (isBold || isSemiBold) ? 'Lato_700Bold' : 'Lato_400Regular',
         'Open Sans': `OpenSans${weightSuffix}`,
         'Raleway': `Raleway${weightSuffix}`,
         'Nunito': `Nunito${weightSuffix}`,

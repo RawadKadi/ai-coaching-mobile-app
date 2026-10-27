@@ -22,6 +22,7 @@ const CALENDAR_BOX_PADDING = 24;
 const PAGE_WIDTH = SCREEN_WIDTH - (CALENDAR_BOX_MARGIN * 2) - (CALENDAR_BOX_PADDING * 2);
 
 import CalendarTwoWeekPage from '@/components/CalendarTwoWeekPage';
+import { CalendarSkeleton } from '@/components/CalendarSkeleton';
 
 interface AnimatedSessionCardProps {
     session: any;
@@ -446,7 +447,7 @@ export default function CalendarScreen() {
     itemVisiblePercentThreshold: 50
   }).current;  
   
-  if (loading && !refreshing) return <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={primary} /></View>;
+  if (loading && !refreshing) return <CalendarSkeleton showBackButton={false} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

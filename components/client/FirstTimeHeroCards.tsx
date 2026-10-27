@@ -98,10 +98,7 @@ export const FirstTimeHeroCards = ({
 
   const handleGoThere = async () => {
     await dismissTasks();
-    router.push({
-      pathname: '/(client)/activity',
-      params: { highlightDailyTasks: 'true' },
-    } as any);
+    router.push('/(client)/activity' as any);
   };
 
   const dismissChallenge = async () => {

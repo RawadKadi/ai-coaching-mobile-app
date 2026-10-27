@@ -31,6 +31,7 @@ import MagicRings from '@/components/ui/MagicRings';
 import Svg, { Path } from 'react-native-svg';
 import { MotiView } from 'moti';
 import BlurText from '@/components/ui/BlurText';
+import { ChallengeListSkeleton } from '@/components/ChallengeListSkeleton';
 
 /** Generates an SVG path with a rounded rectangle cutout using fillRule="evenodd". */
 function getSpotlightPath(
@@ -329,15 +330,13 @@ export default function ClientChallengesScreen() {
         </View>
 
         {loading && !refreshing ? (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 60 }}
+            showsVerticalScrollIndicator={false}
           >
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-          </View>
+            <ChallengeListSkeleton count={3} />
+          </ScrollView>
         ) : (
           <ScrollView
             ref={scrollViewRef}

@@ -1,37 +1,24 @@
 import React from 'react';
-import { View, Platform, Text as RNText, StyleSheet } from 'react-native';
+import { View, Platform } from 'react-native';
 import { useTheme } from '@/contexts/BrandContext';
 import { vars } from 'nativewind';
-import { getFontFamily } from '@/hooks/useAppFonts';
+import { installGlobalFontPatcher } from '@/lib/font-patcher';
 
-const oldTextRender = (RNText as any).render;
-if (Platform.OS !== 'web' && oldTextRender && !(RNText as any).render.__patched) {
-  (RNText as any).render = function render(props: any, ref: any) {
-    const origin = oldTextRender.call(this, props, ref);
-    if (!origin) return origin;
-
-    let weight = '400';
-    if (props.style) {
-      const flat = StyleSheet.flatten(props.style) || {};
-      if (flat.fontWeight) weight = String(flat.fontWeight);
-    }
-    
-    const currentBrandFont = (global as any).currentBrandFontFamily || 'System';
-    const fontFam = getFontFamily(currentBrandFont, weight);
-
-    return React.cloneElement(origin, {
-      style: [{ fontFamily: fontFam }, origin.props.style],
-    });
-  };
-  (RNText as any).render.__patched = true;
-}
+// Ensure the global font patcher is installed
+installGlobalFontPatcher();
 
 export function ThemeWrapper({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
 
+  // Set synchronously during render so all children in the tree get the active font immediately
+  const activeFont = theme.typography.fontFamily || 'System';
+  (globalThis as any).currentBrandFontFamily = activeFont;
+  (globalThis as any).currentBrandHeadingWeight = theme.typography.headingWeight;
+  (globalThis as any).currentBrandBodyWeight = theme.typography.bodyWeight;
+
   React.useEffect(() => {
-    (global as any).currentBrandFontFamily = theme.typography.fontFamily;
-  }, [theme.typography.fontFamily]);
+    (globalThis as any).currentBrandFontFamily = activeFont;
+  }, [activeFont]);
 
   React.useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -65,7 +52,10 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
   });
 
   return (
-    <View style={Platform.OS === 'web' ? { flex: 1 } : [themeVars, { flex: 1 }]}>
+    <View
+      key={`theme-font-wrapper-${activeFont}`}
+      style={Platform.OS === 'web' ? { flex: 1 } : [themeVars, { flex: 1 }]}
+    >
       {children}
     </View>
   );

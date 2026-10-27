@@ -279,6 +279,10 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   // Generate theme based on brand and detected mode
   const theme = generateTheme(brand, isDarkMode);
 
+  if (typeof globalThis !== 'undefined') {
+    (globalThis as any).currentBrandFontFamily = theme.typography.fontFamily || 'System';
+  }
+
   // Load brand data
   const loadBrand = async () => {
     try {

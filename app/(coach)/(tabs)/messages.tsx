@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { ChevronRight, MessageCircle, Users, Zap, Search, Bell, X } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { MessagesListSkeleton } from '@/components/MessagesListSkeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
 import * as Haptics from 'expo-haptics';
@@ -72,7 +73,7 @@ export default function CoachMessagesScreen() {
     return () => { supabase.removeChannel(sub); };
   }, [user?.id]);
 
-  useFocusEffect(useCallback(() => { if (coach) { loadClients(); loadTeammates(); } }, [coach]));
+  useFocusEffect(useCallback(() => { if (coach) { loadClients(clients.length > 0); loadTeammates(teammates.length > 0); } }, [coach, clients.length, teammates.length]));
 
   const loadClients = useCallback(async (silent = false) => {
     try {
@@ -396,7 +397,7 @@ export default function CoachMessagesScreen() {
 
           {/* List */}
           {loading && !refreshing ? (
-            <View className="flex-1 items-center justify-center"><ActivityIndicator color={colors.primary} /></View>
+            <MessagesListSkeleton />
           ) : (
             <FlatList
               key={activeTab}

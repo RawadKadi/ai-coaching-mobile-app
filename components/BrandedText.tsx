@@ -1,7 +1,7 @@
 import React from 'react';
-import { Text as RNText, StyleSheet, TextStyle } from 'react-native';
+import { Text as RNText, StyleSheet, TextStyle, TextProps as RNTextProps } from 'react-native';
 import { useTheme } from '@/contexts/BrandContext';
-import { getFontFamily } from '@/hooks/useAppFonts';
+import { getFontFamilyAndWeight } from '@/lib/font-patcher';
 
 interface BrandedTextProps {
   children: React.ReactNode;
@@ -19,7 +19,7 @@ export function BrandedText({
   style,
 }: BrandedTextProps) {
   const theme = useTheme();
-  
+
   const getTextColor = () => {
     switch (color) {
       case 'primary':
@@ -40,32 +40,34 @@ export function BrandedText({
         return theme.colors.text;
     }
   };
-  
-  const getFontWeight = () => {
+
+  const getWeightParam = () => {
     if (weight) {
-      if (weight === 'heading') return theme.typography.headingWeight;
-      if (weight === 'body') return theme.typography.bodyWeight;
+      if (weight === 'heading') return '700';
+      if (weight === 'body') return '400';
       return weight;
     }
-    
-    // Default: use heading weight for xl and xxl variants
-    if (variant === 'xl' || variant === 'xxl') {
-      return theme.typography.headingWeight;
+    if (variant === 'xl' || variant === 'xxl' || variant === 'lg') {
+      return '700';
     }
-    
-    return theme.typography.bodyWeight;
+    return '400';
   };
-  
+
+  const fontStyle = getFontFamilyAndWeight(
+    theme.typography.fontFamily,
+    getWeightParam(),
+    theme.typography.sizes[variant]
+  );
+
   return (
     <RNText
       style={[
         {
-          fontFamily: getFontFamily(theme.typography.fontFamily, getFontWeight() as string),
           fontSize: theme.typography.sizes[variant],
-          fontWeight: getFontWeight() as any,
           color: getTextColor(),
         },
         style,
+        fontStyle,
       ]}
     >
       {children}
@@ -73,13 +75,14 @@ export function BrandedText({
   );
 }
 
-import { TextProps as RNTextProps } from 'react-native';
-
 export function Text(props: RNTextProps & { className?: string }) {
   const theme = useTheme();
-  const flatStyle = StyleSheet.flatten(props.style) || {};
-  const weight = flatStyle.fontWeight || '400';
-  const fontFamily = getFontFamily(theme.typography.fontFamily, String(weight));
+  const flat = StyleSheet.flatten(props.style) || {};
+  const fontStyle = getFontFamilyAndWeight(
+    theme.typography.fontFamily,
+    flat.fontWeight,
+    flat.fontSize
+  );
 
-  return <RNText {...props} style={[props.style, { fontFamily }]} />;
+  return <RNText {...props} style={[props.style, fontStyle]} />;
 }

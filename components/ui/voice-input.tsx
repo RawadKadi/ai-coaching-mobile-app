@@ -416,6 +416,9 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
   const isDark = isDarkColor(colors.surface || colors.background || '#0F172A');
+  const circleBg = isRecording ? '#EF4444' : (theme?.colors?.primary || colors?.primary || '#3B82F6');
+  const isCircleDark = isDarkColor(circleBg);
+  const micIconColor = isCircleDark ? '#FFFFFF' : '#0F172A';
 
   return (
     <View style={[styles.root, style]}>
@@ -520,13 +523,12 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         </Animated.View>
       )}
 
-      {/* ── Permanent Mic button touch target (DOM identity preserved throughout) ── */}
+      {/* ── Permanent Mic button touch target with circle ── */}
       <View
         key="recording-mic-btn"
         {...panResponder.panHandlers}
         style={[
           styles.micBtn, 
-          isRecording && !isLocked && styles.micBtnActive,
           Platform.OS === 'web' && ({
             userSelect: 'none',
             touchAction: 'none',
@@ -536,11 +538,20 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         ]}
         pointerEvents={isLocked ? 'none' : 'auto'}
       >
-        <Animated.View style={micAnimStyle}>
+        <Animated.View 
+          style={[
+            styles.micCircle,
+            { 
+              backgroundColor: circleBg,
+              shadowColor: circleBg,
+            },
+            micAnimStyle
+          ]}
+        >
           <Mic 
-            size={24} 
-            color={isRecording ? '#EF4444' : theme.colors.primary} 
-            strokeWidth={2.5} 
+            size={20} 
+            color={micIconColor} 
+            strokeWidth={2.4} 
           />
         </Animated.View>
       </View>
@@ -550,11 +561,21 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         <TouchableOpacity
           key="recording-locked-send"
           onPress={() => stopRecording(true)}
-          style={[styles.micBtn, styles.lockedSendCircle, styles.lockedSendAbsolute]}
+          style={[styles.micBtn, styles.lockedSendAbsolute]}
           activeOpacity={0.8}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Send size={18} color="#FFFFFF" />
+          <View 
+            style={[
+              styles.micCircle, 
+              { 
+                backgroundColor: circleBg, 
+                shadowColor: circleBg,
+              }
+            ]}
+          >
+            <Send size={18} color={micIconColor} />
+          </View>
         </TouchableOpacity>
       )}
 
@@ -596,8 +617,19 @@ const getStyles = (colors: any) => StyleSheet.create({
       cursor: 'pointer',
     } : {}),
   },
+  micCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.28,
+    shadowRadius: 5,
+    elevation: 4,
+  },
   micBtnActive: {
-    backgroundColor: 'rgba(239,68,68,0.12)',
+    backgroundColor: 'transparent',
   },
   pulse: {
     width: 14,

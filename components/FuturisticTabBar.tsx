@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, TouchableOpacity, StyleSheet, Animated, Platform, useWindowDimensions, LayoutChangeEvent } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
@@ -15,9 +15,6 @@ export function FuturisticTabBar(props: BottomTabBarProps & { emitter?: any; nav
   const { state, descriptors, navigation } = props;
   const router = useRouter();
   const { isShrunk } = useTabBarScroll();
-  const { width: windowWidth } = useWindowDimensions();
-  const [measuredBarWidth, setMeasuredBarWidth] = useState<number>(0);
-  const animatedActiveIndex = useRef(new Animated.Value(state.index)).current;
 
   const visibleRoutes = state.routes.filter(route => {
     const { options } = descriptors[route.key] as any;
@@ -29,25 +26,6 @@ export function FuturisticTabBar(props: BottomTabBarProps & { emitter?: any; nav
 
   const numTabs = visibleRoutes.length || 1;
 
-  // Responsive widths based on actual measured width or window dimensions
-  const baseWidthWide = windowWidth - (TAB_BAR_MARGIN_WIDE * 2);
-  const baseWidthShrunk = windowWidth - (TAB_BAR_MARGIN_SHRUNK * 2);
-
-  const tabWidthWide = (measuredBarWidth || baseWidthWide) / numTabs;
-  const tabWidthShrunk = (measuredBarWidth ? (measuredBarWidth - (TAB_BAR_MARGIN_SHRUNK - TAB_BAR_MARGIN_WIDE) * 2) : baseWidthShrunk) / numTabs;
-
-  const dynamicTabWidth = isShrunk.interpolate({
-    inputRange: [0, 1],
-    outputRange: [tabWidthWide, tabWidthShrunk]
-  });
-
-  const animatedMargin = isShrunk.interpolate({
-    inputRange: [0, 1],
-    outputRange: [TAB_BAR_MARGIN_WIDE, TAB_BAR_MARGIN_SHRUNK]
-  });
-
-  const indicatorPosition = Animated.multiply(animatedActiveIndex, dynamicTabWidth);
-
   // Find active index among VISIBLE routes
   const activeRouteKey = state.routes[state.index].key;
   const activeOptions = descriptors[activeRouteKey]?.options || {};
@@ -55,6 +33,23 @@ export function FuturisticTabBar(props: BottomTabBarProps & { emitter?: any; nav
   const safeActiveIndex = visibleRoutes.findIndex(r => r.key === activeRouteKey) >= 0 
     ? visibleRoutes.findIndex(r => r.key === activeRouteKey) 
     : 0;
+
+  const animatedActiveIndex = useRef(new Animated.Value(safeActiveIndex)).current;
+
+  const animatedMargin = isShrunk.interpolate({
+    inputRange: [0, 1],
+    outputRange: [TAB_BAR_MARGIN_WIDE, TAB_BAR_MARGIN_SHRUNK]
+  });
+
+  const tabPercent = 100 / numTabs;
+
+  const animatedIndicatorLeft = animatedActiveIndex.interpolate({
+    inputRange: numTabs > 1 ? visibleRoutes.map((_, i) => i) : [0, 1],
+    outputRange: numTabs > 1 
+      ? visibleRoutes.map((_, i) => `${i * tabPercent}%`) 
+      : ['0%', '0%'],
+    extrapolate: 'clamp',
+  });
 
   // Animated scale values for each tab icon
   const scaleValues = useRef(visibleRoutes.map(() => new Animated.Value(1))).current;
@@ -106,16 +101,8 @@ export function FuturisticTabBar(props: BottomTabBarProps & { emitter?: any; nav
     ? hexToRgba(colors.surface, 0.65) 
     : 'rgba(255, 255, 255, 0.68)';
 
-  const handleContainerLayout = (e: LayoutChangeEvent) => {
-    const w = e.nativeEvent.layout.width;
-    if (w > 0 && Math.abs(w - measuredBarWidth) > 1) {
-      setMeasuredBarWidth(w);
-    }
-  };
-
   return (
     <Animated.View 
-      onLayout={handleContainerLayout}
       style={[
         styles.container, 
         { left: animatedMargin, right: animatedMargin }
@@ -144,8 +131,10 @@ export function FuturisticTabBar(props: BottomTabBarProps & { emitter?: any; nav
         <Animated.View
           style={[
             styles.glowIndicatorWrapper,
-            { width: dynamicTabWidth },
-            { transform: [{ translateX: indicatorPosition }] }
+            { 
+              width: `${tabPercent}%` as any,
+              left: animatedIndicatorLeft 
+            }
           ]}
         >
           <View 
@@ -325,7 +314,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    left: 0,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 0,

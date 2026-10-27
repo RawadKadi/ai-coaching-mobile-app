@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { NestedTaskCard } from '@/components/NestedTaskCard';
+import { ChallengeDetailsSkeleton } from '@/components/ChallengeDetailsSkeleton';
 
 export default function ChallengeDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -245,18 +246,7 @@ export default function ChallengeDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.background,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <ChallengeDetailsSkeleton />;
   }
 
   if (!challenge) return null;

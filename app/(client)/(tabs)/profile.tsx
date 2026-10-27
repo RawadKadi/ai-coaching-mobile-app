@@ -385,10 +385,7 @@ export default function ProfileScreen() {
                 isCold={isCold}
                 isDark={isDark}
                 onPress={() => {
-                  router.push({
-                    pathname: '/(client)/(tabs)/activity',
-                    params: { highlightDailyTasks: 'true' },
-                  });
+                  router.push('/(client)/(tabs)/activity');
                 }}
               />
             </View>

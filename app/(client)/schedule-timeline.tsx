@@ -27,6 +27,7 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { CalendarSkeleton } from '@/components/CalendarSkeleton';
 import { DatePickerOverlay } from '@/components/DatePickerOverlay';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import CalendarTwoWeekPage from '@/components/CalendarTwoWeekPage';
@@ -174,11 +175,7 @@ export default function ClientScheduleTimeline() {
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   if (loading && !refreshing) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background || (isDark ? '#020617' : '#F8FAFC'), justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
+    return <CalendarSkeleton showBackButton={true} />;
   }
 
   const now = new Date();

@@ -9,6 +9,7 @@ import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
+import { ClientCardsSkeleton } from '@/components/ClientCardsSkeleton';
 
 interface ClientWithProfile {
   id: string;
@@ -326,7 +327,7 @@ export default function ClientsScreen() {
 
               {/* Athletes List */}
               <View className="px-6">
-                {loading ? <ActivityIndicator className="mt-10" color={colors.primary} /> : filteredClients.length === 0 ? (
+                {loading ? <ClientCardsSkeleton count={4} /> : filteredClients.length === 0 ? (
                   <View className="py-20 items-center">
                     <Users size={48} color={colors.border} />
                     <Text style={{ color: colors.textSecondary }} className="font-bold mt-4">No athletes found</Text>
@@ -418,7 +419,7 @@ export default function ClientsScreen() {
 
                   {/* Coaches List */}
                   <View className="px-6">
-                    {loading ? <ActivityIndicator className="mt-10" color={colors.primary} /> : filteredCoaches.length === 0 ? (
+                    {loading ? <ClientCardsSkeleton count={3} /> : filteredCoaches.length === 0 ? (
                       <View className="py-20 items-center">
                         <Users size={48} color={colors.border} />
                         <Text style={{ color: colors.textSecondary }} className="font-bold mt-4">No coaches found</Text>

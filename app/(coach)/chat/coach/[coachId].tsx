@@ -28,6 +28,7 @@ import { usePresence } from '@/contexts/PresenceContext';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Component as GradientBackground } from '@/components/ui/gradient-backgrounds';
 import BubblePuff from '@/components/ui/BubblePuff';
+import { ChatMessageSkeleton } from '@/components/ChatMessageSkeleton';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -342,13 +343,16 @@ export default function CoachToCoachChat() {
 
     // 1. Create Optimistic Message
     const cid = `c-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    const tempId = `temp-${Date.now()}`;
+    const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
 
     // Embed CID
     const contentWithCid = JSON.stringify({ ...parsedContent, cid });
 
     const optimisticMsg: Message = {
-      id: tempId,
+      id: newId,
       sender_id: user?.id || '',
       recipient_id: paramUserId,
       content: contentWithCid,
@@ -380,7 +384,7 @@ export default function CoachToCoachChat() {
           folder, 
           (pct) => {
             // Update progress in state
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, progress: pct } : m));
+            setMessages(prev => prev.map(m => m.id === newId ? { ...m, progress: pct } : m));
           }
         );
 
@@ -399,8 +403,9 @@ export default function CoachToCoachChat() {
         mediaDownloadManager.markRemoteAvailable(publicUrl);
       }
 
-      // 3. Insert into Supabase
+      // 3. Insert into Supabase with identical stable ID
       const { data: insertedData, error } = await supabase.from('messages').insert({ 
+        id: newId,
         sender_id: user?.id, 
         recipient_id: paramUserId, 
         content: finalContent, 
@@ -411,15 +416,15 @@ export default function CoachToCoachChat() {
 
       if (error) throw error;
 
-      // 4. Replace optimistic message with real one
+      // 4. Update optimistic message in place without unmounting
       if (insertedData) {
-        setMessages(prev => prev.map(m => m.id === tempId ? insertedData : m));
+        setMessages(prev => prev.map(m => m.id === newId ? { ...m, ...insertedData, id: newId, isUploading: false, progress: 100 } : m));
       }
     } catch (e: any) {
       console.error('[CoachCoachChat] Media upload/send failed:', e);
       Alert.alert('Send Error', 'Failed to send media: ' + (e.message || 'Unknown error'));
       // Remove optimistic message on failure
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setMessages(prev => prev.filter(m => m.id !== newId));
     } finally {
       setSending(false);
       setReplyingTo(null);
@@ -810,9 +815,7 @@ function CoachToCoachSwipeReplyAction({ progress, color }: { progress: any; colo
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         {loading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color={theme.colors.primary} />
-          </View>
+          <ChatMessageSkeleton />
         ) : (
           <View style={{ flex: 1 }}>
             <FlatList 

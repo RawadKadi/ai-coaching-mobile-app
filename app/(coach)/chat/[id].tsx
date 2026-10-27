@@ -41,6 +41,7 @@ import {
   Forward
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import { ChatMessageSkeleton } from '@/components/ChatMessageSkeleton';
 import { safeBack } from '@/lib/navigation-utils';
 import BubblePuff from '@/components/ui/BubblePuff';
 import { Component as GradientBackground } from '@/components/ui/gradient-backgrounds';
@@ -548,12 +549,15 @@ export default function CoachChatScreen() {
     }
 
     const cid = `c-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    const tempId = `temp-${Date.now()}`;
+    const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
     
     const contentWithCid = JSON.stringify({ ...parsedContent, cid });
 
     const optimisticMsg: Message = {
-      id: tempId,
+      id: newId,
       sender_id: user?.id || '',
       recipient_id: clientUserId,
       content: contentWithCid,
@@ -582,7 +586,7 @@ export default function CoachChatScreen() {
           parsedContent.url, 
           folder, 
           (pct) => {
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, progress: pct } : m));
+            setMessages(prev => prev.map(m => m.id === newId ? { ...m, progress: pct } : m));
           }
         );
 
@@ -602,6 +606,7 @@ export default function CoachChatScreen() {
       }
 
       const { data: insertedData, error } = await supabase.from('messages').insert({ 
+        id: newId,
         sender_id: user?.id, 
         recipient_id: clientUserId, 
         content: finalContent, 
@@ -613,12 +618,12 @@ export default function CoachChatScreen() {
       if (error) throw error;
 
       if (insertedData) {
-        setMessages(prev => prev.map(m => m.id === tempId ? insertedData : m));
+        setMessages(prev => prev.map(m => m.id === newId ? { ...m, ...insertedData, id: newId, isUploading: false, progress: 100 } : m));
       }
     } catch (e: any) {
       console.error('[CoachChat] Media upload/send failed:', e);
       Alert.alert('Send Error', 'Failed to send media: ' + (e.message || 'Unknown error'));
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setMessages(prev => prev.filter(m => m.id !== newId));
     } finally {
       setSending(false);
       setReplyingTo(null);
@@ -1231,7 +1236,7 @@ function CoachSwipeReplyAction({ progress, color }: { progress: any; color: stri
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={{ flex: 1, position: 'relative' }}>
-          {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color={theme.colors.primary} /></View> : (
+          {loading ? <ChatMessageSkeleton /> : (
                <FlatList
                   ref={flatListRef} data={messages} extraData={messages} renderItem={renderMessage} keyExtractor={item => item.id}
                   inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}

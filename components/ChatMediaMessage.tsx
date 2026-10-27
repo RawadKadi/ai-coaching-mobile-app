@@ -1004,7 +1004,7 @@ function VoiceNotePlayer({
         let snd = soundAvRef.current;
         if (!snd) {
           const { sound: newSound } = await Audio.Sound.createAsync(
-            { uri },
+            { uri: playUri },
             { shouldPlay: false, volume: 1.0 },
             (status) => {
               if (status.isLoaded) {

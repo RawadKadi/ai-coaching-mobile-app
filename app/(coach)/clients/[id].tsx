@@ -43,6 +43,7 @@ import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useTheme } from '@/contexts/BrandContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import SchedulerModal from '@/components/SchedulerModal';
+import { CoachClientDetailsSkeleton } from '@/components/CoachClientDetailsSkeleton';
 import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
@@ -284,11 +285,7 @@ export default function ClientDetailsScreen() {
   }, [id, coach]);
 
   if (loading && !refreshing) {
-    return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
+    return <CoachClientDetailsSkeleton />;
   }
 
   if (!client) {

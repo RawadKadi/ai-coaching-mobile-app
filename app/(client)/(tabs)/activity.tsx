@@ -41,6 +41,7 @@ import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
 import FeedbackModal from '@/components/FeedbackModal';
 import StreakFire from '@/components/StreakFire';
+import { PlanSkeleton } from '@/components/client/PlanSkeleton';
 import { useStreak } from '@/hooks/useStreak';
 import { syncAllHealthData } from '@/lib/health-service';
 import Svg, { Path } from 'react-native-svg';
@@ -163,6 +164,22 @@ function toRgbaString(color: string, alpha = 1): string {
   }
 }
 
+interface ActivityCache {
+  meals: Meal[];
+  workouts: Workout[];
+  habits: Habit[];
+  habitLogs: HabitLog[];
+  challenges: any[];
+  sessionsTaken: number;
+  sessionsTotal: number;
+  motherChallenges: any[];
+  streak: number;
+  isCold: boolean;
+  date: string;
+}
+
+let cachedActivityData: ActivityCache | null = null;
+
 export default function ActivityScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -202,24 +219,27 @@ export default function ActivityScreen() {
   const cardBorder =
     colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
-  const [loading, setLoading] = useState(true);
+  const hasLoadedInitialData = useRef(!!cachedActivityData);
+  const [loading, setLoading] = useState(!cachedActivityData);
   const [refreshing, setRefreshing] = useState(false);
-  const [meals, setMeals] = useState<Meal[]>([]);
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [habitLogs, setHabitLogs] = useState<HabitLog[]>([]);
-  const [challenges, setChallenges] = useState<any[]>([]);
-  const [sessionsTaken, setSessionsTaken] = useState(0);
-  const [sessionsTotal, setSessionsTotal] = useState(0);
+  const [meals, setMeals] = useState<Meal[]>(cachedActivityData?.meals || []);
+  const [workouts, setWorkouts] = useState<Workout[]>(cachedActivityData?.workouts || []);
+  const [habits, setHabits] = useState<Habit[]>(cachedActivityData?.habits || []);
+  const [habitLogs, setHabitLogs] = useState<HabitLog[]>(cachedActivityData?.habitLogs || []);
+  const [challenges, setChallenges] = useState<any[]>(cachedActivityData?.challenges || []);
+  const [sessionsTaken, setSessionsTaken] = useState(cachedActivityData?.sessionsTaken || 0);
+  const [sessionsTotal, setSessionsTotal] = useState(cachedActivityData?.sessionsTotal || 0);
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [selectedChallenge, setSelectedChallenge] = useState<any | null>(null);
-  const [motherChallenges, setMotherChallenges] = useState<any[]>([]);
+  const [motherChallenges, setMotherChallenges] = useState<any[]>(
+    cachedActivityData?.motherChallenges || [],
+  );
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'history'>(
     'all',
   );
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [streak, setStreak] = useState(0);
-  const [isCold, setIsCold] = useState(false);
+  const [streak, setStreak] = useState(cachedActivityData?.streak || 0);
+  const [isCold, setIsCold] = useState(cachedActivityData?.isCold || false);
   const [showStreakGained, setShowStreakGained] = useState(false);
   const [showStreakLost, setShowStreakLost] = useState(false);
   const [showColdStreak, setShowColdStreak] = useState(false);
@@ -302,27 +322,10 @@ export default function ActivityScreen() {
   };
 
   useEffect(() => {
-    if (highlightDailyTasks === 'true' && !loading) {
-      if (hasTriggeredHighlight.current) return;
-      hasTriggeredHighlight.current = true;
-      triggerDailyTasksHighlight(
-        'Finish your daily tasks here not to lose your streak',
-      );
-    } else if (highlightDailyTasks !== 'true') {
-      hasTriggeredHighlight.current = false;
+    if (highlightDailyTasks) {
+      router.setParams({ highlightDailyTasks: undefined });
     }
-  }, [highlightDailyTasks, loading, insets.top]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (highlightDailyTasks === 'true' && !loading) {
-        hasTriggeredHighlight.current = true;
-        triggerDailyTasksHighlight(
-          'Finish your daily tasks here not to lose your streak',
-        );
-      }
-    }, [highlightDailyTasks, loading])
-  );
+  }, [highlightDailyTasks]);
 
   const handleDismissHighlight = () => {
     closeDailyTasksModal();
@@ -542,18 +545,25 @@ export default function ActivityScreen() {
 
   useEffect(() => {
     if (client) {
-      loadActivityData();
+      if (!hasLoadedInitialData.current) {
+        loadActivityData(false);
+      } else {
+        loadActivityData(true);
+      }
     }
   }, [client, selectedDate]);
 
   // Ensure data is fresh when user navigates back to this tab
   useFocusEffect(
     useCallback(() => {
-      if (client) {
-        loadActivityData();
-        syncAllHealthData(client.id).then(() => {
-          loadActivityData();
-        });
+      if (client && hasLoadedInitialData.current) {
+        // Silent background refresh: keeps existing layout instantly visible without showing skeleton
+        loadActivityData(true);
+        syncAllHealthData(client.id)
+          .then(() => {
+            loadActivityData(true);
+          })
+          .catch(() => {});
       }
     }, [client, selectedDate]),
   );
@@ -617,9 +627,15 @@ export default function ActivityScreen() {
     };
   }, [client]);
 
-  const loadActivityData = async () => {
+  const loadActivityData = async (isSilent = false) => {
     try {
-      if (!refreshing) setLoading(true);
+      if (!hasLoadedInitialData.current && !refreshing && !isSilent) {
+        setLoading(true);
+      }
+
+      const todayStr = getLocalDateString();
+      const past90DaysStr = getPastLocalDateString(90);
+
       const [
         mealsResult,
         workoutsResult,
@@ -629,6 +645,8 @@ export default function ActivityScreen() {
         activeResult,
         completedResult,
         failedResult,
+        subsResult,
+        pastLogsResult,
       ] = await Promise.all([
         supabase
           .from('meals')
@@ -669,6 +687,16 @@ export default function ActivityScreen() {
           p_client_id: client?.id,
           p_status: 'failed',
         }),
+        supabase.rpc('get_todays_sub_challenges', {
+          p_client_id: client?.id,
+          p_date: selectedDate,
+        }),
+        supabase
+          .from('habit_logs')
+          .select('date, habit_id, completed')
+          .eq('client_id', client?.id)
+          .gte('date', past90DaysStr)
+          .eq('completed', true),
       ]);
 
       if (mealsResult.error) throw mealsResult.error;
@@ -703,35 +731,19 @@ export default function ActivityScreen() {
 
       setMotherChallenges(combinedMotherChallenges);
 
-      // Get sub-challenges via RPC
-      const { data: subsData, error: subsError } = await supabase.rpc(
-        'get_todays_sub_challenges',
-        {
-          p_client_id: client?.id,
-          p_date: selectedDate,
-        },
-      );
-
-      if (subsError) {
-        console.error('Error loading challenges:', subsError);
+      if (subsResult.error) {
+        console.error('Error loading challenges:', subsResult.error);
       }
 
-      setChallenges(subsData || []);
+      const subsData = subsResult.data || [];
+      setChallenges(subsData);
 
       // ─── Streak & Cold Streak Calculation (2-Consecutive-Miss Rule) ───
-      const todayStr = getLocalDateString();
       const yesterdayStr = getPastLocalDateString(1);
       const dayBeforeYesterdayStr = getPastLocalDateString(2);
 
       const activeHabitsList = habitsResult.data || [];
-
-      // Query past completed habit logs
-      const { data: pastHabitLogs } = await supabase
-        .from('habit_logs')
-        .select('date, habit_id, completed')
-        .eq('client_id', client?.id)
-        .gte('date', getPastLocalDateString(90))
-        .eq('completed', true);
+      const pastHabitLogs = pastLogsResult.data || [];
 
       // Helper: check if all active habits created on or before dateStr were completed
       const isDateCompleted = (dateStr: string) => {
@@ -846,6 +858,21 @@ export default function ActivityScreen() {
         }
       }
 
+      // Cache results in memory for instant tab transitions
+      cachedActivityData = {
+        meals: mealsResult.data || [],
+        workouts: workoutsResult.data || [],
+        habits: habitsResult.data || [],
+        habitLogs: logs,
+        challenges: subsData,
+        sessionsTaken: validSessions.filter((s: any) => s.status === 'completed').length,
+        sessionsTotal: validSessions.length,
+        motherChallenges: combinedMotherChallenges,
+        streak: computedStreak,
+        isCold: coldStatus,
+        date: selectedDate,
+      };
+
       // Initialize last reported status
       logs.forEach((log) => {
         lastReportedStatus.current[log.habit_id] = log.completed;
@@ -853,6 +880,7 @@ export default function ActivityScreen() {
     } catch (error) {
       console.error('Error loading activity:', error);
     } finally {
+      hasLoadedInitialData.current = true;
       setLoading(false);
       setRefreshing(false);
     }
@@ -962,9 +990,6 @@ export default function ActivityScreen() {
     } catch (e) {
       console.error('Error saving cold streak acknowledged:', e);
     }
-    triggerDailyTasksHighlight(
-      'Finish your daily tasks here not to lose your streak',
-    );
   };
 
   const handleDismissStreakLost = async () => {
@@ -984,9 +1009,6 @@ export default function ActivityScreen() {
     } catch (e) {
       console.error('Error saving streak lost modal shown date:', e);
     }
-    triggerDailyTasksHighlight(
-      'Finish your daily tasks here not to lose your streak',
-    );
   };
 
   const handleOpenDetails = (challenge: any) => {
@@ -1425,18 +1447,7 @@ export default function ActivityScreen() {
   });
 
   if (loading && !refreshing) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.background,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
+    return <PlanSkeleton />;
   }
 
   return (
