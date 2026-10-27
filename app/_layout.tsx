@@ -23,7 +23,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
 
 import { ThemeWrapper } from '@/components/ThemeWrapper';
-import TouchIndicator from '@/components/TouchIndicator';
 
 function AuthGuard() {
   const { session, loading } = useAuth();
@@ -110,9 +109,7 @@ export default function RootLayout() {
                 <PresenceProvider>
                   <TabBarScrollProvider>
                     <ThemeWrapper>
-                      <TouchIndicator>
-                        <RootLayoutNav />
-                      </TouchIndicator>
+                      <RootLayoutNav />
                     </ThemeWrapper>
                   </TabBarScrollProvider>
                 </PresenceProvider>

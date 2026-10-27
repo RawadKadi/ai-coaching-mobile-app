@@ -360,10 +360,9 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Refresh brand (exposed to components)
-  const refreshBrand = async () => {
-    setLoading(true);
+  const refreshBrand = React.useCallback(async () => {
     await loadBrand();
-  };
+  }, [coach?.brand_id, client?.id]);
 
   // Update brand settings
   const updateBrandSettings = async (updates: Partial<Brand>): Promise<boolean> => {

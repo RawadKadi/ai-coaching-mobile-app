@@ -285,9 +285,9 @@ export default function ClientChallengesScreen() {
         <View
           style={{
             flexDirection: 'row',
-            paddingHorizontal: 24,
-            gap: 16,
-            marginBottom: 20,
+            paddingHorizontal: 12,
+            gap: 12,
+            marginBottom: 16,
           }}
         >
           {(['active', 'history'] as const).map((tab) => {
@@ -299,7 +299,7 @@ export default function ClientChallengesScreen() {
                 onPress={() => setActiveTab(tab)}
                 style={{
                   paddingVertical: 6,
-                  paddingHorizontal: 12,
+                  paddingHorizontal: 14,
                   borderRadius: 999,
                   backgroundColor: isSelected
                     ? `${theme.colors.primary}20`
@@ -342,7 +342,7 @@ export default function ClientChallengesScreen() {
           <ScrollView
             ref={scrollViewRef}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60 }}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 60 }}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl

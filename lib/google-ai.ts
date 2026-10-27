@@ -17,7 +17,7 @@ if (!API_KEY) {
 export const genAI = new GoogleGenerativeAI(API_KEY || '');
 
 export const visionModel = genAI.getGenerativeModel({
-    model: 'gemini-flash-latest',
+    model: 'gemini-3.5-flash',
     generationConfig: {
         temperature: 0.4,  // Lower for more consistent nutritional data
         topK: 32,
@@ -27,15 +27,26 @@ export const visionModel = genAI.getGenerativeModel({
     }
 });
 
-// Gemini 1.5 Flash model for text tasks (challenge generation)
+// Gemini model for structured/JSON tasks (challenge generation, protocol suggestions)
 export const textModel = genAI.getGenerativeModel({
-    model: 'gemini-flash-latest',
+    model: 'gemini-3.5-flash',
     generationConfig: {
         temperature: 0.7,  // Higher for creative challenge generation
         topK: 40,
         topP: 0.95,
         maxOutputTokens: 8192,
         responseMimeType: 'application/json',
+    }
+});
+
+// Gemini model for natural text generation (insights, advice, explanations)
+export const plainTextModel = genAI.getGenerativeModel({
+    model: 'gemini-3.5-flash',
+    generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 2048,
     }
 });
 
@@ -91,15 +102,52 @@ export const fileToGenerativePart = async (uri: string, mimeType: string) => {
     }
 };
 /**
- * Generate text from a prompt using Gemini
+ * Helper to wrap a promise with a timeout
+ */
+const withTimeout = <T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> => {
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMessage)), ms))
+    ]);
+};
+
+/**
+ * Generate text from a prompt using Gemini.
+ * Uses fast plain text generation with timeout and automatic model fallback.
  */
 export const generateText = async (prompt: string): Promise<string> => {
-    try {
-        const result = await textModel.generateContent(prompt);
-        const response = await result.response;
-        return response.text();
-    } catch (error) {
-        console.warn('Error generating text (AI Engine busy or rate limited):', error);
-        throw new Error('Failed to generate text');
+    if (!API_KEY) {
+        throw new Error('Google AI API key is not configured');
     }
+
+    const candidateModels = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+
+    for (const modelName of candidateModels) {
+        try {
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 2048,
+                }
+            });
+
+            const result = await withTimeout(
+                model.generateContent(prompt),
+                7000,
+                `Timeout generating content with ${modelName}`
+            );
+
+            const response = await result.response;
+            const text = response.text();
+            if (text && text.trim().length > 0) {
+                return text.trim();
+            }
+        } catch (error: any) {
+            console.warn(`[Google AI] Model ${modelName} failed or timed out:`, error?.message || error);
+            // Continue to next candidate model
+        }
+    }
+
+    throw new Error('All AI models failed to generate text');
 };

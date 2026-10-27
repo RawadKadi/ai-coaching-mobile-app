@@ -34,7 +34,8 @@ import { MotiView } from 'moti';
 import BlurText from '@/components/ui/BlurText';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/BrandContext';
+import { useTheme, useBrand } from '@/contexts/BrandContext';
+import { Image as ExpoImage } from 'expo-image';
 import { isDarkColor, getContrastColor, hexToRGB } from '@/lib/theme-utils';
 import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
@@ -190,6 +191,7 @@ export default function ActivityScreen() {
   const hasTriggeredHighlight = useRef(false);
   const { client, profile, refreshProfile } = useAuth();
   const { handleScroll } = useTabBarScroll();
+  const { brand } = useBrand();
   const theme = useTheme();
   const colors = theme.colors;
   const isDark = isDarkColor(colors.background || '#020617');
@@ -247,12 +249,56 @@ export default function ActivityScreen() {
     return streakQuotes[index] || streakQuotes[0];
   })();
 
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+
+  // Daily Tasks Bottom Sheet Drawer Animation state
+  const [showDailyTasksListModal, setShowDailyTasksListModal] = useState(false);
+  const dailyTasksSheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const dailyTasksFadeAnim = useRef(new Animated.Value(0)).current;
+
+  const openDailyTasksModal = () => {
+    setShowDailyTasksListModal(true);
+    dailyTasksSheetAnim.setValue(SCREEN_HEIGHT);
+    dailyTasksFadeAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(dailyTasksFadeAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.spring(dailyTasksSheetAnim, {
+        toValue: 0,
+        damping: 24,
+        stiffness: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeDailyTasksModal = () => {
+    Animated.parallel([
+      Animated.timing(dailyTasksFadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(dailyTasksSheetAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowDailyTasksListModal(false);
+    });
+  };
+
   const toggleCategory = (key: string) => {
     setExpandedCategories((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const triggerDailyTasksHighlight = (customTooltipText?: string) => {
-    setShowDailyTasksListModal(true);
+    openDailyTasksModal();
   };
 
   useEffect(() => {
@@ -279,7 +325,7 @@ export default function ActivityScreen() {
   );
 
   const handleDismissHighlight = () => {
-    setShowDailyTasksListModal(false);
+    closeDailyTasksModal();
     if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
     setShowTooltipCard(false);
     setIsHighlighting(false);
@@ -314,14 +360,12 @@ export default function ActivityScreen() {
   }, [activeTab]);
 
   // Bottom Sheet Animation state
-  const SCREEN_HEIGHT = Dimensions.get('window').height;
   const sheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const panY = useRef(new Animated.Value(0)).current;
 
   // Task Details Bottom Sheet Drawer Animation state
   const [selectedTask, setSelectedTask] = useState<Habit | null>(null);
   const [showTaskDetailsModal, setShowTaskDetailsModal] = useState(false);
-  const [showDailyTasksListModal, setShowDailyTasksListModal] = useState(false);
   const taskSheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const taskFadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -1414,24 +1458,57 @@ export default function ActivityScreen() {
               marginBottom: 8,
             }}
           >
-            <View>
-              <Text
-                style={{ color: textColor, fontSize: 28, fontWeight: '900', letterSpacing: -0.5 }}
-              >
-                Plan
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.primary,
-                  fontWeight: 'bold',
-                  textTransform: 'uppercase',
-                  letterSpacing: 2,
-                  fontSize: 10,
-                  marginTop: 4,
-                }}
-              >
-                {formattedDate}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              {brand?.logo_url ? (
+                <ExpoImage
+                  source={{ uri: brand.logo_url }}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: cardBorder,
+                  }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: colors.primary + '25',
+                    borderWidth: 1,
+                    borderColor: colors.primary + '40',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 18, fontWeight: '900' }}>
+                    {brand?.name ? brand.name.charAt(0).toUpperCase() : 'C'}
+                  </Text>
+                </View>
+              )}
+
+              <View>
+                <Text
+                  style={{ color: textColor, fontSize: 28, fontWeight: '900', letterSpacing: -0.5 }}
+                >
+                  Plan
+                </Text>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    letterSpacing: 2,
+                    fontSize: 10,
+                    marginTop: 2,
+                  }}
+                >
+                  {formattedDate}
+                </Text>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -1494,7 +1571,7 @@ export default function ActivityScreen() {
             <DailyTasksHeroCard
               habits={habits}
               habitLogs={habitLogs}
-              onPress={() => setShowDailyTasksListModal(true)}
+              onPress={openDailyTasksModal}
             />
 
             {/* 2. BENTO ROW: Calendar & Challenges (Side-by-Side Chunky Cards) */}
@@ -1581,79 +1658,6 @@ export default function ActivityScreen() {
               </CollapsibleContent>
             </View>
 
-            {/* Meals Section */}
-            <View style={{ marginBottom: 16, marginTop: 8, paddingHorizontal: 4 }}>
-              <TouchableOpacity
-                onPress={() => toggleCategory('nutrition')}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
-                activeOpacity={0.7}
-              >
-                <AnimatedChevron expanded={expandedCategories.nutrition} />
-                <Text
-                  style={{ color: textColor, fontSize: 18, fontWeight: '900' }}
-                >
-                  Nutrition
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <CollapsibleContent expanded={expandedCategories.nutrition}>
-              <View style={{ marginBottom: 24 }}>
-                {meals.length === 0 ? (
-                  <EmptyState message="No meals tracked for today." />
-                ) : (
-                  <View style={{ gap: 12 }}>
-                    {meals.map((meal, idx) => (
-                      <ActivityCard
-                        key={meal.id}
-                        title={meal.name}
-                        sub={`${meal.meal_type.toUpperCase()} • ${formatCompactNumber(meal.calories || 0)} kcal`}
-                        completed={true}
-                        icon={<Utensils size={20} color="#F59E0B" />}
-                        readOnly
-                        delay={idx * 60}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
-            </CollapsibleContent>
-
-            {/* Workouts Section */}
-            <View style={{ marginBottom: 16, marginTop: 8, paddingHorizontal: 4 }}>
-              <TouchableOpacity
-                onPress={() => toggleCategory('performance')}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
-                activeOpacity={0.7}
-              >
-                <AnimatedChevron expanded={expandedCategories.performance} />
-                <Text
-                  style={{ color: textColor, fontSize: 18, fontWeight: '900' }}
-                >
-                  Performance
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <CollapsibleContent expanded={expandedCategories.performance}>
-              <View style={{ marginBottom: 24 }}>
-                {workouts.length === 0 ? (
-                  <EmptyState message="No workouts recorded for today." />
-                ) : (
-                  <View style={{ gap: 12 }}>
-                    {workouts.map((workout, idx) => (
-                      <ActivityCard
-                        key={workout.id}
-                        title={workout.name}
-                        sub={`${workout.duration_minutes} MIN • ${workout.exercises?.length || 0} EXERCISES`}
-                        completed={true}
-                        icon={<Dumbbell size={20} color="#8B5CF6" />}
-                        readOnly
-                        delay={idx * 60}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
-            </CollapsibleContent>
           </View>
         </View>
       </ScrollView>
@@ -1935,21 +1939,32 @@ export default function ActivityScreen() {
         visible={showDailyTasksListModal}
         transparent
         statusBarTranslucent
-        animationType="fade"
-        onRequestClose={() => setShowDailyTasksListModal(false)}
+        animationType="none"
+        onRequestClose={closeDailyTasksModal}
       >
         <View
           style={{
             flex: 1,
             justifyContent: 'flex-end',
-            backgroundColor: isDark ? 'rgba(0,0,0,0.72)' : 'rgba(15, 23, 42, 0.55)',
           }}
         >
-          <TouchableWithoutFeedback onPress={() => setShowDailyTasksListModal(false)}>
-            <View style={{ flex: 1 }} />
-          </TouchableWithoutFeedback>
+          {/* Dimmed backdrop fades in/out without sliding */}
+          <Animated.View
+            style={{
+              ...(StyleSheet.absoluteFill as any),
+              backgroundColor: isDark
+                ? 'rgba(0,0,0,0.72)'
+                : 'rgba(15, 23, 42, 0.55)',
+              opacity: dailyTasksFadeAnim,
+            }}
+          >
+            <TouchableWithoutFeedback onPress={closeDailyTasksModal}>
+              <View style={{ flex: 1 }} />
+            </TouchableWithoutFeedback>
+          </Animated.View>
 
-          <View
+          {/* Drawer sheet slides up from bottom */}
+          <Animated.View
             style={{
               backgroundColor: cardBg,
               borderTopLeftRadius: 36,
@@ -1960,6 +1975,7 @@ export default function ActivityScreen() {
               maxHeight: '85%',
               borderTopWidth: 1,
               borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+              transform: [{ translateY: dailyTasksSheetAnim }],
             }}
           >
             {/* Handle bar */}
@@ -2009,7 +2025,7 @@ export default function ActivityScreen() {
               </View>
 
               <TouchableOpacity
-                onPress={() => setShowDailyTasksListModal(false)}
+                onPress={closeDailyTasksModal}
                 style={{
                   width: 36,
                   height: 36,
@@ -2032,7 +2048,7 @@ export default function ActivityScreen() {
                   progressPercent={(completedHabits / habits.length) * 100}
                   isCompleted={completedHabits === habits.length && habits.length > 0}
                   primaryColor={theme.colors.primary}
-                  completedColor="#10B981"
+                  completedColor={theme.colors.primary}
                   trackBg={isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9'}
                   height={8}
                   borderRadius={4}
@@ -2050,20 +2066,20 @@ export default function ActivityScreen() {
                   alignItems: 'center',
                   gap: 8,
                   backgroundColor: isDark
-                    ? 'rgba(16, 185, 129, 0.15)'
-                    : 'rgba(16, 185, 129, 0.1)',
+                    ? toRgbaString(theme.colors.primary, 0.18)
+                    : toRgbaString(theme.colors.primary, 0.1),
                   borderWidth: 1,
-                  borderColor: 'rgba(16, 185, 129, 0.3)',
+                  borderColor: toRgbaString(theme.colors.primary, 0.28),
                   borderRadius: 14,
                   paddingHorizontal: 14,
                   paddingVertical: 10,
                   marginBottom: 16,
                 }}
               >
-                <CheckCircle size={18} color="#10B981" />
+                <CheckCircle size={18} color={theme.colors.primary} />
                 <Text
                   style={{
-                    color: isDark ? '#A7F3D0' : '#047857',
+                    color: isDark ? '#FFFFFF' : theme.colors.primary,
                     fontSize: 13,
                     fontWeight: '800',
                   }}
@@ -2108,7 +2124,7 @@ export default function ActivityScreen() {
                 </View>
               )}
             </ScrollView>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -2262,12 +2278,12 @@ export default function ActivityScreen() {
                       padding: 16,
                       borderRadius: 20,
                       backgroundColor: isDone
-                        ? 'rgba(16, 185, 129, 0.10)'
-                        : `${colors.primary}10`,
+                        ? toRgbaString(colors.primary, 0.12)
+                        : toRgbaString(colors.primary, 0.1),
                       borderWidth: 1,
                       borderColor: isDone
-                        ? 'rgba(16, 185, 129, 0.28)'
-                        : `${colors.primary}25`,
+                        ? toRgbaString(colors.primary, 0.28)
+                        : toRgbaString(colors.primary, 0.25),
                       marginBottom: 16,
                       gap: 12,
                     }}
@@ -2277,7 +2293,7 @@ export default function ActivityScreen() {
                         width: 32,
                         height: 32,
                         borderRadius: 16,
-                        backgroundColor: isDone ? '#10B981' : colors.primary,
+                        backgroundColor: colors.primary,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -2291,7 +2307,7 @@ export default function ActivityScreen() {
                     <View style={{ flex: 1 }}>
                       <Text
                         style={{
-                          color: isDone ? '#10B981' : colors.primary,
+                          color: colors.primary,
                           fontSize: 14,
                           fontWeight: '900',
                         }}
@@ -2925,7 +2941,7 @@ const SmoothProgressBar = ({
   progressPercent,
   isCompleted,
   primaryColor,
-  completedColor = '#10B981',
+  completedColor,
   trackBg,
   height = 8,
   borderRadius = 4,
@@ -2942,6 +2958,7 @@ const SmoothProgressBar = ({
   showPercentage?: boolean;
   percentageColor?: string;
 }) => {
+  const finalCompletedColor = completedColor || primaryColor;
   const [trackWidth, setTrackWidth] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -2979,7 +2996,7 @@ const SmoothProgressBar = ({
     inputRange: [0, 1],
     outputRange: [
       toRgbaString(primaryColor, 1),
-      toRgbaString(completedColor, 1),
+      toRgbaString(finalCompletedColor, 1),
     ],
   });
 
@@ -3019,7 +3036,7 @@ const SmoothProgressBar = ({
       {showPercentage && (
         <Text
           style={{
-            color: percentageColor || (isCompleted ? completedColor : primaryColor),
+            color: percentageColor || (isCompleted ? finalCompletedColor : primaryColor),
             fontSize: 12,
             fontWeight: '900',
             minWidth: 36,

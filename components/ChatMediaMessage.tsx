@@ -851,7 +851,10 @@ function VoiceNotePlayer({
     }
   }, []);
 
-  // Cleanup on unmount or uri change
+  const currentUriRef = useRef(uri);
+  currentUriRef.current = uri;
+
+  // Cleanup ONLY on unmount
   useEffect(() => {
     return () => {
       if (Platform.OS === 'web' && audioWebRef.current) {
@@ -875,10 +878,11 @@ function VoiceNotePlayer({
         soundAvRef.current = null;
       }
     };
-  }, [uri]);
+  }, []);
 
   const togglePlayback = async () => {
-    if (!uri) return;
+    const playUri = currentUriRef.current || uri;
+    if (!playUri) return;
 
     if (isPlaying) {
       pausePlayback();
@@ -900,7 +904,7 @@ function VoiceNotePlayer({
         setIsLoading(true);
         let audio = audioWebRef.current;
         if (!audio) {
-          audio = new (window as any).Audio(uri);
+          audio = new (window as any).Audio(playUri);
           audioWebRef.current = audio;
 
           audio.onloadedmetadata = () => {
@@ -928,6 +932,9 @@ function VoiceNotePlayer({
             setIsLoading(false);
             setIsPlaying(false);
           };
+        } else if (audio.src !== playUri && !isPlaying) {
+          // If URI changed while idle, update source seamlessly
+          audio.src = playUri;
         }
 
         // If at end, rewind to start
@@ -953,7 +960,7 @@ function VoiceNotePlayer({
       setIsLoading(true);
       let player = nativePlayerRef.current;
       if (!player) {
-        player = createAudioPlayer(uri, { updateInterval: 80 });
+        player = createAudioPlayer(playUri, { updateInterval: 80 });
         nativePlayerRef.current = player;
 
         player.addListener('playbackStatusUpdate', (status: any) => {

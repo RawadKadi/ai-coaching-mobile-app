@@ -14,6 +14,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check, Mic } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
@@ -517,6 +518,10 @@ export function ChatInputBar({
 
   const isDisabled = !!sending;
 
+  const isSurfaceDark = isDarkColor(theme.colors.surface || theme.colors.background || '#FFFFFF');
+  const closeIconColor = isSurfaceDark ? '#FFFFFF' : '#0F172A';
+  const closeBtnBg = isSurfaceDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.08)';
+
   return (
     <View style={{ backgroundColor: 'transparent' }}>
       {activePanel && (
@@ -632,11 +637,11 @@ export function ChatInputBar({
             return null;
           })()}
           <TouchableOpacity 
-            style={styles.replyCloseBtn} 
+            style={[styles.replyCloseBtn, { backgroundColor: closeBtnBg, borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }]} 
             onPress={onCancelReply}
             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
           >
-            <X size={16} color="rgba(255,255,255,0.4)" />
+            <X size={15} color={closeIconColor} strokeWidth={2.5} />
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -651,10 +656,11 @@ export function ChatInputBar({
             </Text>
           </View>
           <TouchableOpacity
+            style={{ backgroundColor: closeBtnBg, borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }}
             onPress={() => { setText(''); onCancelEdit?.(); }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <X size={16} color="rgba(255,255,255,0.4)" />
+            <X size={15} color={closeIconColor} strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
       )}
@@ -694,9 +700,9 @@ export function ChatInputBar({
             borderTopColor: theme.colors.border,
         }} />
 
-        {/* Left: Cancel Edit (X) in edit mode, Plus otherwise — hidden while recording */}
-        {!isVoiceRecording && (
-          editingMessage ? (
+        {/* Left: Cancel Edit (X) in edit mode, Plus otherwise — opacity hidden while recording to prevent unmounting/layout disruption */}
+        <View style={{ opacity: isVoiceRecording ? 0 : 1 }} pointerEvents={isVoiceRecording ? 'none' : 'auto'}>
+          {editingMessage ? (
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={() => { setText(''); onCancelEdit?.(); }}
@@ -717,15 +723,21 @@ export function ChatInputBar({
                 strokeWidth={2.5}
               />
             </TouchableOpacity>
-          )
-        )}
+          )}
+        </View>
 
-        {/* Styled Focus Input — hidden while recording */}
-        {!isVoiceRecording && (
-          <View style={[
+        {/* Styled Focus Input — opacity hidden while recording to preserve DOM structure */}
+        <View 
+          style={[
             styles.inputWrapper,
-            { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-          ]}>
+            { 
+              backgroundColor: theme.colors.surface, 
+              borderColor: theme.colors.border,
+              opacity: isVoiceRecording ? 0 : 1,
+            },
+          ]}
+          pointerEvents={isVoiceRecording ? 'none' : 'auto'}
+        >
           <TextInput
             ref={inputRef}
             style={[
@@ -761,7 +773,7 @@ export function ChatInputBar({
             }}
             onFocus={onInputFocus}
             multiline
-            editable={!isDisabled}
+            editable={!isDisabled && !isVoiceRecording}
           />
 
           {/* Core Engine: Sticker/GIF */}
@@ -769,7 +781,7 @@ export function ChatInputBar({
             style={styles.stickerBtn}
             onPress={() => togglePanel('emoji')}
             activeOpacity={0.7}
-            disabled={isDisabled}
+            disabled={isDisabled || isVoiceRecording}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={activePanel === 'emoji' ? theme.colors.primary : '#64748B'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -777,23 +789,20 @@ export function ChatInputBar({
               <Path d="M15 21a6 6 0 0 0 6-6" />
             </Svg>
           </TouchableOpacity>
-          </View>
-        )}
+        </View>
 
         {(!text.trim() && !selectedMedia && !editingMessage) ? (
-          <View style={[
-            { flexDirection: 'row', alignItems: 'center', gap: 4 },
-            isVoiceRecording && { flex: 1 }
-          ]}>
-            {!isVoiceRecording && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ opacity: isVoiceRecording ? 0 : 1 }} pointerEvents={isVoiceRecording ? 'none' : 'auto'}>
               <TouchableOpacity 
                 style={styles.iconBtn} 
                 onPress={openCamera}
                 activeOpacity={0.7}
+                disabled={isDisabled || isVoiceRecording}
               >
                 <Camera size={24} color="#64748B" strokeWidth={2} />
               </TouchableOpacity>
-            )}
+            </View>
             <VoiceInput 
               onStart={handleVoiceStart} 
               onStop={handleVoiceStop} 
