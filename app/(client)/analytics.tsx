@@ -7,7 +7,7 @@ import {
   StatusBar,
   StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
@@ -60,6 +60,8 @@ function getLocalDateString(d: Date = new Date()): string {
 export default function AnalyticsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ clientId?: string }>();
+  const isCoachView = Boolean(params.clientId);
   const { client, profile } = useAuth();
   const theme = useTheme();
   const colors = theme.colors;
@@ -75,14 +77,16 @@ export default function AnalyticsScreen() {
   const [todayWorkouts, setTodayWorkouts] = useState<number>(0);
   const [todayActiveMinutes, setTodayActiveMinutes] = useState<number>(0);
 
+  const targetClientId = (params.clientId as string) || client?.id;
+
   useEffect(() => {
-    if (client) {
+    if (targetClientId) {
       loadData();
     }
-  }, [client, profile]);
+  }, [targetClientId, profile]);
 
   const loadData = async () => {
-    if (!client) return;
+    if (!targetClientId) return;
 
     const todayStr = getLocalDateString(new Date());
     const startDate = new Date();
@@ -90,8 +94,8 @@ export default function AnalyticsScreen() {
     const startDateStr = getLocalDateString(startDate);
 
     try {
-      const clientIds = [client.id];
-      if (profile?.id && profile.id !== client.id) {
+      const clientIds = [targetClientId];
+      if (!isCoachView && profile?.id && profile.id !== targetClientId) {
         clientIds.push(profile.id);
       }
 
@@ -116,10 +120,10 @@ export default function AnalyticsScreen() {
           .in('client_id', clientIds)
           .gte('date', startDateStr)
           .order('date', { ascending: true }),
-        getTodaySteps(),
-        getLastNightSleep(),
-        getLatestWeight(),
-        AsyncStorage.getItem(`@steps_${todayStr}`),
+        isCoachView ? Promise.resolve(null) : getTodaySteps(),
+        isCoachView ? Promise.resolve(null) : getLastNightSleep(),
+        isCoachView ? Promise.resolve(null) : getLatestWeight(),
+        isCoachView ? Promise.resolve(null) : AsyncStorage.getItem(`@steps_${todayStr}`),
         supabase
           .from('workouts')
           .select('id, duration_minutes')
@@ -135,40 +139,42 @@ export default function AnalyticsScreen() {
       const fetchedLogs: DailyLogEntry[] = [...(logsRes.data || [])];
       const fetchedCheckIns: CheckInEntry[] = [...(checkInsRes.data || [])];
 
-      // Merge live steps for today so today is always fresh
-      const currentTodaySteps = Math.max(
-        liveSteps || 0,
-        localStepsStr ? parseInt(localStepsStr, 10) : 0
-      );
+      if (!isCoachView) {
+        // Merge live steps for today so today is always fresh for the client
+        const currentTodaySteps = Math.max(
+          liveSteps || 0,
+          localStepsStr ? parseInt(localStepsStr, 10) : 0
+        );
 
-      const todayLogIdx = fetchedLogs.findIndex((l) => l.date === todayStr);
-      if (todayLogIdx >= 0) {
-        if (currentTodaySteps > (fetchedLogs[todayLogIdx].steps || 0)) {
-          fetchedLogs[todayLogIdx].steps = currentTodaySteps;
-        }
-        if (liveSleep && !fetchedLogs[todayLogIdx].sleep_hours) {
-          fetchedLogs[todayLogIdx].sleep_hours = liveSleep;
-        }
-      } else if (currentTodaySteps > 0 || liveSleep) {
-        fetchedLogs.push({
-          date: todayStr,
-          steps: currentTodaySteps,
-          sleep_hours: liveSleep || undefined,
-        });
-      }
-
-      // Merge live weight if present
-      if (liveWeight) {
-        const todayCiIdx = fetchedCheckIns.findIndex((c) => c.date === todayStr);
-        if (todayCiIdx >= 0) {
-          if (!fetchedCheckIns[todayCiIdx].weight_kg) {
-            fetchedCheckIns[todayCiIdx].weight_kg = liveWeight;
+        const todayLogIdx = fetchedLogs.findIndex((l) => l.date === todayStr);
+        if (todayLogIdx >= 0) {
+          if (currentTodaySteps > (fetchedLogs[todayLogIdx].steps || 0)) {
+            fetchedLogs[todayLogIdx].steps = currentTodaySteps;
           }
-        } else {
-          fetchedCheckIns.push({
+          if (liveSleep && !fetchedLogs[todayLogIdx].sleep_hours) {
+            fetchedLogs[todayLogIdx].sleep_hours = liveSleep;
+          }
+        } else if (currentTodaySteps > 0 || liveSleep) {
+          fetchedLogs.push({
             date: todayStr,
-            weight_kg: liveWeight,
+            steps: currentTodaySteps,
+            sleep_hours: liveSleep || undefined,
           });
+        }
+
+        // Merge live weight if present
+        if (liveWeight) {
+          const todayCiIdx = fetchedCheckIns.findIndex((c) => c.date === todayStr);
+          if (todayCiIdx >= 0) {
+            if (!fetchedCheckIns[todayCiIdx].weight_kg) {
+              fetchedCheckIns[todayCiIdx].weight_kg = liveWeight;
+            }
+          } else {
+            fetchedCheckIns.push({
+              date: todayStr,
+              weight_kg: liveWeight,
+            });
+          }
         }
       }
 
@@ -304,7 +310,8 @@ export default function AnalyticsScreen() {
 
   const navigateToMetric = (metric: 'steps' | 'sleep' | 'weight' | 'energy') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/(client)/analytics-detail?metric=${metric}` as any);
+    const clientParam = params.clientId ? `&clientId=${params.clientId}` : '';
+    router.push(`/(client)/analytics-detail?metric=${metric}${clientParam}` as any);
   };
 
   return (

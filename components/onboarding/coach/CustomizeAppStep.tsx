@@ -179,7 +179,6 @@ export default function CustomizeAppStep({ formData, updateForm }: CustomizeAppS
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <View style={[styles.colorDot, { backgroundColor: currentPrimary }]} />
-              <View style={[styles.colorDot, { backgroundColor: formData.secondary_color || '#10B981' }]} />
               <View
                 style={[
                   styles.colorDot,
@@ -386,12 +385,6 @@ export default function CustomizeAppStep({ formData, updateForm }: CustomizeAppS
                             style={[
                               styles.colorDotLarge,
                               { backgroundColor: preset.primary_color },
-                            ]}
-                          />
-                          <View
-                            style={[
-                              styles.colorDotLarge,
-                              { backgroundColor: preset.secondary_color },
                             ]}
                           />
                           <View

@@ -206,6 +206,10 @@ export default function ActivityScreen() {
     width: number;
     height: number;
   } | null>(null);
+  const taskRefs = useRef<Record<string, any>>({});
+  const taskLayouts = useRef<
+    Record<string, { x: number; y: number; width: number; height: number }>
+  >({});
   const hasTriggeredHighlight = useRef(false);
   const { client, profile, refreshProfile } = useAuth();
   const { handleScroll } = useTabBarScroll();
@@ -288,49 +292,69 @@ export default function ActivityScreen() {
     setIsHighlighting(false);
     if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
 
-    // 2. Smoothly scroll down to Daily Tasks section
+    // Identify target task (first unfinished task or first task)
+    const targetHabit =
+      habits.find((h) => {
+        const log = habitLogs.find((l) => l.habit_id === h.id);
+        return !log?.completed;
+      }) ||
+      habits[0] ||
+      null;
+
+    // 2. Smoothly scroll down to the target task
     setTimeout(() => {
-      const targetScrollY =
-        (logsContainerYRef.current || 0) +
-        (dailyTasksLayoutRef.current?.y || 0);
+      const baseLogsY = logsContainerYRef.current || 0;
+      const dailyTasksY = dailyTasksLayoutRef.current?.y || 0;
+      const taskOffsetY =
+        targetHabit && taskLayouts.current[targetHabit.id]
+          ? taskLayouts.current[targetHabit.id].y
+          : 0;
+
+      const screenH = Dimensions.get('window').height;
+      const totalTaskY = baseLogsY + dailyTasksY + taskOffsetY + 48;
+
+      // Position the task in the upper third of screen (~28% from top) so there's plenty of space around it
+      const idealScrollY = Math.max(
+        0,
+        totalTaskY - Math.round(screenH * 0.28),
+      );
 
       scrollViewRef.current?.scrollTo({
-        y: Math.max(0, targetScrollY - 20),
+        y: idealScrollY,
         animated: true,
       });
 
-      // 3. Measure in window to place spotlight highlight & tooltip card
+      // 3. Measure target task in window to place spotlight highlight & adaptive card
       setTimeout(() => {
-        dailyTasksContainerRef.current?.measureInWindow(
+        const targetElementRef =
+          (targetHabit && taskRefs.current[targetHabit.id]) ||
+          dailyTasksContainerRef.current;
+
+        targetElementRef?.measureInWindow(
           (x: number, y: number, width: number, height: number) => {
             const screenW = Dimensions.get('window').width;
-            const screenH = Dimensions.get('window').height;
-            const availableH = screenH - insets.bottom - 210;
-            const computedY = Math.max(
-              insets.top + 10,
-              (y > 0 ? y : insets.top + 70) - 8,
-            );
-            const maxH = Math.max(160, availableH - computedY);
-            const computedH =
-              width > 0 && height > 0
-                ? Math.min(height + 16, maxH)
-                : Math.min(
-                    (dailyTasksLayoutRef.current?.height || 220) + 16,
-                    maxH,
-                  );
 
-            setHighlightLayout({
-              x: Math.max(8, (x > 0 ? x : 16) - 8),
-              y: computedY,
-              width: (width > 0 ? width : screenW - 32) + 16,
-              height: computedH,
-            });
+            if (width > 0 && height > 0) {
+              setHighlightLayout({
+                x,
+                y,
+                width,
+                height,
+              });
+            } else {
+              setHighlightLayout({
+                x: 16,
+                y: insets.top + 120,
+                width: screenW - 32,
+                height: 88,
+              });
+            }
             setIsHighlighting(true);
 
             // Graceful slight delay for tooltip card to appear
             tooltipTimerRef.current = setTimeout(() => {
               setShowTooltipCard(true);
-            }, 300);
+            }, 250);
           },
         );
       }, 450);
@@ -1648,24 +1672,35 @@ export default function ActivityScreen() {
                         const isCompleted = log?.completed || false;
                         const visuals = getTaskVisuals(habit);
                         return (
-                          <ActivityCard
+                          <View
                             key={habit.id}
-                            title={habit.name}
-                            sub={
-                              (habit.category
-                                ? `${habit.category.toUpperCase()} • `
-                                : '') +
-                              (habit.verification_type === 'camera'
-                                ? 'Camera Verification Required'
-                                : 'Manual Toggle')
-                            }
-                            completed={isCompleted}
-                            icon={visuals.icon}
-                            iconColor={visuals.color}
-                            onPress={() => openTaskDrawer(habit)}
-                            onToggle={() => toggleHabit(habit)}
-                            delay={idx * 60}
-                          />
+                            collapsable={false}
+                            onLayout={(e) => {
+                              taskLayouts.current[habit.id] =
+                                e.nativeEvent.layout;
+                            }}
+                          >
+                            <ActivityCard
+                              cardRef={(el: any) => {
+                                if (el) taskRefs.current[habit.id] = el;
+                              }}
+                              title={habit.name}
+                              sub={
+                                (habit.category
+                                  ? `${habit.category.toUpperCase()} • `
+                                  : '') +
+                                (habit.verification_type === 'camera'
+                                  ? 'Camera Verification Required'
+                                  : 'Manual Toggle')
+                              }
+                              completed={isCompleted}
+                              icon={visuals.icon}
+                              iconColor={visuals.color}
+                              onPress={() => openTaskDrawer(habit)}
+                              onToggle={() => toggleHabit(habit)}
+                              delay={idx * 60}
+                            />
+                          </View>
                         );
                       })}
                     </View>
@@ -2471,7 +2506,7 @@ export default function ActivityScreen() {
                       highlightLayout.y,
                       highlightLayout.width,
                       highlightLayout.height,
-                      36,
+                      30,
                     )}
                     fill={
                       isDark
@@ -2484,7 +2519,7 @@ export default function ActivityScreen() {
               </View>
             </TouchableWithoutFeedback>
 
-            {/* Glowing Border Box surrounding Daily Tasks */}
+            {/* Glowing Border Box surrounding target task */}
             <View
               pointerEvents="none"
               style={{
@@ -2493,51 +2528,65 @@ export default function ActivityScreen() {
                 left: highlightLayout.x,
                 width: highlightLayout.width,
                 height: highlightLayout.height,
-                borderRadius: 36,
-                borderWidth: 2.5,
+                borderRadius: 30,
+                borderWidth: 2,
                 borderColor: theme.colors.primary,
                 shadowColor: theme.colors.primary,
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.9,
-                shadowRadius: 18,
+                shadowRadius: 16,
                 elevation: 12,
               }}
             />
 
             {/* Floating Toolbar with Explanatory Text & "Got It" Button */}
-            {showTooltipCard && (
-              <MotiView
-                from={{ opacity: 0, translateY: 16, scale: 0.95 }}
-                animate={{ opacity: 1, translateY: 0, scale: 1 }}
-                transition={
-                  { type: 'spring', damping: 18, stiffness: 140 } as any
-                }
-                style={{
-                  position: 'absolute',
-                  left: 20,
-                  right: 20,
-                  top:
-                    highlightLayout.y + highlightLayout.height + 180 <=
-                    Dimensions.get('window').height - insets.bottom
-                      ? highlightLayout.y + highlightLayout.height + 14
-                      : highlightLayout.y - 180 >= insets.top + 10
-                      ? highlightLayout.y - 180
-                      : Math.min(
-                          Dimensions.get('window').height - insets.bottom - 190,
-                          highlightLayout.y + highlightLayout.height + 14,
-                        ),
-                  backgroundColor: cardBg,
-                  borderRadius: 28,
-                  padding: 22,
-                  borderWidth: 1.5,
-                  borderColor: colors.primary + (isDark ? '40' : '25'),
-                  shadowColor: isDark ? '#000000' : colors.primary,
-                  shadowOffset: { width: 0, height: 12 },
-                  shadowOpacity: isDark ? 0.6 : 0.16,
-                  shadowRadius: 24,
-                  elevation: 20,
-                }}
-              >
+            {showTooltipCard && (() => {
+              const screenH = Dimensions.get('window').height;
+              const topInset = insets.top;
+              const bottomInset = insets.bottom;
+              const CARD_HEIGHT = 175;
+
+              // Space below highlight: from bottom of highlight to safe bottom / tab bar
+              const spaceBelow =
+                screenH - bottomInset - (highlightLayout.y + highlightLayout.height);
+              // Space above highlight: from safe top to top of highlight
+              const spaceAbove = highlightLayout.y - topInset;
+
+              // Place below if there is enough space (CARD_HEIGHT + gap)
+              const placeBelow = spaceBelow >= CARD_HEIGHT + 24;
+
+              const cardTop = placeBelow
+                ? highlightLayout.y + highlightLayout.height + 14
+                : Math.max(topInset + 12, highlightLayout.y - CARD_HEIGHT - 14);
+
+              return (
+                <MotiView
+                  from={{
+                    opacity: 0,
+                    translateY: placeBelow ? 16 : -16,
+                    scale: 0.95,
+                  }}
+                  animate={{ opacity: 1, translateY: 0, scale: 1 }}
+                  transition={
+                    { type: 'spring', damping: 18, stiffness: 140 } as any
+                  }
+                  style={{
+                    position: 'absolute',
+                    left: 20,
+                    right: 20,
+                    top: cardTop,
+                    backgroundColor: cardBg,
+                    borderRadius: 28,
+                    padding: 22,
+                    borderWidth: 1.5,
+                    borderColor: colors.primary + (isDark ? '40' : '25'),
+                    shadowColor: isDark ? '#000000' : colors.primary,
+                    shadowOffset: { width: 0, height: 12 },
+                    shadowOpacity: isDark ? 0.6 : 0.16,
+                    shadowRadius: 24,
+                    elevation: 20,
+                  }}
+                >
                 <View
                   style={{
                     flexDirection: 'row',
@@ -2621,7 +2670,8 @@ export default function ActivityScreen() {
                   </Text>
                 </TouchableOpacity>
               </MotiView>
-            )}
+            );
+          })()}
           </View>
         </Modal>
       )}
@@ -3810,6 +3860,7 @@ const ActivityCard = ({
   onPress,
   readOnly,
   delay = 0,
+  cardRef,
 }: any) => {
   const theme = useTheme();
   const colors = theme.colors;
@@ -3939,6 +3990,8 @@ const ActivityCard = ({
           onPressOut={handlePressOut}
         >
           <Animated.View
+            ref={cardRef}
+            collapsable={false}
             style={{
               flexDirection: 'row',
               alignItems: 'center',

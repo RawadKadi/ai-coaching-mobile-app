@@ -117,9 +117,7 @@ export default function BrandSettingsScreen() {
 
   // Color picker modal state
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [activeColorField, setActiveColorField] = useState<
-    'primary' | 'secondary' | 'accent' | 'background'
-  >('primary');
+  const [activeColorField, setActiveColorField] = useState<'primary' | 'background'>('primary');
 
   // Form state - Identity
   const [brandName, setBrandName] = useState('');
@@ -243,8 +241,6 @@ export default function BrandSettingsScreen() {
       (brandName || '').trim() !== init.brandName.trim() ||
       (logoUrl || '') !== init.logoUrl ||
       primaryColor.toLowerCase() !== init.primaryColor.toLowerCase() ||
-      secondaryColor.toLowerCase() !== init.secondaryColor.toLowerCase() ||
-      accentColor.toLowerCase() !== init.accentColor.toLowerCase() ||
       backgroundColor.toLowerCase() !== init.backgroundColor.toLowerCase() ||
       (fontFamily || 'System') !== init.fontFamily
     );
@@ -252,8 +248,6 @@ export default function BrandSettingsScreen() {
     brandName,
     logoUrl,
     primaryColor,
-    secondaryColor,
-    accentColor,
     backgroundColor,
     fontFamily,
   ]);
@@ -446,7 +440,7 @@ export default function BrandSettingsScreen() {
     }
   };
 
-  const openColorPicker = (field: 'primary' | 'secondary' | 'accent' | 'background') => {
+  const openColorPicker = (field: 'primary' | 'background') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveColorField(field);
     setShowColorPicker(true);
@@ -456,12 +450,6 @@ export default function BrandSettingsScreen() {
     switch (activeColorField) {
       case 'primary':
         setPrimaryColor(color);
-        break;
-      case 'secondary':
-        setSecondaryColor(color);
-        break;
-      case 'accent':
-        setAccentColor(color);
         break;
       case 'background':
         if (color.toLowerCase() !== backgroundColor.toLowerCase()) {
@@ -777,7 +765,7 @@ export default function BrandSettingsScreen() {
               </View>
 
               <View style={styles.colorsCardContent}>
-                {/* 4 Color Swatches */}
+                {/* 2 Color Swatches: Primary & Background */}
                 <View style={styles.colorSwatchesRow}>
                   <View style={styles.swatchItem}>
                     <View style={[styles.colorDot, { backgroundColor: primaryColor, borderColor: cardBorder }]} />
@@ -788,24 +776,8 @@ export default function BrandSettingsScreen() {
                   </View>
 
                   <View style={styles.swatchItem}>
-                    <View style={[styles.colorDot, { backgroundColor: secondaryColor, borderColor: cardBorder }]} />
-                    <Text style={[styles.swatchLabel, { color: textSecondary }]}>Secondary</Text>
-                    <Text style={[styles.swatchHex, { color: textColor }]}>
-                      {secondaryColor.toUpperCase()}
-                    </Text>
-                  </View>
-
-                  <View style={styles.swatchItem}>
-                    <View style={[styles.colorDot, { backgroundColor: accentColor, borderColor: cardBorder }]} />
-                    <Text style={[styles.swatchLabel, { color: textSecondary }]}>Accent</Text>
-                    <Text style={[styles.swatchHex, { color: textColor }]}>
-                      {accentColor.toUpperCase()}
-                    </Text>
-                  </View>
-
-                  <View style={styles.swatchItem}>
                     <View style={[styles.colorDot, { backgroundColor, borderColor: cardBorder }]} />
-                    <Text style={[styles.swatchLabel, { color: textSecondary }]}>Base</Text>
+                    <Text style={[styles.swatchLabel, { color: textSecondary }]}>Background</Text>
                     <Text style={[styles.swatchHex, { color: textColor }]}>
                       {backgroundColor.toUpperCase()}
                     </Text>
@@ -1048,24 +1020,13 @@ export default function BrandSettingsScreen() {
                           style={[
                             styles.presetMiniDot,
                             {
-                              backgroundColor: preset.secondary_color,
-                              borderColor: inputBg,
-                              marginLeft: -8,
-                              zIndex: 2,
-                            },
-                          ]}
-                        />
-                        <View
-                          style={[
-                            styles.presetMiniDot,
-                            {
                               backgroundColor: preset.background_color,
                               borderColor:
                                 preset.background_color.toLowerCase() === '#ffffff' && !isDark
                                   ? cardBorder
                                   : inputBg,
                               marginLeft: -8,
-                              zIndex: 3,
+                              zIndex: 2,
                             },
                           ]}
                         />
@@ -1104,26 +1065,6 @@ export default function BrandSettingsScreen() {
                   cardBorder={cardBorder}
                   inputBg={inputBg}
                   onPress={() => openColorPicker('primary')}
-                />
-                <ColorRow
-                  label="Secondary Color"
-                  sublabel="Supporting accents & tags"
-                  value={secondaryColor}
-                  textColor={textColor}
-                  textSecondary={textSecondary}
-                  cardBorder={cardBorder}
-                  inputBg={inputBg}
-                  onPress={() => openColorPicker('secondary')}
-                />
-                <ColorRow
-                  label="Accent Color"
-                  sublabel="Badges & stars"
-                  value={accentColor}
-                  textColor={textColor}
-                  textSecondary={textSecondary}
-                  cardBorder={cardBorder}
-                  inputBg={inputBg}
-                  onPress={() => openColorPicker('accent')}
                 />
                 <ColorRow
                   label="Background Color"
@@ -1297,24 +1238,8 @@ export default function BrandSettingsScreen() {
       {/* Color Picker Modal */}
       <ColorPickerModal
         visible={showColorPicker}
-        currentColor={
-          activeColorField === 'primary'
-            ? primaryColor
-            : activeColorField === 'secondary'
-            ? secondaryColor
-            : activeColorField === 'accent'
-            ? accentColor
-            : backgroundColor
-        }
-        title={
-          activeColorField === 'primary'
-            ? 'Primary Color'
-            : activeColorField === 'secondary'
-            ? 'Secondary Color'
-            : activeColorField === 'accent'
-            ? 'Accent Color'
-            : 'Background Color'
-        }
+        currentColor={activeColorField === 'primary' ? primaryColor : backgroundColor}
+        title={activeColorField === 'primary' ? 'Primary Color' : 'Background Color'}
         onClose={() => setShowColorPicker(false)}
         onColorSelected={handleColorChange}
         primaryColor={primaryColor}
@@ -1528,8 +1453,8 @@ function FullPreviewContent({
           </View>
 
           <View style={[styles.fullPreviewStatCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={[styles.statIconCircle, { backgroundColor: `${secondaryColor}16` }]}>
-              <TrendingUp size={18} color={secondaryColor} />
+            <View style={[styles.statIconCircle, { backgroundColor: `${primaryColor}16` }]}>
+              <TrendingUp size={18} color={primaryColor} />
             </View>
             <Text style={[styles.fullPreviewStatVal, { color: textColor }]}>94%</Text>
             <Text style={[styles.fullPreviewStatLbl, { color: textSecondary }]}>Check-In Rate</Text>

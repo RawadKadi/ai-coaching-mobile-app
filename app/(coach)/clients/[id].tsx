@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -37,10 +37,13 @@ import {
   TrendingUp,
   Mail,
   Check,
-  X
+  X,
+  Flame,
+  Activity,
 } from 'lucide-react-native';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useTheme } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import SchedulerModal from '@/components/SchedulerModal';
 import { CoachClientDetailsSkeleton } from '@/components/CoachClientDetailsSkeleton';
@@ -49,6 +52,41 @@ import ConflictResolutionModal from '@/components/ConflictResolutionModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { MotiView, AnimatePresence } from 'moti';
 import { useReducedMotion } from 'react-native-reanimated';
+
+// ─── Mini Bar Chart for Steps Card (7-day trend) ────────────────────────────
+function MiniBarChart({
+  data,
+  color,
+  isDark,
+}: {
+  data: number[];
+  color: string;
+  isDark: boolean;
+}) {
+  const points = data.length >= 7 ? data.slice(-7) : [...Array(7 - data.length).fill(0), ...data];
+  const max = Math.max(...points, 1);
+  const inactiveColor = isDark ? 'rgba(255, 255, 255, 0.14)' : '#E2E8F0';
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 40, gap: 4 }}>
+      {points.map((val, idx) => {
+        const isLast = idx === points.length - 1;
+        const barHeight = val > 0 ? Math.max(8, (val / max) * 36) : 6;
+        return (
+          <View
+            key={idx}
+            style={{
+              width: 6,
+              borderRadius: 3,
+              height: barHeight,
+              backgroundColor: isLast ? color : inactiveColor,
+            }}
+          />
+        );
+      })}
+    </View>
+  );
+}
 
 export default function ClientDetailsScreen() {
   const { id, tab } = useLocalSearchParams();
@@ -65,8 +103,9 @@ export default function ClientDetailsScreen() {
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
   const [challengeFilter, setChallengeFilter] = useState<'active' | 'history'>('active');
-  const [mainTab, setMainTab] = useState<'overview' | 'daily_tasks' | 'challenges' | 'checkins' | 'sessions'>(
-    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : (tab as string) === 'challenges' ? 'challenges' : (tab as string) === 'sessions' ? 'sessions' : 'overview'
+  type SubView = 'daily_tasks' | 'challenges' | 'checkins' | 'sessions' | 'weight_history' | null;
+  const [activeSubView, setActiveSubView] = useState<SubView>(
+    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : (tab as string) === 'challenges' ? 'challenges' : (tab as string) === 'sessions' ? 'sessions' : null
   );
   const [checkins, setCheckins] = useState<any[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -296,14 +335,42 @@ export default function ClientDetailsScreen() {
     );
   }
 
-  // Calculate Today's Steps
+  const isDark = isDarkColor(colors.background || '#010417');
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
   const todayStr = `${yyyy}-${mm}-${dd}`;
   const todayLog = stepsLog.find(log => log.date === todayStr);
-  const todaySteps = todayLog ? todayLog.steps : 0;
+  const todaySteps = todayLog ? todayLog.steps : (stepsLog.length > 0 && stepsLog[0].steps ? stepsLog[0].steps : 0);
+
+  const stepsChartData = useMemo(() => {
+    const points: number[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${day}`;
+      const log = stepsLog.find(l => l.date === dateStr);
+      points.push(log?.steps || 0);
+    }
+    return points;
+  }, [stepsLog]);
+
+  const stepsTimeStr = useMemo(() => {
+    if (todayLog) {
+      return 'Today';
+    }
+    if (stepsLog.length > 0 && stepsLog[0]?.date) {
+      return new Date(stepsLog[0].date + 'T00:00:00').toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+    return 'Today';
+  }, [todayLog, stepsLog]);
 
   const validWeights = checkins.filter(c => c.weight_kg !== null && c.weight_kg !== undefined);
   const latestWeight = validWeights.length > 0 ? Number(validWeights[0].weight_kg) : null;
@@ -329,7 +396,6 @@ export default function ClientDetailsScreen() {
 
   const computedChallenges = challenges.map(c => {
     const endDate = new Date(c.end_date);
-    // Set to end of day to not mark as completed on the last day until it's over
     endDate.setHours(23, 59, 59, 999);
     const isPast = endDate < new Date();
     
@@ -339,40 +405,101 @@ export default function ClientDetailsScreen() {
     return c;
   });
 
+  const activeChallengesCount = computedChallenges.filter(c => c.status === 'active').length;
   const filteredChallenges = computedChallenges.filter(c => challengeFilter === 'active' ? c.status === 'active' : c.status === 'completed');
+  const upcomingSessions = sessionLog.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at) > new Date());
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }}>
         <View style={{ flex: 1 }}>
             {/* Header */}
-            <View className="flex-row items-center justify-between px-6 pt-10 pb-6 border-b" style={{ borderBottomColor: colors.border }}>
-                <View className="flex-row items-center gap-4">
+            <View className="flex-row items-center justify-between px-6 pt-10 pb-5 border-b" style={{ borderBottomColor: colors.border }}>
+                {activeSubView === null ? (
+                  <>
+                    <View className="flex-row items-center gap-3.5 flex-1 pr-3">
+                        <TouchableOpacity 
+                          onPress={() => router.back()} 
+                          className="w-10 h-10 rounded-2xl items-center justify-center border"
+                          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        >
+                            <ArrowLeft size={18} color={colors.text} />
+                        </TouchableOpacity>
+                        <BrandedAvatar name={client.profiles?.full_name} size={42} imageUrl={client.profiles?.avatar_url} />
+                        <View className="flex-1">
+                            <Text className="text-lg font-black tracking-tight" numberOfLines={1} style={{ color: colors.text }}>
+                              {client.profiles?.full_name}
+                            </Text>
+                            {client.profiles?.email && (
+                              <Text className="text-xs font-medium" numberOfLines={1} style={{ color: colors.textSecondary }}>
+                                {client.profiles?.email}
+                              </Text>
+                            )}
+                        </View>
+                    </View>
                     <TouchableOpacity 
-                      onPress={() => router.back()} 
-                      className="w-10 h-10 rounded-xl items-center justify-center border"
+                      onPress={() => setSchedulerVisible(true)} 
+                      className="w-10 h-10 rounded-2xl items-center justify-center border"
                       style={{ backgroundColor: colors.surface, borderColor: colors.border }}
                     >
-                        <ArrowLeft size={20} color={colors.text} />
+                        <CalendarIcon size={18} color={colors.primary} />
                     </TouchableOpacity>
-                    <BrandedAvatar name={client.profiles?.full_name} size={40} imageUrl={client.profiles?.avatar_url} />
-                    <View>
-                        <Text className="text-xl font-black" style={{ color: colors.text }}>{client.profiles?.full_name}</Text>
-                        {client.profiles?.email && (
-                            <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>{client.profiles?.email}</Text>
-                        )}
+                  </>
+                ) : (
+                  <>
+                    <View className="flex-row items-center gap-3.5 flex-1 pr-3">
+                        <TouchableOpacity 
+                          onPress={() => setActiveSubView(null)} 
+                          className="w-10 h-10 rounded-2xl items-center justify-center border"
+                          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        >
+                            <ArrowLeft size={18} color={colors.text} />
+                        </TouchableOpacity>
+                        <View className="flex-1">
+                            <Text className="text-lg font-black tracking-tight" numberOfLines={1} style={{ color: colors.text }}>
+                              {activeSubView === 'daily_tasks' ? 'Daily Tasks'
+                                : activeSubView === 'challenges' ? 'Challenges'
+                                : activeSubView === 'checkins' ? 'Check-ins'
+                                : activeSubView === 'sessions' ? 'Sessions'
+                                : 'Weight History'}
+                            </Text>
+                            <Text className="text-xs font-medium" numberOfLines={1} style={{ color: colors.textSecondary }}>
+                              {client.profiles?.full_name}
+                            </Text>
+                        </View>
                     </View>
-                </View>
-                <TouchableOpacity 
-                  onPress={() => setSchedulerVisible(true)} 
-                  className="w-10 h-10 rounded-xl items-center justify-center border"
-                  style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                >
-                    <CalendarIcon size={20} color={colors.primary} />
-                </TouchableOpacity>
+                    {activeSubView === 'sessions' ? (
+                      <TouchableOpacity 
+                        onPress={() => setSchedulerVisible(true)} 
+                        className="w-10 h-10 rounded-2xl items-center justify-center border"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <CalendarIcon size={18} color={colors.primary} />
+                      </TouchableOpacity>
+                    ) : activeSubView === 'challenges' ? (
+                      <TouchableOpacity 
+                        onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)} 
+                        className="h-10 px-3.5 rounded-2xl flex-row items-center gap-1.5"
+                        style={{ backgroundColor: colors.primary }}
+                      >
+                        <Plus size={16} color={colors.textOnPrimary || 'white'} />
+                        <Text className="font-bold text-xs" style={{ color: colors.textOnPrimary || 'white' }}>Create</Text>
+                      </TouchableOpacity>
+                    ) : activeSubView === 'daily_tasks' ? (
+                      <TouchableOpacity 
+                        onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)} 
+                        className="h-10 px-3.5 rounded-2xl flex-row items-center gap-1.5"
+                        style={{ backgroundColor: colors.primary }}
+                      >
+                        <Plus size={16} color={colors.textOnPrimary || 'white'} />
+                        <Text className="font-bold text-xs" style={{ color: colors.textOnPrimary || 'white' }}>Add</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </>
+                )}
             </View>
 
-            {pendingResolutions.length > 0 && (
+            {pendingResolutions.length > 0 && activeSubView === null && (
                 <TouchableOpacity 
                     className="mx-6 mt-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex-row items-center justify-between"
                     onPress={() => setPendingModalVisible(true)}
@@ -391,281 +518,386 @@ export default function ClientDetailsScreen() {
                 contentContainerStyle={{ paddingBottom: 120 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             >
-                {/* Main Tab Navigation */}
-                <View className="border-b mt-4" style={{ borderBottomColor: colors.border }}>
-                    <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ paddingHorizontal: 24 }}
+                {activeSubView === null ? (
+                  <View className="px-6 pt-6">
+                    {/* ─── 1. Steps Card (Apple Design) ───────────────────────── */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => router.push(`/(client)/analytics-detail?metric=steps&clientId=${id}` as any)}
+                      style={{
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                      }}
+                      className="p-6 rounded-[32px] border shadow-sm mb-4"
                     >
-                        <TouchableOpacity 
-                            className="mr-8 pb-4 border-b-2"
-                            style={{ borderBottomColor: mainTab === 'overview' ? colors.primary : 'transparent' }}
-                            onPress={() => setMainTab('overview')}
-                        >
-                            <Text className="text-sm font-black uppercase tracking-widest" style={{ color: mainTab === 'overview' ? colors.text : colors.textSecondary }}>Overview</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            className="mr-8 pb-4 border-b-2"
-                            style={{ borderBottomColor: mainTab === 'daily_tasks' ? colors.primary : 'transparent' }}
-                            onPress={() => setMainTab('daily_tasks')}
-                        >
-                            <Text className="text-sm font-black uppercase tracking-widest" style={{ color: mainTab === 'daily_tasks' ? colors.text : colors.textSecondary }}>Daily Tasks</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            className="mr-8 pb-4 border-b-2"
-                            style={{ borderBottomColor: mainTab === 'challenges' ? colors.primary : 'transparent' }}
-                            onPress={() => setMainTab('challenges')}
-                        >
-                            <Text className="text-sm font-black uppercase tracking-widest" style={{ color: mainTab === 'challenges' ? colors.text : colors.textSecondary }}>Challenges</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            className="mr-8 pb-4 border-b-2"
-                            style={{ borderBottomColor: mainTab === 'checkins' ? colors.primary : 'transparent' }}
-                            onPress={() => setMainTab('checkins')}
-                        >
-                            <Text className="text-sm font-black uppercase tracking-widest" style={{ color: mainTab === 'checkins' ? colors.text : colors.textSecondary }}>Check-ins</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            className="pb-4 border-b-2"
-                            style={{ borderBottomColor: mainTab === 'sessions' ? colors.primary : 'transparent' }}
-                            onPress={() => setMainTab('sessions')}
-                        >
-                            <Text className="text-sm font-black uppercase tracking-widest" style={{ color: mainTab === 'sessions' ? colors.text : colors.textSecondary }}>Sessions</Text>
-                        </TouchableOpacity>
-                    </ScrollView>
-                </View>
-
-                {mainTab === 'overview' ? (
-                  <>
-                    {/* Premium Metrics Grid */}
-                    <View className="px-6 pt-8 pb-4">
-                        <View className="flex-row flex-wrap justify-between gap-4 mb-4">
-                            {/* Today's Steps Card (Full Width) */}
-                            <View 
-                                className="w-full rounded-[32px] p-6 border flex-row items-center justify-between"
-                                style={{ 
-                                    backgroundColor: `${colors.primary}12`, 
-                                    borderColor: `${colors.primary}30` 
-                                }}
-                            >
-                                <View className="flex-row items-center gap-4">
-                                    <View 
-                                        className="w-12 h-12 rounded-2xl items-center justify-center border"
-                                        style={{ 
-                                            backgroundColor: `${colors.primary}20`, 
-                                            borderColor: `${colors.primary}35` 
-                                        }}
-                                    >
-                                        <Zap size={22} color={colors.primary} />
-                                    </View>
-                                    <View>
-                                        <Text className="text-[10px] font-black uppercase tracking-wider" style={{ color: colors.primary }}>Today's Steps</Text>
-                                        <Text className="text-2xl font-black mt-1" style={{ color: colors.text }}>
-                                            {todaySteps.toLocaleString()}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View 
-                                    className="px-3 py-1.5 rounded-xl border"
-                                    style={{ 
-                                        backgroundColor: `${colors.primary}20`, 
-                                        borderColor: `${colors.primary}35` 
-                                    }}
-                                >
-                                    <Text className="font-black text-[9px] uppercase tracking-wider" style={{ color: colors.primary }}>Today</Text>
-                                </View>
-                            </View>
-
-                            {/* Streak Card */}
-                            <View 
-                                className="w-[47%] rounded-[32px] p-5 border items-center justify-between"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                            >
-                                <View className="w-10 h-10 bg-emerald-500/10 rounded-2xl items-center justify-center border border-emerald-500/20 mb-3">
-                                    <Award size={18} color="#10B981" />
-                                </View>
-                                <Text className="text-[10px] font-black uppercase tracking-wider text-center" style={{ color: colors.textSecondary }}>Active Streak</Text>
-                                <Text className="text-lg font-black mt-1" style={{ color: colors.text }}>{streak} Days</Text>
-                            </View>
-
-                            {/* Weight Card */}
-                            <View 
-                                className="w-[47%] rounded-[32px] p-5 border items-center justify-between"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                            >
-                                <View className="w-10 h-10 bg-amber-500/10 rounded-2xl items-center justify-center border border-amber-500/20 mb-3">
-                                    <Scale size={18} color="#F59E0B" />
-                                </View>
-                                <Text className="text-[10px] font-black uppercase tracking-wider text-center" style={{ color: colors.textSecondary }}>
-                                    {weightDaysAgo > 5 ? `Weight (${weightDaysAgo}d ago)` : 'Last Weight'}
-                                </Text>
-                                <Text className="text-lg font-black mt-1" style={{ color: colors.text }}>{latestWeight ? `${latestWeight} kg` : '--'}</Text>
-                                {weightDaysAgo > 5 && (
-                                    <View className="mt-1 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
-                                        <Text className="text-red-500 text-[8px] font-black uppercase">Not Updated</Text>
-                                    </View>
-                                )}
-                            </View>
-
-                            {/* Average Sleep Card */}
-                            <View 
-                                className="w-[47%] rounded-[32px] p-5 border items-center justify-between"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                            >
-                                <View className="w-10 h-10 bg-indigo-500/10 rounded-2xl items-center justify-center border border-indigo-500/20 mb-3">
-                                    <Clock size={18} color="#6366F1" />
-                                </View>
-                                <Text className="text-[10px] font-black uppercase tracking-wider text-center" style={{ color: colors.textSecondary }}>Avg Sleep</Text>
-                                <Text className="text-lg font-black mt-1" style={{ color: colors.text }}>{avgSleep ? `${avgSleep} hrs` : '--'}</Text>
-                            </View>
-
-                            {/* Average Energy Card */}
-                            <View 
-                                className="w-[47%] rounded-[32px] p-5 border items-center justify-between"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                            >
-                                <View className="w-10 h-10 bg-orange-500/10 rounded-2xl items-center justify-center border border-orange-500/20 mb-3">
-                                    <Zap size={18} color="#F97316" />
-                                </View>
-                                <Text className="text-[10px] font-black uppercase tracking-wider text-center" style={{ color: colors.textSecondary }}>Avg Energy</Text>
-                                <Text className="text-lg font-black mt-1" style={{ color: colors.text }}>{avgEnergy ? `${avgEnergy}/10` : '--'}</Text>
-                            </View>
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center gap-2.5">
+                          <View
+                            style={{ backgroundColor: `${colors.primary}16` }}
+                            className="w-9 h-9 rounded-xl items-center justify-center"
+                          >
+                            <Flame size={18} color={colors.primary} />
+                          </View>
+                          <Text style={{ color: colors.text }} className="text-lg font-black tracking-tight">
+                            Steps
+                          </Text>
                         </View>
-                    </View>
 
-                    {/* Client Info Card */}
-                    <View className="px-6 pb-8">
-                        <View 
-                            className="rounded-[32px] p-6 border"
-                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                        >
-                            <Text className="text-[10px] font-black uppercase tracking-[4px] mb-6" style={{ color: colors.textSecondary }}>Client Info</Text>
-                            <View className="flex-row flex-wrap gap-y-6">
-                                <InfoTile icon={<Target size={14} color={colors.textSecondary} />} label="Goal" value={client.goal || 'Not set'} fullWidth />
-                                <InfoTile icon={<Mail size={14} color={colors.textSecondary} />} label="Email" value={client.profiles?.email || 'Not set'} fullWidth selectable />
-                                <InfoTile icon={<Award size={14} color={colors.textSecondary} />} label="Experience" value={client.experience_level || 'Not set'} />
-                                <InfoTile icon={<User size={14} color={colors.textSecondary} />} label="Height" value={client.height_cm ? `${client.height_cm} cm` : 'Not set'} />
-                                <InfoTile icon={<Clock size={14} color={colors.textSecondary} />} label="Age" value={client.date_of_birth ? `${Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 3600 * 24 * 365.25))}` : 'Not set'} />
-                            </View>
+                        <View className="flex-row items-center gap-1">
+                          <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">
+                            {stepsTimeStr}
+                          </Text>
+                          <ChevronRight size={18} color={colors.textSecondary} />
                         </View>
+                      </View>
+
+                      <View className="flex-row items-end justify-between mt-4">
+                        <View className="flex-row items-baseline gap-2">
+                          <Text style={{ color: colors.text }} className="text-3xl font-black tracking-tight">
+                            {(todaySteps || 0).toLocaleString()}
+                          </Text>
+                          <Text style={{ color: colors.textSecondary }} className="text-base font-bold">
+                            steps
+                          </Text>
+                        </View>
+
+                        <MiniBarChart data={stepsChartData} color={colors.primary} isDark={isDark} />
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* ─── 2. Quick Health Metric Cards (2x2 Grid) ─────────────── */}
+                    <View className="flex-row flex-wrap justify-between gap-3 mb-4">
+                      {/* Active Streak */}
+                      <View 
+                        className="w-[48%] rounded-[28px] p-4 border justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center justify-between mb-3">
+                          <View className="w-8 h-8 rounded-xl items-center justify-center bg-emerald-500/10 border border-emerald-500/20">
+                            <Award size={16} color="#10B981" />
+                          </View>
+                          <Text className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Streak</Text>
+                        </View>
+                        <View>
+                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>
+                            {streak} <Text className="text-xs font-bold" style={{ color: colors.textSecondary }}>Days</Text>
+                          </Text>
+                          <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.textSecondary }}>Active Streak</Text>
+                        </View>
+                      </View>
+
+                      {/* Weight Card */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setActiveSubView('weight_history')}
+                        className="w-[48%] rounded-[28px] p-4 border justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center justify-between mb-3">
+                          <View className="w-8 h-8 rounded-xl items-center justify-center bg-amber-500/10 border border-amber-500/20">
+                            <Scale size={16} color="#F59E0B" />
+                          </View>
+                          {weightDaysAgo > 5 ? (
+                            <View className="bg-red-500/10 px-1.5 py-0.5 rounded-md border border-red-500/20">
+                              <Text className="text-red-500 text-[8px] font-bold uppercase">Update</Text>
+                            </View>
+                          ) : (
+                            <ChevronRight size={14} color={colors.textSecondary} />
+                          )}
+                        </View>
+                        <View>
+                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>
+                            {latestWeight ? latestWeight : '--'} <Text className="text-xs font-bold" style={{ color: colors.textSecondary }}>kg</Text>
+                          </Text>
+                          <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.textSecondary }}>
+                            {weightDaysAgo > 5 ? `${weightDaysAgo}d ago` : 'Last Weight'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Avg Sleep */}
+                      <View 
+                        className="w-[48%] rounded-[28px] p-4 border justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center justify-between mb-3">
+                          <View className="w-8 h-8 rounded-xl items-center justify-center bg-indigo-500/10 border border-indigo-500/20">
+                            <Clock size={16} color="#6366F1" />
+                          </View>
+                          <Text className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Sleep</Text>
+                        </View>
+                        <View>
+                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>
+                            {avgSleep ? avgSleep : '--'} <Text className="text-xs font-bold" style={{ color: colors.textSecondary }}>hrs</Text>
+                          </Text>
+                          <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.textSecondary }}>Avg Sleep</Text>
+                        </View>
+                      </View>
+
+                      {/* Avg Energy */}
+                      <View 
+                        className="w-[48%] rounded-[28px] p-4 border justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center justify-between mb-3">
+                          <View className="w-8 h-8 rounded-xl items-center justify-center bg-orange-500/10 border border-orange-500/20">
+                            <Zap size={16} color="#F97316" />
+                          </View>
+                          <Text className="text-[10px] font-bold uppercase tracking-wider text-orange-400">Energy</Text>
+                        </View>
+                        <View>
+                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>
+                            {avgEnergy ? avgEnergy : '--'} <Text className="text-xs font-bold" style={{ color: colors.textSecondary }}>/10</Text>
+                          </Text>
+                          <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.textSecondary }}>Avg Energy</Text>
+                        </View>
+                      </View>
                     </View>
 
-                    {/* Synced Activity (Steps History) */}
-                    <View className="px-6 pb-8">
-                        <Text className="text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1" style={{ color: colors.textSecondary }}>Synced Activity</Text>
-                        {stepsLog.length === 0 ? (
-                            <View 
-                                className="p-8 items-center justify-center rounded-[32px] border border-dashed"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                            >
-                                <Text className="font-bold text-xs uppercase" style={{ color: colors.textSecondary }}>No steps synced yet</Text>
-                            </View>
-                        ) : (
-                            <View className="gap-3">
-                                {stepsLog.slice(0, 5).map((logItem, idx) => (
-                                    <MotiView
-                                        key={logItem.id}
-                                        from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
-                                        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
-                                        transition={{ delay: idx * 30 }}
-                                        className="rounded-[24px] p-5 border flex-row items-center justify-between"
-                                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                                    >
-                                        <View className="flex-1">
-                                            <Text className="font-black text-sm" style={{ color: colors.text }}>
-                                                {new Date(logItem.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-                                            </Text>
-                                            <Text className="font-bold text-xs mt-1" style={{ color: colors.textSecondary }}>
-                                                {logItem.steps ? `${logItem.steps.toLocaleString()} steps` : '0 steps'}
-                                            </Text>
-                                        </View>
-                                        <View 
-                                            className="px-3 py-1.5 rounded-xl border"
-                                            style={{ 
-                                                backgroundColor: `${colors.primary}15`, 
-                                                borderColor: `${colors.primary}30` 
-                                            }}
-                                        >
-                                            <Text className="font-black text-[9px] uppercase tracking-wider" style={{ color: colors.primary }}>Synced</Text>
-                                        </View>
-                                    </MotiView>
-                                ))}
-                            </View>
+                    {/* ─── 3. Weight History Row ───────────────────────────────── */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => setActiveSubView('weight_history')}
+                      className="p-4 rounded-[24px] border flex-row items-center justify-between mb-6"
+                      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                    >
+                      <View className="flex-row items-center gap-3">
+                        <View className="w-9 h-9 rounded-xl items-center justify-center bg-amber-500/10 border border-amber-500/20">
+                          <Scale size={18} color="#F59E0B" />
+                        </View>
+                        <View>
+                          <Text className="text-sm font-black" style={{ color: colors.text }}>Weight History</Text>
+                          <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>
+                            {validWeights.length > 0 ? `${validWeights.length} logs recorded` : 'No weigh-ins yet'}
+                          </Text>
+                        </View>
+                      </View>
+                      <View className="flex-row items-center gap-1.5">
+                        {latestWeight && (
+                          <View className="px-2.5 py-1 rounded-full border mr-1" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+                            <Text className="text-xs font-bold" style={{ color: colors.text }}>{latestWeight} kg</Text>
+                          </View>
                         )}
+                        <ChevronRight size={18} color={colors.textSecondary} />
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* ─── 4. Manage Client Hub Cards ──────────────────────────── */}
+                    <Text className="text-xs font-bold uppercase tracking-widest mb-3 ml-1" style={{ color: colors.textSecondary }}>
+                      Manage
+                    </Text>
+                    <View className="gap-3 mb-6">
+                      {/* Daily Tasks Card */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setActiveSubView('daily_tasks')}
+                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center gap-3.5 flex-1 pr-3">
+                          <View
+                            className="w-11 h-11 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                          >
+                            <Target size={20} color={colors.primary} />
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                              Daily Tasks
+                            </Text>
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
+                              {habits.length > 0 ? `${habits.length} active daily tasks` : 'Assign daily habits'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View className="flex-row items-center gap-2">
+                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+                            <Text className="text-xs font-bold" style={{ color: colors.primary }}>{habits.length}</Text>
+                          </View>
+                          <ChevronRight size={18} color={colors.textSecondary} />
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Challenges Card */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setActiveSubView('challenges')}
+                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center gap-3.5 flex-1 pr-3">
+                          <View className="w-11 h-11 rounded-2xl items-center justify-center bg-amber-500/10 border border-amber-500/20">
+                            <Award size={20} color="#F59E0B" />
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                              Challenges
+                            </Text>
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
+                              {activeChallengesCount > 0 ? `${activeChallengesCount} active challenges` : 'Start a challenge'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View className="flex-row items-center gap-2">
+                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+                            <Text className="text-xs font-bold" style={{ color: '#F59E0B' }}>{activeChallengesCount}</Text>
+                          </View>
+                          <ChevronRight size={18} color={colors.textSecondary} />
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Check-ins Card */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setActiveSubView('checkins')}
+                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center gap-3.5 flex-1 pr-3">
+                          <View className="w-11 h-11 rounded-2xl items-center justify-center bg-emerald-500/10 border border-emerald-500/20">
+                            <CalendarIcon size={20} color="#10B981" />
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                              Check-ins
+                            </Text>
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
+                              {checkins.length > 0 ? `${checkins.length} check-ins logged` : 'No logs recorded'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View className="flex-row items-center gap-2">
+                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+                            <Text className="text-xs font-bold" style={{ color: '#10B981' }}>{checkins.length}</Text>
+                          </View>
+                          <ChevronRight size={18} color={colors.textSecondary} />
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Sessions Card */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setActiveSubView('sessions')}
+                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center gap-3.5 flex-1 pr-3">
+                          <View className="w-11 h-11 rounded-2xl items-center justify-center bg-indigo-500/10 border border-indigo-500/20">
+                            <Clock size={20} color="#6366F1" />
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                              Sessions
+                            </Text>
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
+                              {upcomingSessions.length > 0 ? `${upcomingSessions.length} upcoming scheduled` : 'Weekly schedule'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View className="flex-row items-center gap-2">
+                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+                            <Text className="text-xs font-bold" style={{ color: '#6366F1' }}>{upcomingSessions.length}</Text>
+                          </View>
+                          <ChevronRight size={18} color={colors.textSecondary} />
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Analytics Card */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => router.push(`/(client)/analytics?clientId=${id}` as any)}
+                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <View className="flex-row items-center gap-3.5 flex-1 pr-3">
+                          <View
+                            className="w-11 h-11 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                          >
+                            <Activity size={20} color={colors.primary} />
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                              Analytics
+                            </Text>
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
+                              Steps, sleep, energy & trends
+                            </Text>
+                          </View>
+                        </View>
+                        <View className="flex-row items-center gap-2">
+                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+                            <Text className="text-xs font-bold" style={{ color: colors.primary }}>View</Text>
+                          </View>
+                          <ChevronRight size={18} color={colors.textSecondary} />
+                        </View>
+                      </TouchableOpacity>
                     </View>
 
-                    {/* Weigh-in History */}
-                    <View className="px-6 pb-8">
-                        <Text className="text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1" style={{ color: colors.textSecondary }}>Weigh-in History</Text>
-                        {validWeights.length === 0 ? (
-                            <View 
-                                className="p-8 items-center justify-center rounded-[32px] border border-dashed"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                            >
-                                <Text className="font-bold text-xs uppercase" style={{ color: colors.textSecondary }}>No weight records yet</Text>
-                            </View>
-                        ) : (
-                            <View className="gap-3">
-                                {validWeights.slice(0, 5).map((checkin, idx) => {
-                                    const currentWeight = Number(checkin.weight_kg);
-                                    const prevCheckin = validWeights[idx + 1];
-                                    const prevWeight = prevCheckin ? Number(prevCheckin.weight_kg) : null;
-                                    const diff = prevWeight !== null ? (currentWeight - prevWeight) : null;
+                    {/* ─── 5. Client Info Card (Apple Grouped Style) ─────────────── */}
+                    <Text className="text-xs font-bold uppercase tracking-widest mb-3 ml-1" style={{ color: colors.textSecondary }}>
+                      Client Info
+                    </Text>
+                    <View 
+                      className="rounded-[28px] border overflow-hidden mb-8"
+                      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                    >
+                      <View className="p-5 border-b" style={{ borderBottomColor: colors.border }}>
+                        <View className="flex-row items-center gap-2.5 mb-1.5">
+                          <Target size={16} color={colors.primary} />
+                          <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Goal</Text>
+                        </View>
+                        <Text className="text-base font-bold" style={{ color: colors.text }}>{client.goal || 'Not set'}</Text>
+                      </View>
 
-                                    return (
-                                        <MotiView
-                                            key={checkin.id}
-                                            from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
-                                            animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
-                                            transition={{ delay: idx * 30 }}
-                                            className="rounded-[24px] p-5 border flex-row items-center justify-between"
-                                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                                        >
-                                            <View className="flex-1">
-                                                <Text className="font-black text-sm" style={{ color: colors.text }}>
-                                                    {new Date(checkin.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-                                                </Text>
-                                                <Text className="font-bold text-xs mt-1" style={{ color: colors.textSecondary }}>
-                                                    {currentWeight} kg
-                                                </Text>
-                                            </View>
-                                            {diff !== null && (
-                                                <View className={`px-3 py-1.5 rounded-xl border flex-row items-center gap-1 ${
-                                                    diff < 0 
-                                                        ? 'bg-emerald-500/10 border-emerald-500/20' 
-                                                        : diff > 0 
-                                                            ? 'bg-amber-500/10 border-amber-500/20'
-                                                            : 'border'
-                                                }`}
-                                                style={diff === 0 ? { backgroundColor: colors.background, borderColor: colors.border } : undefined}
-                                                >
-                                                    <TrendingUp 
-                                                        size={10} 
-                                                        color={diff < 0 ? '#10B981' : diff > 0 ? '#F59E0B' : colors.textSecondary} 
-                                                        style={diff < 0 ? { transform: [{ rotate: '180deg' }] } : undefined}
-                                                    />
-                                                    <Text className={`font-black text-[9px] uppercase tracking-wider ${
-                                                        diff < 0 
-                                                            ? 'text-emerald-400' 
-                                                            : diff > 0 
-                                                                ? 'text-amber-500' 
-                                                                : ''
-                                                    }`}
-                                                    style={diff === 0 ? { color: colors.textSecondary } : undefined}
-                                                    >
-                                                        {diff < 0 ? `${diff.toFixed(1)} kg` : diff > 0 ? `+${diff.toFixed(1)} kg` : 'Stable'}
-                                                    </Text>
-                                                </View>
-                                            )}
-                                        </MotiView>
-                                    );
-                                })}
-                            </View>
-                        )}
+                      <View className="p-5 border-b" style={{ borderBottomColor: colors.border }}>
+                        <View className="flex-row items-center gap-2.5 mb-1.5">
+                          <Mail size={16} color={colors.primary} />
+                          <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Email</Text>
+                        </View>
+                        <Text className="text-base font-bold" style={{ color: colors.text }} selectable>{client.profiles?.email || 'Not set'}</Text>
+                      </View>
+
+                      <View className="flex-row border-b" style={{ borderBottomColor: colors.border }}>
+                        <View className="flex-1 p-5 border-r" style={{ borderRightColor: colors.border }}>
+                          <View className="flex-row items-center gap-2 mb-1.5">
+                            <Award size={16} color={colors.primary} />
+                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Experience</Text>
+                          </View>
+                          <Text className="text-base font-bold capitalize" style={{ color: colors.text }}>{client.experience_level || 'Not set'}</Text>
+                        </View>
+                        <View className="flex-1 p-5">
+                          <View className="flex-row items-center gap-2 mb-1.5">
+                            <User size={16} color={colors.primary} />
+                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Height</Text>
+                          </View>
+                          <Text className="text-base font-bold" style={{ color: colors.text }}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
+                        </View>
+                      </View>
+
+                      <View className="flex-row">
+                        <View className="flex-1 p-5 border-r" style={{ borderRightColor: colors.border }}>
+                          <View className="flex-row items-center gap-2 mb-1.5">
+                            <Clock size={16} color={colors.primary} />
+                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Age</Text>
+                          </View>
+                          <Text className="text-base font-bold" style={{ color: colors.text }}>
+                            {client.date_of_birth ? `${Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 3600 * 24 * 365.25))} yrs` : 'Not set'}
+                          </Text>
+                        </View>
+                        <View className="flex-1 p-5">
+                          <View className="flex-row items-center gap-2 mb-1.5">
+                            <Scale size={16} color={colors.primary} />
+                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Starting</Text>
+                          </View>
+                          <Text className="text-base font-bold" style={{ color: colors.text }}>
+                            {validWeights.length > 0 ? `${validWeights[validWeights.length - 1].weight_kg} kg` : 'Not set'}
+                          </Text>
+                        </View>
+                      </View>
                     </View>
-                  </>
-                ) : mainTab === 'daily_tasks' ? (
+                  </View>
+                ) : activeSubView === 'daily_tasks' ? (
                   <View className="px-6 py-8">
                     <View className="flex-row items-center justify-between mb-8 ml-1">
                         <Text className="text-[10px] font-black uppercase tracking-[4px]" style={{ color: colors.textSecondary }}>Daily Tasks</Text>
@@ -764,7 +996,7 @@ export default function ClientDetailsScreen() {
                         </TouchableOpacity>
                     )}
                   </View>
-                ) : mainTab === 'challenges' ? (
+                ) : activeSubView === 'challenges' ? (
                   <View className="px-6 py-8">
                     <View className="flex-row justify-between items-center mb-8">
                         <View className="flex-row gap-6">
@@ -849,7 +1081,7 @@ export default function ClientDetailsScreen() {
                         </View>
                     </View>
                   </View>
-                ) : mainTab === 'checkins' ? (
+                ) : activeSubView === 'checkins' ? (
                   <View className="px-6 py-8">
                     {checkins.length === 0 ? (
                         <View 
@@ -905,7 +1137,7 @@ export default function ClientDetailsScreen() {
                         ))
                     )}
                   </View>
-                ) : mainTab === 'sessions' ? (() => {
+                ) : activeSubView === 'sessions' ? (() => {
                   // Compute Weekly Slots and Ad-Hoc/Past Sessions
                   const activeWeeklySlots = sessionLog.filter(s => s.recurrence_rule && s.recurrence_rule.includes('WEEKLY'));
                   const weeklySlotConfigs = activeWeeklySlots.map(s => {
@@ -1147,7 +1379,7 @@ export default function ClientDetailsScreen() {
                           <MotiView
                             from={{ rotate: '0deg' }}
                             animate={{ rotate: pastSessionsExpanded ? '90deg' : '0deg' }}
-                            transition={{ type: 'timing', duration: 200 }}
+                            transition={{ type: 'timing', duration: 200 } as any}
                           >
                             <ChevronRight size={18} color={colors.textSecondary} />
                           </MotiView>
@@ -1241,7 +1473,145 @@ export default function ClientDetailsScreen() {
                       </View>
                     </View>
                   );
-                })() : null}
+                })() : activeSubView === 'weight_history' ? (
+                  <View className="px-6 py-6">
+                    {/* Summary Card */}
+                    <View 
+                      className="p-6 rounded-[28px] border mb-6"
+                      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                    >
+                      <Text className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.textSecondary }}>
+                        Current Weight
+                      </Text>
+                      <View className="flex-row items-baseline gap-2">
+                        <Text className="text-4xl font-black tracking-tight" style={{ color: colors.text }}>
+                          {latestWeight ? latestWeight : '--'}
+                        </Text>
+                        <Text className="text-lg font-bold" style={{ color: colors.textSecondary }}>
+                          kg
+                        </Text>
+                      </View>
+
+                      {/* Progress since first check-in */}
+                      {(() => {
+                        const firstWeight = validWeights.length > 0 ? Number(validWeights[validWeights.length - 1].weight_kg) : null;
+                        const totalDiff = (latestWeight !== null && firstWeight !== null) ? Number((latestWeight - firstWeight).toFixed(1)) : null;
+                        if (totalDiff === null || validWeights.length < 2) return null;
+                        const isLoss = totalDiff < 0;
+                        const isGain = totalDiff > 0;
+                        return (
+                          <View className="flex-row items-center gap-2 mt-4 pt-4 border-t" style={{ borderTopColor: colors.border }}>
+                            <View className={`px-2.5 py-1 rounded-full border flex-row items-center gap-1 ${
+                              isLoss ? 'bg-emerald-500/10 border-emerald-500/20' : isGain ? 'bg-amber-500/10 border-amber-500/20' : 'border'
+                            }`}
+                            style={totalDiff === 0 ? { backgroundColor: colors.background, borderColor: colors.border } : undefined}
+                            >
+                              <TrendingUp 
+                                size={12} 
+                                color={isLoss ? '#10B981' : isGain ? '#F59E0B' : colors.textSecondary} 
+                                style={isLoss ? { transform: [{ rotate: '180deg' }] } : undefined}
+                              />
+                              <Text className={`font-black text-xs ${isLoss ? 'text-emerald-500' : isGain ? 'text-amber-500' : ''}`}
+                                style={totalDiff === 0 ? { color: colors.textSecondary } : undefined}
+                              >
+                                {isLoss ? `${totalDiff} kg` : isGain ? `+${totalDiff} kg` : 'Stable'}
+                              </Text>
+                            </View>
+                            <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>
+                              since starting ({validWeights[validWeights.length - 1].weight_kg} kg)
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                    </View>
+
+                    <Text className="text-xs font-bold uppercase tracking-widest mb-3 ml-1" style={{ color: colors.textSecondary }}>
+                      All Logs ({validWeights.length})
+                    </Text>
+
+                    {validWeights.length === 0 ? (
+                      <View 
+                        className="p-12 items-center justify-center rounded-[32px] border border-dashed"
+                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      >
+                        <Scale size={32} color={colors.textSecondary} />
+                        <Text className="font-black text-sm uppercase mt-4" style={{ color: colors.text }}>No Weight Logged</Text>
+                        <Text className="text-xs mt-1 text-center" style={{ color: colors.textSecondary }}>The client hasn't recorded any weigh-ins yet.</Text>
+                      </View>
+                    ) : (
+                      <View className="gap-3">
+                        {validWeights.map((checkin, idx) => {
+                          const currentWeight = Number(checkin.weight_kg);
+                          const prevCheckin = validWeights[idx + 1];
+                          const prevWeight = prevCheckin ? Number(prevCheckin.weight_kg) : null;
+                          const diff = prevWeight !== null ? (currentWeight - prevWeight) : null;
+
+                          return (
+                            <MotiView
+                              key={checkin.id}
+                              from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
+                              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
+                              transition={{ delay: idx * 30 }}
+                              className="rounded-[24px] p-5 border"
+                              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                            >
+                              <View className="flex-row items-center justify-between">
+                                <View>
+                                  <Text className="font-black text-base" style={{ color: colors.text }}>
+                                    {currentWeight} kg
+                                  </Text>
+                                  <Text className="font-medium text-xs mt-0.5" style={{ color: colors.textSecondary }}>
+                                    {new Date(checkin.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </Text>
+                                </View>
+
+                                {diff !== null && (
+                                  <View className={`px-3 py-1.5 rounded-xl border flex-row items-center gap-1 ${
+                                    diff < 0 
+                                      ? 'bg-emerald-500/10 border-emerald-500/20' 
+                                      : diff > 0 
+                                        ? 'bg-amber-500/10 border-amber-500/20'
+                                        : 'border'
+                                  }`}
+                                  style={diff === 0 ? { backgroundColor: colors.background, borderColor: colors.border } : undefined}
+                                  >
+                                    <TrendingUp 
+                                      size={11} 
+                                      color={diff < 0 ? '#10B981' : diff > 0 ? '#F59E0B' : colors.textSecondary} 
+                                      style={diff < 0 ? { transform: [{ rotate: '180deg' }] } : undefined}
+                                    />
+                                    <Text className={`font-black text-[10px] uppercase tracking-wider ${
+                                      diff < 0 
+                                        ? 'text-emerald-500' 
+                                        : diff > 0 
+                                          ? 'text-amber-500' 
+                                          : ''
+                                    }`}
+                                    style={diff === 0 ? { color: colors.textSecondary } : undefined}
+                                    >
+                                      {diff < 0 ? `${diff.toFixed(1)} kg` : diff > 0 ? `+${diff.toFixed(1)} kg` : 'Stable'}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+
+                              {checkin.notes ? (
+                                <View 
+                                  className="mt-3 pt-3 border-t"
+                                  style={{ borderTopColor: colors.border }}
+                                >
+                                  <Text className="text-xs font-normal leading-4" style={{ color: colors.textSecondary }}>
+                                    "{checkin.notes}"
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </MotiView>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                ) : null}
             </ScrollView>
         </View>
       </SafeAreaView>
@@ -1542,7 +1912,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                     from={{ opacity: 0, translateY: 8, scale: 0.98 }}
                                     animate={{ opacity: 1, translateY: 0, scale: 1 }}
                                     exit={{ opacity: 0, translateY: 8, scale: 0.98 }}
-                                    transition={{ type: 'timing', duration: 180 }}
+                                    transition={{ type: 'timing', duration: 180 } as any}
                                     style={{
                                         position: 'absolute',
                                         bottom: 72,
