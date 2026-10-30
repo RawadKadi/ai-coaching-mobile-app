@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text as RNText, StyleSheet, TextStyle, TextProps as RNTextProps } from 'react-native';
 import { useTheme } from '@/contexts/BrandContext';
-import { getFontFamilyAndWeight } from '@/lib/font-patcher';
+import { getFontFamilyAndWeight, isExplicitCustomFont, isIconFont } from '@/lib/font-patcher';
 
 interface BrandedTextProps {
   children: React.ReactNode;
@@ -9,6 +9,7 @@ interface BrandedTextProps {
   color?: 'default' | 'secondary' | 'disabled' | 'primary' | 'accent' | 'error' | 'success' | 'warning';
   weight?: 'heading' | 'body' | '400' | '500' | '600' | '700' | '800' | '900';
   style?: TextStyle;
+  preserveFont?: boolean;
 }
 
 export function BrandedText({
@@ -17,8 +18,24 @@ export function BrandedText({
   color = 'default',
   weight,
   style,
+  preserveFont,
 }: BrandedTextProps) {
   const theme = useTheme();
+
+  if (preserveFont) {
+    return (
+      <RNText
+        style={[
+          {
+            fontSize: theme.typography.sizes[variant],
+          },
+          style,
+        ]}
+      >
+        {children}
+      </RNText>
+    );
+  }
 
   const getTextColor = () => {
     switch (color) {
@@ -75,9 +92,27 @@ export function BrandedText({
   );
 }
 
-export function Text(props: RNTextProps & { className?: string }) {
-  const theme = useTheme();
+export function Text(props: RNTextProps & { className?: string; preserveFont?: boolean }) {
+  if (props.preserveFont) {
+    const flat = StyleSheet.flatten(props.style);
+    if (flat && flat.fontFamily && flat.fontFamily !== 'System') {
+      return <RNText {...props} style={[props.style, { fontWeight: undefined }]} />;
+    }
+    return <RNText {...props} />;
+  }
+
   const flat = StyleSheet.flatten(props.style) || {};
+  const currentFont = flat.fontFamily ? String(flat.fontFamily) : '';
+
+  if (isIconFont(currentFont)) {
+    return <RNText {...props} />;
+  }
+
+  if (isExplicitCustomFont(currentFont)) {
+    return <RNText {...props} style={[props.style, { fontWeight: undefined }]} />;
+  }
+
+  const theme = useTheme();
   const fontStyle = getFontFamilyAndWeight(
     theme.typography.fontFamily,
     flat.fontWeight,

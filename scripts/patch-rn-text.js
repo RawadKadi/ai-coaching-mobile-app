@@ -10,92 +10,123 @@ if (!fs.existsSync(textFile)) {
 
 let content = fs.readFileSync(textFile, 'utf8');
 
-if (content.includes('currentBrandFontFamily')) {
-  console.log('[patch-rn-text] Text.js already patched');
+if (content.includes('isPreserved = typeof restProps !== \'undefined\'')) {
+  console.log('[patch-rn-text] Text.js already up to date');
   process.exit(0);
 }
 
-const target = `    if (overrides != null) {
-      // $FlowFixMe[incompatible-type]
-      _style = [_style, overrides];
-    }
-  }`;
-
-const replacement = `    if (overrides != null) {
+const newPatch = `    if (overrides != null) {
       // $FlowFixMe[incompatible-type]
       _style = [_style, overrides];
     }
 
-    const brandFont = typeof globalThis !== 'undefined' ? (globalThis: any).currentBrandFontFamily : null;
-    if (brandFont && brandFont !== 'System') {
-      const currentFontFam = processedStyle.fontFamily ? String(processedStyle.fontFamily).toLowerCase() : '';
-      const isIcon = currentFontFam.includes('icon') || currentFontFam.includes('feather') || currentFontFam.includes('awesome') || currentFontFam.includes('glyph') || currentFontFam.includes('material');
-      if (!isIcon) {
-        const wStr = processedStyle.fontWeight ? String(processedStyle.fontWeight).toLowerCase() : '';
-        const fSize = processedStyle.fontSize;
-        const isBold = wStr === 'bold' || wStr === '700' || wStr === '800' || wStr === '900' || (Boolean(fSize && fSize >= 18) && wStr !== '400' && wStr !== '300' && wStr !== 'normal');
-        const isSemiBold = wStr === '600';
-        const isMedium = wStr === '500';
-        let resWeight = '400';
-        if (isBold) {
-          resWeight = brandFont === 'Lato' && (wStr === '800' || wStr === '900') ? '900' : '700';
-        } else if (isSemiBold) {
-          resWeight = '600';
-        } else if (isMedium) {
-          resWeight = '500';
-        } else {
-          if (brandFont === 'Raleway' || brandFont === 'Outfit' || brandFont === 'Montserrat' || brandFont === 'Poppins') {
+    const isPreserved = typeof restProps !== 'undefined' && (restProps: any).preserveFont === true;
+    const rawFontFam = processedStyle.fontFamily ? String(processedStyle.fontFamily) : '';
+    const isExplicitCustom =
+      rawFontFam.includes('Inter_') ||
+      rawFontFam.includes('Roboto_') ||
+      rawFontFam.includes('Outfit_') ||
+      rawFontFam.includes('Montserrat_') ||
+      rawFontFam.includes('Poppins_') ||
+      rawFontFam.includes('Lato_') ||
+      rawFontFam.includes('OpenSans_') ||
+      rawFontFam.includes('Raleway_') ||
+      rawFontFam.includes('Nunito_') ||
+      rawFontFam.includes('PlayfairDisplay_');
+
+    if (isExplicitCustom) {
+      // $FlowFixMe[incompatible-type]
+      _style = [_style, { fontWeight: undefined }];
+    } else if (!isPreserved) {
+      const brandFont = typeof globalThis !== 'undefined' ? (globalThis: any).currentBrandFontFamily : null;
+      if (brandFont && brandFont !== 'System') {
+        const currentFontFam = rawFontFam.toLowerCase();
+        const isIcon = currentFontFam.includes('icon') || currentFontFam.includes('feather') || currentFontFam.includes('awesome') || currentFontFam.includes('glyph') || currentFontFam.includes('material');
+        if (!isIcon) {
+          const wStr = processedStyle.fontWeight ? String(processedStyle.fontWeight).toLowerCase() : '';
+          const fSize = processedStyle.fontSize;
+          const isBold = wStr === 'bold' || wStr === '700' || wStr === '800' || wStr === '900' || (Boolean(fSize && fSize >= 18) && wStr !== '400' && wStr !== '300' && wStr !== 'normal');
+          const isSemiBold = wStr === '600';
+          const isMedium = wStr === '500';
+          let resWeight = '400';
+          if (isBold) {
+            resWeight = brandFont === 'Lato' && (wStr === '800' || wStr === '900') ? '900' : '700';
+          } else if (isSemiBold) {
+            resWeight = '600';
+          } else if (isMedium) {
             resWeight = '500';
           } else {
-            resWeight = '400';
+            if (brandFont === 'Raleway' || brandFont === 'Outfit' || brandFont === 'Montserrat' || brandFont === 'Poppins') {
+              resWeight = '500';
+            } else {
+              resWeight = '400';
+            }
           }
-        }
 
-        const wSuffix = resWeight === '500' ? '_500Medium' : resWeight === '600' ? '_600SemiBold' : resWeight === '700' ? '_700Bold' : '_400Regular';
+          const wSuffix = resWeight === '500' ? '_500Medium' : resWeight === '600' ? '_600SemiBold' : resWeight === '700' ? '_700Bold' : '_400Regular';
+          const fMap = {
+            'Inter': 'Inter' + wSuffix,
+            'Roboto': resWeight === '500' ? 'Roboto_500Medium' : (isBold || isSemiBold) ? 'Roboto_700Bold' : 'Roboto_400Regular',
+            'Outfit': 'Outfit' + wSuffix,
+            'Montserrat': 'Montserrat' + wSuffix,
+            'Poppins': 'Poppins' + wSuffix,
+            'Lato': (wStr === '800' || wStr === '900') ? 'Lato_900Black' : (isBold || isSemiBold) ? 'Lato_700Bold' : 'Lato_400Regular',
+            'Open Sans': 'OpenSans' + wSuffix,
+            'Raleway': 'Raleway' + wSuffix,
+            'Nunito': 'Nunito' + wSuffix,
+            'Playfair Display': 'PlayfairDisplay' + wSuffix,
+          };
+
+          const targetFont = fMap[brandFont] || brandFont;
+          // $FlowFixMe[incompatible-type]
+          _style = [_style, { fontFamily: targetFont, fontWeight: undefined }];
+        }
+      }
+    }
+  } else {
+    const isPreserved = typeof restProps !== 'undefined' && (restProps: any).preserveFont === true;
+    if (!isPreserved) {
+      const brandFont = typeof globalThis !== 'undefined' ? (globalThis: any).currentBrandFontFamily : null;
+      if (brandFont && brandFont !== 'System') {
+        const wSuffix = (brandFont === 'Raleway' || brandFont === 'Outfit' || brandFont === 'Montserrat' || brandFont === 'Poppins') ? '_500Medium' : '_400Regular';
         const fMap = {
           'Inter': 'Inter' + wSuffix,
-          'Roboto': resWeight === '500' ? 'Roboto_500Medium' : (isBold || isSemiBold) ? 'Roboto_700Bold' : 'Roboto_400Regular',
+          'Roboto': 'Roboto' + wSuffix,
           'Outfit': 'Outfit' + wSuffix,
           'Montserrat': 'Montserrat' + wSuffix,
           'Poppins': 'Poppins' + wSuffix,
-          'Lato': (wStr === '800' || wStr === '900') ? 'Lato_900Black' : (isBold || isSemiBold) ? 'Lato_700Bold' : 'Lato_400Regular',
+          'Lato': 'Lato_400Regular',
           'Open Sans': 'OpenSans' + wSuffix,
           'Raleway': 'Raleway' + wSuffix,
           'Nunito': 'Nunito' + wSuffix,
           'Playfair Display': 'PlayfairDisplay' + wSuffix,
         };
-
         const targetFont = fMap[brandFont] || brandFont;
         // $FlowFixMe[incompatible-type]
-        _style = [_style, { fontFamily: targetFont, fontWeight: undefined }];
+        _style = [{ fontFamily: targetFont }];
       }
-    }
-  } else {
-    const brandFont = typeof globalThis !== 'undefined' ? (globalThis: any).currentBrandFontFamily : null;
-    if (brandFont && brandFont !== 'System') {
-      const wSuffix = (brandFont === 'Raleway' || brandFont === 'Outfit' || brandFont === 'Montserrat' || brandFont === 'Poppins') ? '_500Medium' : '_400Regular';
-      const fMap = {
-        'Inter': 'Inter' + wSuffix,
-        'Roboto': 'Roboto' + wSuffix,
-        'Outfit': 'Outfit' + wSuffix,
-        'Montserrat': 'Montserrat' + wSuffix,
-        'Poppins': 'Poppins' + wSuffix,
-        'Lato': 'Lato_400Regular',
-        'Open Sans': 'OpenSans' + wSuffix,
-        'Raleway': 'Raleway' + wSuffix,
-        'Nunito': 'Nunito' + wSuffix,
-        'Playfair Display': 'PlayfairDisplay' + wSuffix,
-      };
-      const targetFont = fMap[brandFont] || brandFont;
-      // $FlowFixMe[incompatible-type]
-      _style = [{ fontFamily: targetFont }];
     }
   }`;
 
-if (content.includes(target)) {
-  content = content.replace(target, replacement);
+// Check if any existing patch exists in content
+const existingPatchRegex = /    if \(overrides != null\) {[\s\S]*?\/\/ \$FlowFixMe\[incompatible-type\][\s\S]*?_style = \[{ fontFamily: targetFont }\];\s*}\s*}\s*}/;
+
+if (existingPatchRegex.test(content)) {
+  content = content.replace(existingPatchRegex, newPatch);
   fs.writeFileSync(textFile, content, 'utf8');
-  console.log('[patch-rn-text] Successfully patched Text.js');
+  console.log('[patch-rn-text] Successfully updated Text.js using restProps');
 } else {
-  console.log('[patch-rn-text] Target snippet not found or already modified');
+  const target = `    if (overrides != null) {
+      // $FlowFixMe[incompatible-type]
+      _style = [_style, overrides];
+    }
+  }`;
+
+  if (content.includes(target)) {
+    content = content.replace(target, newPatch);
+    fs.writeFileSync(textFile, content, 'utf8');
+    console.log('[patch-rn-text] Successfully patched Text.js');
+  } else {
+    console.log('[patch-rn-text] Target snippet not found or already up to date');
+  }
 }

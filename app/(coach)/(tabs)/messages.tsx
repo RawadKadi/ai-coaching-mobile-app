@@ -27,17 +27,31 @@ export default function CoachMessagesScreen() {
   const colors = theme.colors;
   const isDarkMode = theme.isDarkMode;
   const router = useRouter();
-  const { coach, user } = useAuth();
+  const { coach, user, loading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
   const { isUserOnline } = usePresence();
   const [activeTab, setActiveTab] = useState<Tab>('clients');
   const [clients, setClients] = useState<ClientPreview[]>([]);
   const [teammates, setTeammates] = useState<CoachPreview[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [clientsLoading, setClientsLoading] = useState(true);
+  const [teamLoading, setTeamLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [teamUnreadCount, setTeamUnreadCount] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const clientsRef = useRef(clients);
+  clientsRef.current = clients;
+  const teammatesRef = useRef(teammates);
+  teammatesRef.current = teammates;
+
+  // Handle case where auth finishes without a coach profile
+  useEffect(() => {
+    if (!authLoading && !coach?.id) {
+      setClientsLoading(false);
+      setTeamLoading(false);
+    }
+  }, [authLoading, coach?.id]);
 
   const { width: windowWidth } = useWindowDimensions();
   const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -62,33 +76,33 @@ export default function CoachMessagesScreen() {
   const filteredClients = clients.filter(c => c.full_name.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredTeammates = teammates.filter(t => t.full_name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // Note: Initial data loading is handled by useFocusEffect below
-
-  useEffect(() => {
-    if (!user?.id) return;
-    const sub = supabase.channel('coach-messages-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `recipient_id=eq.${user.id}` }, () => { loadClients(true); loadTeammates(true); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `sender_id=eq.${user.id}` }, () => { loadClients(true); loadTeammates(true); })
-      .subscribe();
-    return () => { supabase.removeChannel(sub); };
-  }, [user?.id]);
-
-  useFocusEffect(useCallback(() => { if (coach) { loadClients(clients.length > 0); loadTeammates(teammates.length > 0); } }, [coach, clients.length, teammates.length]));
-
   const loadClients = useCallback(async (silent = false) => {
+    if (!coach?.id) return;
     try {
-      if (!silent) setLoading(true);
+      if (!silent) setClientsLoading(true);
 
       // 1. Get all clients with their profiles (1 query)
-      const { data: links } = await supabase
+      const { data: links, error: linksError } = await supabase
         .from('coach_client_links')
         .select(`client_id, clients:client_id(id, user_id, profiles:user_id(full_name, avatar_url))`)
-        .eq('coach_id', coach?.id)
+        .eq('coach_id', coach.id)
         .eq('status', 'active');
 
-      if (!links?.length) { setClients([]); return; }
+      if (linksError) {
+        console.error('Error loading client links:', linksError);
+      }
+
+      if (!links?.length) { 
+        setClients([]); 
+        return; 
+      }
 
       const clientUserIds = links.map((l: any) => l.clients?.user_id).filter(Boolean);
+
+      if (clientUserIds.length === 0) {
+        setClients([]);
+        return;
+      }
 
       // 2. Get last message for ALL clients in ONE query, then group in JS
       const { data: allMsgs } = await supabase
@@ -130,7 +144,7 @@ export default function CoachMessagesScreen() {
           if (p?.type === 'task_completion') {
             preview = `✅ Task: ${p.taskName || 'Completed'}`;
           } else if (p?.type === 'challenge_completed') {
-            preview = `🏆 Protocol: ${p.taskName || 'Achieved'}`;
+            preview = `🏆 Challenge: ${p.taskName || 'Completed'}`;
           } else if (p?.type === 'meal' || p?.type === 'meal_log') {
             preview = '🍽️ Meal Log';
           } else if (p?.type === 'image') {
@@ -161,18 +175,31 @@ export default function CoachMessagesScreen() {
 
       list.sort((a, b) => new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime());
       setClients(list);
-    } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
+    } catch (e) { 
+      console.error('Error in loadClients:', e); 
+    } finally { 
+      setClientsLoading(false); 
+      setRefreshing(false); 
+    }
   }, [coach?.id, user?.id]);
 
   const loadTeammates = useCallback(async (silent = false) => {
     try {
-      if (!silent) setLoading(true);
+      if (!silent) setTeamLoading(true);
 
       // 1. Get team coaches (1 RPC call)
       const { data } = await supabase.rpc('get_team_coaches');
-      if (!data?.length) { setTeammates([]); return; }
+      if (!data?.length) { 
+        setTeammates([]); 
+        return; 
+      }
 
       const teamUserIds = data.map((tm: any) => tm.user_id).filter(Boolean);
+
+      if (teamUserIds.length === 0) {
+        setTeammates([]);
+        return;
+      }
 
       // 2. Get last message for ALL teammates in ONE query
       const { data: allMsgs } = await supabase
@@ -212,7 +239,7 @@ export default function CoachMessagesScreen() {
           if (p?.type === 'task_completion') {
             preview = `✅ Task: ${p.taskName || 'Completed'}`;
           } else if (p?.type === 'challenge_completed') {
-            preview = `🏆 Protocol: ${p.taskName || 'Achieved'}`;
+            preview = `🏆 Challenge: ${p.taskName || 'Completed'}`;
           } else if (p?.type === 'meal' || p?.type === 'meal_log') {
             preview = '🍽️ Meal Log';
           } else if (p?.type === 'image') {
@@ -244,8 +271,42 @@ export default function CoachMessagesScreen() {
       list.sort((a: any, b: any) => new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime());
       setTeammates(list);
       setTeamUnreadCount(list.reduce((s: number, t: any) => s + (t.unread_count || 0), 0));
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+    } catch (e) { 
+      console.error('Error in loadTeammates:', e); 
+    } finally { 
+      setTeamLoading(false); 
+      setRefreshing(false);
+    }
   }, [user?.id]);
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!user?.id) return;
+    const sub = supabase.channel('coach-messages-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `recipient_id=eq.${user.id}` }, () => { 
+        loadClients(true); 
+        loadTeammates(true); 
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `sender_id=eq.${user.id}` }, () => { 
+        loadClients(true); 
+        loadTeammates(true); 
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [user?.id, loadClients, loadTeammates]);
+
+  useFocusEffect(
+    useCallback(() => { 
+      if (coach?.id) { 
+        loadClients(clientsRef.current.length > 0); 
+        loadTeammates(teammatesRef.current.length > 0); 
+      } 
+    }, [coach?.id, loadClients, loadTeammates])
+  );
+
+  const isTabLoading = activeTab === 'clients'
+    ? (clientsLoading || (authLoading && !coach?.id))
+    : (teamLoading || (authLoading && !coach?.id));
 
   const formatTime = (iso?: string) => {
     if (!iso) return '';
@@ -255,12 +316,21 @@ export default function CoachMessagesScreen() {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
-  const onRefresh = () => { setRefreshing(true); loadClients(); loadTeammates(); };
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadClients(true), loadTeammates(true)]);
+    } catch (e) {
+      console.error('Error refreshing messages:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadClients, loadTeammates]);
   const renderCard = (fullName: string, avatarUrl: string | null, lastMsg: string | undefined, lastTime: string | undefined, unread: number | undefined, onPress: () => void, index: number, userId: string) => (
     <MotiView
       from={{ opacity: 0, translateY: -24 }}
       animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 350, delay: index * 70 }}
+      transition={{ type: 'timing', duration: 350, delay: index * 70 } as any}
       className="mb-4"
     >
       <TouchableOpacity
@@ -396,7 +466,7 @@ export default function CoachMessagesScreen() {
           </View>
 
           {/* List */}
-          {loading && !refreshing ? (
+          {isTabLoading && !refreshing ? (
             <MessagesListSkeleton />
           ) : (
             <FlatList
@@ -420,8 +490,15 @@ export default function CoachMessagesScreen() {
                   <View className="w-24 h-24 rounded-[32px] items-center justify-center border shadow-sm" style={{ backgroundColor: colors.surface, borderColor: colors.border }}>
                     <MessageCircle size={40} color={colors.textSecondary} />
                   </View>
-                  <Text className="font-black text-lg mt-8 text-center" style={{ color: colors.text }}>Your inbox is clear</Text>
-                  <Text className="text-xs mt-2 text-center leading-5 font-medium" style={{ color: colors.textSecondary }}>When you have active conversations with {activeTab === 'clients' ? 'clients' : 'team members'}, they'll appear here.</Text>
+                  <Text className="font-black text-lg mt-8 text-center" style={{ color: colors.text }}>No messages found</Text>
+                  <Text className="text-xs mt-2 text-center leading-5 font-medium" style={{ color: colors.textSecondary }}>
+                    {searchQuery.trim()
+                      ? `No results for "${searchQuery}"`
+                      : activeTab === 'clients'
+                        ? 'When you start a chat with a client, it will appear here.'
+                        : 'When you start a chat with a team member, it will appear here.'
+                    }
+                  </Text>
                 </View>
               }
             />

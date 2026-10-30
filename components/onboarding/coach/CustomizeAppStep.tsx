@@ -452,8 +452,14 @@ export default function CustomizeAppStep({ formData, updateForm }: CustomizeAppS
               <View style={{ gap: 10 }}>
                 {AVAILABLE_FONTS.map((font) => {
                   const active = currentFont === font.name;
+                  const isSystem = font.name === 'System';
                   const itemHeadingFont = getFontFamily(font.name, '700');
-                  const itemSampleFont = getFontFamily(font.name, '400');
+                  const itemSampleFont = getFontFamily(
+                    font.name,
+                    font.name === 'Raleway' || font.name === 'Outfit' || font.name === 'Montserrat'
+                      ? '500'
+                      : '400'
+                  );
                   return (
                     <TouchableOpacity
                       key={font.name}
@@ -472,20 +478,23 @@ export default function CustomizeAppStep({ formData, updateForm }: CustomizeAppS
                     >
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text
+                          preserveFont={true}
                           style={{
                             fontFamily: itemHeadingFont,
                             fontSize: 16,
                             color: active ? currentPrimary : '#FFFFFF',
-                            fontWeight: '700',
+                            fontWeight: isSystem ? '700' : undefined,
                           }}
                         >
                           {font.name}
                         </Text>
                         <Text
+                          preserveFont={true}
                           style={{
                             fontFamily: itemSampleFont,
                             fontSize: 12,
                             color: active ? '#CBD5E1' : '#64748B',
+                            fontWeight: isSystem ? '400' : undefined,
                           }}
                         >
                           Smart training • Strong results

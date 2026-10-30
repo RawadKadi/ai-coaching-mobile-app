@@ -41,6 +41,7 @@ import { supabase } from '@/lib/supabase';
 import { Meal, Workout, Habit, HabitLog } from '@/types/database';
 import FeedbackModal from '@/components/FeedbackModal';
 import StreakFire from '@/components/StreakFire';
+import StreakBadge from '@/components/StreakBadge';
 import { PlanSkeleton } from '@/components/client/PlanSkeleton';
 import { useStreak } from '@/hooks/useStreak';
 import { syncAllHealthData } from '@/lib/health-service';
@@ -248,7 +249,7 @@ export default function ActivityScreen() {
   const [completedChallengeName, setCompletedChallengeName] = useState('');
   const [allChallengesFinished, setAllChallengesFinished] = useState(false);
   const [highlightTooltipText, setHighlightTooltipText] = useState(
-    'Finish your daily tasks here not to lose your streak',
+    'Finish these tasks to earn your streaks',
   );
   const streakLostShownThisSession = useRef(false);
   const coldStreakShownThisSession = useRef(false);
@@ -271,69 +272,96 @@ export default function ActivityScreen() {
 
   const SCREEN_HEIGHT = Dimensions.get('window').height;
 
-  // Daily Tasks Bottom Sheet Drawer Animation state
-  const [showDailyTasksListModal, setShowDailyTasksListModal] = useState(false);
-  const dailyTasksSheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const dailyTasksFadeAnim = useRef(new Animated.Value(0)).current;
-
-  const openDailyTasksModal = () => {
-    setShowDailyTasksListModal(true);
-    dailyTasksSheetAnim.setValue(SCREEN_HEIGHT);
-    dailyTasksFadeAnim.setValue(0);
-
-    Animated.parallel([
-      Animated.timing(dailyTasksFadeAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.spring(dailyTasksSheetAnim, {
-        toValue: 0,
-        damping: 24,
-        stiffness: 180,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const closeDailyTasksModal = () => {
-    Animated.parallel([
-      Animated.timing(dailyTasksFadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(dailyTasksSheetAnim, {
-        toValue: SCREEN_HEIGHT,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setShowDailyTasksListModal(false);
-    });
-  };
-
   const toggleCategory = (key: string) => {
     setExpandedCategories((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const triggerDailyTasksHighlight = (customTooltipText?: string) => {
-    openDailyTasksModal();
+    if (customTooltipText) {
+      setHighlightTooltipText(customTooltipText);
+    }
+    // 1. Ensure daily tasks category is expanded so it is visible
+    setExpandedCategories((prev) => ({ ...prev, dailyTasks: true }));
+
+    // Reset card and highlight state if already showing
+    setShowTooltipCard(false);
+    setIsHighlighting(false);
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+
+    // 2. Smoothly scroll down to Daily Tasks section
+    setTimeout(() => {
+      const targetScrollY =
+        (logsContainerYRef.current || 0) +
+        (dailyTasksLayoutRef.current?.y || 0);
+
+      scrollViewRef.current?.scrollTo({
+        y: Math.max(0, targetScrollY - 20),
+        animated: true,
+      });
+
+      // 3. Measure in window to place spotlight highlight & tooltip card
+      setTimeout(() => {
+        dailyTasksContainerRef.current?.measureInWindow(
+          (x: number, y: number, width: number, height: number) => {
+            const screenW = Dimensions.get('window').width;
+            const screenH = Dimensions.get('window').height;
+            const availableH = screenH - insets.bottom - 210;
+            const computedY = Math.max(
+              insets.top + 10,
+              (y > 0 ? y : insets.top + 70) - 8,
+            );
+            const maxH = Math.max(160, availableH - computedY);
+            const computedH =
+              width > 0 && height > 0
+                ? Math.min(height + 16, maxH)
+                : Math.min(
+                    (dailyTasksLayoutRef.current?.height || 220) + 16,
+                    maxH,
+                  );
+
+            setHighlightLayout({
+              x: Math.max(8, (x > 0 ? x : 16) - 8),
+              y: computedY,
+              width: (width > 0 ? width : screenW - 32) + 16,
+              height: computedH,
+            });
+            setIsHighlighting(true);
+
+            // Graceful slight delay for tooltip card to appear
+            tooltipTimerRef.current = setTimeout(() => {
+              setShowTooltipCard(true);
+            }, 300);
+          },
+        );
+      }, 450);
+    }, 150);
   };
 
   useEffect(() => {
-    if (highlightDailyTasks) {
-      router.setParams({ highlightDailyTasks: undefined });
+    if (highlightDailyTasks === 'true' && !loading) {
+      if (hasTriggeredHighlight.current) return;
+      hasTriggeredHighlight.current = true;
+      triggerDailyTasksHighlight('Finish these tasks to earn your streaks');
+    } else if (highlightDailyTasks !== 'true') {
+      hasTriggeredHighlight.current = false;
     }
-  }, [highlightDailyTasks]);
+  }, [highlightDailyTasks, loading]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (highlightDailyTasks === 'true' && !loading) {
+        hasTriggeredHighlight.current = true;
+        triggerDailyTasksHighlight('Finish these tasks to earn your streaks');
+      }
+    }, [highlightDailyTasks, loading])
+  );
 
   const handleDismissHighlight = () => {
-    closeDailyTasksModal();
     if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
     setShowTooltipCard(false);
     setIsHighlighting(false);
     hasTriggeredHighlight.current = false;
-    router.setParams({ highlightDailyTasks: '' });
+    router.setParams({ highlightDailyTasks: undefined });
   };
 
   // Challenge subtab cross-fade: displayActiveTab lags behind activeTab during fade
@@ -1522,43 +1550,16 @@ export default function ActivityScreen() {
               </View>
             </View>
 
-            <TouchableOpacity
-              activeOpacity={0.8}
+            <StreakBadge
+              streak={streak}
+              isCold={isCold}
+              isDark={isDark}
               onPress={() => {
                 triggerDailyTasksHighlight(
-                  'Finish your daily tasks here not to lose your streak',
+                  'Finish these tasks to earn your streaks',
                 );
               }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 999,
-                backgroundColor: isDark
-                  ? 'rgba(249, 115, 22, 0.12)'
-                  : 'rgba(249, 115, 22, 0.08)',
-                borderWidth: 1,
-                borderColor: isDark
-                  ? 'rgba(249, 115, 22, 0.3)'
-                  : 'rgba(249, 115, 22, 0.25)',
-              }}
-            >
-              <StreakFire
-                variant={isCold ? 'cold' : streak > 0 ? 'active' : 'zero'}
-                size={20}
-              />
-              <Text
-                style={{
-                  color: '#F97316',
-                  fontSize: 15,
-                  fontWeight: '900',
-                }}
-              >
-                {formatCompactNumber(streak)}
-              </Text>
-            </TouchableOpacity>
+            />
           </View>
         </View>
 
@@ -1582,7 +1583,11 @@ export default function ActivityScreen() {
             <DailyTasksHeroCard
               habits={habits}
               habitLogs={habitLogs}
-              onPress={openDailyTasksModal}
+              onPress={() =>
+                triggerDailyTasksHighlight(
+                  'Finish these tasks to earn your streaks',
+                )
+              }
             />
 
             {/* 2. BENTO ROW: Calendar & Challenges (Side-by-Side Chunky Cards) */}
@@ -1939,200 +1944,6 @@ export default function ActivityScreen() {
                     )}
                   </TouchableOpacity>
                 </>
-              )}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Dedicated Daily Tasks Modal / Drawer */}
-      <Modal
-        visible={showDailyTasksListModal}
-        transparent
-        statusBarTranslucent
-        animationType="none"
-        onRequestClose={closeDailyTasksModal}
-      >
-        <View
-          style={{
-            flex: 1,
-            justifyContent: 'flex-end',
-          }}
-        >
-          {/* Dimmed backdrop fades in/out without sliding */}
-          <Animated.View
-            style={{
-              ...(StyleSheet.absoluteFill as any),
-              backgroundColor: isDark
-                ? 'rgba(0,0,0,0.72)'
-                : 'rgba(15, 23, 42, 0.55)',
-              opacity: dailyTasksFadeAnim,
-            }}
-          >
-            <TouchableWithoutFeedback onPress={closeDailyTasksModal}>
-              <View style={{ flex: 1 }} />
-            </TouchableWithoutFeedback>
-          </Animated.View>
-
-          {/* Drawer sheet slides up from bottom */}
-          <Animated.View
-            style={{
-              backgroundColor: cardBg,
-              borderTopLeftRadius: 36,
-              borderTopRightRadius: 36,
-              paddingTop: 18,
-              paddingHorizontal: 22,
-              paddingBottom: insets.bottom + 24,
-              maxHeight: '85%',
-              borderTopWidth: 1,
-              borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
-              transform: [{ translateY: dailyTasksSheetAnim }],
-            }}
-          >
-            {/* Handle bar */}
-            <View
-              style={{
-                width: 44,
-                height: 5,
-                borderRadius: 3,
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.2)' : '#CBD5E1',
-                alignSelf: 'center',
-                marginBottom: 16,
-              }}
-            />
-
-            {/* Modal Header */}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 14,
-              }}
-            >
-              <View>
-                <Text
-                  style={{
-                    color: textColor,
-                    fontSize: 22,
-                    fontWeight: '900',
-                    letterSpacing: -0.4,
-                  }}
-                >
-                  Daily Tasks
-                </Text>
-                <Text
-                  style={{
-                    color: textSecondaryColor,
-                    fontSize: 13,
-                    fontWeight: '600',
-                    marginTop: 2,
-                  }}
-                >
-                  {habits.length === 0
-                    ? 'No tasks established'
-                    : `${completedHabits} of ${habits.length} completed`}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={closeDailyTasksModal}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: isDark
-                    ? 'rgba(255, 255, 255, 0.08)'
-                    : '#F1F5F9',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <X size={18} color={textColor} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Smooth Animated Progress Bar */}
-            {habits.length > 0 && (
-              <View style={{ marginBottom: 16 }}>
-                <SmoothProgressBar
-                  progressPercent={(completedHabits / habits.length) * 100}
-                  isCompleted={completedHabits === habits.length && habits.length > 0}
-                  primaryColor={theme.colors.primary}
-                  completedColor={theme.colors.primary}
-                  trackBg={isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9'}
-                  height={8}
-                  borderRadius={4}
-                  showPercentage={true}
-                  percentageColor={textColor}
-                />
-              </View>
-            )}
-
-            {/* All Tasks Done Celebration Badge */}
-            {completedHabits === habits.length && habits.length > 0 && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  backgroundColor: isDark
-                    ? toRgbaString(theme.colors.primary, 0.18)
-                    : toRgbaString(theme.colors.primary, 0.1),
-                  borderWidth: 1,
-                  borderColor: toRgbaString(theme.colors.primary, 0.28),
-                  borderRadius: 14,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  marginBottom: 16,
-                }}
-              >
-                <CheckCircle size={18} color={theme.colors.primary} />
-                <Text
-                  style={{
-                    color: isDark ? '#FFFFFF' : theme.colors.primary,
-                    fontSize: 13,
-                    fontWeight: '800',
-                  }}
-                >
-                  All tasks completed today!
-                </Text>
-              </View>
-            )}
-
-            {/* Habit Items */}
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
-            >
-              {habits.length === 0 ? (
-                <EmptyState message="No daily tasks established." />
-              ) : (
-                <View style={{ gap: 10 }}>
-                  {habits.map((habit, idx) => {
-                    const log = habitLogs.find((l) => l.habit_id === habit.id);
-                    const isCompleted = log?.completed || false;
-                    const visuals = getTaskVisuals(habit);
-                    return (
-                      <ActivityCard
-                        key={habit.id}
-                        title={habit.name}
-                        sub={
-                          (habit.category ? `${habit.category.toUpperCase()} • ` : '') +
-                          (habit.verification_type === 'camera'
-                            ? 'Camera Verification Required'
-                            : 'Manual Toggle')
-                        }
-                        completed={isCompleted}
-                        icon={visuals.icon}
-                        iconColor={visuals.color}
-                        onPress={() => openTaskDrawer(habit)}
-                        onToggle={() => toggleHabit(habit)}
-                        delay={idx * 40}
-                      />
-                    );
-                  })}
-                </View>
               )}
             </ScrollView>
           </Animated.View>
@@ -2706,10 +2517,15 @@ export default function ActivityScreen() {
                   left: 20,
                   right: 20,
                   top:
-                    highlightLayout.y + highlightLayout.height + 180 >
+                    highlightLayout.y + highlightLayout.height + 180 <=
                     Dimensions.get('window').height - insets.bottom
-                      ? Math.max(insets.top + 16, highlightLayout.y - 170)
-                      : highlightLayout.y + highlightLayout.height + 16,
+                      ? highlightLayout.y + highlightLayout.height + 14
+                      : highlightLayout.y - 180 >= insets.top + 10
+                      ? highlightLayout.y - 180
+                      : Math.min(
+                          Dimensions.get('window').height - insets.bottom - 190,
+                          highlightLayout.y + highlightLayout.height + 14,
+                        ),
                   backgroundColor: cardBg,
                   borderRadius: 28,
                   padding: 22,
@@ -2758,7 +2574,7 @@ export default function ActivityScreen() {
                 <BlurText
                   text={
                     highlightTooltipText ||
-                    'Finish your daily tasks here not to lose your streak'
+                    'Finish these tasks to earn your streaks'
                   }
                   effect="blur"
                   animateBy="words"

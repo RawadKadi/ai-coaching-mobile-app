@@ -88,6 +88,22 @@ export function isIconFont(fontFamily?: string): boolean {
   );
 }
 
+export function isExplicitCustomFont(fontFamily?: string): boolean {
+  if (!fontFamily) return false;
+  return (
+    fontFamily.includes('Inter_') ||
+    fontFamily.includes('Roboto_') ||
+    fontFamily.includes('Outfit_') ||
+    fontFamily.includes('Montserrat_') ||
+    fontFamily.includes('Poppins_') ||
+    fontFamily.includes('Lato_') ||
+    fontFamily.includes('OpenSans_') ||
+    fontFamily.includes('Raleway_') ||
+    fontFamily.includes('Nunito_') ||
+    fontFamily.includes('PlayfairDisplay_')
+  );
+}
+
 let patcherInstalled = false;
 
 export function installGlobalFontPatcher() {
@@ -96,36 +112,56 @@ export function installGlobalFontPatcher() {
 
   try {
     const RN = require('react-native');
-    const RNTextModule = require('react-native/Libraries/Text/Text');
-    const OriginalTextImpl = RNTextModule.default;
+    let RNTextModule: any = null;
+    let OriginalTextImpl: any = null;
+    try {
+      RNTextModule = require('react-native/Libraries/Text/Text');
+      OriginalTextImpl = RNTextModule?.default;
+    } catch (_) {}
 
     if (OriginalTextImpl && !(OriginalTextImpl as any).__brandPatched) {
       const PatchedText = React.forwardRef((props: any, ref: any) => {
+        if (props.preserveFont) {
+          const flat = StyleSheet.flatten(props.style);
+          if (flat && flat.fontFamily && flat.fontFamily !== 'System') {
+            return React.createElement(OriginalTextImpl, {
+              ...props,
+              ref,
+              style: [props.style, { fontWeight: undefined }],
+            });
+          }
+          return React.createElement(OriginalTextImpl, { ...props, ref });
+        }
+
+        const flat = StyleSheet.flatten(props.style);
+        const currentFont = flat?.fontFamily ? String(flat.fontFamily) : '';
+
+        if (isIconFont(currentFont)) {
+          return React.createElement(OriginalTextImpl, { ...props, ref });
+        }
+
+        if (isExplicitCustomFont(currentFont)) {
+          return React.createElement(OriginalTextImpl, {
+            ...props,
+            ref,
+            style: [props.style, { fontWeight: undefined }],
+          });
+        }
+
         const brandFont = (globalThis as any).currentBrandFontFamily;
 
         if (!brandFont || brandFont === 'System') {
           return React.createElement(OriginalTextImpl, { ...props, ref });
         }
 
-        let resolvedStyle = props.style;
-        if (props.style) {
-          const flat = StyleSheet.flatten(props.style);
-          if (flat && !isIconFont(flat.fontFamily)) {
-            const { fontFamily, fontWeight } = getFontFamilyAndWeight(
-              brandFont,
-              flat.fontWeight,
-              flat.fontSize
-            );
-            resolvedStyle = [props.style, { fontFamily, fontWeight }];
-          }
-        } else {
-          const { fontFamily, fontWeight } = getFontFamilyAndWeight(
-            brandFont,
-            undefined,
-            undefined
-          );
-          resolvedStyle = { fontFamily, fontWeight };
-        }
+        const { fontFamily, fontWeight } = getFontFamilyAndWeight(
+          brandFont,
+          flat?.fontWeight,
+          flat?.fontSize
+        );
+        const resolvedStyle = props.style
+          ? [props.style, { fontFamily, fontWeight }]
+          : { fontFamily, fontWeight };
 
         return React.createElement(OriginalTextImpl, {
           ...props,
@@ -137,7 +173,10 @@ export function installGlobalFontPatcher() {
       Object.assign(PatchedText, OriginalTextImpl);
       PatchedText.displayName = 'Text';
       (PatchedText as any).__brandPatched = true;
-      RNTextModule.default = PatchedText;
+
+      try {
+        RNTextModule.default = PatchedText;
+      } catch (_) {}
 
       try {
         Object.defineProperty(RN, 'Text', {
@@ -149,33 +188,47 @@ export function installGlobalFontPatcher() {
     }
 
     // Also patch TextInput so form fields use the brand font
-    const RNTextInputModule = require('react-native/Libraries/Components/TextInput/TextInput');
-    const OriginalTextInput = RNTextInputModule.default;
+    let RNTextInputModule: any = null;
+    let OriginalTextInput: any = null;
+    try {
+      RNTextInputModule = require('react-native/Libraries/Components/TextInput/TextInput');
+      OriginalTextInput = RNTextInputModule?.default;
+    } catch (_) {}
+
     if (OriginalTextInput && !(OriginalTextInput as any).__brandPatched) {
       const PatchedTextInput = React.forwardRef((props: any, ref: any) => {
+        if (props.preserveFont) {
+          return React.createElement(OriginalTextInput, { ...props, ref });
+        }
+        const flat = StyleSheet.flatten(props.style) || {};
+        const currentFont = flat?.fontFamily ? String(flat.fontFamily) : '';
+        if (isIconFont(currentFont) || isExplicitCustomFont(currentFont)) {
+          return React.createElement(OriginalTextInput, { ...props, ref });
+        }
+
         const brandFont = (globalThis as any).currentBrandFontFamily;
         if (!brandFont || brandFont === 'System') {
           return React.createElement(OriginalTextInput, { ...props, ref });
         }
-        const flat = StyleSheet.flatten(props.style) || {};
-        if (!isIconFont(flat.fontFamily)) {
-          const { fontFamily, fontWeight } = getFontFamilyAndWeight(
-            brandFont,
-            flat.fontWeight,
-            flat.fontSize
-          );
-          return React.createElement(OriginalTextInput, {
-            ...props,
-            ref,
-            style: [props.style, { fontFamily, fontWeight }],
-          });
-        }
-        return React.createElement(OriginalTextInput, { ...props, ref });
+
+        const { fontFamily, fontWeight } = getFontFamilyAndWeight(
+          brandFont,
+          flat.fontWeight,
+          flat.fontSize
+        );
+        return React.createElement(OriginalTextInput, {
+          ...props,
+          ref,
+          style: [props.style, { fontFamily, fontWeight }],
+        });
       });
       Object.assign(PatchedTextInput, OriginalTextInput);
       PatchedTextInput.displayName = 'TextInput';
       (PatchedTextInput as any).__brandPatched = true;
-      RNTextInputModule.default = PatchedTextInput;
+
+      try {
+        RNTextInputModule.default = PatchedTextInput;
+      } catch (_) {}
 
       try {
         Object.defineProperty(RN, 'TextInput', {
@@ -194,36 +247,49 @@ export function installGlobalFontPatcher() {
       const wrapJsx = (origJsx: any) => {
         if (!origJsx || origJsx.__brandPatched) return origJsx;
         const patched = function (this: any, type: any, props: any, ...rest: any[]) {
-          const brandFont = (globalThis as any).currentBrandFontFamily;
           if (
-            brandFont &&
-            brandFont !== 'System' &&
             props &&
             (type?.displayName === 'Text' ||
               type?.name === 'Text' ||
               type?.name === 'TextImpl' ||
               type === OriginalTextImpl)
           ) {
+            if (props.preserveFont) {
+              const flat = StyleSheet.flatten(props.style);
+              if (flat && flat.fontFamily && flat.fontFamily !== 'System') {
+                props = {
+                  ...props,
+                  style: [props.style, { fontWeight: undefined }],
+                };
+              }
+              return origJsx.apply(this, [type, props, ...rest]);
+            }
+
             const flat = StyleSheet.flatten(props.style);
-            if (flat && !isIconFont(flat.fontFamily)) {
-              const { fontFamily, fontWeight } = getFontFamilyAndWeight(
-                brandFont,
-                flat.fontWeight,
-                flat.fontSize
-              );
+            const currentFont = flat?.fontFamily ? String(flat.fontFamily) : '';
+
+            if (isIconFont(currentFont)) {
+              return origJsx.apply(this, [type, props, ...rest]);
+            }
+
+            if (isExplicitCustomFont(currentFont)) {
               props = {
                 ...props,
-                style: [props.style, { fontFamily, fontWeight }],
+                style: [props.style, { fontWeight: undefined }],
               };
-            } else if (!props.style) {
+              return origJsx.apply(this, [type, props, ...rest]);
+            }
+
+            const brandFont = (globalThis as any).currentBrandFontFamily;
+            if (brandFont && brandFont !== 'System') {
               const { fontFamily, fontWeight } = getFontFamilyAndWeight(
                 brandFont,
-                undefined,
-                undefined
+                flat?.fontWeight,
+                flat?.fontSize
               );
               props = {
                 ...props,
-                style: { fontFamily, fontWeight },
+                style: props.style ? [props.style, { fontFamily, fontWeight }] : { fontFamily, fontWeight },
               };
             }
           }

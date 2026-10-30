@@ -156,6 +156,8 @@ interface BrandContextType {
   canManageBrand: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+  showBrandSavedModal: boolean;
+  setShowBrandSavedModal: (show: boolean) => void;
 }
 
 const BrandContext = createContext<BrandContextType | undefined>(undefined);
@@ -272,6 +274,7 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [canManageBrand, setCanManageBrand] = useState(false);
   const [userDarkModePreference, setUserDarkModePreference] = useState<boolean | null>(null);
+  const [showBrandSavedModal, setShowBrandSavedModal] = useState(false);
 
   // Detect if the brand's background is dark to set the overall theme mode
   const isDarkMode = brand ? isDarkColor(brand.background_color) : false;
@@ -446,6 +449,8 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
         canManageBrand,
         isDarkMode,
         toggleDarkMode,
+        showBrandSavedModal,
+        setShowBrandSavedModal,
       }}
     >
       {children}

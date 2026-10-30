@@ -107,6 +107,10 @@ export default function ClientMessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [coachProfile, setCoachProfile] = useState<any>(null);
   const [coachUserId, setCoachUserId] = useState<string | null>(null);
+  const coachUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    coachUserIdRef.current = coachUserId;
+  }, [coachUserId]);
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -364,7 +368,11 @@ export default function ClientMessagesScreen() {
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
-    if (!profile || !coachUserId) return;
+    const targetCoachId = coachUserId || coachUserIdRef.current;
+    if (!user || !targetCoachId) {
+      console.warn('[ClientChat] Cannot send media: user or coachUserId missing', { user: !!user, targetCoachId });
+      return;
+    }
     
     let parsedContent: any = {};
     try {
@@ -387,7 +395,7 @@ export default function ClientMessagesScreen() {
     const optimisticMsg: Message = {
       id: newId,
       sender_id: user?.id || '',
-      recipient_id: coachUserId,
+      recipient_id: targetCoachId,
       content: contentWithCid,
       created_at: new Date().toISOString(),
       read: false,
@@ -429,7 +437,7 @@ export default function ClientMessagesScreen() {
       const { data: insertedData, error } = await supabase.from('messages').insert({ 
         id: newId,
         sender_id: user?.id, 
-        recipient_id: coachUserId, 
+        recipient_id: targetCoachId, 
         content: finalContent, 
         read: false, 
         reply_to_id: replyId, 

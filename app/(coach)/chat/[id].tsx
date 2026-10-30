@@ -538,7 +538,11 @@ export default function CoachChatScreen() {
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
-    if (!profile || !clientUserId) return;
+    const targetClientId = clientUserId || clientUserIdRef.current;
+    if (!user || !targetClientId) {
+      console.warn('[CoachChat] Cannot send media: user or clientUserId missing', { user: !!user, targetClientId });
+      return;
+    }
     
     let parsedContent: any = {};
     try {
@@ -559,7 +563,7 @@ export default function CoachChatScreen() {
     const optimisticMsg: Message = {
       id: newId,
       sender_id: user?.id || '',
-      recipient_id: clientUserId,
+      recipient_id: targetClientId,
       content: contentWithCid,
       created_at: new Date().toISOString(),
       read: false,
@@ -608,7 +612,7 @@ export default function CoachChatScreen() {
       const { data: insertedData, error } = await supabase.from('messages').insert({ 
         id: newId,
         sender_id: user?.id, 
-        recipient_id: clientUserId, 
+        recipient_id: targetClientId, 
         content: finalContent, 
         read: false, 
         reply_to_id: replyId, 

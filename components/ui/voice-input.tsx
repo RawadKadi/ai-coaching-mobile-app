@@ -46,7 +46,22 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   const [time, setTime] = useState(0);
   const [metering, setMetering] = useState<number[]>(new Array(NUM_BARS).fill(MIN_BAR_HEIGHT));
 
-  const recorder = useAudioRecorder(RECORDING_OPTIONS);
+  const lastRecordedUrlRef = useRef<string | null>(null);
+  const recorder = useAudioRecorder(RECORDING_OPTIONS, (status) => {
+    if (status?.url) {
+      lastRecordedUrlRef.current = status.url;
+    }
+  });
+
+  const recorderRef = useRef(recorder);
+  useEffect(() => {
+    recorderRef.current = recorder;
+  }, [recorder]);
+
+  const propsRef = useRef({ onStart, onStop, onCancel, disabled });
+  useEffect(() => {
+    propsRef.current = { onStart, onStop, onCancel, disabled };
+  });
 
   // ── Refs for PanResponder closures & race-condition prevention ─────────────
   const isRecordingRef = useRef(false);
@@ -58,7 +73,6 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
   const timerRef = useRef<any>(null);
   const meteringTimerRef = useRef<any>(null);
-  const holdTimerRef = useRef<any>(null);
   const timeRef = useRef(0);
   const isMountedRef = useRef(true);
   const envRef = useRef(0);
@@ -76,10 +90,9 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       isMountedRef.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
       if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
-      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
       if (isRecordingRef.current) {
         try {
-          recorder.stop().catch(() => {});
+          recorderRef.current.stop().catch(() => {});
         } catch {}
       }
     };
@@ -90,9 +103,10 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
   // ── Recording start / stop ────────────────────────────────────────────────
   const startRecording = async () => {
-    if (disabled || isRecordingRef.current || isStartingRef.current) return;
+    if (propsRef.current.disabled || isRecordingRef.current || isStartingRef.current) return;
     isStartingRef.current = true;
     pendingActionRef.current = null;
+    lastRecordedUrlRef.current = null;
     startTimeRef.current = Date.now();
 
     isRecordingRef.current = true;
@@ -105,7 +119,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     } catch {}
 
     // Notify parent immediately so controls fade out seamlessly
-    onStart?.();
+    propsRef.current.onStart?.();
 
     try {
       const perm = await getRecordingPermissionsAsync();
@@ -118,8 +132,8 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       }
 
       try {
-        if (recorder.isRecording) {
-          await recorder.stop();
+        if (recorderRef.current.isRecording) {
+          await recorderRef.current.stop();
         }
       } catch {}
 
@@ -131,12 +145,12 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
         });
       } catch {}
 
-      await recorder.prepareToRecordAsync();
-      recorder.record();
+      await recorderRef.current.prepareToRecordAsync();
+      recorderRef.current.record();
 
       if (!isMountedRef.current) {
         try {
-          recorder.stop().catch(() => {});
+          recorderRef.current.stop().catch(() => {});
         } catch {}
         return;
       }
@@ -159,12 +173,13 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       meteringTimerRef.current = setInterval(() => {
         if (!isMountedRef.current) return;
         try {
-          const st = recorder.getStatus();
+          const rec = recorderRef.current;
+          const st = rec?.getStatus ? rec.getStatus() : null;
           let rawLevel = 0;
           if (st && typeof st.metering === 'number' && !isNaN(st.metering) && st.metering > -100) {
             const clamped = Math.max(-48, Math.min(-8, st.metering));
             rawLevel = (clamped - (-48)) / 40;
-          } else if (recorder.isRecording) {
+          } else if (rec?.isRecording) {
             const t = (Date.now() - startTimeRef.current) / 1000;
             const synth = 0.5 * Math.sin(t * 9) + 0.3 * Math.sin(t * 14) + 0.2 * Math.sin(t * 22);
             rawLevel = Math.max(0, 0.12 + 0.16 * synth);
@@ -203,7 +218,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
     let wasRecording = isRecordingRef.current;
     if (!wasRecording) {
       try {
-        wasRecording = !!recorder.isRecording;
+        wasRecording = !!recorderRef.current?.isRecording;
       } catch {
         wasRecording = false;
       }
@@ -218,35 +233,71 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
     const elapsedMs = Date.now() - startTimeRef.current;
     const durationSeconds = Math.max(1, Math.round(elapsedMs / 1000));
+    const recordedTime = timeRef.current;
     reset();
 
     try {
-      let isRec = false;
-      try {
-        isRec = !!recorder.isRecording;
-      } catch {
-        isRec = false;
+      let uri = lastRecordedUrlRef.current;
+      if (!uri) {
+        try {
+          const rec = recorderRef.current as any;
+          const raw = rec?.uri || rec?.url;
+          if (raw && typeof raw === 'string' && raw.trim().length > 0) {
+            uri = raw;
+          }
+        } catch {}
+      }
+      if (!uri && recorderRef.current?.getStatus) {
+        try {
+          uri = recorderRef.current.getStatus()?.url || null;
+        } catch {}
       }
 
-      if (isRec) {
-        await recorder.stop();
-        let uri = null;
-        try {
-          uri = recorder.uri;
-        } catch {}
+      try {
+        await recorderRef.current.stop();
+      } catch (err) {
+        console.warn('[VoiceInput] recorder.stop error:', err);
+      }
 
-        // Only send if duration was at least 500ms (avoids accidental quick-tap noise)
-        if (shouldSend && uri && elapsedMs >= 500) {
-          onStop?.(uri, durationSeconds);
-        } else {
-          onCancel?.();
-        }
+      // Check again after stop completes
+      if (!uri) {
+        uri = lastRecordedUrlRef.current;
+      }
+      if (!uri) {
+        try {
+          const rec = recorderRef.current as any;
+          const raw = rec?.uri || rec?.url;
+          if (raw && typeof raw === 'string' && raw.trim().length > 0) {
+            uri = raw;
+          }
+        } catch {}
+      }
+      if (!uri && recorderRef.current?.getStatus) {
+        try {
+          uri = recorderRef.current.getStatus()?.url || null;
+        } catch {}
+      }
+
+      // If still not available immediately, brief wait for file buffer flush
+      if (!uri) {
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        uri = lastRecordedUrlRef.current || (recorderRef.current as any)?.uri || (recorderRef.current as any)?.url || recorderRef.current?.getStatus()?.url || null;
+      }
+
+      console.log('[VoiceInput] stopRecording finished stop. uri:', uri, 'elapsedMs:', elapsedMs, 'shouldSend:', shouldSend);
+
+      // Directly send upon release if held more than 0.5 seconds; quick taps (<0.5s) are cancelled
+      const isAboveHalfSec = elapsedMs >= 500 || durationSeconds >= 1 || recordedTime >= 1;
+      if (shouldSend && uri && isAboveHalfSec) {
+        console.log('[VoiceInput] Calling onStop callback with uri:', uri, 'duration:', durationSeconds);
+        propsRef.current.onStop?.(uri, durationSeconds);
       } else {
-        onCancel?.();
+        console.log('[VoiceInput] Calling onCancel callback. shouldSend:', shouldSend, 'uriExists:', !!uri, 'isAboveHalfSec:', isAboveHalfSec);
+        propsRef.current.onCancel?.();
       }
     } catch (e) {
       console.error('stopRecording error', e);
-      onCancel?.();
+      propsRef.current.onCancel?.();
     }
 
     // Release audio session back to normal mode
@@ -277,34 +328,38 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   };
 
   const handleFingerRelease = (dx: number = 0) => {
+    console.log('[VoiceInput] handleFingerRelease called. dx:', dx, 'isLocked:', isLockedRef.current, 'isStarting:', isStartingRef.current, 'isRecording:', isRecordingRef.current);
     isPressedRef.current = false;
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-      reset();
-      return;
-    }
 
     // If locked into hands-free mode, releasing finger does nothing
-    if (isLockedRef.current) return;
+    if (isLockedRef.current) {
+      console.log('[VoiceInput] handleFingerRelease ignored because isLocked is true');
+      return;
+    }
 
     // If still in async initialization phase, queue action
     if (isStartingRef.current) {
-      pendingActionRef.current = dx < -50 ? 'cancel' : 'stop';
+      console.log('[VoiceInput] handleFingerRelease queuing pending action because isStarting is true');
+      pendingActionRef.current = dx < -70 ? 'cancel' : 'stop';
       return;
     }
 
-    if (!isRecordingRef.current) return;
+    if (!isRecordingRef.current) {
+      console.log('[VoiceInput] handleFingerRelease ignored because isRecording is false');
+      return;
+    }
 
-    if (dx < -50) {
+    if (dx < -70) {
+      console.log('[VoiceInput] handleFingerRelease: cancelling due to dx < -70');
       stopRecording(false); // cancelled
     } else {
+      console.log('[VoiceInput] handleFingerRelease: stopping and sending');
       stopRecording(true); // send
     }
   };
 
   const handleDragMove = (dx: number, dy: number) => {
-    if (disabled || isLockedRef.current) return;
+    if (propsRef.current.disabled || isLockedRef.current) return;
     if (!isPressedRef.current && !isRecordingRef.current) return;
 
     // Slide left → cancel drag
@@ -316,13 +371,14 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
     // Slide up → track lock drag
     if (dy < 0) {
-      lockDragY.value = Math.max(-45, dy * 0.5);
+      lockDragY.value = Math.max(-50, dy * 0.5);
     } else {
       lockDragY.value = withTiming(0, { duration: 100 });
     }
 
-    // Trigger lock if slid up past threshold (-35px)
-    if (dy <= -35) {
+    // Trigger lock if deliberately slid up past threshold (-65px towards lock icon)
+    if (dy <= -65) {
+      console.log('[VoiceInput] handleDragMove: Lock triggered! dy:', dy);
       isLockedRef.current = true;
       setIsLocked(true);
       lockDragY.value = withTiming(0);
@@ -335,6 +391,7 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
 
     // Trigger cancel if slid left past threshold (-70px)
     if (dx <= -70) {
+      console.log('[VoiceInput] handleDragMove: Cancel triggered! dx:', dx);
       stopRecording(false);
     }
   };
@@ -342,17 +399,19 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
   // ── PanResponder for WhatsApp-style Hold & Slide ─────────────────────────
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onStartShouldSetPanResponderCapture: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponderCapture: () => !disabled,
+      onStartShouldSetPanResponder: () => !propsRef.current.disabled,
+      onStartShouldSetPanResponderCapture: () => !propsRef.current.disabled,
+      onMoveShouldSetPanResponder: () => !propsRef.current.disabled,
+      onMoveShouldSetPanResponderCapture: () => !propsRef.current.disabled,
+      onPanResponderTerminationRequest: () => !isPressedRef.current && !isRecordingRef.current,
 
       onPanResponderGrant: (evt) => {
-        if (disabled) return;
+        console.log('[VoiceInput] onPanResponderGrant');
+        if (propsRef.current.disabled) return;
         isPressedRef.current = true;
-        const pageX = evt.nativeEvent?.pageX ?? (evt.nativeEvent as any)?.clientX ?? 0;
-        const pageY = evt.nativeEvent?.pageY ?? (evt.nativeEvent as any)?.clientY ?? 0;
-        startPosRef.current = { x: pageX, y: pageY };
+        const clientX = (evt.nativeEvent as any)?.clientX ?? evt.nativeEvent?.pageX ?? 0;
+        const clientY = (evt.nativeEvent as any)?.clientY ?? evt.nativeEvent?.pageY ?? 0;
+        startPosRef.current = { x: clientX, y: clientY };
 
         // Attach window listeners on Web for continuous drag tracking outside button bounds
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -388,12 +447,14 @@ export function VoiceInput({ onStart, onStop, onCancel, theme, disabled, style }
       },
 
       onPanResponderRelease: (_, gs) => {
+        console.log('[VoiceInput] onPanResponderRelease, gs.dx:', gs.dx, 'gs.dy:', gs.dy);
         handleFingerRelease(gs.dx);
       },
 
-      onPanResponderTerminate: () => {
+      onPanResponderTerminate: (_, gs) => {
+        console.log('[VoiceInput] onPanResponderTerminate, gs?.dx:', gs?.dx);
         if (!isLockedRef.current) {
-          handleFingerRelease(0);
+          handleFingerRelease(gs?.dx || 0);
         }
       },
     })

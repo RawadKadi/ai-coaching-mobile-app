@@ -13,6 +13,7 @@ import { UnreadProvider } from '@/contexts/UnreadContext';
 import { NotificationProvider, useNotification } from '@/contexts/NotificationContext';
 import { TabBarScrollProvider } from '@/contexts/TabBarScrollContext';
 import NotificationToast from '@/components/NotificationToast';
+import BrandSavedModal from '@/components/BrandSavedModal';
 import { loadNotificationSound, unloadNotificationSound } from '@/lib/notification-sound';
 import SessionMonitor from '@/components/SessionMonitor';
 import TeamInvitationMonitor from '@/components/TeamInvitationMonitor';
@@ -63,6 +64,7 @@ function RootLayoutNav() {
       </Stack>
       <StatusBar style="auto" />
       <NotificationToastWrapper />
+      <BrandSavedModal />
     </>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
   Modal,
   Platform,
+  BackHandler,
+  Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -103,7 +105,7 @@ type ViewMode = 'overview' | 'identity' | 'colors' | 'font';
 
 export default function BrandSettingsScreen() {
   const router = useRouter();
-  const { brand, canManageBrand, updateBrandSettings, refreshBrand } = useBrand();
+  const { brand, canManageBrand, updateBrandSettings, refreshBrand, setShowBrandSavedModal } = useBrand();
   const currentTheme = useTheme();
   const { coach } = useAuth();
   const insets = useSafeAreaInsets();
@@ -130,6 +132,11 @@ export default function BrandSettingsScreen() {
   const [backgroundColor, setBackgroundColor] = useState('#010417');
   const [selectedPreset, setSelectedPreset] = useState<string | null>('deepNavy');
 
+  // Animated background fade-in transition
+  const [prevBgColor, setPrevBgColor] = useState('#010417');
+  const [targetBgColor, setTargetBgColor] = useState('#010417');
+  const fadeBgAnim = useRef(new Animated.Value(1)).current;
+
   // Form state - Typography
   const [fontFamily, setFontFamily] = useState('System');
   const [headingWeight, setHeadingWeight] = useState('700');
@@ -149,19 +156,48 @@ export default function BrandSettingsScreen() {
   const [darkAccentColor, setDarkAccentColor] = useState('');
   const [darkBackgroundColor, setDarkBackgroundColor] = useState('');
 
+  // Initial brand snapshot for detecting unsaved changes
+  const initialValues = useRef<{
+    brandName: string;
+    logoUrl: string;
+    primaryColor: string;
+    secondaryColor: string;
+    accentColor: string;
+    backgroundColor: string;
+    fontFamily: string;
+    headingWeight: string;
+    bodyWeight: string;
+    fontScale: number;
+    selectedPreset: string | null;
+  } | null>(null);
+
   // Load brand data
   useEffect(() => {
     if (brand) {
-      setBrandName(brand.name || '');
-      setLogoUrl(brand.logo_url || '');
-      setPrimaryColor(brand.primary_color || '#7FA7FF');
-      setSecondaryColor(brand.secondary_color || '#10B981');
-      setAccentColor(brand.accent_color || '#F59E0B');
-      setBackgroundColor(brand.background_color || '#010417');
-      setFontFamily(brand.font_family || 'System');
-      setHeadingWeight(brand.heading_font_weight || '700');
-      setBodyWeight(brand.body_font_weight || '400');
-      setFontScale(brand.font_scale || 1.0);
+      const bName = brand.name || '';
+      const bLogo = brand.logo_url || '';
+      const bPrimary = brand.primary_color || '#7FA7FF';
+      const bSecondary = brand.secondary_color || '#10B981';
+      const bAccent = brand.accent_color || '#F59E0B';
+      const bBg = brand.background_color || '#010417';
+      const bFont = brand.font_family || 'System';
+      const bHeading = brand.heading_font_weight || '700';
+      const bBody = brand.body_font_weight || '400';
+      const bScale = brand.font_scale || 1.0;
+
+      setBrandName(bName);
+      setLogoUrl(bLogo);
+      setPrimaryColor(bPrimary);
+      setSecondaryColor(bSecondary);
+      setAccentColor(bAccent);
+      setBackgroundColor(bBg);
+      setPrevBgColor(bBg);
+      setTargetBgColor(bBg);
+      fadeBgAnim.setValue(1);
+      setFontFamily(bFont);
+      setHeadingWeight(bHeading);
+      setBodyWeight(bBody);
+      setFontScale(bScale);
       setButtonShape(brand.button_shape || 'rounded');
       setButtonStyle(brand.button_style || 'flat');
       setButtonShadow(brand.button_shadow_enabled ?? false);
@@ -177,16 +213,50 @@ export default function BrandSettingsScreen() {
       // Check matching preset
       const match = Object.entries(PRESET_THEMES).find(
         ([_, p]) =>
-          p.primary_color.toLowerCase() === (brand.primary_color || '').toLowerCase() &&
-          p.background_color.toLowerCase() === (brand.background_color || '').toLowerCase()
+          p.primary_color.toLowerCase() === bPrimary.toLowerCase() &&
+          p.background_color.toLowerCase() === bBg.toLowerCase()
       );
-      if (match) {
-        setSelectedPreset(match[0]);
-      } else {
-        setSelectedPreset(null);
-      }
+      const matchedPreset = match ? match[0] : null;
+      setSelectedPreset(matchedPreset);
+
+      initialValues.current = {
+        brandName: bName,
+        logoUrl: bLogo,
+        primaryColor: bPrimary,
+        secondaryColor: bSecondary,
+        accentColor: bAccent,
+        backgroundColor: bBg,
+        fontFamily: bFont,
+        headingWeight: bHeading,
+        bodyWeight: bBody,
+        fontScale: bScale,
+        selectedPreset: matchedPreset,
+      };
     }
   }, [brand]);
+
+  // Determine if any settings have been modified compared to initial snapshot
+  const hasChanges = useMemo(() => {
+    const init = initialValues.current;
+    if (!init) return false;
+    return (
+      (brandName || '').trim() !== init.brandName.trim() ||
+      (logoUrl || '') !== init.logoUrl ||
+      primaryColor.toLowerCase() !== init.primaryColor.toLowerCase() ||
+      secondaryColor.toLowerCase() !== init.secondaryColor.toLowerCase() ||
+      accentColor.toLowerCase() !== init.accentColor.toLowerCase() ||
+      backgroundColor.toLowerCase() !== init.backgroundColor.toLowerCase() ||
+      (fontFamily || 'System') !== init.fontFamily
+    );
+  }, [
+    brandName,
+    logoUrl,
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    backgroundColor,
+    fontFamily,
+  ]);
 
   // Dynamic Contrast calculation: white text on dark bg, dark text on light bg
   const isDark = isDarkColor(backgroundColor);
@@ -352,6 +422,20 @@ export default function BrandSettingsScreen() {
     const preset = PRESET_THEMES[presetKey];
     if (!preset) return;
 
+    if (preset.background_color.toLowerCase() !== backgroundColor.toLowerCase()) {
+      fadeBgAnim.stopAnimation();
+      setPrevBgColor(backgroundColor);
+      setTargetBgColor(preset.background_color);
+      fadeBgAnim.setValue(0);
+      Animated.timing(fadeBgAnim, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }).start(() => {
+        setPrevBgColor(preset.background_color);
+      });
+    }
+
     setSelectedPreset(presetKey);
     setPrimaryColor(preset.primary_color);
     setSecondaryColor(preset.secondary_color);
@@ -380,6 +464,19 @@ export default function BrandSettingsScreen() {
         setAccentColor(color);
         break;
       case 'background':
+        if (color.toLowerCase() !== backgroundColor.toLowerCase()) {
+          fadeBgAnim.stopAnimation();
+          setPrevBgColor(backgroundColor);
+          setTargetBgColor(color);
+          fadeBgAnim.setValue(0);
+          Animated.timing(fadeBgAnim, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true,
+          }).start(() => {
+            setPrevBgColor(color);
+          });
+        }
         setBackgroundColor(color);
         break;
     }
@@ -424,10 +521,26 @@ export default function BrandSettingsScreen() {
       if (success) {
         await refreshBrand();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Saved', 'Brand settings updated successfully.');
+        initialValues.current = {
+          brandName,
+          logoUrl: logoUrl || '',
+          primaryColor,
+          secondaryColor,
+          accentColor,
+          backgroundColor,
+          fontFamily: fontFamily || 'System',
+          headingWeight: headingWeight || '700',
+          bodyWeight: bodyWeight || '400',
+          fontScale: fontScale || 1.0,
+          selectedPreset,
+        };
         if (currentView !== 'overview') {
           setCurrentView('overview');
         }
+        safeBack('/(coach)/(tabs)/profile');
+        setTimeout(() => {
+          setShowBrandSavedModal(true);
+        }, 180);
       } else {
         Alert.alert('Save Failed', 'Could not update brand settings. Please try again.');
       }
@@ -439,14 +552,67 @@ export default function BrandSettingsScreen() {
     }
   };
 
-  const handleBack = () => {
+  const handleDiscard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (initialValues.current) {
+      const init = initialValues.current;
+      setBrandName(init.brandName);
+      setLogoUrl(init.logoUrl);
+      setPrimaryColor(init.primaryColor);
+      setSecondaryColor(init.secondaryColor);
+      setAccentColor(init.accentColor);
+      setBackgroundColor(init.backgroundColor);
+      setPrevBgColor(init.backgroundColor);
+      setTargetBgColor(init.backgroundColor);
+      fadeBgAnim.setValue(1);
+      setFontFamily(init.fontFamily);
+      setHeadingWeight(init.headingWeight);
+      setBodyWeight(init.bodyWeight);
+      setFontScale(init.fontScale);
+      setSelectedPreset(init.selectedPreset);
+
+      (globalThis as any).currentBrandFontFamily = init.fontFamily;
+      (globalThis as any).currentBrandHeadingWeight = init.headingWeight;
+      (globalThis as any).currentBrandBodyWeight = init.bodyWeight;
+    }
+    safeBack('/(coach)/(tabs)/profile');
+  }, []);
+
+  const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (currentView === 'overview') {
+      if (hasChanges) {
+        Alert.alert(
+          'Discard Changes?',
+          'You have unsaved changes.',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: 'Discard',
+              style: 'destructive',
+              onPress: handleDiscard,
+            },
+          ]
+        );
+        return;
+      }
       safeBack('/(coach)/(tabs)/profile');
     } else {
       setCurrentView('overview');
     }
-  };
+  }, [currentView, hasChanges, handleDiscard]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [handleBack]);
 
   // Header Titles based on active view
   const headerInfo = useMemo(() => {
@@ -463,7 +629,19 @@ export default function BrandSettingsScreen() {
   }, [currentView]);
 
   return (
-    <View style={[styles.screen, { backgroundColor }]}>
+    <View style={styles.screen}>
+      {/* Animated Fade-in Background Layers */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: prevBgColor }]} />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: targetBgColor,
+            opacity: fadeBgAnim,
+          },
+        ]}
+      />
+
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* Top Header - Matches Analytics Overview Header Pattern */}
@@ -856,9 +1034,41 @@ export default function BrandSettingsScreen() {
                       )}
 
                       <View style={styles.presetDotsWrap}>
-                        <View style={[styles.presetMiniDot, { backgroundColor: preset.primary_color }]} />
-                        <View style={[styles.presetMiniDot, { backgroundColor: preset.secondary_color }]} />
-                        <View style={[styles.presetMiniDot, { backgroundColor: preset.background_color, borderColor: cardBorder, borderWidth: 1 }]} />
+                        <View
+                          style={[
+                            styles.presetMiniDot,
+                            {
+                              backgroundColor: preset.primary_color,
+                              borderColor: inputBg,
+                              zIndex: 1,
+                            },
+                          ]}
+                        />
+                        <View
+                          style={[
+                            styles.presetMiniDot,
+                            {
+                              backgroundColor: preset.secondary_color,
+                              borderColor: inputBg,
+                              marginLeft: -8,
+                              zIndex: 2,
+                            },
+                          ]}
+                        />
+                        <View
+                          style={[
+                            styles.presetMiniDot,
+                            {
+                              backgroundColor: preset.background_color,
+                              borderColor:
+                                preset.background_color.toLowerCase() === '#ffffff' && !isDark
+                                  ? cardBorder
+                                  : inputBg,
+                              marginLeft: -8,
+                              zIndex: 3,
+                            },
+                          ]}
+                        />
                       </View>
 
                       <Text style={[styles.presetCardName, { color: textColor }]} numberOfLines={1}>
@@ -955,6 +1165,15 @@ export default function BrandSettingsScreen() {
               <View style={styles.fontsList}>
                 {AVAILABLE_FONTS.map((font) => {
                   const isSelected = (fontFamily || 'System') === font.name;
+                  const isSystem = font.name === 'System';
+                  const itemTitleFont = getFontFamily(font.name, '700');
+                  const itemPreviewFont = getFontFamily(
+                    font.name,
+                    font.name === 'Raleway' || font.name === 'Outfit' || font.name === 'Montserrat'
+                      ? '500'
+                      : '400'
+                  );
+
                   return (
                     <TouchableOpacity
                       key={font.name}
@@ -970,24 +1189,26 @@ export default function BrandSettingsScreen() {
                     >
                       <View style={styles.fontOptionInfo}>
                         <Text
+                          preserveFont={true}
                           style={[
                             styles.fontOptionName,
                             {
                               color: isSelected ? primaryColor : textColor,
-                              fontFamily: getFontFamily(font.name, '700'),
-                              fontWeight: undefined,
+                              fontFamily: itemTitleFont,
+                              fontWeight: isSystem ? '700' : undefined,
                             },
                           ]}
                         >
                           {font.name}
                         </Text>
                         <Text
+                          preserveFont={true}
                           style={[
                             styles.fontOptionPreview,
                             {
                               color: textSecondary,
-                              fontFamily: getFontFamily(font.name, font.name === 'Raleway' || font.name === 'Outfit' ? '500' : '400'),
-                              fontWeight: undefined,
+                              fontFamily: itemPreviewFont,
+                              fontWeight: isSystem ? '400' : undefined,
                             },
                           ]}
                         >
@@ -1666,12 +1887,13 @@ const styles = StyleSheet.create({
   },
   presetDotsWrap: {
     flexDirection: 'row',
-    gap: -6,
+    alignItems: 'center',
   },
   presetMiniDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
   },
   presetCardName: {
     fontSize: 13,

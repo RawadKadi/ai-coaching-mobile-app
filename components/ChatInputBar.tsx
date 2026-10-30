@@ -323,10 +323,16 @@ export function ChatInputBar({
     }
   };
 
+  const onSendMediaRef = useRef(onSendMedia);
+  React.useEffect(() => {
+    onSendMediaRef.current = onSendMedia;
+  }, [onSendMedia]);
+
   const handleVoiceStop = async (uri: string, duration: number) => {
+    console.log('[ChatInputBar] handleVoiceStop called with uri:', uri, 'duration:', duration);
     setIsVoiceRecording(false);
     // Notify parent immediately with local info
-    await onSendMedia(JSON.stringify({
+    await onSendMediaRef.current(JSON.stringify({
       type: 'audio',
       url: uri, // Use local URI optimistically
       duration: duration,
@@ -339,10 +345,12 @@ export function ChatInputBar({
   };
 
   const handleVoiceStart = () => {
+    console.log('[ChatInputBar] handleVoiceStart called');
     setIsVoiceRecording(true);
   };
 
   const handleVoiceCancel = () => {
+    console.log('[ChatInputBar] handleVoiceCancel called');
     setIsVoiceRecording(false);
   };
 

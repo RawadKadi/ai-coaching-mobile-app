@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, PanResponder } from 'react-native';
 import { MessageCircle } from 'lucide-react-native';
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrand } from '@/contexts/BrandContext';
+import { isDarkColor, hexToRGB } from '@/lib/theme-utils';
+import { getFontFamily } from '@/hooks/useAppFonts';
 import { BlurView } from 'expo-blur';
 
 interface NotificationToastProps {
@@ -19,7 +21,36 @@ export default function NotificationToast({
   onDismiss,
   duration = 5000,
 }: NotificationToastProps) {
-  const colors = useBrandColors();
+  const { brand, theme } = useBrand();
+  const colors = theme.colors;
+  const typography = theme.typography;
+
+  const isDark = isDarkColor(colors.surface || colors.background || '#0F172A');
+  const surfaceBase = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const surfaceRgb = hexToRGB(surfaceBase);
+
+  // Background and border adapting to brand theme
+  const toastBg = isDark
+    ? `rgba(${surfaceRgb.r}, ${surfaceRgb.g}, ${surfaceRgb.b}, 0.82)`
+    : `rgba(${surfaceRgb.r}, ${surfaceRgb.g}, ${surfaceRgb.b}, 0.92)`;
+
+  const borderColor = isDark
+    ? 'rgba(255, 255, 255, 0.12)'
+    : 'rgba(0, 0, 0, 0.08)';
+
+  // Shape adapting to brand settings (square, rounded, pill)
+  const borderRadius =
+    brand?.button_shape === 'square' ? 14 : brand?.button_shape === 'rounded' ? 20 : 26;
+  const iconBorderRadius = brand?.button_shape === 'square' ? 12 : 22;
+
+  // Typography adapting to brand settings
+  const headingFont = getFontFamily(typography?.fontFamily || 'System', 'bold');
+  const bodyFont = getFontFamily(typography?.fontFamily || 'System', 'regular');
+  const mediumFont = getFontFamily(typography?.fontFamily || 'System', 'medium');
+
+  // Pill and action styling
+  const actionPillBg = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+  const actionTextColor = isDark ? 'rgba(255, 255, 255, 0.55)' : 'rgba(15, 23, 42, 0.5)';
 
   const slideAnim = useRef(new Animated.Value(-150)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -124,38 +155,114 @@ export default function NotificationToast({
       ]}
     >
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={0.85}
         onPress={handlePress}
         style={{ width: '100%' }}
       >
         <BlurView
-          intensity={40}
-          tint="dark"
-          style={[styles.blurContainer, { borderColor: 'rgba(255,255,255,0.1)' }]}
+          intensity={Platform.OS === 'ios' ? 45 : 85}
+          tint={isDark ? 'dark' : 'light'}
+          style={[
+            styles.blurContainer,
+            {
+              borderRadius,
+              backgroundColor: toastBg,
+              borderColor,
+              shadowColor: isDark ? '#000000' : (colors.primary || '#000000'),
+              shadowOpacity: isDark ? 0.35 : 0.12,
+              shadowRadius: isDark ? 20 : 16,
+              elevation: isDark ? 10 : 6,
+            },
+          ]}
         >
-          {/* Subtle gradient glow overlay */}
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.primary, opacity: 0.03 }]} />
-          
-          <View style={[styles.iconContainer, { backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}40`, borderWidth: 1 }]}>
+          {/* Subtle brand glow overlay */}
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: colors.primary, opacity: isDark ? 0.05 : 0.03 },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.iconContainer,
+              {
+                backgroundColor: `${colors.primary}18`,
+                borderColor: `${colors.primary}35`,
+                borderWidth: 1,
+                borderRadius: iconBorderRadius,
+              },
+            ]}
+          >
             <MessageCircle size={20} color={colors.primary} />
           </View>
-          
+
           <View style={styles.content}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                <Text style={styles.senderName}>{senderName}</Text>
-                <Text style={styles.nowText}>now</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 2,
+              }}
+            >
+              <Text
+                style={[
+                  styles.senderName,
+                  {
+                    color: colors.text,
+                    fontFamily: headingFont,
+                    fontWeight: (typography?.headingWeight as any) || '800',
+                  },
+                ]}
+              >
+                {senderName}
+              </Text>
+              <Text
+                style={[
+                  styles.nowText,
+                  {
+                    color:
+                      colors.textTertiary ||
+                      (isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(15, 23, 42, 0.4)'),
+                    fontFamily: mediumFont,
+                  },
+                ]}
+              >
+                now
+              </Text>
             </View>
-            <Text style={styles.message} numberOfLines={2}>
+            <Text
+              style={[
+                styles.message,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: bodyFont,
+                  fontWeight: (typography?.bodyWeight as any) || '500',
+                },
+              ]}
+              numberOfLines={2}
+            >
               {message}
             </Text>
           </View>
         </BlurView>
-        
+
         {/* Helper Action Text Below */}
         <View style={styles.actionContainer}>
-            <View style={styles.actionPill}>
-               <Text style={styles.action}>Swipe up to dismiss</Text>
-            </View>
+          <View style={[styles.actionPill, { backgroundColor: actionPillBg }]}>
+            <Text
+              style={[
+                styles.action,
+                {
+                  color: actionTextColor,
+                  fontFamily: mediumFont,
+                },
+              ]}
+            >
+              Swipe up to dismiss
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -172,23 +279,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   blurContainer: {
-    borderRadius: 24,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    shadowOffset: { width: 0, height: 8 },
   },
   iconContainer: {
     width: 44,
     height: 44,
-    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -199,37 +299,31 @@ const styles = StyleSheet.create({
   },
   senderName: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   nowText: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   message: {
     fontSize: 13,
     lineHeight: 18,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '500',
   },
   actionContainer: {
-      marginTop: 8,
-      alignItems: 'center',
+    marginTop: 8,
+    alignItems: 'center',
   },
   actionPill: {
-      backgroundColor: 'rgba(255,255,255,0.1)',
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   action: {
     fontSize: 10,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.5)',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
 });
+

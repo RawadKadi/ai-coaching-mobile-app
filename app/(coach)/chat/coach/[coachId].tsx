@@ -77,6 +77,10 @@ export default function CoachToCoachChat() {
     fullName: string;
     avatarUrl: string;
   }>();
+  const paramUserIdRef = useRef<string | null>(paramUserId || null);
+  useEffect(() => {
+    paramUserIdRef.current = paramUserId || null;
+  }, [paramUserId]);
   const router = useRouter();
   const { user, profile } = useAuth();
   const theme = useTheme();
@@ -331,7 +335,11 @@ export default function CoachToCoachChat() {
   };
 
   const handleSendMedia = async (jsonContent: string, replyId?: string) => {
-    if (!profile || !paramUserId) return;
+    const targetUserId = paramUserId || paramUserIdRef.current;
+    if (!user || !targetUserId) {
+      console.warn('[CoachCoachChat] Cannot send media: user or targetUserId missing', { user: !!user, targetUserId });
+      return;
+    }
     
     let parsedContent: any = {};
     try {
@@ -354,7 +362,7 @@ export default function CoachToCoachChat() {
     const optimisticMsg: Message = {
       id: newId,
       sender_id: user?.id || '',
-      recipient_id: paramUserId,
+      recipient_id: targetUserId,
       content: contentWithCid,
       created_at: new Date().toISOString(),
       read: false,
@@ -407,7 +415,7 @@ export default function CoachToCoachChat() {
       const { data: insertedData, error } = await supabase.from('messages').insert({ 
         id: newId,
         sender_id: user?.id, 
-        recipient_id: paramUserId, 
+        recipient_id: targetUserId, 
         content: finalContent, 
         read: false, 
         reply_to_id: replyId, 

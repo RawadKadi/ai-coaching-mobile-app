@@ -7,4 +7,11 @@ declare global {
   }
 }
 
+declare module 'react-native' {
+  interface TextProps {
+    preserveFont?: boolean;
+  }
+}
+
 export {};
+
