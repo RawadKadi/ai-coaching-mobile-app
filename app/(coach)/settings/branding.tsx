@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from 'react';
 import {
   View,
   Text,
@@ -46,6 +52,15 @@ import { AVAILABLE_FONTS, getFontFamily } from '@/hooks/useAppFonts';
 import { safeBack } from '@/lib/navigation-utils';
 
 // Preset themes (colors & palettes)
+const INITIAL_PRESET_KEYS = [
+  'modernBlue',
+  'deepNavy',
+  'cleanLight',
+  'energeticOrange',
+  'calmGreen',
+  'premiumPurple',
+];
+
 const PRESET_THEMES: Record<
   string,
   {
@@ -60,21 +75,21 @@ const PRESET_THEMES: Record<
   modernBlue: {
     name: 'Modern Blue',
     primary_color: '#2563EB',
-    secondary_color: '#10B981',
+    secondary_color: '#3B82F6',
     accent_color: '#F59E0B',
     background_color: '#0B132B',
   },
   deepNavy: {
     name: 'Deep Navy',
     primary_color: '#7FA7FF',
-    secondary_color: '#10B981',
+    secondary_color: '#818CF8',
     accent_color: '#F59E0B',
     background_color: '#010417',
   },
   cleanLight: {
     name: 'Clean Light',
     primary_color: '#2563EB',
-    secondary_color: '#059669',
+    secondary_color: '#3B82F6',
     accent_color: '#D97706',
     background_color: '#F8FAFB',
   },
@@ -99,13 +114,229 @@ const PRESET_THEMES: Record<
     accent_color: '#F59E0B',
     background_color: '#170E2B',
   },
+  midnightGold: {
+    name: 'Midnight Gold',
+    primary_color: '#F59E0B',
+    secondary_color: '#FB923C',
+    accent_color: '#3B82F6',
+    background_color: '#0F172A',
+  },
+  crimsonPower: {
+    name: 'Crimson Power',
+    primary_color: '#EF4444',
+    secondary_color: '#F97316',
+    accent_color: '#EAB308',
+    background_color: '#180909',
+  },
+  oceanTeal: {
+    name: 'Ocean Teal',
+    primary_color: '#14B8A6',
+    secondary_color: '#0EA5E9',
+    accent_color: '#F59E0B',
+    background_color: '#042F2E',
+  },
+  arcticWhite: {
+    name: 'Arctic White',
+    primary_color: '#0EA5E9',
+    secondary_color: '#38BDF8',
+    accent_color: '#F59E0B',
+    background_color: '#FFFFFF',
+  },
+  forestDark: {
+    name: 'Forest Dark',
+    primary_color: '#22C55E',
+    secondary_color: '#14B8A6',
+    accent_color: '#EAB308',
+    background_color: '#052E16',
+  },
+  sunsetCoral: {
+    name: 'Sunset Coral',
+    primary_color: '#F43F5E',
+    secondary_color: '#FB923C',
+    accent_color: '#FACC15',
+    background_color: '#1F1218',
+  },
+  slateBlue: {
+    name: 'Slate Blue',
+    primary_color: '#38BDF8',
+    secondary_color: '#818CF8',
+    accent_color: '#F472B6',
+    background_color: '#0F172A',
+  },
+  royalIndigo: {
+    name: 'Royal Indigo',
+    primary_color: '#6366F1',
+    secondary_color: '#818CF8',
+    accent_color: '#F59E0B',
+    background_color: '#0E0F2C',
+  },
+  emeraldLight: {
+    name: 'Emerald Light',
+    primary_color: '#059669',
+    secondary_color: '#0284C7',
+    accent_color: '#D97706',
+    background_color: '#F0FDF4',
+  },
+  electricLime: {
+    name: 'Electric Lime',
+    primary_color: '#84CC16',
+    secondary_color: '#10B981',
+    accent_color: '#06B6D4',
+    background_color: '#141A08',
+  },
+  charcoalRed: {
+    name: 'Charcoal Red',
+    primary_color: '#F87171',
+    secondary_color: '#FB923C',
+    accent_color: '#FBBF24',
+    background_color: '#18181B',
+  },
+  warmSand: {
+    name: 'Warm Sand',
+    primary_color: '#D97706',
+    secondary_color: '#F59E0B',
+    accent_color: '#2563EB',
+    background_color: '#FAF8F5',
+  },
+  neonPink: {
+    name: 'Neon Pink',
+    primary_color: '#EC4899',
+    secondary_color: '#8B5CF6',
+    accent_color: '#06B6D4',
+    background_color: '#1E0B18',
+  },
+  cobaltNight: {
+    name: 'Cobalt Night',
+    primary_color: '#3B82F6',
+    secondary_color: '#06B6D4',
+    accent_color: '#10B981',
+    background_color: '#090D16',
+  },
+  mintFresh: {
+    name: 'Mint Fresh',
+    primary_color: '#10B981',
+    secondary_color: '#34D399',
+    accent_color: '#F59E0B',
+    background_color: '#06281E',
+  },
+  amberGlow: {
+    name: 'Amber Glow',
+    primary_color: '#F97316',
+    secondary_color: '#F59E0B',
+    accent_color: '#10B981',
+    background_color: '#1A120B',
+  },
+  softLavender: {
+    name: 'Soft Lavender',
+    primary_color: '#7C3AED',
+    secondary_color: '#2563EB',
+    accent_color: '#EC4899',
+    background_color: '#F5F3FF',
+  },
+  graphiteSteel: {
+    name: 'Graphite Steel',
+    primary_color: '#94A3B8',
+    secondary_color: '#38BDF8',
+    accent_color: '#F59E0B',
+    background_color: '#090A0F',
+  },
+  rubyDark: {
+    name: 'Ruby Dark',
+    primary_color: '#E11D48',
+    secondary_color: '#FB7185',
+    accent_color: '#F59E0B',
+    background_color: '#19080D',
+  },
+  skyLight: {
+    name: 'Sky Light',
+    primary_color: '#0284C7',
+    secondary_color: '#0D9488',
+    accent_color: '#EA580C',
+    background_color: '#F0F9FF',
+  },
+  copperBronze: {
+    name: 'Copper Bronze',
+    primary_color: '#D97706',
+    secondary_color: '#EA580C',
+    accent_color: '#10B981',
+    background_color: '#1C140D',
+  },
+  berryPlum: {
+    name: 'Berry Plum',
+    primary_color: '#A855F7',
+    secondary_color: '#EC4899',
+    accent_color: '#38BDF8',
+    background_color: '#1B0B2E',
+  },
+  jadeGreen: {
+    name: 'Jade Green',
+    primary_color: '#34D399',
+    secondary_color: '#10B981',
+    accent_color: '#FBBF24',
+    background_color: '#022C22',
+  },
+  classicBlack: {
+    name: 'Classic Black',
+    primary_color: '#38BDF8',
+    secondary_color: '#818CF8',
+    accent_color: '#F59E0B',
+    background_color: '#0A0A0A',
+  },
+  crispLight: {
+    name: 'Crisp Light',
+    primary_color: '#111827',
+    secondary_color: '#2563EB',
+    accent_color: '#059669',
+    background_color: '#F9FAFB',
+  },
+  aquaMarine: {
+    name: 'Aqua Marine',
+    primary_color: '#06B6D4',
+    secondary_color: '#38BDF8',
+    accent_color: '#10B981',
+    background_color: '#082F49',
+  },
+  warmPeach: {
+    name: 'Warm Peach',
+    primary_color: '#EA580C',
+    secondary_color: '#D97706',
+    accent_color: '#059669',
+    background_color: '#FFF7ED',
+  },
+  violetStorm: {
+    name: 'Violet Storm',
+    primary_color: '#8B5CF6',
+    secondary_color: '#6366F1',
+    accent_color: '#EC4899',
+    background_color: '#0D0B1E',
+  },
+  oliveEarth: {
+    name: 'Olive Earth',
+    primary_color: '#65A30D',
+    secondary_color: '#16A34A',
+    accent_color: '#CA8A04',
+    background_color: '#1A200C',
+  },
+  roseLight: {
+    name: 'Rose Light',
+    primary_color: '#E11D48',
+    secondary_color: '#9333EA',
+    accent_color: '#D97706',
+    background_color: '#FFF1F2',
+  },
 };
 
-type ViewMode = 'overview' | 'identity' | 'colors' | 'font';
+type ViewMode = 'overview' | 'identity' | 'colors' | 'presets' | 'font';
 
 export default function BrandSettingsScreen() {
   const router = useRouter();
-  const { brand, canManageBrand, updateBrandSettings, refreshBrand, setShowBrandSavedModal } = useBrand();
+  const {
+    brand,
+    canManageBrand,
+    updateBrandSettings,
+    refreshBrand,
+    setShowBrandSavedModal,
+  } = useBrand();
   const currentTheme = useTheme();
   const { coach } = useAuth();
   const insets = useSafeAreaInsets();
@@ -117,7 +348,9 @@ export default function BrandSettingsScreen() {
 
   // Color picker modal state
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [activeColorField, setActiveColorField] = useState<'primary' | 'background'>('primary');
+  const [activeColorField, setActiveColorField] = useState<
+    'primary' | 'background'
+  >('primary');
 
   // Form state - Identity
   const [brandName, setBrandName] = useState('');
@@ -128,7 +361,9 @@ export default function BrandSettingsScreen() {
   const [secondaryColor, setSecondaryColor] = useState('#10B981');
   const [accentColor, setAccentColor] = useState('#F59E0B');
   const [backgroundColor, setBackgroundColor] = useState('#010417');
-  const [selectedPreset, setSelectedPreset] = useState<string | null>('deepNavy');
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(
+    'deepNavy',
+  );
 
   // Animated background fade-in transition
   const [prevBgColor, setPrevBgColor] = useState('#010417');
@@ -142,11 +377,17 @@ export default function BrandSettingsScreen() {
   const [fontScale, setFontScale] = useState(1.0);
 
   // Hidden preserved system properties (preserved for DB integrity)
-  const [buttonShape, setButtonShape] = useState<'rounded' | 'pill' | 'square'>('rounded');
-  const [buttonStyle, setButtonStyle] = useState<'flat' | 'gradient' | 'outlined'>('flat');
+  const [buttonShape, setButtonShape] = useState<'rounded' | 'pill' | 'square'>(
+    'rounded',
+  );
+  const [buttonStyle, setButtonStyle] = useState<
+    'flat' | 'gradient' | 'outlined'
+  >('flat');
   const [buttonShadow, setButtonShadow] = useState(false);
   const [spacingScale, setSpacingScale] = useState(1.0);
-  const [cardShadow, setCardShadow] = useState<'none' | 'small' | 'medium' | 'large'>('medium');
+  const [cardShadow, setCardShadow] = useState<
+    'none' | 'small' | 'medium' | 'large'
+  >('medium');
   const [borderRadiusScale, setBorderRadiusScale] = useState(1.0);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [darkPrimaryColor, setDarkPrimaryColor] = useState('');
@@ -212,7 +453,7 @@ export default function BrandSettingsScreen() {
       const match = Object.entries(PRESET_THEMES).find(
         ([_, p]) =>
           p.primary_color.toLowerCase() === bPrimary.toLowerCase() &&
-          p.background_color.toLowerCase() === bBg.toLowerCase()
+          p.background_color.toLowerCase() === bBg.toLowerCase(),
       );
       const matchedPreset = match ? match[0] : null;
       setSelectedPreset(matchedPreset);
@@ -244,13 +485,7 @@ export default function BrandSettingsScreen() {
       backgroundColor.toLowerCase() !== init.backgroundColor.toLowerCase() ||
       (fontFamily || 'System') !== init.fontFamily
     );
-  }, [
-    brandName,
-    logoUrl,
-    primaryColor,
-    backgroundColor,
-    fontFamily,
-  ]);
+  }, [brandName, logoUrl, primaryColor, backgroundColor, fontFamily]);
 
   // Dynamic Contrast calculation: white text on dark bg, dark text on light bg
   const isDark = isDarkColor(backgroundColor);
@@ -258,11 +493,17 @@ export default function BrandSettingsScreen() {
   const textSecondary = isDark ? 'rgba(255, 255, 255, 0.65)' : '#64748B';
   const textTertiary = isDark ? 'rgba(255, 255, 255, 0.4)' : '#94A3B8';
   const cardBg = isDark ? 'rgba(255, 255, 255, 0.05)' : '#FFFFFF';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+  const cardBorder = isDark
+    ? 'rgba(255, 255, 255, 0.1)'
+    : 'rgba(0, 0, 0, 0.08)';
   const inputBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9';
   const inputBorder = isDark ? 'rgba(255, 255, 255, 0.14)' : '#CBD5E1';
-  const backButtonBg = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
-  const backButtonBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)';
+  const backButtonBg = isDark
+    ? 'rgba(255, 255, 255, 0.08)'
+    : 'rgba(0, 0, 0, 0.05)';
+  const backButtonBorder = isDark
+    ? 'rgba(255, 255, 255, 0.12)'
+    : 'rgba(0, 0, 0, 0.1)';
   const primaryTextColor = getContrastColor(primaryColor);
 
   const activePresetName = useMemo(() => {
@@ -272,7 +513,7 @@ export default function BrandSettingsScreen() {
     const match = Object.entries(PRESET_THEMES).find(
       ([_, p]) =>
         p.primary_color.toLowerCase() === primaryColor.toLowerCase() &&
-        p.background_color.toLowerCase() === backgroundColor.toLowerCase()
+        p.background_color.toLowerCase() === backgroundColor.toLowerCase(),
     );
     return match ? match[1].name : 'Custom';
   }, [selectedPreset, primaryColor, backgroundColor]);
@@ -280,30 +521,73 @@ export default function BrandSettingsScreen() {
   // Restricted Access View
   if (!canManageBrand) {
     return (
-      <View style={[styles.screen, { backgroundColor: currentTheme.colors.background }]}>
+      <View
+        style={[
+          styles.screen,
+          { backgroundColor: currentTheme.colors.background },
+        ]}
+      >
         <StatusBar style={currentTheme.isDarkMode ? 'light' : 'dark'} />
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity
             onPress={() => safeBack('/(coach)/(tabs)/profile')}
-            style={[styles.backButton, { backgroundColor: backButtonBg, borderColor: backButtonBorder }]}
+            style={[
+              styles.backButton,
+              { backgroundColor: backButtonBg, borderColor: backButtonBorder },
+            ]}
           >
             <ChevronLeft size={22} color={currentTheme.colors.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, { color: currentTheme.colors.text }]}>Brand</Text>
-            <Text style={[styles.headerSubtitle, { color: currentTheme.colors.textSecondary }]}>View Only</Text>
+            <Text
+              style={[styles.headerTitle, { color: currentTheme.colors.text }]}
+            >
+              Brand
+            </Text>
+            <Text
+              style={[
+                styles.headerSubtitle,
+                { color: currentTheme.colors.textSecondary },
+              ]}
+            >
+              View Only
+            </Text>
           </View>
           <View style={styles.headerRightSpacer} />
         </View>
 
         <View style={styles.restrictedContent}>
-          <View style={[styles.restrictedCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <ShieldAlert size={44} color={primaryColor} style={{ marginBottom: 16 }} />
-            <Text style={[styles.cardTitle, { color: currentTheme.colors.text, textAlign: 'center' }]}>
+          <View
+            style={[
+              styles.restrictedCard,
+              { backgroundColor: cardBg, borderColor: cardBorder },
+            ]}
+          >
+            <ShieldAlert
+              size={44}
+              color={primaryColor}
+              style={{ marginBottom: 16 }}
+            />
+            <Text
+              style={[
+                styles.cardTitle,
+                { color: currentTheme.colors.text, textAlign: 'center' },
+              ]}
+            >
               Access Restricted
             </Text>
-            <Text style={[styles.helperText, { color: currentTheme.colors.textSecondary, textAlign: 'center', marginTop: 8 }]}>
-              Brand settings are managed at the organization level. Contact your administrator to request updates.
+            <Text
+              style={[
+                styles.helperText,
+                {
+                  color: currentTheme.colors.textSecondary,
+                  textAlign: 'center',
+                  marginTop: 8,
+                },
+              ]}
+            >
+              Brand settings are managed at the organization level. Contact your
+              administrator to request updates.
             </Text>
           </View>
         </View>
@@ -316,7 +600,10 @@ export default function BrandSettingsScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Please allow access to photos to choose a brand logo.');
+      Alert.alert(
+        'Permission Needed',
+        'Please allow access to photos to choose a brand logo.',
+      );
       return;
     }
 
@@ -340,7 +627,9 @@ export default function BrandSettingsScreen() {
         const uriParts = uri.split('.');
         if (uriParts.length > 1) {
           const ext = uriParts[uriParts.length - 1].split('?')[0];
-          if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext.toLowerCase())) {
+          if (
+            ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext.toLowerCase())
+          ) {
             fileExt = ext.toLowerCase();
           }
         }
@@ -381,10 +670,16 @@ export default function BrandSettingsScreen() {
 
       setLogoUrl(publicUrl);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Logo Updated', 'Your brand logo has been uploaded successfully.');
+      Alert.alert(
+        'Logo Updated',
+        'Your brand logo has been uploaded successfully.',
+      );
     } catch (error) {
       console.error('[Logo Upload] Error:', error);
-      Alert.alert('Upload Error', 'Could not upload logo. Please try another image.');
+      Alert.alert(
+        'Upload Error',
+        'Could not upload logo. Please try another image.',
+      );
     } finally {
       setUploading(false);
     }
@@ -399,7 +694,11 @@ export default function BrandSettingsScreen() {
     // Body: 500 Medium for Raleway, Outfit, and Montserrat so they are never hair-thin! 400 for standard fonts
     const predictedHeading = '700';
     const predictedBody =
-      fontName === 'Raleway' || fontName === 'Outfit' || fontName === 'Montserrat' ? '500' : '400';
+      fontName === 'Raleway' ||
+      fontName === 'Outfit' ||
+      fontName === 'Montserrat'
+        ? '500'
+        : '400';
     const predictedScale = 1.0;
 
     setHeadingWeight(predictedHeading);
@@ -416,7 +715,9 @@ export default function BrandSettingsScreen() {
     const preset = PRESET_THEMES[presetKey];
     if (!preset) return;
 
-    if (preset.background_color.toLowerCase() !== backgroundColor.toLowerCase()) {
+    if (
+      preset.background_color.toLowerCase() !== backgroundColor.toLowerCase()
+    ) {
       fadeBgAnim.stopAnimation();
       setPrevBgColor(backgroundColor);
       setTargetBgColor(preset.background_color);
@@ -450,6 +751,7 @@ export default function BrandSettingsScreen() {
     switch (activeColorField) {
       case 'primary':
         setPrimaryColor(color);
+        setSecondaryColor(color);
         break;
       case 'background':
         if (color.toLowerCase() !== backgroundColor.toLowerCase()) {
@@ -530,7 +832,10 @@ export default function BrandSettingsScreen() {
           setShowBrandSavedModal(true);
         }, 180);
       } else {
-        Alert.alert('Save Failed', 'Could not update brand settings. Please try again.');
+        Alert.alert(
+          'Save Failed',
+          'Could not update brand settings. Please try again.',
+        );
       }
     } catch (error) {
       console.error('Error saving brand:', error);
@@ -568,23 +873,23 @@ export default function BrandSettingsScreen() {
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (currentView === 'presets') {
+      setCurrentView('colors');
+      return;
+    }
     if (currentView === 'overview') {
       if (hasChanges) {
-        Alert.alert(
-          'Discard Changes?',
-          'You have unsaved changes.',
-          [
-            {
-              text: 'Cancel',
-              style: 'cancel',
-            },
-            {
-              text: 'Discard',
-              style: 'destructive',
-              onPress: handleDiscard,
-            },
-          ]
-        );
+        Alert.alert('Discard Changes?', 'You have unsaved changes.', [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: handleDiscard,
+          },
+        ]);
         return;
       }
       safeBack('/(coach)/(tabs)/profile');
@@ -598,7 +903,10 @@ export default function BrandSettingsScreen() {
       handleBack();
       return true;
     };
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress,
+    );
     return () => subscription.remove();
   }, [handleBack]);
 
@@ -609,6 +917,8 @@ export default function BrandSettingsScreen() {
         return { title: 'Identity', subtitle: 'Name & Logo' };
       case 'colors':
         return { title: 'Colors', subtitle: 'Palette & Presets' };
+      case 'presets':
+        return { title: 'Color Presets', subtitle: 'All Palettes' };
       case 'font':
         return { title: 'Font', subtitle: 'Typography' };
       default:
@@ -619,7 +929,9 @@ export default function BrandSettingsScreen() {
   return (
     <View style={styles.screen}>
       {/* Animated Fade-in Background Layers */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: prevBgColor }]} />
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: prevBgColor }]}
+      />
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
@@ -645,14 +957,21 @@ export default function BrandSettingsScreen() {
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={handleBack}
-          style={[styles.backButton, { backgroundColor: backButtonBg, borderColor: backButtonBorder }]}
+          style={[
+            styles.backButton,
+            { backgroundColor: backButtonBg, borderColor: backButtonBorder },
+          ]}
         >
           <ChevronLeft size={22} color={textColor} />
         </TouchableOpacity>
 
         <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: textColor }]}>{headerInfo.title}</Text>
-          <Text style={[styles.headerSubtitle, { color: textSecondary }]}>{headerInfo.subtitle}</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>
+            {headerInfo.title}
+          </Text>
+          <Text style={[styles.headerSubtitle, { color: textSecondary }]}>
+            {headerInfo.subtitle}
+          </Text>
         </View>
 
         {currentView === 'overview' ? (
@@ -662,24 +981,38 @@ export default function BrandSettingsScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setShowFullPreview(true);
             }}
-            style={[styles.previewButton, { backgroundColor: `${primaryColor}20`, borderColor: `${primaryColor}40` }]}
+            style={[
+              styles.previewButton,
+              {
+                backgroundColor: `${primaryColor}20`,
+                borderColor: `${primaryColor}40`,
+              },
+            ]}
           >
             <Eye size={20} color={primaryColor} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => setCurrentView('overview')}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setCurrentView(currentView === 'presets' ? 'colors' : 'overview');
+            }}
             style={styles.doneHeaderButton}
           >
-            <Text style={[styles.doneHeaderText, { color: primaryColor }]}>Done</Text>
+            <Text style={[styles.doneHeaderText, { color: primaryColor }]}>
+              Done
+            </Text>
           </TouchableOpacity>
         )}
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
       >
         {/* VIEW 1: BRAND OVERVIEW (3 CARDS) */}
         {currentView === 'overview' && (
@@ -696,17 +1029,29 @@ export default function BrandSettingsScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setCurrentView('identity');
               }}
-              style={[styles.metricCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+              style={[
+                styles.metricCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
             >
               <View style={styles.metricCardHeader}>
                 <View style={styles.metricCardTitleRow}>
-                  <View style={[styles.cardIconBadge, { backgroundColor: `${primaryColor}18` }]}>
+                  <View
+                    style={[
+                      styles.cardIconBadge,
+                      { backgroundColor: `${primaryColor}18` },
+                    ]}
+                  >
                     <LayoutGrid size={18} color={primaryColor} />
                   </View>
-                  <Text style={[styles.metricCardTitle, { color: textColor }]}>Identity</Text>
+                  <Text style={[styles.metricCardTitle, { color: textColor }]}>
+                    Identity
+                  </Text>
                 </View>
                 <View style={styles.metricCardRightRow}>
-                  <Text style={[styles.metricCardTime, { color: textSecondary }]}>
+                  <Text
+                    style={[styles.metricCardTime, { color: textSecondary }]}
+                  >
                     {brandName ? 'Custom' : 'Default'}
                   </Text>
                   <ChevronRight size={18} color={textSecondary} />
@@ -714,7 +1059,15 @@ export default function BrandSettingsScreen() {
               </View>
 
               <View style={styles.identityCardContent}>
-                <View style={[styles.avatarBox, { backgroundColor: `${primaryColor}20`, borderColor: cardBorder }]}>
+                <View
+                  style={[
+                    styles.avatarBox,
+                    {
+                      backgroundColor: `${primaryColor}20`,
+                      borderColor: cardBorder,
+                    },
+                  ]}
+                >
                   {logoUrl ? (
                     <Image
                       source={{ uri: logoUrl }}
@@ -723,17 +1076,27 @@ export default function BrandSettingsScreen() {
                       transition={200}
                     />
                   ) : (
-                    <Text style={[styles.avatarFallbackText, { color: primaryColor }]}>
+                    <Text
+                      style={[
+                        styles.avatarFallbackText,
+                        { color: primaryColor },
+                      ]}
+                    >
                       {brandName ? brandName.charAt(0).toUpperCase() : 'B'}
                     </Text>
                   )}
                 </View>
 
                 <View style={styles.identityInfo}>
-                  <Text style={[styles.identityName, { color: textColor }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.identityName, { color: textColor }]}
+                    numberOfLines={1}
+                  >
                     {brandName || 'Untitled Brand'}
                   </Text>
-                  <Text style={[styles.identityStatus, { color: textSecondary }]}>
+                  <Text
+                    style={[styles.identityStatus, { color: textSecondary }]}
+                  >
                     {logoUrl ? 'Logo uploaded' : 'No logo uploaded'}
                   </Text>
                 </View>
@@ -747,17 +1110,29 @@ export default function BrandSettingsScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setCurrentView('colors');
               }}
-              style={[styles.metricCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+              style={[
+                styles.metricCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
             >
               <View style={styles.metricCardHeader}>
                 <View style={styles.metricCardTitleRow}>
-                  <View style={[styles.cardIconBadge, { backgroundColor: `${primaryColor}18` }]}>
+                  <View
+                    style={[
+                      styles.cardIconBadge,
+                      { backgroundColor: `${primaryColor}18` },
+                    ]}
+                  >
                     <Palette size={18} color={primaryColor} />
                   </View>
-                  <Text style={[styles.metricCardTitle, { color: textColor }]}>Colors</Text>
+                  <Text style={[styles.metricCardTitle, { color: textColor }]}>
+                    Colors
+                  </Text>
                 </View>
                 <View style={styles.metricCardRightRow}>
-                  <Text style={[styles.metricCardTime, { color: textSecondary }]}>
+                  <Text
+                    style={[styles.metricCardTime, { color: textSecondary }]}
+                  >
                     {activePresetName}
                   </Text>
                   <ChevronRight size={18} color={textSecondary} />
@@ -765,19 +1140,60 @@ export default function BrandSettingsScreen() {
               </View>
 
               <View style={styles.colorsCardContent}>
-                {/* 2 Color Swatches: Primary & Background */}
+                {/* 3 Color Swatches: Primary, Secondary & Background */}
                 <View style={styles.colorSwatchesRow}>
                   <View style={styles.swatchItem}>
-                    <View style={[styles.colorDot, { backgroundColor: primaryColor, borderColor: cardBorder }]} />
-                    <Text style={[styles.swatchLabel, { color: textSecondary }]}>Primary</Text>
+                    <View
+                      style={[
+                        styles.colorDot,
+                        {
+                          backgroundColor: primaryColor,
+                          borderColor: cardBorder,
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[styles.swatchLabel, { color: textSecondary }]}
+                    >
+                      Primary
+                    </Text>
                     <Text style={[styles.swatchHex, { color: textColor }]}>
                       {primaryColor.toUpperCase()}
                     </Text>
                   </View>
 
                   <View style={styles.swatchItem}>
-                    <View style={[styles.colorDot, { backgroundColor, borderColor: cardBorder }]} />
-                    <Text style={[styles.swatchLabel, { color: textSecondary }]}>Background</Text>
+                    <View
+                      style={[
+                        styles.colorDot,
+                        {
+                          backgroundColor: secondaryColor,
+                          borderColor: cardBorder,
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[styles.swatchLabel, { color: textSecondary }]}
+                    >
+                      Secondary
+                    </Text>
+                    <Text style={[styles.swatchHex, { color: textColor }]}>
+                      {secondaryColor.toUpperCase()}
+                    </Text>
+                  </View>
+
+                  <View style={styles.swatchItem}>
+                    <View
+                      style={[
+                        styles.colorDot,
+                        { backgroundColor, borderColor: cardBorder },
+                      ]}
+                    />
+                    <Text
+                      style={[styles.swatchLabel, { color: textSecondary }]}
+                    >
+                      Background
+                    </Text>
                     <Text style={[styles.swatchHex, { color: textColor }]}>
                       {backgroundColor.toUpperCase()}
                     </Text>
@@ -785,9 +1201,16 @@ export default function BrandSettingsScreen() {
                 </View>
 
                 {/* Preset Badge */}
-                <View style={[styles.presetBadge, { backgroundColor: `${primaryColor}16` }]}>
+                <View
+                  style={[
+                    styles.presetBadge,
+                    { backgroundColor: `${primaryColor}16` },
+                  ]}
+                >
                   <Sparkles size={12} color={primaryColor} />
-                  <Text style={[styles.presetBadgeText, { color: primaryColor }]}>
+                  <Text
+                    style={[styles.presetBadgeText, { color: primaryColor }]}
+                  >
                     {activePresetName} Theme Active
                   </Text>
                 </View>
@@ -801,17 +1224,29 @@ export default function BrandSettingsScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setCurrentView('font');
               }}
-              style={[styles.metricCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+              style={[
+                styles.metricCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
             >
               <View style={styles.metricCardHeader}>
                 <View style={styles.metricCardTitleRow}>
-                  <View style={[styles.cardIconBadge, { backgroundColor: `${primaryColor}18` }]}>
+                  <View
+                    style={[
+                      styles.cardIconBadge,
+                      { backgroundColor: `${primaryColor}18` },
+                    ]}
+                  >
                     <Type size={18} color={primaryColor} />
                   </View>
-                  <Text style={[styles.metricCardTitle, { color: textColor }]}>Font</Text>
+                  <Text style={[styles.metricCardTitle, { color: textColor }]}>
+                    Font
+                  </Text>
                 </View>
                 <View style={styles.metricCardRightRow}>
-                  <Text style={[styles.metricCardTime, { color: textSecondary }]}>
+                  <Text
+                    style={[styles.metricCardTime, { color: textSecondary }]}
+                  >
                     {fontFamily || 'System'}
                   </Text>
                   <ChevronRight size={18} color={textSecondary} />
@@ -837,7 +1272,10 @@ export default function BrandSettingsScreen() {
                     styles.fontSampleText,
                     {
                       color: textSecondary,
-                      fontFamily: getFontFamily(fontFamily, bodyWeight || '500'),
+                      fontFamily: getFontFamily(
+                        fontFamily,
+                        bodyWeight || '500',
+                      ),
                       fontWeight: undefined,
                     },
                   ]}
@@ -845,9 +1283,16 @@ export default function BrandSettingsScreen() {
                   Consistent effort creates lasting progress.
                 </Text>
 
-                <View style={[styles.presetBadge, { backgroundColor: `${primaryColor}16`, marginTop: 4 }]}>
+                <View
+                  style={[
+                    styles.presetBadge,
+                    { backgroundColor: `${primaryColor}16`, marginTop: 4 },
+                  ]}
+                >
                   <Sparkles size={12} color={primaryColor} />
-                  <Text style={[styles.presetBadgeText, { color: primaryColor }]}>
+                  <Text
+                    style={[styles.presetBadgeText, { color: primaryColor }]}
+                  >
                     Brand Typography Active
                   </Text>
                 </View>
@@ -865,8 +1310,15 @@ export default function BrandSettingsScreen() {
             style={styles.detailContainer}
           >
             {/* Brand Name Input */}
-            <View style={[styles.detailCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-              <Text style={[styles.fieldTitle, { color: textColor }]}>Brand Name</Text>
+            <View
+              style={[
+                styles.detailCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
+            >
+              <Text style={[styles.fieldTitle, { color: textColor }]}>
+                Brand Name
+              </Text>
               <Text style={[styles.fieldSubtitle, { color: textSecondary }]}>
                 Visible across client dashboards and messages
               </Text>
@@ -888,16 +1340,32 @@ export default function BrandSettingsScreen() {
             </View>
 
             {/* Brand Logo Upload */}
-            <View style={[styles.detailCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-              <Text style={[styles.fieldTitle, { color: textColor }]}>Brand Logo</Text>
+            <View
+              style={[
+                styles.detailCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
+            >
+              <Text style={[styles.fieldTitle, { color: textColor }]}>
+                Brand Logo
+              </Text>
               <Text style={[styles.fieldSubtitle, { color: textSecondary }]}>
                 A clean, square logo gives the best result
               </Text>
 
               {logoUrl ? (
                 <View style={styles.logoEditContainer}>
-                  <View style={[styles.largeLogoBox, { backgroundColor: inputBg, borderColor: cardBorder }]}>
-                    <Image source={{ uri: logoUrl }} style={styles.largeLogoImage} contentFit="contain" />
+                  <View
+                    style={[
+                      styles.largeLogoBox,
+                      { backgroundColor: inputBg, borderColor: cardBorder },
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: logoUrl }}
+                      style={styles.largeLogoImage}
+                      contentFit="contain"
+                    />
                   </View>
 
                   <View style={styles.logoActionsRow}>
@@ -905,14 +1373,27 @@ export default function BrandSettingsScreen() {
                       activeOpacity={0.8}
                       onPress={pickImage}
                       disabled={uploading}
-                      style={[styles.logoActionBtn, { backgroundColor: `${primaryColor}20`, borderColor: `${primaryColor}40` }]}
+                      style={[
+                        styles.logoActionBtn,
+                        {
+                          backgroundColor: `${primaryColor}20`,
+                          borderColor: `${primaryColor}40`,
+                        },
+                      ]}
                     >
                       {uploading ? (
                         <ActivityIndicator size="small" color={primaryColor} />
                       ) : (
                         <>
                           <Upload size={16} color={primaryColor} />
-                          <Text style={[styles.logoActionBtnText, { color: primaryColor }]}>Change Logo</Text>
+                          <Text
+                            style={[
+                              styles.logoActionBtnText,
+                              { color: primaryColor },
+                            ]}
+                          >
+                            Change Logo
+                          </Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -923,10 +1404,20 @@ export default function BrandSettingsScreen() {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setLogoUrl('');
                       }}
-                      style={[styles.logoActionBtn, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.2)' }]}
+                      style={[
+                        styles.logoActionBtn,
+                        {
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          borderColor: 'rgba(239, 68, 68, 0.2)',
+                        },
+                      ]}
                     >
                       <Trash2 size={16} color="#EF4444" />
-                      <Text style={[styles.logoActionBtnText, { color: '#EF4444' }]}>Remove</Text>
+                      <Text
+                        style={[styles.logoActionBtnText, { color: '#EF4444' }]}
+                      >
+                        Remove
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -935,17 +1426,34 @@ export default function BrandSettingsScreen() {
                   activeOpacity={0.8}
                   onPress={pickImage}
                   disabled={uploading}
-                  style={[styles.uploadBox, { backgroundColor: inputBg, borderColor: inputBorder }]}
+                  style={[
+                    styles.uploadBox,
+                    { backgroundColor: inputBg, borderColor: inputBorder },
+                  ]}
                 >
                   {uploading ? (
                     <ActivityIndicator size="large" color={primaryColor} />
                   ) : (
                     <>
-                      <View style={[styles.uploadIconCircle, { backgroundColor: `${primaryColor}18` }]}>
+                      <View
+                        style={[
+                          styles.uploadIconCircle,
+                          { backgroundColor: `${primaryColor}18` },
+                        ]}
+                      >
                         <Upload size={22} color={primaryColor} />
                       </View>
-                      <Text style={[styles.uploadPromptTitle, { color: textColor }]}>Upload Logo</Text>
-                      <Text style={[styles.uploadPromptSubtitle, { color: textSecondary }]}>
+                      <Text
+                        style={[styles.uploadPromptTitle, { color: textColor }]}
+                      >
+                        Upload Logo
+                      </Text>
+                      <Text
+                        style={[
+                          styles.uploadPromptSubtitle,
+                          { color: textSecondary },
+                        ]}
+                      >
                         Tap to choose from photo library
                       </Text>
                     </>
@@ -964,26 +1472,66 @@ export default function BrandSettingsScreen() {
             transition={{ type: 'timing', duration: 200 } as any}
             style={styles.detailContainer}
           >
-            {/* Ready-made Presets */}
-            <View style={[styles.detailCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-              <View style={styles.cardHeaderRow}>
-                <View style={[styles.cardIconBadge, { backgroundColor: `${primaryColor}18` }]}>
-                  <Sparkles size={18} color={primaryColor} />
+            {/* Ready-made Presets (Clickable Full Card Wrapper) */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setCurrentView('presets');
+              }}
+              style={[
+                styles.detailCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
+            >
+              <View style={styles.cardHeaderRowBetween}>
+                <View style={styles.cardHeaderLeft}>
+                  <View
+                    style={[
+                      styles.cardIconBadge,
+                      { backgroundColor: `${primaryColor}18` },
+                    ]}
+                  >
+                    <Sparkles size={18} color={primaryColor} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.fieldTitle, { color: textColor }]}>
+                      Color Presets
+                    </Text>
+                    <Text
+                      style={[
+                        styles.fieldSubtitle,
+                        { color: textSecondary, marginBottom: 0 },
+                      ]}
+                    >
+                      Pick a ready-made palette
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={[styles.fieldTitle, { color: textColor }]}>Color Presets</Text>
-                  <Text style={[styles.fieldSubtitle, { color: textSecondary, marginBottom: 0 }]}>
-                    Pick a ready-made palette
+
+                <View style={styles.viewAllPresetsLink}>
+                  <Text
+                    style={[
+                      styles.viewAllPresetsText,
+                      { color: textSecondary },
+                    ]}
+                  >
+                    View All
                   </Text>
+                  <ChevronRight size={16} color={textSecondary} />
                 </View>
               </View>
 
               <View style={styles.presetsGrid}>
-                {Object.entries(PRESET_THEMES).map(([key, preset]) => {
+                {INITIAL_PRESET_KEYS.map((key) => {
+                  const preset = PRESET_THEMES[key];
+                  if (!preset) return null;
                   const isActive =
                     selectedPreset === key ||
-                    (primaryColor.toLowerCase() === preset.primary_color.toLowerCase() &&
-                      backgroundColor.toLowerCase() === preset.background_color.toLowerCase());
+                    (primaryColor.toLowerCase() ===
+                      preset.primary_color.toLowerCase() &&
+                      backgroundColor.toLowerCase() ===
+                        preset.background_color.toLowerCase());
 
                   return (
                     <TouchableOpacity
@@ -1000,7 +1548,12 @@ export default function BrandSettingsScreen() {
                       ]}
                     >
                       {isActive && (
-                        <View style={[styles.presetCheckPill, { backgroundColor: primaryColor }]}>
+                        <View
+                          style={[
+                            styles.presetCheckPill,
+                            { backgroundColor: primaryColor },
+                          ]}
+                        >
                           <Check size={10} color={primaryTextColor} />
                         </View>
                       )}
@@ -1022,7 +1575,8 @@ export default function BrandSettingsScreen() {
                             {
                               backgroundColor: preset.background_color,
                               borderColor:
-                                preset.background_color.toLowerCase() === '#ffffff' && !isDark
+                                preset.background_color.toLowerCase() ===
+                                  '#ffffff' && !isDark
                                   ? cardBorder
                                   : inputBg,
                               marginLeft: -8,
@@ -1032,24 +1586,62 @@ export default function BrandSettingsScreen() {
                         />
                       </View>
 
-                      <Text style={[styles.presetCardName, { color: textColor }]} numberOfLines={1}>
+                      <Text
+                        style={[styles.presetCardName, { color: textColor }]}
+                        numberOfLines={1}
+                      >
                         {preset.name}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            </View>
+
+              {selectedPreset &&
+                !INITIAL_PRESET_KEYS.includes(selectedPreset) &&
+                PRESET_THEMES[selectedPreset] && (
+                  <View
+                    style={[
+                      styles.presetBadge,
+                      { backgroundColor: `${primaryColor}16`, marginTop: 12 },
+                    ]}
+                  >
+                    <Sparkles size={12} color={primaryColor} />
+                    <Text
+                      style={[styles.presetBadgeText, { color: primaryColor }]}
+                    >
+                      {PRESET_THEMES[selectedPreset].name} Active
+                    </Text>
+                  </View>
+                )}
+            </TouchableOpacity>
 
             {/* Custom Individual Color Pickers */}
-            <View style={[styles.detailCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View
+              style={[
+                styles.detailCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
+            >
               <View style={styles.cardHeaderRow}>
-                <View style={[styles.cardIconBadge, { backgroundColor: `${primaryColor}18` }]}>
+                <View
+                  style={[
+                    styles.cardIconBadge,
+                    { backgroundColor: `${primaryColor}18` },
+                  ]}
+                >
                   <Palette size={18} color={primaryColor} />
                 </View>
                 <View>
-                  <Text style={[styles.fieldTitle, { color: textColor }]}>Custom Colors</Text>
-                  <Text style={[styles.fieldSubtitle, { color: textSecondary, marginBottom: 0 }]}>
+                  <Text style={[styles.fieldTitle, { color: textColor }]}>
+                    Custom Colors
+                  </Text>
+                  <Text
+                    style={[
+                      styles.fieldSubtitle,
+                      { color: textSecondary, marginBottom: 0 },
+                    ]}
+                  >
                     Fine-tune individual colors
                   </Text>
                 </View>
@@ -1081,6 +1673,120 @@ export default function BrandSettingsScreen() {
           </MotiView>
         )}
 
+        {/* VIEW 3B: ALL COLOR PRESETS SUBPAGE (36 PRESETS) */}
+        {currentView === 'presets' && (
+          <MotiView
+            from={{ opacity: 0, translateY: 8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 200 } as any}
+            style={styles.detailContainer}
+          >
+            <View
+              style={[
+                styles.detailCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
+            >
+              <View style={styles.cardHeaderRow}>
+                <View
+                  style={[
+                    styles.cardIconBadge,
+                    { backgroundColor: `${primaryColor}18` },
+                  ]}
+                >
+                  <Sparkles size={18} color={primaryColor} />
+                </View>
+                <View>
+                  <Text style={[styles.fieldTitle, { color: textColor }]}>
+                    All Color Presets
+                  </Text>
+                  <Text
+                    style={[
+                      styles.fieldSubtitle,
+                      { color: textSecondary, marginBottom: 0 },
+                    ]}
+                  >
+                    {Object.keys(PRESET_THEMES).length} ready-made palettes
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.presetsGrid}>
+                {Object.entries(PRESET_THEMES).map(([key, preset]) => {
+                  const isActive =
+                    selectedPreset === key ||
+                    (primaryColor.toLowerCase() ===
+                      preset.primary_color.toLowerCase() &&
+                      backgroundColor.toLowerCase() ===
+                        preset.background_color.toLowerCase());
+
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      activeOpacity={0.8}
+                      onPress={() => applyPreset(key)}
+                      style={[
+                        styles.presetCardItem,
+                        {
+                          backgroundColor: inputBg,
+                          borderColor: isActive ? primaryColor : cardBorder,
+                          borderWidth: isActive ? 2 : 1,
+                        },
+                      ]}
+                    >
+                      {isActive && (
+                        <View
+                          style={[
+                            styles.presetCheckPill,
+                            { backgroundColor: primaryColor },
+                          ]}
+                        >
+                          <Check size={10} color={primaryTextColor} />
+                        </View>
+                      )}
+
+                      <View style={styles.presetDotsWrap}>
+                        <View
+                          style={[
+                            styles.presetMiniDot,
+                            {
+                              backgroundColor: preset.primary_color,
+                              borderColor: inputBg,
+                              zIndex: 1,
+                            },
+                          ]}
+                        />
+                        <View
+                          style={[
+                            styles.presetMiniDot,
+                            {
+                              backgroundColor: preset.background_color,
+                              borderColor:
+                                preset.background_color.toLowerCase() ===
+                                  '#ffffff' && !isDark
+                                  ? cardBorder
+                                  : inputBg,
+                              marginLeft: -8,
+                              zIndex: 2,
+                            },
+                          ]}
+                        />
+                      </View>
+
+                      <Text
+                        style={[styles.presetCardName, { color: textColor }]}
+                        numberOfLines={1}
+                      >
+                        {preset.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </MotiView>
+        )}
+
         {/* VIEW 4: FONT ADJUSTMENT */}
         {currentView === 'font' && (
           <MotiView
@@ -1090,14 +1796,31 @@ export default function BrandSettingsScreen() {
             style={styles.detailContainer}
           >
             {/* Font Family Selection */}
-            <View style={[styles.detailCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View
+              style={[
+                styles.detailCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
+            >
               <View style={styles.cardHeaderRow}>
-                <View style={[styles.cardIconBadge, { backgroundColor: `${primaryColor}18` }]}>
+                <View
+                  style={[
+                    styles.cardIconBadge,
+                    { backgroundColor: `${primaryColor}18` },
+                  ]}
+                >
                   <Type size={18} color={primaryColor} />
                 </View>
                 <View>
-                  <Text style={[styles.fieldTitle, { color: textColor }]}>Font Family</Text>
-                  <Text style={[styles.fieldSubtitle, { color: textSecondary, marginBottom: 0 }]}>
+                  <Text style={[styles.fieldTitle, { color: textColor }]}>
+                    Font Family
+                  </Text>
+                  <Text
+                    style={[
+                      styles.fieldSubtitle,
+                      { color: textSecondary, marginBottom: 0 },
+                    ]}
+                  >
                     App-wide typography style
                   </Text>
                 </View>
@@ -1110,9 +1833,11 @@ export default function BrandSettingsScreen() {
                   const itemTitleFont = getFontFamily(font.name, '700');
                   const itemPreviewFont = getFontFamily(
                     font.name,
-                    font.name === 'Raleway' || font.name === 'Outfit' || font.name === 'Montserrat'
+                    font.name === 'Raleway' ||
+                      font.name === 'Outfit' ||
+                      font.name === 'Montserrat'
                       ? '500'
-                      : '400'
+                      : '400',
                   );
 
                   return (
@@ -1123,7 +1848,9 @@ export default function BrandSettingsScreen() {
                       style={[
                         styles.fontOptionRow,
                         {
-                          backgroundColor: isSelected ? `${primaryColor}16` : inputBg,
+                          backgroundColor: isSelected
+                            ? `${primaryColor}16`
+                            : inputBg,
                           borderColor: isSelected ? primaryColor : cardBorder,
                         },
                       ]}
@@ -1158,7 +1885,12 @@ export default function BrandSettingsScreen() {
                       </View>
 
                       {isSelected && (
-                        <View style={[styles.fontCheckCircle, { backgroundColor: primaryColor }]}>
+                        <View
+                          style={[
+                            styles.fontCheckCircle,
+                            { backgroundColor: primaryColor },
+                          ]}
+                        >
                           <Check size={14} color={primaryTextColor} />
                         </View>
                       )}
@@ -1169,12 +1901,29 @@ export default function BrandSettingsScreen() {
             </View>
 
             {/* Live Typography Preview Card */}
-            <View style={[styles.detailCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-              <Text style={[styles.fieldTitle, { color: textColor }]}>Live Preview</Text>
-              <Text style={[styles.fieldSubtitle, { color: textSecondary, marginBottom: 12 }]}>
+            <View
+              style={[
+                styles.detailCard,
+                { backgroundColor: cardBg, borderColor: cardBorder },
+              ]}
+            >
+              <Text style={[styles.fieldTitle, { color: textColor }]}>
+                Live Preview
+              </Text>
+              <Text
+                style={[
+                  styles.fieldSubtitle,
+                  { color: textSecondary, marginBottom: 12 },
+                ]}
+              >
                 Optimal weights automatically tuned for {fontFamily || 'System'}
               </Text>
-              <View style={[styles.livePreviewBox, { backgroundColor: inputBg, borderColor: cardBorder }]}>
+              <View
+                style={[
+                  styles.livePreviewBox,
+                  { backgroundColor: inputBg, borderColor: cardBorder },
+                ]}
+              >
                 <Text
                   style={[
                     styles.livePreviewHeading,
@@ -1193,13 +1942,18 @@ export default function BrandSettingsScreen() {
                     styles.livePreviewBody,
                     {
                       color: textSecondary,
-                      fontFamily: getFontFamily(fontFamily, bodyWeight || '500'),
+                      fontFamily: getFontFamily(
+                        fontFamily,
+                        bodyWeight || '500',
+                      ),
                       fontWeight: undefined,
                       fontSize: 14,
                     },
                   ]}
                 >
-                  Your clients will experience this typography style consistently across all workout plans, check-ins, and messages.
+                  Your clients will experience this typography style
+                  consistently across all workout plans, check-ins, and
+                  messages.
                 </Text>
               </View>
             </View>
@@ -1213,7 +1967,9 @@ export default function BrandSettingsScreen() {
           styles.bottomActionBar,
           {
             paddingBottom: insets.bottom + 12,
-            backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.85)',
+            backgroundColor: isDark
+              ? 'rgba(0,0,0,0.85)'
+              : 'rgba(255,255,255,0.85)',
             borderTopColor: cardBorder,
           },
         ]}
@@ -1222,14 +1978,22 @@ export default function BrandSettingsScreen() {
           activeOpacity={0.85}
           onPress={handleSave}
           disabled={loading}
-          style={[styles.saveButton, { backgroundColor: primaryColor }, loading && { opacity: 0.7 }]}
+          style={[
+            styles.saveButton,
+            { backgroundColor: primaryColor },
+            loading && { opacity: 0.7 },
+          ]}
         >
           {loading ? (
             <ActivityIndicator color={primaryTextColor} />
           ) : (
             <View style={styles.saveButtonContent}>
               <Save size={18} color={primaryTextColor} strokeWidth={2.5} />
-              <Text style={[styles.saveButtonText, { color: primaryTextColor }]}>Save Changes</Text>
+              <Text
+                style={[styles.saveButtonText, { color: primaryTextColor }]}
+              >
+                Save Changes
+              </Text>
             </View>
           )}
         </TouchableOpacity>
@@ -1238,8 +2002,12 @@ export default function BrandSettingsScreen() {
       {/* Color Picker Modal */}
       <ColorPickerModal
         visible={showColorPicker}
-        currentColor={activeColorField === 'primary' ? primaryColor : backgroundColor}
-        title={activeColorField === 'primary' ? 'Primary Color' : 'Background Color'}
+        currentColor={
+          activeColorField === 'primary' ? primaryColor : backgroundColor
+        }
+        title={
+          activeColorField === 'primary' ? 'Primary Color' : 'Background Color'
+        }
         onClose={() => setShowColorPicker(false)}
         onColorSelected={handleColorChange}
         primaryColor={primaryColor}
@@ -1247,7 +2015,11 @@ export default function BrandSettingsScreen() {
       />
 
       {/* Full Simulated Preview Modal */}
-      <Modal visible={showFullPreview} animationType="slide" presentationStyle="fullScreen">
+      <Modal
+        visible={showFullPreview}
+        animationType="slide"
+        presentationStyle="fullScreen"
+      >
         <FullPreviewContent
           brandName={brandName}
           logoUrl={logoUrl}
@@ -1289,15 +2061,29 @@ function ColorRow({
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={onPress}
-      style={[styles.colorPickerRow, { backgroundColor: inputBg, borderColor: cardBorder }]}
+      style={[
+        styles.colorPickerRow,
+        { backgroundColor: inputBg, borderColor: cardBorder },
+      ]}
     >
-      <View style={[styles.colorSquareSwatch, { backgroundColor: value, borderColor: cardBorder }]} />
+      <View
+        style={[
+          styles.colorSquareSwatch,
+          { backgroundColor: value, borderColor: cardBorder },
+        ]}
+      />
       <View style={styles.colorRowInfo}>
-        <Text style={[styles.colorRowLabel, { color: textColor }]}>{label}</Text>
-        <Text style={[styles.colorRowSublabel, { color: textSecondary }]}>{sublabel}</Text>
+        <Text style={[styles.colorRowLabel, { color: textColor }]}>
+          {label}
+        </Text>
+        <Text style={[styles.colorRowSublabel, { color: textSecondary }]}>
+          {sublabel}
+        </Text>
       </View>
       <View style={styles.colorRowRight}>
-        <Text style={[styles.colorRowHex, { color: textColor }]}>{value.toUpperCase()}</Text>
+        <Text style={[styles.colorRowHex, { color: textColor }]}>
+          {value.toUpperCase()}
+        </Text>
         <ChevronRight size={16} color={textSecondary} />
       </View>
     </TouchableOpacity>
@@ -1335,7 +2121,12 @@ function ColorPickerModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
       <View style={styles.modalOverlay}>
         <View style={styles.colorModalBox}>
           <View style={styles.colorModalHeader}>
@@ -1358,7 +2149,9 @@ function ColorPickerModal({
           </View>
 
           <View style={styles.colorPreviewBar}>
-            <View style={[styles.previewSwatchBox, { backgroundColor: tempColor }]} />
+            <View
+              style={[styles.previewSwatchBox, { backgroundColor: tempColor }]}
+            />
             <Text style={styles.previewHexCode}>{tempColor.toUpperCase()}</Text>
           </View>
 
@@ -1366,7 +2159,11 @@ function ColorPickerModal({
             style={[styles.modalConfirmBtn, { backgroundColor: primaryColor }]}
             onPress={handleConfirm}
           >
-            <Text style={[styles.modalConfirmBtnText, { color: primaryTextColor }]}>Select Color</Text>
+            <Text
+              style={[styles.modalConfirmBtnText, { color: primaryTextColor }]}
+            >
+              Select Color
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1401,7 +2198,9 @@ function FullPreviewContent({
   const textColor = isDark ? '#FFFFFF' : '#0F172A';
   const textSecondary = isDark ? 'rgba(255, 255, 255, 0.65)' : '#64748B';
   const cardBg = isDark ? 'rgba(255, 255, 255, 0.06)' : '#FFFFFF';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+  const cardBorder = isDark
+    ? 'rgba(255, 255, 255, 0.1)'
+    : 'rgba(0, 0, 0, 0.08)';
 
   return (
     <View style={[styles.fullPreviewScreen, { backgroundColor }]}>
@@ -1409,20 +2208,44 @@ function FullPreviewContent({
 
       {/* Floating Close Button */}
       <TouchableOpacity
-        style={[styles.fullPreviewCloseBtn, { top: insets.top + 10, backgroundColor: `${primaryColor}20`, borderColor: `${primaryColor}40` }]}
+        style={[
+          styles.fullPreviewCloseBtn,
+          {
+            top: insets.top + 10,
+            backgroundColor: `${primaryColor}20`,
+            borderColor: `${primaryColor}40`,
+          },
+        ]}
         onPress={onClose}
       >
         <X size={20} color={primaryColor} />
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 40, paddingBottom: 60, paddingHorizontal: 20 }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: insets.top + 40,
+          paddingBottom: 60,
+          paddingHorizontal: 20,
+        }}
+      >
         {/* Brand Header */}
         <View style={styles.fullPreviewBrandRow}>
           {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={styles.fullPreviewLogo} contentFit="contain" />
+            <Image
+              source={{ uri: logoUrl }}
+              style={styles.fullPreviewLogo}
+              contentFit="contain"
+            />
           ) : (
-            <View style={[styles.fullPreviewLogoPlaceholder, { backgroundColor: `${primaryColor}20` }]}>
-              <Text style={{ fontSize: 20, fontWeight: '800', color: primaryColor }}>
+            <View
+              style={[
+                styles.fullPreviewLogoPlaceholder,
+                { backgroundColor: `${primaryColor}20` },
+              ]}
+            >
+              <Text
+                style={{ fontSize: 20, fontWeight: '800', color: primaryColor }}
+              >
                 {brandName ? brandName.charAt(0).toUpperCase() : 'B'}
               </Text>
             </View>
@@ -1431,12 +2254,20 @@ function FullPreviewContent({
             <Text
               style={[
                 styles.fullPreviewBrandTitle,
-                { color: textColor, fontFamily: getFontFamily(fontFamily, headingWeight) },
+                {
+                  color: textColor,
+                  fontFamily: getFontFamily(fontFamily, headingWeight),
+                },
               ]}
             >
               {brandName || 'Coach Brand'}
             </Text>
-            <Text style={[styles.fullPreviewBrandSubtitle, { color: textSecondary }]}>
+            <Text
+              style={[
+                styles.fullPreviewBrandSubtitle,
+                { color: textSecondary },
+              ]}
+            >
               Client App Preview
             </Text>
           </View>
@@ -1444,30 +2275,74 @@ function FullPreviewContent({
 
         {/* Stats Row */}
         <View style={styles.fullPreviewStatsGrid}>
-          <View style={[styles.fullPreviewStatCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={[styles.statIconCircle, { backgroundColor: `${primaryColor}16` }]}>
+          <View
+            style={[
+              styles.fullPreviewStatCard,
+              { backgroundColor: cardBg, borderColor: cardBorder },
+            ]}
+          >
+            <View
+              style={[
+                styles.statIconCircle,
+                { backgroundColor: `${primaryColor}16` },
+              ]}
+            >
               <Users size={18} color={primaryColor} />
             </View>
-            <Text style={[styles.fullPreviewStatVal, { color: textColor }]}>18</Text>
-            <Text style={[styles.fullPreviewStatLbl, { color: textSecondary }]}>Active Clients</Text>
+            <Text style={[styles.fullPreviewStatVal, { color: textColor }]}>
+              18
+            </Text>
+            <Text style={[styles.fullPreviewStatLbl, { color: textSecondary }]}>
+              Active Clients
+            </Text>
           </View>
 
-          <View style={[styles.fullPreviewStatCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={[styles.statIconCircle, { backgroundColor: `${primaryColor}16` }]}>
+          <View
+            style={[
+              styles.fullPreviewStatCard,
+              { backgroundColor: cardBg, borderColor: cardBorder },
+            ]}
+          >
+            <View
+              style={[
+                styles.statIconCircle,
+                { backgroundColor: `${primaryColor}16` },
+              ]}
+            >
               <TrendingUp size={18} color={primaryColor} />
             </View>
-            <Text style={[styles.fullPreviewStatVal, { color: textColor }]}>94%</Text>
-            <Text style={[styles.fullPreviewStatLbl, { color: textSecondary }]}>Check-In Rate</Text>
+            <Text style={[styles.fullPreviewStatVal, { color: textColor }]}>
+              94%
+            </Text>
+            <Text style={[styles.fullPreviewStatLbl, { color: textSecondary }]}>
+              Check-In Rate
+            </Text>
           </View>
         </View>
 
         {/* Sample Activity Card */}
-        <View style={[styles.fullPreviewSampleCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <Text style={[styles.sampleCardTitle, { color: textColor }]}>Today's Workout Plan</Text>
-          <Text style={[styles.sampleCardSub, { color: textSecondary }]}>Upper Body Power & Core</Text>
+        <View
+          style={[
+            styles.fullPreviewSampleCard,
+            { backgroundColor: cardBg, borderColor: cardBorder },
+          ]}
+        >
+          <Text style={[styles.sampleCardTitle, { color: textColor }]}>
+            Today's Workout Plan
+          </Text>
+          <Text style={[styles.sampleCardSub, { color: textSecondary }]}>
+            Upper Body Power & Core
+          </Text>
 
-          <View style={[styles.sampleActionBtn, { backgroundColor: primaryColor }]}>
-            <Text style={[styles.sampleActionBtnText, { color: getContrastColor(primaryColor) }]}>
+          <View
+            style={[styles.sampleActionBtn, { backgroundColor: primaryColor }]}
+          >
+            <Text
+              style={[
+                styles.sampleActionBtnText,
+                { color: getContrastColor(primaryColor) },
+              ]}
+            >
               Start Workout
             </Text>
           </View>
@@ -1706,6 +2581,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     marginBottom: 16,
+  },
+  cardHeaderRowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 12,
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  viewAllPresetsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  viewAllPresetsText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   fieldTitle: {
     fontSize: 16,

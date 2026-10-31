@@ -28,46 +28,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      const [profileRes, coachRes, clientRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('coaches').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('clients').select('*').eq('user_id', userId).maybeSingle(),
+      ]);
 
-      if (profileError) throw profileError;
+      if (profileRes.error) throw profileRes.error;
 
-      setProfile(profileData);
+      const profileData = profileRes.data;
 
       if (profileData?.role === 'coach') {
-        const { data: coachData } = await supabase
-          .from('coaches')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        setCoach(coachData);
+        setCoach(coachRes.data ?? null);
         setClient(null);
       } else if (profileData?.role === 'client') {
-        const { data: clientData, error: clientError } = await supabase
-          .from('clients')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (clientError) {
-          console.error('Error fetching client profile:', clientError);
+        if (clientRes.error) {
+          console.error('Error fetching client profile:', clientRes.error);
         }
-
-        // If client profile doesn't exist yet (should be created by trigger/signup), handle gracefully
-        if (!clientData) {
-           console.log('Client profile missing for user:', userId);
-           // Optional: Try to create it if missing?
-           // For now, just leave as null or handle in UI
+        if (!clientRes.data) {
+          console.log('Client profile missing for user:', userId);
         }
-
-        setClient(clientData);
+        setClient(clientRes.data ?? null);
         setCoach(null);
+      } else {
+        setCoach(null);
+        setClient(null);
       }
+
+      setProfile(profileData);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -111,12 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Please enter a valid email address');
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
 
     if (error) throw error;
+
+    if (data?.user) {
+      await fetchProfile(data.user.id);
+    }
   };
 
   const signUp = async (

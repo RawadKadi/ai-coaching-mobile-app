@@ -1,4 +1,4 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useBrand, useBrandColors } from '@/contexts/BrandContext';
 import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -6,15 +6,17 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const colors = useBrandColors();
+  const { loading: brandLoading, isCacheHydrated } = useBrand();
   const styles = getStyles(colors);
   const router = useRouter();
   const { session, profile, loading } = useAuth();
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && isCacheHydrated) {
       if (!session) {
         router.replace('/(auth)/login');
       } else if (profile) {
+        if (brandLoading) return;
         switch (profile.role) {
           case 'client':
             router.replace('/(client)/(tabs)');
@@ -35,7 +37,7 @@ export default function Index() {
         return () => clearTimeout(timeout);
       }
     }
-  }, [loading, session, profile]);
+  }, [loading, brandLoading, isCacheHydrated, session, profile]);
 
   return (
     <View style={styles.container}>
@@ -49,6 +51,6 @@ const getStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background || '#010417',
   },
 });

@@ -1,14 +1,16 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useTheme } from '@/contexts/BrandContext';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Sparkles, ChevronRight, Zap, Target as FocusIcon, Flame, Check } from 'lucide-react-native';
+import { ArrowLeft, Sparkles, ChevronRight, Zap, Flame, Check } from 'lucide-react-native';
 import { generateDailyProtocol } from '@/lib/ai-protocol-service';
 
 export default function AIProtocolSuggestScreen() {
-  const colors = useBrandColors();
+  const theme = useTheme();
+  const colors = theme.colors;
+  const buttonTheme = theme.button;
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { coach } = useAuth();
@@ -102,18 +104,18 @@ export default function AIProtocolSuggestScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               borderWidth: 2,
-              backgroundColor: step >= s ? '#2563EB' : '#0F172A',
-              borderColor: step >= s ? colors.primary : '#1E293B'
+              backgroundColor: step >= s ? colors.primary : colors.surface,
+              borderColor: step >= s ? colors.primary : colors.border
             }}
           >
             {step > s ? (
-              <Check size={14} color="white" />
+              <Check size={14} color={colors.textOnPrimary || 'white'} />
             ) : (
-              <Text style={{ fontWeight: 'bold', fontSize: 12, color: step >= s ? 'white' : '#475569' }}>{s}</Text>
+              <Text style={{ fontWeight: 'bold', fontSize: 12, color: step >= s ? (colors.textOnPrimary || 'white') : colors.textSecondary }}>{s}</Text>
             )}
           </View>
           {s < 3 && (
-            <View style={{ flex: 1, height: 2, marginHorizontal: 8, backgroundColor: step > s ? '#2563EB' : '#1E293B' }} />
+            <View style={{ flex: 1, height: 2, marginHorizontal: 8, backgroundColor: step > s ? colors.primary : colors.border }} />
           )}
         </View>
       ))}
@@ -122,27 +124,27 @@ export default function AIProtocolSuggestScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity 
               onPress={() => step > 1 ? setStep(step - 1) : router.back()} 
-              style={{ padding: 10, backgroundColor: '#0F172A', borderRadius: 12, borderWidth: 1, borderColor: '#1E293B', marginRight: 16 }}
+              style={{ padding: 10, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginRight: 16 }}
             >
-              <ArrowLeft size={18} color="#94A3B8" />
+              <ArrowLeft size={18} color={colors.textSecondary} />
             </TouchableOpacity>
             <View>
-              <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>AI Task Generator</Text>
-              <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }}>Step {step} of 3</Text>
+              <Text style={{ color: colors.text, fontSize: 18, fontWeight: 'bold' }}>AI Task Generator</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }}>Step {step} of 3</Text>
             </View>
           </View>
         </View>
@@ -156,8 +158,8 @@ export default function AIProtocolSuggestScreen() {
         >
             {step === 1 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Main Focus</Text>
-                <Text style={{ color: '#64748B', marginBottom: 24 }}>What should the AI focus on for {clientInfo?.full_name}?</Text>
+                <Text style={{ color: colors.text, fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>Main Focus</Text>
+                <Text style={{ color: colors.textSecondary, marginBottom: 24 }}>What should the AI focus on for {clientInfo?.full_name}?</Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                     {(['training', 'nutrition', 'recovery', 'consistency'] as const).map((f) => {
@@ -174,12 +176,12 @@ export default function AIProtocolSuggestScreen() {
                                     borderRadius: 24,
                                     borderWidth: 2,
                                     alignItems: 'center',
-                                    backgroundColor: isActive ? 'rgba(37, 99, 235, 0.1)' : '#0F172A',
-                                    borderColor: isActive ? colors.primary : '#1E293B'
+                                    backgroundColor: isActive ? `${colors.primary}12` : colors.surface,
+                                    borderColor: isActive ? colors.primary : colors.border
                                 }}
                             >
                                 <Text style={{ fontSize: 24, marginBottom: 8 }}>{emojis[f]}</Text>
-                                <Text style={{ fontWeight: 'bold', textTransform: 'capitalize', color: isActive ? 'white' : '#64748B' }}>{f}</Text>
+                                <Text style={{ fontWeight: 'bold', textTransform: 'capitalize', color: isActive ? colors.text : colors.textSecondary }}>{f}</Text>
                             </TouchableOpacity>
                         );
                     })}
@@ -189,17 +191,17 @@ export default function AIProtocolSuggestScreen() {
 
             {step === 2 && (
               <View>
-                <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>How hard?</Text>
-                <Text style={{ color: '#64748B', marginBottom: 24 }}>Select the daily difficulty level.</Text>
+                <Text style={{ color: colors.text, fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>How hard?</Text>
+                <Text style={{ color: colors.textSecondary, marginBottom: 24 }}>Select the daily difficulty level.</Text>
                 
                 <View style={{ gap: 16 }}>
                     {(['low', 'medium', 'high'] as const).map((int) => {
                         const isActive = intensity === int;
-                        let color = '#475569';
+                        let color = colors.border;
                         let desc = '';
-                        if (int === 'low') { color = '#10B981'; desc = 'Focus on core basics and getting started.'; }
-                        if (int === 'medium') { color = '#F59E0B'; desc = 'A balanced set of tasks for steady progress.'; }
-                        if (int === 'high') { color = '#EF4444'; desc = 'Challenging tasks for fast results.'; }
+                        if (int === 'low') { color = colors.secondary || '#10B981'; desc = 'Focus on core basics and getting started.'; }
+                        if (int === 'medium') { color = colors.accent || '#F59E0B'; desc = 'A balanced set of tasks for steady progress.'; }
+                        if (int === 'high') { color = colors.error || '#EF4444'; desc = 'Challenging tasks for fast results.'; }
                         
                         return (
                             <TouchableOpacity
@@ -209,17 +211,17 @@ export default function AIProtocolSuggestScreen() {
                                     padding: 24,
                                     borderRadius: 24,
                                     borderWidth: 2,
-                                    backgroundColor: isActive ? 'rgba(37, 99, 235, 0.05)' : '#0F172A',
-                                    borderColor: isActive ? color : '#1E293B'
+                                    backgroundColor: isActive ? `${color}12` : colors.surface,
+                                    borderColor: isActive ? color : colors.border
                                 }}
                             >
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                                     <Flame size={20} color={color} style={{ marginRight: 10 }} />
-                                    <Text style={{ fontWeight: '900', textTransform: 'uppercase', fontSize: 16, color: isActive ? 'white' : '#64748B' }}>
+                                    <Text style={{ fontWeight: '900', textTransform: 'uppercase', fontSize: 16, color: isActive ? colors.text : colors.textSecondary }}>
                                         {int} Level
                                     </Text>
                                 </View>
-                                <Text style={{ color: '#475569', fontSize: 14 }}>{desc}</Text>
+                                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{desc}</Text>
                             </TouchableOpacity>
                         );
                     })}
@@ -229,41 +231,41 @@ export default function AIProtocolSuggestScreen() {
 
             {step === 3 && (
               <View>
-                <View style={{ padding: 32, borderRadius: 32, backgroundColor: 'rgba(37, 99, 235, 0.05)', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.2)', alignItems: 'center', marginBottom: 24 }}>
-                    <View style={{ width: 64, height: 64, backgroundColor: '#2563EB', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                        <Zap size={32} color="white" />
+                <View style={{ padding: 32, borderRadius: 32, backgroundColor: `${colors.primary}0d`, borderWidth: 1, borderColor: `${colors.primary}25`, alignItems: 'center', marginBottom: 24 }}>
+                    <View style={{ width: 64, height: 64, backgroundColor: colors.primary, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                        <Zap size={32} color={colors.textOnPrimary || 'white'} />
                     </View>
-                    <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>Ready to build</Text>
-                    <Text style={{ color: '#94A3B8', textAlign: 'center', marginTop: 12, lineHeight: 20, paddingHorizontal: 16, fontSize: 14 }}>
+                    <Text style={{ color: colors.text, fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>Ready to build</Text>
+                    <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 12, lineHeight: 20, paddingHorizontal: 16, fontSize: 14 }}>
                         The AI will create a set of daily tasks for {clientInfo?.full_name}.
                     </Text>
                 </View>
 
                 {/* Selected Options Summary */}
-                <View style={{ backgroundColor: '#0F172A', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#1E293B', marginBottom: 24 }}>
-                    <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', trackingWidest: 1.5, marginBottom: 16 }}>Configuration</Text>
+                <View style={{ backgroundColor: colors.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: colors.border, marginBottom: 24 }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>Configuration</Text>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
-                        <View style={{ flex: 1, backgroundColor: '#020617', padding: 16, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
-                            <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Focus</Text>
-                            <Text style={{ color: 'white', fontWeight: 'bold', textTransform: 'capitalize' }}>{focusType}</Text>
+                        <View style={{ flex: 1, backgroundColor: colors.background, padding: 16, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+                            <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Focus</Text>
+                            <Text style={{ color: colors.text, fontWeight: 'bold', textTransform: 'capitalize' }}>{focusType}</Text>
                         </View>
-                        <View style={{ flex: 1, backgroundColor: '#020617', padding: 16, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: intensity === 'high' ? '#EF4444' : intensity === 'medium' ? '#F59E0B' : '#10B981' }}>
-                            <Text style={{ color: '#475569', fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Intensity</Text>
-                            <Text style={{ color: 'white', fontWeight: 'bold', textTransform: 'capitalize' }}>{intensity}</Text>
+                        <View style={{ flex: 1, backgroundColor: colors.background, padding: 16, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: intensity === 'high' ? (colors.error || '#EF4444') : intensity === 'medium' ? (colors.accent || '#F59E0B') : (colors.secondary || '#10B981') }}>
+                            <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Intensity</Text>
+                            <Text style={{ color: colors.text, fontWeight: 'bold', textTransform: 'capitalize' }}>{intensity}</Text>
                         </View>
                     </View>
                 </View>
 
                 {/* Preset Examples */}
-                <View style={{ backgroundColor: '#0F172A', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#1E293B' }}>
-                    <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', trackingWidest: 1.5, marginBottom: 16 }}>Possible Tasks</Text>
+                <View style={{ backgroundColor: colors.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: colors.border }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>Possible Tasks</Text>
                     <View style={{ gap: 12 }}>
                         {getExamples().map((ex, i) => (
                             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: 'rgba(37, 99, 235, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center' }}>
                                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                 </View>
-                                <Text style={{ color: '#94A3B8', fontSize: 13 }}>{ex}</Text>
+                                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{ex}</Text>
                             </View>
                         ))}
                     </View>
@@ -273,7 +275,7 @@ export default function AIProtocolSuggestScreen() {
         </ScrollView>
 
         {/* Footer Navigation */}
-        <View style={{ paddingHorizontal: 24, paddingVertical: 24, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: '#0F172A' }}>
+        <View style={{ paddingHorizontal: 24, paddingVertical: 24, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
             <TouchableOpacity 
               onPress={() => {
                 if (step < 3) setStep(step + 1);
@@ -282,29 +284,34 @@ export default function AIProtocolSuggestScreen() {
               disabled={generating}
               style={{
                 height: 60,
-                borderRadius: 20,
+                borderRadius: buttonTheme?.borderRadius ? Math.max(buttonTheme.borderRadius, 20) : 20,
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: '#2563EB',
+                backgroundColor: colors.primary,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 8,
+                elevation: 4,
                 opacity: generating ? 0.7 : 1
               }}
             >
                 {generating ? (
-                    <ActivityIndicator color="white" />
+                    <ActivityIndicator color={colors.textOnPrimary || 'white'} />
                 ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       {step === 3 ? (
                         <>
-                           <Sparkles size={20} color="white" style={{ marginRight: 10 }} />
-                           <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Generate Tasks</Text>
+                           <Sparkles size={20} color={colors.textOnPrimary || 'white'} style={{ marginRight: 10 }} />
+                           <Text style={{ color: colors.textOnPrimary || 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }}>Generate Tasks</Text>
                         </>
                       ) : (
                         <>
-                           <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: 'white', marginRight: 8 }}>
+                           <Text style={{ fontWeight: '900', fontSize: 16, textTransform: 'uppercase', color: colors.textOnPrimary || 'white', marginRight: 8 }}>
                              Next
                            </Text>
-                           <ChevronRight size={18} color="white" />
+                           <ChevronRight size={18} color={colors.textOnPrimary || 'white'} />
                         </>
                       )}
                     </View>

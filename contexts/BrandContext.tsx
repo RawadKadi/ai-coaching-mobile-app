@@ -1,8 +1,17 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import { getFontFamily } from '@/hooks/useAppFonts';
+
+const BRAND_CACHE_KEY = '@cached_brand_settings';
+const BRAND_CAN_MANAGE_KEY = '@cached_can_manage_brand';
+
+let memoryCachedBrand: Brand | null = null;
+let memoryCachedCanManage = false;
+let memoryCacheHydrated = false;
 import {
   hexToRGB,
   lightenColor,
@@ -151,7 +160,9 @@ interface BrandContextType {
   brand: Brand | null;
   theme: Theme;
   loading: boolean;
+  isCacheHydrated: boolean;
   refreshBrand: () => Promise<void>;
+  loadBrandById: (brandId: string, coachId?: string) => Promise<void>;
   updateBrandSettings: (updates: Partial<Brand>) => Promise<boolean>;
   canManageBrand: boolean;
   isDarkMode: boolean;
@@ -166,10 +177,35 @@ const BrandContext = createContext<BrandContextType | undefined>(undefined);
 // THEME GENERATION FUNCTIONS
 // ============================================================================
 
+function isGreenColor(hex?: string | null): boolean {
+  if (!hex) return false;
+  const h = hex.toLowerCase().trim();
+  return (
+    h === '#10b981' ||
+    h === '#059669' ||
+    h === '#047857' ||
+    h === '#34d399' ||
+    h === '#16a34a' ||
+    h === '#22c55e' ||
+    h === '#14b8a6' ||
+    h.startsWith('#059') ||
+    h.startsWith('#10b') ||
+    h.startsWith('#34d')
+  );
+}
+
 function generateThemeColors(brand: Brand | null, isDark: boolean): ThemeColors {
   // Use brand colors EXACTLY as the coach configured them - no modifications
   const primaryColor = ensureValidColor(brand?.primary_color, '#7FA7FF');
-  const secondaryColor = ensureValidColor(brand?.secondary_color, '#10B981');
+  const rawSecondary = brand?.secondary_color;
+  const isPrimaryGreen = isGreenColor(primaryColor);
+  const defaultSecondary = isPrimaryGreen ? '#10B981' : primaryColor;
+  const secondaryColor = ensureValidColor(
+    rawSecondary && (!isGreenColor(rawSecondary) || isPrimaryGreen)
+      ? rawSecondary
+      : defaultSecondary,
+    defaultSecondary,
+  );
   const accentColor = ensureValidColor(brand?.accent_color, '#F59E0B');
   const backgroundColor = ensureValidColor(brand?.background_color, '#010417');
   
@@ -270,14 +306,93 @@ function generateTheme(brand: Brand | null, isDark: boolean): Theme {
 export function BrandProvider({ children }: { children: React.ReactNode }) {
   const { coach, client } = useAuth();
   const systemColorScheme = useColorScheme();
-  const [brand, setBrand] = useState<Brand | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [canManageBrand, setCanManageBrand] = useState(false);
+  const [brand, setBrand] = useState<Brand | null>(memoryCachedBrand);
+  const [loading, setLoading] = useState(!memoryCachedBrand);
+  const [isCacheHydrated, setIsCacheHydrated] = useState(memoryCacheHydrated);
+  const [canManageBrand, setCanManageBrand] = useState(memoryCachedCanManage);
   const [userDarkModePreference, setUserDarkModePreference] = useState<boolean | null>(null);
   const [showBrandSavedModal, setShowBrandSavedModal] = useState(false);
 
+  const persistBrandToCache = useCallback(async (brandData: Brand, canManage?: boolean) => {
+    memoryCachedBrand = brandData;
+    setBrand(brandData);
+
+    if (brandData.logo_url) {
+      Image.prefetch(brandData.logo_url).catch(() => {});
+    }
+
+    try {
+      await AsyncStorage.setItem(BRAND_CACHE_KEY, JSON.stringify(brandData));
+      if (canManage !== undefined) {
+        memoryCachedCanManage = canManage;
+        setCanManageBrand(canManage);
+        await AsyncStorage.setItem(BRAND_CAN_MANAGE_KEY, String(canManage));
+      }
+    } catch (err) {
+      console.error('[BrandContext] Failed to persist brand cache:', err);
+    }
+  }, []);
+
+  // Hydrate cached brand from local device storage immediately on startup
+  useEffect(() => {
+    let mounted = true;
+
+    const hydrateFromCache = async () => {
+      try {
+        const [[, cachedBrandStr], [, cachedCanManageStr]] = await AsyncStorage.multiGet([
+          BRAND_CACHE_KEY,
+          BRAND_CAN_MANAGE_KEY,
+        ]);
+
+        if (cachedBrandStr) {
+          const parsedBrand: Brand = JSON.parse(cachedBrandStr);
+          memoryCachedBrand = parsedBrand;
+          if (mounted) {
+            setBrand(parsedBrand);
+            setLoading(false);
+          }
+          if (parsedBrand.logo_url) {
+            Image.prefetch(parsedBrand.logo_url).catch(() => {});
+          }
+        } else {
+          // Fallback: if no brand cached yet on this device, check if a brand exists in DB
+          const { data: fallbackBrand } = await supabase
+            .from('brands')
+            .select('*')
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (fallbackBrand && mounted) {
+            await persistBrandToCache(fallbackBrand, false);
+          }
+        }
+
+        if (cachedCanManageStr !== null) {
+          const canManage = cachedCanManageStr === 'true';
+          memoryCachedCanManage = canManage;
+          if (mounted) {
+            setCanManageBrand(canManage);
+          }
+        }
+      } catch (err) {
+        console.error('[BrandContext] Error hydrating brand cache:', err);
+      } finally {
+        memoryCacheHydrated = true;
+        if (mounted) {
+          setIsCacheHydrated(true);
+        }
+      }
+    };
+
+    hydrateFromCache();
+    return () => {
+      mounted = false;
+    };
+  }, [persistBrandToCache]);
+
   // Detect if the brand's background is dark to set the overall theme mode
-  const isDarkMode = brand ? isDarkColor(brand.background_color) : false;
+  const isDarkMode = brand ? isDarkColor(brand.background_color) : true;
 
   // Generate theme based on brand and detected mode
   const theme = generateTheme(brand, isDarkMode);
@@ -286,66 +401,96 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     (globalThis as any).currentBrandFontFamily = theme.typography.fontFamily || 'System';
   }
 
-  // Load brand data
-  const loadBrand = async () => {
+  // Load a specific brand by ID (e.g. from invite code validation on sign up)
+  const loadBrandById = useCallback(async (targetBrandId: string, fallbackCoachId?: string) => {
     try {
-      setLoading(true);
+      let resolvedBrandId = targetBrandId;
+      if (!resolvedBrandId && fallbackCoachId) {
+        const { data: cData } = await supabase
+          .from('coaches')
+          .select('brand_id')
+          .eq('id', fallbackCoachId)
+          .maybeSingle();
+        if (cData?.brand_id) {
+          resolvedBrandId = cData.brand_id;
+        }
+      }
+      if (!resolvedBrandId) return;
+
+      const { data, error } = await supabase
+        .from('brands')
+        .select('*')
+        .eq('id', resolvedBrandId)
+        .maybeSingle();
+
+      if (!error && data) {
+        await persistBrandToCache(data, false);
+      }
+    } catch (err) {
+      console.error('[BrandContext] Error in loadBrandById:', err);
+    }
+  }, [persistBrandToCache]);
+
+  // Load brand data
+  const loadBrand = useCallback(async () => {
+    try {
+      const expectedBrandId = coach?.brand_id || (client as any)?.brand_id || null;
+      if (!memoryCachedBrand || (expectedBrandId && memoryCachedBrand.id !== expectedBrandId)) {
+        setLoading(true);
+      }
 
       let brandId: string | null = null;
+      let canManage = false;
       
       // COACH: Load their own brand
       if (coach?.brand_id) {
         brandId = coach.brand_id;
-        setCanManageBrand(coach.can_manage_brand || false);
+        canManage = coach.can_manage_brand || false;
+        setCanManageBrand(canManage);
       } 
       // CLIENT: Load their main coach's brand
       else if (client) {
-        console.log('[BrandContext] Client detected, fetching coach link for:', client.id);
-        
-        // 1. Get the active coach link
-        const { data: linkData, error: linkError } = await supabase
-          .from('coach_client_links')
-          .select('coach_id')
-          .eq('client_id', client.id)
-          .in('status', ['active', 'pending'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (linkError) {
-           console.error('[BrandContext] Error fetching coach link:', linkError);
-        } else if (linkData?.coach_id) {
-           console.log('[BrandContext] Found active coach:', linkData.coach_id);
-           
-           // 2. Fetch the coach's brand_id
-           const { data: coachData, error: coachError } = await supabase
-             .from('coaches')
-             .select('brand_id')
-             .eq('id', linkData.coach_id)
-             .single();
-
-           if (coachError) {
-             console.error('[BrandContext] Error fetching coach brand:', coachError);
-           } else if (coachData?.brand_id) {
-             brandId = coachData.brand_id;
-             setCanManageBrand(false);
-             console.log('[BrandContext] Client will use coach brand:', brandId);
-           }
+        setCanManageBrand(false);
+        const directClientBrandId = (client as any).brand_id;
+        if (directClientBrandId) {
+          brandId = directClientBrandId;
         } else {
-           console.log('[BrandContext] No active coach link found for client');
+          // 1. Get the active coach link
+          const { data: linkData, error: linkError } = await supabase
+            .from('coach_client_links')
+            .select('coach_id')
+            .eq('client_id', client.id)
+            .in('status', ['active', 'pending'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (linkError) {
+            console.error('[BrandContext] Error fetching coach link:', linkError);
+          } else if (linkData?.coach_id) {
+            // 2. Fetch the coach's brand_id
+            const { data: coachData, error: coachError } = await supabase
+              .from('coaches')
+              .select('brand_id')
+              .eq('id', linkData.coach_id)
+              .maybeSingle();
+
+            if (coachError) {
+              console.error('[BrandContext] Error fetching coach brand:', coachError);
+            } else if (coachData?.brand_id) {
+              brandId = coachData.brand_id;
+            }
+          }
         }
       }
 
       if (!brandId) {
-        console.log('[BrandContext] No brand ID found, utilizing default theme');
-        setBrand(null);
+        // Keep cached brand on local device (e.g. when signed out on login/signup screen)
         setCanManageBrand(false);
         setLoading(false);
         return;
       }
 
-      console.log('[BrandContext] Loading brand:', brandId);
-      
       const { data, error } = await supabase
         .from('brands')
         .select('*')
@@ -357,19 +502,24 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
 
-      console.log('[BrandContext] Brand loaded:', data);
-      setBrand(data);
+      const mergedBrand: Brand = {
+        ...data,
+        name: data.name || coach?.business_name || data.name,
+        logo_url: data.logo_url || coach?.logo_url || null,
+      };
+
+      await persistBrandToCache(mergedBrand, canManage);
     } catch (error) {
       console.error('[BrandContext] Failed to load brand:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [coach?.brand_id, coach?.can_manage_brand, coach?.business_name, coach?.logo_url, client?.id, persistBrandToCache]);
 
   // Refresh brand (exposed to components)
-  const refreshBrand = React.useCallback(async () => {
+  const refreshBrand = useCallback(async () => {
     await loadBrand();
-  }, [coach?.brand_id, client?.id]);
+  }, [loadBrand]);
 
   // Update brand settings
   const updateBrandSettings = async (updates: Partial<Brand>): Promise<boolean> => {
@@ -378,10 +528,18 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
+    const previousBrand = brand;
+    const optimisticBrand: Brand = {
+      ...brand,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Optimistically save to state & local device cache immediately
+    await persistBrandToCache(optimisticBrand, canManageBrand);
+
     try {
-      console.log('[BrandContext] Updating brand:', updates);
-      
-      const { data, error } = await supabase.rpc('update_brand', {
+      const { error } = await supabase.rpc('update_brand', {
         p_brand_id: brand.id,
         p_name: updates.name || null,
         p_logo_url: updates.logo_url || null,
@@ -408,12 +566,11 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('[BrandContext] Error updating brand:', error);
+        await persistBrandToCache(previousBrand, canManageBrand);
         throw error;
       }
 
-      console.log('[BrandContext] Brand updated successfully');
-      
-      // Refresh brand data
+      // Refresh brand data from DB and update cache
       await refreshBrand();
       return true;
     } catch (error) {
@@ -436,7 +593,7 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   // Load brand when coach or client changes
   useEffect(() => {
     loadBrand();
-  }, [coach?.brand_id, client?.id]);
+  }, [loadBrand]);
 
   return (
     <BrandContext.Provider
@@ -444,7 +601,9 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
         brand,
         theme,
         loading,
+        isCacheHydrated,
         refreshBrand,
+        loadBrandById,
         updateBrandSettings,
         canManageBrand,
         isDarkMode,

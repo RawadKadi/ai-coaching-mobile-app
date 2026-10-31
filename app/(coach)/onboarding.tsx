@@ -45,7 +45,7 @@ const TOTAL_FORM_STEPS = 6; // Form inputs and informational slides; step 7 is s
 export default function CoachOnboardingScreen() {
   const router = useRouter();
   const colors = useBrandColors();
-  const { refreshBrand } = useBrand();
+  const { refreshBrand, updateBrandSettings } = useBrand();
   const { user, coach, profile, refreshProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [success, setSuccess] = useState(false); // True after successful submit → show Step 4
@@ -195,6 +195,16 @@ export default function CoachOnboardingScreen() {
         .eq('id', user.id);
 
       if (coach.brand_id) {
+        await updateBrandSettings({
+          name: values.business_name || 'My Coaching',
+          logo_url: values.logo_url || null,
+          primary_color: values.primary_color || '#7FA7FF',
+          secondary_color: values.secondary_color || '#10B981',
+          accent_color: values.accent_color || '#F59E0B',
+          background_color: values.background_color || '#010417',
+          font_family: values.font_family || 'System',
+          dark_mode_enabled: true,
+        });
         await supabase
           .from('brands')
           .update({

@@ -1,6 +1,6 @@
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { isDarkColor } from '@/lib/theme-utils';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -16,7 +16,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/BrandedText';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
@@ -41,6 +41,7 @@ import {
   Moon,
   CheckCircle2,
   Flame,
+  BarChart2,
 } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import FeedbackModal from '@/components/FeedbackModal';
@@ -236,6 +237,13 @@ export default function CoachDashboard() {
             loadDashboardData();
           },
         )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'messages' },
+          () => {
+            loadDashboardData();
+          },
+        )
         .subscribe();
 
       return () => {
@@ -245,6 +253,14 @@ export default function CoachDashboard() {
       setLoading(false);
     }
   }, [coach, unreadCount]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (coach) {
+        loadDashboardData();
+      }
+    }, [coach, unreadCount]),
+  );
 
   const loadDashboardData = async () => {
     if (!coach) return;
@@ -299,7 +315,14 @@ export default function CoachDashboard() {
       }
 
       const allClients = clientsResult.data || [];
-      const clientMap = new Map<string, { name: string; avatar: string }>();
+      const clientMap = new Map<
+        string,
+        { name: string; avatar: string; userId?: string }
+      >();
+      const userToClientMap = new Map<
+        string,
+        { clientId: string; name: string; avatar: string }
+      >();
 
       if (clientsResult.data) {
         const ids = allClients
@@ -310,10 +333,19 @@ export default function CoachDashboard() {
         setClientUserIds(ids);
 
         allClients.forEach((c: any) => {
+          const uId = c.user_id || c.client_user_id;
           clientMap.set(c.client_id, {
             name: c.client_name,
             avatar: c.client_avatar,
+            userId: uId,
           });
+          if (uId) {
+            userToClientMap.set(uId, {
+              clientId: c.client_id,
+              name: c.client_name,
+              avatar: c.client_avatar,
+            });
+          }
         });
 
         // Set streak leaders from active clients
@@ -327,27 +359,102 @@ export default function CoachDashboard() {
       setHasMoreCheckins((checkinsResult.data || []).length === 15);
       setUpcomingSession(sessionResult?.data || null);
 
-      // Fetch Today's Meals with photos for coach's clients
+      // Fetch ONLY Unseen Meal Logs (meal_log messages sent to the coach that haven't been seen/read in Messages yet)
       const allClientIds = allClients.map((c: any) => c.client_id);
       if (allClientIds.length > 0) {
-        const { data: mealsData } = await supabase
-          .from('meals')
-          .select(
-            'id, client_id, name, meal_date, meal_type, calories, protein_g, carbs_g, fat_g, photo_url, created_at',
-          )
-          .in('client_id', allClientIds)
-          .eq('meal_date', todayStr)
-          .not('photo_url', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(10);
+        const coachUserId = profile?.id || (coach as any)?.user_id;
+        const mealMsgsRes = coachUserId
+          ? await supabase
+              .from('messages')
+              .select('id, sender_id, recipient_id, content, read, created_at')
+              .eq('recipient_id', coachUserId)
+              .eq('read', false)
+              .ilike('content', '%meal%')
+              .order('created_at', { ascending: false })
+              .limit(20)
+          : { data: [] as any[] };
 
-        if (mealsData) {
-          const enriched = mealsData.map((m: any) => ({
-            ...m,
-            client_name: clientMap.get(m.client_id)?.name || 'Client',
-            client_avatar: clientMap.get(m.client_id)?.avatar,
-          }));
-          setTodayMeals(enriched);
+        const unseenEntries: {
+          mealId: string;
+          messageId: string;
+          parsed: any;
+          row: any;
+          clientInfo: { clientId: string; name: string; avatar: string };
+        }[] = [];
+        const seenMealIds = new Set<string>();
+
+        (mealMsgsRes.data || []).forEach((msg: any) => {
+          try {
+            let p =
+              typeof msg.content === 'string'
+                ? JSON.parse(msg.content)
+                : msg.content;
+            if (typeof p === 'string' && p.trim().startsWith('{')) {
+              p = JSON.parse(p.trim());
+            }
+            if ((p?.type === 'meal_log' || p?.type === 'meal') && p?.mealId) {
+              const clientInfo = userToClientMap.get(msg.sender_id);
+              if (clientInfo && !seenMealIds.has(p.mealId)) {
+                seenMealIds.add(p.mealId);
+                unseenEntries.push({
+                  mealId: p.mealId,
+                  messageId: msg.id,
+                  parsed: p,
+                  row: msg,
+                  clientInfo,
+                });
+              }
+            }
+          } catch {}
+        });
+
+        if (unseenEntries.length > 0) {
+          const unseenMealIds = unseenEntries.map((e) => e.mealId);
+          const { data: mealsRows } = await supabase
+            .from('meals')
+            .select(
+              'id, client_id, meal_name, description, meal_date, meal_time, meal_type, calories, protein_g, carbs_g, fat_g, photo_url, created_at',
+            )
+            .in('id', unseenMealIds);
+
+          const mealRowMap = new Map<string, any>();
+          (mealsRows || []).forEach((m: any) => {
+            mealRowMap.set(m.id, m);
+          });
+
+          const unseenMeals = unseenEntries
+            .map(({ mealId, messageId, parsed, row, clientInfo }) => {
+              const m = mealRowMap.get(mealId);
+              const photoUrl =
+                m?.photo_url ||
+                parsed.imageUrl ||
+                parsed.photo_url ||
+                parsed.url;
+              if (!photoUrl) return null;
+              return {
+                id: mealId,
+                client_id: m?.client_id || clientInfo.clientId,
+                meal_name: m?.meal_name || parsed.mealName || 'Meal Log',
+                description: m?.description || parsed.description || '',
+                meal_date:
+                  m?.meal_date ||
+                  (parsed.timestamp || row.created_at || '').split('T')[0],
+                meal_time: m?.meal_time || '',
+                meal_type: m?.meal_type || parsed.mealType || 'meal',
+                calories: m?.calories ?? parsed.calories,
+                protein_g: m?.protein_g ?? parsed.protein,
+                carbs_g: m?.carbs_g,
+                fat_g: m?.fat_g,
+                photo_url: photoUrl,
+                created_at: row.created_at || parsed.timestamp || m?.created_at,
+                message_id: messageId,
+                client_name: clientInfo.name || 'Client',
+                client_avatar: clientInfo.avatar,
+              };
+            })
+            .filter(Boolean);
+
+          setTodayMeals(unseenMeals);
         } else {
           setTodayMeals([]);
         }
@@ -819,15 +926,23 @@ export default function CoachDashboard() {
                         }
                       />
                     </View>
-                    <View className="flex-1">
+                    <View className="flex-1 justify-center">
                       <Text
-                        style={{ color: textColor }}
-                        className="text-4xl font-black tracking-tighter leading-none mb-1"
+                        style={{
+                          color: textColor,
+                          fontSize: 28,
+                          lineHeight: 32,
+                        }}
+                        className="font-black tracking-tight"
                       >
                         {stats.pendingCheckIns}
                       </Text>
                       <Text
-                        style={{ color: textSecondaryColor }}
+                        style={{
+                          color: textSecondaryColor,
+                          lineHeight: 14,
+                          marginTop: 2,
+                        }}
                         className="text-xs font-bold uppercase tracking-wider"
                         numberOfLines={1}
                       >
@@ -876,15 +991,23 @@ export default function CoachDashboard() {
                         }
                       />
                     </View>
-                    <View className="flex-1">
+                    <View className="flex-1 justify-center">
                       <Text
-                        style={{ color: textColor }}
-                        className="text-4xl font-black tracking-tighter leading-none mb-1"
+                        style={{
+                          color: textColor,
+                          fontSize: 28,
+                          lineHeight: 32,
+                        }}
+                        className="font-black tracking-tight"
                       >
                         {stats.unreadMessages}
                       </Text>
                       <Text
-                        style={{ color: textSecondaryColor }}
+                        style={{
+                          color: textSecondaryColor,
+                          lineHeight: 14,
+                          marginTop: 2,
+                        }}
                         className="text-xs font-bold uppercase tracking-wider"
                         numberOfLines={1}
                       >
@@ -921,15 +1044,27 @@ export default function CoachDashboard() {
                 </View>
               )}
 
-              {/* Today's Meals Slideshow / Reel (With Real Photos) */}
+              {/* Client Meal Logs Slideshow / Reel (Only Unseen Meal Logs) */}
               {todayMeals.length > 0 && (
                 <MealSlideshowCard
                   meals={todayMeals}
-                  onPressMeal={(mealId) => {
-                    router.push(`/meal-details/${mealId}` as any);
+                  onPressMeal={(meal) => {
+                    router.push({
+                      pathname: '/meal-details/[id]',
+                      params: {
+                        id: String(meal.id),
+                        clientId: meal.client_id ? String(meal.client_id) : '',
+                        messageId: meal.message_id
+                          ? String(meal.message_id)
+                          : '',
+                      },
+                    });
                   }}
                 />
               )}
+
+              {/* Big & Clear Coach Analytics Card (Colored with brand primary color) */}
+              <CoachAnalyticsCard />
 
               {/* Clients Performance (Big Visible Averages) */}
               <ClientsPerformanceCard pulse={teamPulse} />
@@ -966,8 +1101,8 @@ export default function CoachDashboard() {
                       <ArrowUpRight size={18} color={textSecondaryColor} />
                     </View>
                     <Text
-                      style={{ color: textColor }}
-                      className="text-4xl font-black tracking-tighter leading-none mb-1"
+                      style={{ color: textColor, fontSize: 32, lineHeight: 38 }}
+                      className="font-black tracking-tight mb-1"
                     >
                       {stats.totalClients}
                     </Text>
@@ -983,7 +1118,7 @@ export default function CoachDashboard() {
                         style={{ color: textSecondaryColor }}
                         className="text-xs font-semibold"
                       >
-                        Active roster
+                        View All
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -1012,8 +1147,8 @@ export default function CoachDashboard() {
                       <ArrowUpRight size={18} color={textSecondaryColor} />
                     </View>
                     <Text
-                      style={{ color: textColor }}
-                      className="text-4xl font-black tracking-tighter leading-none mb-1"
+                      style={{ color: textColor, fontSize: 32, lineHeight: 38 }}
+                      className="font-black tracking-tight mb-1"
                     >
                       {displayActiveCount}
                     </Text>
@@ -1073,8 +1208,8 @@ export default function CoachDashboard() {
                       <ArrowUpRight size={18} color={textSecondaryColor} />
                     </View>
                     <Text
-                      style={{ color: textColor }}
-                      className="text-4xl font-black tracking-tighter leading-none mb-1"
+                      style={{ color: textColor, fontSize: 32, lineHeight: 38 }}
+                      className="font-black tracking-tight mb-1"
                     >
                       {stats.todaysSessions}
                     </Text>
@@ -1127,8 +1262,8 @@ export default function CoachDashboard() {
                       <ArrowUpRight size={18} color={textSecondaryColor} />
                     </View>
                     <Text
-                      style={{ color: textColor }}
-                      className="text-4xl font-black tracking-tighter leading-none mb-1"
+                      style={{ color: textColor, fontSize: 32, lineHeight: 38 }}
+                      className="font-black tracking-tight mb-1"
                     >
                       {stats.activeChallenges}
                     </Text>
@@ -1831,6 +1966,154 @@ const SlippingClientsHeroCard = ({
   );
 };
 
+// ─── Big & Clear Coach Analytics Card (Brand Secondary Color) ───────────────
+const CoachAnalyticsCard = () => {
+  const colors = useBrandColors();
+  const router = useRouter();
+  const { isDarkMode } = useTheme();
+  const isDark = isDarkMode || isDarkColor(colors.background || '#010417');
+
+  const primaryColor = colors.primary || '#3B82F6';
+  const isPrimaryDark = isDarkColor(primaryColor);
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+
+  return (
+    <View className="mb-4">
+      <TouchableOpacity
+        activeOpacity={0.88}
+        onPress={() => router.push('/(coach)/client-analytics')}
+        className="rounded-[36px] p-6 border relative overflow-hidden"
+        style={{
+          backgroundColor: isDark
+            ? `${primaryColor}15`
+            : `${primaryColor}10`,
+          borderColor: `${primaryColor}40`,
+        }}
+      >
+        {/* Glow ambient background circles */}
+        <View
+          style={{ backgroundColor: `${primaryColor}25` }}
+          className="absolute -top-16 -right-16 w-56 h-56 rounded-full"
+        />
+        <View
+          style={{ backgroundColor: `${primaryColor}15` }}
+          className="absolute -bottom-12 -left-12 w-44 h-44 rounded-full"
+        />
+
+        {/* Top Header Row */}
+        <View className="flex-row items-center justify-between mb-4">
+          <View className="flex-row items-center gap-3.5">
+            <View
+              className="rounded-2xl items-center justify-center border"
+              style={{
+                width: 52,
+                height: 52,
+                backgroundColor: primaryColor,
+                borderColor: `${primaryColor}80`,
+              }}
+            >
+              <BarChart2
+                size={26}
+                color={colors.textOnPrimary || (isPrimaryDark ? '#FFFFFF' : '#0F172A')}
+                strokeWidth={2.3}
+              />
+            </View>
+            <View>
+              <Text
+                style={{ color: textColor }}
+                className="text-2xl font-black tracking-tight"
+              >
+                Client Analytics
+              </Text>
+              <Text
+                style={{ color: primaryColor }}
+                className="text-xs font-black uppercase tracking-wider mt-0.5"
+              >
+                Nutrition, Steps & Health
+              </Text>
+            </View>
+          </View>
+
+          <View
+            className="w-10 h-10 rounded-full items-center justify-center border"
+            style={{
+              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+              borderColor: `${primaryColor}50`,
+            }}
+          >
+            <ChevronRight size={20} color={primaryColor} />
+          </View>
+        </View>
+
+        {/* Description */}
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="text-sm font-medium leading-5 mb-4"
+        >
+          Check client calories, macros, sleep, and daily habits with interactive charts.
+        </Text>
+
+        {/* Feature Pills */}
+        <View className="flex-row items-center gap-2 flex-wrap">
+          <View
+            className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+            style={{
+              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+              borderColor: `${primaryColor}30`,
+            }}
+          >
+            <Utensils size={13} color={primaryColor} />
+            <Text style={{ color: textColor }} className="text-xs font-bold">
+              Food & Macros
+            </Text>
+          </View>
+
+          <View
+            className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+            style={{
+              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+              borderColor: `${primaryColor}30`,
+            }}
+          >
+            <Flame size={13} color={primaryColor} />
+            <Text style={{ color: textColor }} className="text-xs font-bold">
+              Steps
+            </Text>
+          </View>
+
+          <View
+            className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+            style={{
+              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+              borderColor: `${primaryColor}30`,
+            }}
+          >
+            <Moon size={13} color={primaryColor} />
+            <Text style={{ color: textColor }} className="text-xs font-bold">
+              Sleep
+            </Text>
+          </View>
+
+          <View
+            className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+            style={{
+              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+              borderColor: `${primaryColor}30`,
+            }}
+          >
+            <Zap size={13} color={primaryColor} />
+            <Text style={{ color: textColor }} className="text-xs font-bold">
+              Energy
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 // ─── Clients Performance Card (Big Numbers & Averages) ──────────────────────
 const ClientsPerformanceCard = ({
   pulse,
@@ -1991,13 +2274,13 @@ const ClientsPerformanceCard = ({
   );
 };
 
-// ─── Today's Meals Slideshow Card (Huge Photos & Deep Link) ──────────────────
+// ─── Client Meal Logs Slideshow Card (Huge Photos & Deep Link) ──────────────────
 const MealSlideshowCard = ({
   meals,
   onPressMeal,
 }: {
   meals: any[];
-  onPressMeal: (mealId: string) => void;
+  onPressMeal: (meal: any) => void;
 }) => {
   const colors = useBrandColors();
   const { isDarkMode } = useTheme();
@@ -2029,14 +2312,14 @@ const MealSlideshowCard = ({
             style={{ color: textColor }}
             className="text-2xl font-black tracking-tight"
           >
-            Today's Meals
+            Meal Logs
           </Text>
         </View>
         <Text
           style={{ color: textSecondaryColor }}
           className="text-xs font-bold"
         >
-          {meals.length} {meals.length === 1 ? 'logged' : 'logged'}
+          {meals.length} new
         </Text>
       </View>
 
@@ -2057,24 +2340,22 @@ const MealSlideshowCard = ({
       >
         {meals.map((meal) => {
           const timeStr = meal.created_at
-            ? new Date(meal.created_at).toLocaleTimeString([], {
-                hour: 'numeric',
-                minute: '2-digit',
-              })
+            ? formatActivityDate(meal.created_at)
             : '';
           const mealTypeLabel = meal.meal_type
             ? meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)
             : 'Meal';
+          const displayTitle = meal.meal_name || meal.name || mealTypeLabel;
 
           return (
             <TouchableOpacity
               key={meal.id}
               activeOpacity={0.9}
-              onPress={() => onPressMeal(meal.id)}
+              onPress={() => onPressMeal(meal)}
               className="overflow-hidden rounded-[36px] border relative"
               style={{
                 width: MEAL_CARD_WIDTH,
-                height: 220,
+                height: 236,
                 borderColor: cardBorder,
                 backgroundColor: isDark ? '#0F172A' : '#F1F5F9',
               }}
@@ -2087,7 +2368,11 @@ const MealSlideshowCard = ({
 
               {/* Gradient Overlay for legibility */}
               <LinearGradient
-                colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(0,0,0,0.88)']}
+                colors={[
+                  'rgba(0,0,0,0.55)',
+                  'rgba(0,0,0,0.1)',
+                  'rgba(0,0,0,0.92)',
+                ]}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -2097,13 +2382,13 @@ const MealSlideshowCard = ({
                 }}
               />
 
-              {/* Top Bar: Client info & Meal time */}
+              {/* Top Bar: Client Profile & Name + Log Time */}
               <View className="absolute top-4 left-4 right-4 flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2 bg-black/50 px-3 py-1.5 rounded-full border border-white/10">
+                <View className="flex-row items-center gap-2.5 bg-black/55 px-3 py-1.5 rounded-full border border-white/15">
                   <BrandedAvatar
                     name={meal.client_name}
                     imageUrl={meal.client_avatar}
-                    size={24}
+                    size={26}
                   />
                   <Text
                     className="text-white font-bold text-xs"
@@ -2113,41 +2398,49 @@ const MealSlideshowCard = ({
                   </Text>
                 </View>
 
-                <View className="bg-black/50 px-3 py-1.5 rounded-full border border-white/10">
+                <View className="bg-black/55 px-3 py-1.5 rounded-full border border-white/15">
                   <Text className="text-white/90 font-bold text-xs">
-                    {mealTypeLabel} {timeStr ? `· ${timeStr}` : ''}
+                    {timeStr || mealTypeLabel}
                   </Text>
                 </View>
               </View>
 
-              {/* Bottom Content: Meal Title & Calories/Protein badge */}
+              {/* Bottom Content: Meal Name, Brief Detail & Macros */}
               <View className="absolute bottom-4 left-4 right-4 flex-row items-end justify-between">
                 <View className="flex-1 mr-3">
                   <Text
                     className="text-white font-black text-xl tracking-tight leading-6"
                     numberOfLines={1}
                   >
-                    {meal.name || mealTypeLabel}
+                    {displayTitle}
                   </Text>
-                  <View className="flex-row items-center gap-2 mt-1.5">
+                  {meal.description ? (
+                    <Text
+                      className="text-white/80 font-medium text-xs mt-0.5"
+                      numberOfLines={1}
+                    >
+                      {meal.description}
+                    </Text>
+                  ) : null}
+                  <View className="flex-row items-center gap-2 mt-2">
                     {meal.calories != null && (
                       <View className="bg-white/20 px-3 py-1 rounded-full">
                         <Text className="text-white font-bold text-xs">
-                          {meal.calories} kcal
+                          {Math.round(Number(meal.calories))} kcal
                         </Text>
                       </View>
                     )}
                     {meal.protein_g != null && (
                       <View className="bg-emerald-500/30 border border-emerald-400/30 px-3 py-1 rounded-full">
                         <Text className="text-emerald-300 font-bold text-xs">
-                          {meal.protein_g}g protein
+                          {Math.round(Number(meal.protein_g))}g protein
                         </Text>
                       </View>
                     )}
                   </View>
                 </View>
 
-                <View className="bg-white/20 border border-white/20 px-3.5 py-2 rounded-full flex-row items-center gap-1.5">
+                <View className="bg-white/20 border border-white/25 px-3.5 py-2 rounded-full flex-row items-center gap-1.5">
                   <Text className="text-white font-bold text-xs">View</Text>
                   <ChevronRight size={14} color="white" />
                 </View>

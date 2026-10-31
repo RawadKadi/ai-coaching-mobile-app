@@ -134,17 +134,40 @@ export default function FeedbackModal({
   const fadeAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const scaleAnim = useRef(new Animated.Value(visible ? 1 : 0.95)).current;
   const isClosingRef = useRef(false);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (visible) {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
       isClosingRef.current = false;
       setInternalVisible(true);
-      if (reduceMotion) {
-        fadeAnim.setValue(1);
-        scaleAnim.setValue(1);
-      } else {
-        fadeAnim.setValue(0);
-        scaleAnim.setValue(0.95);
+    } else if (internalVisible && !isClosingRef.current) {
+      handleClose();
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!internalVisible || !visible) return;
+
+    fadeAnim.stopAnimation();
+    scaleAnim.stopAnimation();
+
+    if (reduceMotion) {
+      fadeAnim.setValue(1);
+      scaleAnim.setValue(1);
+    } else {
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.95);
+      const raf = requestAnimationFrame(() => {
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
@@ -158,39 +181,47 @@ export default function FeedbackModal({
             useNativeDriver: true,
           }),
         ]).start();
-      }
-    } else if (internalVisible && !isClosingRef.current) {
-      handleClose();
+      });
+      return () => cancelAnimationFrame(raf);
     }
-  }, [visible, reduceMotion]);
+  }, [internalVisible, visible, reduceMotion]);
+
+  const finalizeClose = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    setInternalVisible(false);
+    onClose();
+  };
 
   const handleClose = () => {
     if (isClosingRef.current) return;
     isClosingRef.current = true;
 
+    fadeAnim.stopAnimation();
+    scaleAnim.stopAnimation();
+
     if (reduceMotion) {
-      setInternalVisible(false);
-      onClose();
+      finalizeClose();
     } else {
+      closeTimeoutRef.current = setTimeout(finalizeClose, 260);
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 200,
+          duration: 180,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.94,
-          duration: 200,
+          duration: 180,
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setInternalVisible(false);
-        onClose();
+        finalizeClose();
       });
     }
   };
-
-  if (!internalVisible) return null;
 
   return (
     <Modal
@@ -200,6 +231,7 @@ export default function FeedbackModal({
       statusBarTranslucent
       onRequestClose={handleClose}
     >
+      {internalVisible && (
       <TouchableWithoutFeedback onPress={handleClose}>
         <Animated.View
           style={{
@@ -344,6 +376,7 @@ export default function FeedbackModal({
           </TouchableWithoutFeedback>
         </Animated.View>
       </TouchableWithoutFeedback>
+      )}
     </Modal>
   );
 }

@@ -28,8 +28,9 @@ export default function PendingResolutionsModal({ visible, onClose, sessions: in
         if (!visible) return;
 
         console.log('[PendingResolutions] Subscribing to session updates...');
+        const channelId = `pending-resolutions-${Date.now()}_${Math.random()}`;
         const subscription = supabase
-            .channel('pending-resolutions-updates')
+            .channel(channelId)
             .on(
                 'postgres_changes',
                 {

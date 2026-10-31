@@ -40,6 +40,7 @@ import {
   X,
   Flame,
   Activity,
+  MessageSquare,
 } from 'lucide-react-native';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useTheme } from '@/contexts/BrandContext';
@@ -51,7 +52,69 @@ import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { MotiView, AnimatePresence } from 'moti';
-import { useReducedMotion } from 'react-native-reanimated';
+import Animated, { useReducedMotion, useAnimatedStyle, interpolate } from 'react-native-reanimated';
+import StreakFire from '@/components/StreakFire';
+import { formatCompactNumber } from '@/lib/format-utils';
+
+function HabitSwipeActions({
+  progress,
+  cardBg,
+  cardBorder,
+  textColor,
+  onEdit,
+  onDelete,
+}: {
+  progress: any;
+  cardBg: string;
+  cardBorder: string;
+  textColor: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const p = progress?.value ?? 0;
+    return {
+      opacity: interpolate(p, [0, 0.2, 1], [0, 1, 1]),
+      transform: [
+        {
+          translateX: interpolate(p, [0, 1], [30, 0]),
+        },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingLeft: 12,
+          height: '100%',
+        },
+        animatedStyle,
+      ]}
+    >
+      <TouchableOpacity 
+        accessibilityRole="button"
+        accessibilityLabel="Edit task"
+        onPress={onEdit}
+        className="w-14 h-full rounded-2xl items-center justify-center border mr-2"
+        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+      >
+        <Edit2 size={18} color={textColor} />
+      </TouchableOpacity>
+      <TouchableOpacity 
+        accessibilityRole="button"
+        accessibilityLabel="Delete task"
+        onPress={onDelete}
+        className="w-14 h-full bg-red-500 rounded-2xl items-center justify-center"
+      >
+        <Trash2 size={18} color="white" />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 // ─── Mini Bar Chart for Steps Card (7-day trend) ────────────────────────────
 function MiniBarChart({
@@ -102,14 +165,40 @@ export default function ClientDetailsScreen() {
   const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
-  const [challengeFilter, setChallengeFilter] = useState<'active' | 'history'>('active');
-  type SubView = 'daily_tasks' | 'challenges' | 'checkins' | 'sessions' | 'weight_history' | null;
+  type SubView = 'daily_tasks' | 'weight_history' | null;
   const [activeSubView, setActiveSubView] = useState<SubView>(
-    (tab as string) === 'checkins' ? 'checkins' : (tab as string) === 'daily_tasks' ? 'daily_tasks' : (tab as string) === 'challenges' ? 'challenges' : (tab as string) === 'sessions' ? 'sessions' : null
+    (tab as string) === 'daily_tasks' ? 'daily_tasks' : null
   );
+  const scrollRef = useRef<ScrollView>(null);
+  const hasLoadedOnce = useRef(false);
+
+  const [messageFabPressed, setMessageFabPressed] = useState(false);
+
+  // Challenges, Check-ins and Sessions are their own pages now
+  const openClientPage = (page: 'challenges' | 'checkins' | 'sessions') => {
+    router.push({
+      pathname: `/(coach)/clients/${page}` as any,
+      params: { 
+        clientId: id as string, 
+        name: client?.profiles?.full_name || '',
+        avatar: client?.profiles?.avatar_url || '',
+      },
+    });
+  };
+
+  useEffect(() => {
+    if (tab === 'checkins') {
+      openClientPage('checkins');
+    } else if (tab === 'challenges') {
+      openClientPage('challenges');
+    } else if (tab === 'sessions') {
+      openClientPage('sessions');
+    }
+  }, [tab, id, client?.profiles?.full_name, client?.profiles?.avatar_url]);
   const [checkins, setCheckins] = useState<any[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [streak, setStreak] = useState(0);
+  const [isColdStreak, setIsColdStreak] = useState(false);
   const [sessionLog, setSessionLog] = useState<any[]>([]);
   const [stepsLog, setStepsLog] = useState<any[]>([]);
   
@@ -118,14 +207,12 @@ export default function ClientDetailsScreen() {
   const [currentConflict, setCurrentConflict] = useState<any>(null);
   // Habit Editing State
   const [isEditingHabits, setIsEditingHabits] = useState(false);
-  const [isEditingChallenges, setIsEditingChallenges] = useState(false);
   const [editHabitModalVisible, setEditHabitModalVisible] = useState(false);
   const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
   const [editingName, setEditingName] = useState('');
   const [editingDescription, setEditingDescription] = useState('');
   const [editingCategory, setEditingCategory] = useState<any>('general');
   const [updating, setUpdating] = useState(false);
-  const [pastSessionsExpanded, setPastSessionsExpanded] = useState(false);
   const reduceMotion = useReducedMotion();
 
   const swipeableRefs = useRef<{ [key: string]: any }>({});
@@ -139,6 +226,12 @@ export default function ClientDetailsScreen() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions', filter: `coach_id=eq.${coach.id}` }, () => {
             loadClientData();
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'habit_logs', filter: `client_id=eq.${id}` }, () => {
+            loadClientData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'habits', filter: `client_id=eq.${id}` }, () => {
+            loadClientData();
+        })
         .subscribe();
 
       return () => { supabase.removeChannel(subscription); };
@@ -147,75 +240,160 @@ export default function ClientDetailsScreen() {
 
   const loadClientData = async () => {
     try {
-      if (!refreshing) setLoading(true);
-      
-      const { data: clientData, error: clientError } = await supabase.rpc('get_client_details', { target_client_id: id });
-      if (clientError) throw clientError;
-      setClient(clientData);
+      // Only show the loading screen the first time. Later refreshes happen quietly.
+      if (!hasLoadedOnce.current && !refreshing) setLoading(true);
 
-      const { data: challengesData, error: challengesError } = await supabase.rpc('get_coach_mother_challenges', { 
-        p_coach_id: coach?.id,
-        p_client_id: id 
-      });
-      if (challengesError) throw challengesError;
-      setChallenges(challengesData || []);
+      const dateStrForDaysAgo = (daysAgo: number) => {
+        const d = new Date();
+        d.setDate(d.getDate() - daysAgo);
+        return [
+          d.getFullYear(),
+          String(d.getMonth() + 1).padStart(2, '0'),
+          String(d.getDate()).padStart(2, '0'),
+        ].join('-');
+      };
 
-      const { data: sessionsData, error: sessionsError } = await supabase.from('sessions').select(`*, client:clients!sessions_client_id_fkey(id, profiles(full_name))`).eq('coach_id', coach?.id).gte('scheduled_at', new Date().toISOString());
-        
-      if (!sessionsError && sessionsData) {
-          const sessionsWithNames = sessionsData.map(s => ({ ...s, client_name: s.client?.profiles?.full_name || 'Unknown' }));
-          setAllCoachSessions(sessionsWithNames);
-          const pending = sessionsData.filter(s => s.client_id === id && (s.status === 'pending_resolution' || s.status === 'proposed' || (s.invite_sent === true && s.status === 'scheduled' && !s.cancellation_reason) || (s.cancellation_reason?.startsWith('pending_reschedule')) || (s.cancellation_reason === 'reschedule_rejected')));
-          setPendingResolutions(pending);
+      // Fetch everything at the same time instead of one after another
+      const [
+        clientRes,
+        challengesRes,
+        sessionsRes,
+        checkinsRes,
+        habitsRes,
+        habitLogsRes,
+        sessionLogRes,
+        stepsRes,
+        mealsRes,
+      ] = await Promise.all([
+        supabase.rpc('get_client_details', { target_client_id: id }),
+        supabase.rpc('get_coach_mother_challenges', { p_coach_id: coach?.id, p_client_id: id }),
+        supabase
+          .from('sessions')
+          .select('*, client:clients!sessions_client_id_fkey(id, profiles(full_name))')
+          .eq('coach_id', coach?.id)
+          .gte('scheduled_at', new Date().toISOString()),
+        supabase.from('check_ins').select('*').eq('client_id', id).order('date', { ascending: false }),
+        supabase
+          .from('habits')
+          .select('*')
+          .eq('client_id', id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('habit_logs')
+          .select('date, habit_id, completed')
+          .eq('client_id', id)
+          .gte('date', dateStrForDaysAgo(90))
+          .eq('completed', true),
+        supabase
+          .from('sessions')
+          .select('*')
+          .eq('client_id', id)
+          .order('scheduled_at', { ascending: false }),
+        supabase
+          .from('daily_logs')
+          .select('date, steps')
+          .eq('client_id', id)
+          .order('date', { ascending: false })
+          .limit(30),
+        supabase
+          .from('meals')
+          .select('meal_date')
+          .eq('client_id', id)
+          .gte('meal_date', dateStrForDaysAgo(90)),
+      ]);
+
+      if (clientRes.error) throw clientRes.error;
+      setClient(clientRes.data);
+      setChallenges(challengesRes.data || []);
+
+      const sessionsData = sessionsRes.data;
+      if (!sessionsRes.error && sessionsData) {
+        setAllCoachSessions(
+          sessionsData.map((s: any) => ({ ...s, client_name: s.client?.profiles?.full_name || 'Unknown' }))
+        );
+        setPendingResolutions(
+          sessionsData.filter(
+            (s: any) =>
+              s.client_id === id &&
+              (s.status === 'pending_resolution' ||
+                s.status === 'proposed' ||
+                (s.invite_sent === true && s.status === 'scheduled' && !s.cancellation_reason) ||
+                s.cancellation_reason?.startsWith('pending_reschedule') ||
+                s.cancellation_reason === 'reschedule_rejected')
+          )
+        );
       }
 
-      const { data: checkinsData, error: checkinsError } = await supabase
-        .from('check_ins')
-        .select('*')
-        .eq('client_id', id)
-        .order('date', { ascending: false });
-        
-      if (!checkinsError && checkinsData) {
-        setCheckins(checkinsData);
+      if (!checkinsRes.error && checkinsRes.data) setCheckins(checkinsRes.data);
+      const activeHabitsList = (!habitsRes.error && habitsRes.data) || [];
+      setHabits(activeHabitsList as Habit[]);
+      if (!sessionLogRes.error && sessionLogRes.data) setSessionLog(sessionLogRes.data);
+      if (stepsRes.data) setStepsLog(stepsRes.data);
+
+      // Streak (2-missed-days rule). Same math the client app uses (Check-in + Meal + Coach tasks).
+      const completedLogs = habitLogsRes.data || [];
+      const checkInsList = checkinsRes.data || [];
+      const checkInDatesSet = new Set(checkInsList.map((c: any) => c.date));
+      const mealDatesSet = new Set((mealsRes.data || []).map((m: any) => m.meal_date));
+
+      const isDateCompleted = (dateStr: string) => {
+        // Essential 1: Check-in
+        if (!checkInDatesSet.has(dateStr)) return false;
+
+        // Essential 2: At least 1 meal
+        if (!mealDatesSet.has(dateStr)) return false;
+
+        // Essential 3+: Any active coach habits established for that date
+        const habitsForDate = activeHabitsList.filter((h: any) => {
+          const createdDate = h.created_at ? h.created_at.split('T')[0] : '2000-01-01';
+          return createdDate <= dateStr;
+        });
+        if (habitsForDate.length > 0) {
+          return habitsForDate.every((h: any) =>
+            completedLogs.some((l: any) => l.habit_id === h.id && l.date === dateStr && l.completed)
+          );
+        }
+        return true;
+      };
+
+      const isTodayDone = isDateCompleted(dateStrForDaysAgo(0));
+      const isYesterdayDone = isDateCompleted(dateStrForDaysAgo(1));
+      const isDayBeforeYesterdayDone = isDateCompleted(dateStrForDaysAgo(2));
+
+      const countStreak = (startDaysAgo: number) => {
+        let count = isTodayDone ? 1 : 0;
+        let daysAgo = startDaysAgo;
+        let consecutiveMiss = 0;
+        while (daysAgo <= 90) {
+          if (isDateCompleted(dateStrForDaysAgo(daysAgo))) {
+            count += 1;
+            consecutiveMiss = 0;
+          } else {
+            consecutiveMiss += 1;
+            if (consecutiveMiss >= 2) break;
+          }
+          daysAgo += 1;
+        }
+        return count;
+      };
+
+      let computedStreak = 0;
+      let coldStatus = false;
+
+      // Essentials always exist, so streak calculation runs for all clients
+      if (isYesterdayDone) {
+        computedStreak = countStreak(1);
+      } else if (isDayBeforeYesterdayDone) {
+        computedStreak = countStreak(2);
+        coldStatus = !isTodayDone && computedStreak > 0;
+      } else {
+        computedStreak = isTodayDone ? 1 : 0;
       }
 
-      // Load Habits for Daily Tasks tab
-      const { data: habitsData, error: habitsError } = await supabase
-        .from('habits')
-        .select('*')
-        .eq('client_id', id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true });
-
-      if (!habitsError && habitsData) {
-        setHabits(habitsData);
-      }
-
-      // Load Streak
-      const viewerTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const { data: streakData } = await supabase.rpc('get_client_streak', { p_client_id: id, p_timezone: viewerTimezone });
-      setStreak(streakData || 0);
-
-      // Load Session Log
-      const { data: sessionLogData, error: sessionLogError } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('client_id', id)
-        .order('scheduled_at', { ascending: false });
-
-      if (!sessionLogError && sessionLogData) {
-        setSessionLog(sessionLogData);
-      }
-
-      // Load steps logs
-      const { data: stepsData } = await supabase
-        .from('daily_logs')
-        .select('*')
-        .eq('client_id', id)
-        .order('date', { ascending: false });
-      if (stepsData) {
-        setStepsLog(stepsData);
-      }
+      setStreak(computedStreak);
+      setIsColdStreak(coldStatus);
+      hasLoadedOnce.current = true;
     } catch (error) {
       console.error(error);
     } finally {
@@ -224,29 +402,6 @@ export default function ClientDetailsScreen() {
     }
   };
 
-  const handleDeleteChallenge = async (challengeId: string) => {
-    Alert.alert(
-      'Remove Challenge',
-      'Are you sure? This will delete the challenge and all progress.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase.from('mother_challenges').delete().eq('id', challengeId);
-              if (error) throw error;
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setChallenges(prev => prev.filter(c => c.id !== challengeId));
-            } catch (e: any) {
-              Alert.alert('Error', e.message);
-            }
-          }
-        }
-      ]
-    );
-  };
 
   const handleDeleteHabit = async (habitId: string) => {
     Alert.alert(
@@ -323,26 +478,18 @@ export default function ClientDetailsScreen() {
     loadClientData();
   }, [id, coach]);
 
-  if (loading && !refreshing) {
-    return <CoachClientDetailsSkeleton />;
-  }
-
-  if (!client) {
-    return (
-      <View className="flex-1 bg-slate-950 justify-center items-center">
-        <Text className="text-white font-bold">Client not found</Text>
-      </View>
-    );
-  }
-
   const isDark = isDarkColor(colors.background || '#010417');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
   const todayStr = `${yyyy}-${mm}-${dd}`;
   const todayLog = stepsLog.find(log => log.date === todayStr);
-  const todaySteps = todayLog ? todayLog.steps : (stepsLog.length > 0 && stepsLog[0].steps ? stepsLog[0].steps : 0);
+  const todaySteps = todayLog ? todayLog.steps : (stepsLog.length > 0 && stepsLog[0]?.steps ? stepsLog[0].steps : 0);
 
   const stepsChartData = useMemo(() => {
     const points: number[] = [];
@@ -359,18 +506,25 @@ export default function ClientDetailsScreen() {
     return points;
   }, [stepsLog]);
 
-  const stepsTimeStr = useMemo(() => {
-    if (todayLog) {
-      return 'Today';
-    }
-    if (stepsLog.length > 0 && stepsLog[0]?.date) {
-      return new Date(stepsLog[0].date + 'T00:00:00').toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-      });
-    }
-    return 'Today';
-  }, [todayLog, stepsLog]);
+  const avgSteps = useMemo(() => {
+    if (stepsChartData.length === 0) return 0;
+    const total = stepsChartData.reduce((acc, curr) => acc + (curr || 0), 0);
+    return Math.round(total / 7);
+  }, [stepsChartData]);
+
+  const stepsTimeStr = 'Last 7 Days';
+
+  if (loading && !refreshing) {
+    return <CoachClientDetailsSkeleton />;
+  }
+
+  if (!client) {
+    return (
+      <View className="flex-1 bg-slate-950 justify-center items-center">
+        <Text className="text-white font-bold">Client not found</Text>
+      </View>
+    );
+  }
 
   const validWeights = checkins.filter(c => c.weight_kg !== null && c.weight_kg !== undefined);
   const latestWeight = validWeights.length > 0 ? Number(validWeights[0].weight_kg) : null;
@@ -406,7 +560,6 @@ export default function ClientDetailsScreen() {
   });
 
   const activeChallengesCount = computedChallenges.filter(c => c.status === 'active').length;
-  const filteredChallenges = computedChallenges.filter(c => challengeFilter === 'active' ? c.status === 'active' : c.status === 'completed');
   const upcomingSessions = sessionLog.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at) > new Date());
 
   return (
@@ -437,13 +590,15 @@ export default function ClientDetailsScreen() {
                             )}
                         </View>
                     </View>
-                    <TouchableOpacity 
-                      onPress={() => setSchedulerVisible(true)} 
-                      className="w-10 h-10 rounded-2xl items-center justify-center border"
-                      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                    >
-                        <CalendarIcon size={18} color={colors.primary} />
-                    </TouchableOpacity>
+                    <View className="flex-row items-center gap-2">
+                        <TouchableOpacity 
+                          onPress={() => setSchedulerVisible(true)} 
+                          className="w-10 h-10 rounded-2xl items-center justify-center border"
+                          style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+                        >
+                            <CalendarIcon size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                    </View>
                   </>
                 ) : (
                   <>
@@ -451,41 +606,21 @@ export default function ClientDetailsScreen() {
                         <TouchableOpacity 
                           onPress={() => setActiveSubView(null)} 
                           className="w-10 h-10 rounded-2xl items-center justify-center border"
-                          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                          style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                         >
-                            <ArrowLeft size={18} color={colors.text} />
+                            <ArrowLeft size={18} color={textColor} />
                         </TouchableOpacity>
+                        <BrandedAvatar name={client.profiles?.full_name} size={42} imageUrl={client.profiles?.avatar_url} />
                         <View className="flex-1">
-                            <Text className="text-lg font-black tracking-tight" numberOfLines={1} style={{ color: colors.text }}>
-                              {activeSubView === 'daily_tasks' ? 'Daily Tasks'
-                                : activeSubView === 'challenges' ? 'Challenges'
-                                : activeSubView === 'checkins' ? 'Check-ins'
-                                : activeSubView === 'sessions' ? 'Sessions'
-                                : 'Weight History'}
+                            <Text className="text-lg font-black tracking-tight" numberOfLines={1} style={{ color: textColor }}>
+                              {activeSubView === 'daily_tasks' ? 'Daily Tasks' : 'Weight History'}
                             </Text>
-                            <Text className="text-xs font-medium" numberOfLines={1} style={{ color: colors.textSecondary }}>
+                            <Text className="text-xs font-medium" numberOfLines={1} style={{ color: textSecondaryColor }}>
                               {client.profiles?.full_name}
                             </Text>
                         </View>
                     </View>
-                    {activeSubView === 'sessions' ? (
-                      <TouchableOpacity 
-                        onPress={() => setSchedulerVisible(true)} 
-                        className="w-10 h-10 rounded-2xl items-center justify-center border"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                      >
-                        <CalendarIcon size={18} color={colors.primary} />
-                      </TouchableOpacity>
-                    ) : activeSubView === 'challenges' ? (
-                      <TouchableOpacity 
-                        onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)} 
-                        className="h-10 px-3.5 rounded-2xl flex-row items-center gap-1.5"
-                        style={{ backgroundColor: colors.primary }}
-                      >
-                        <Plus size={16} color={colors.textOnPrimary || 'white'} />
-                        <Text className="font-bold text-xs" style={{ color: colors.textOnPrimary || 'white' }}>Create</Text>
-                      </TouchableOpacity>
-                    ) : activeSubView === 'daily_tasks' ? (
+                    {activeSubView === 'daily_tasks' ? (
                       <TouchableOpacity 
                         onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)} 
                         className="h-10 px-3.5 rounded-2xl flex-row items-center gap-1.5"
@@ -501,7 +636,7 @@ export default function ClientDetailsScreen() {
 
             {pendingResolutions.length > 0 && activeSubView === null && (
                 <TouchableOpacity 
-                    className="mx-6 mt-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex-row items-center justify-between"
+                    className="mx-3 mt-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex-row items-center justify-between"
                     onPress={() => setPendingModalVisible(true)}
                 >
                     <View className="flex-row items-center gap-3">
@@ -519,44 +654,49 @@ export default function ClientDetailsScreen() {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             >
                 {activeSubView === null ? (
-                  <View className="px-6 pt-6">
-                    {/* ─── 1. Steps Card (Apple Design) ───────────────────────── */}
+                  <View className="px-3 pt-3">
+                    {/* ─── 1. Steps Card (Matching Dashboard Design) ───────────── */}
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      onPress={() => router.push(`/(client)/analytics-detail?metric=steps&clientId=${id}` as any)}
+                      onPress={() => router.push(`/(client)/analytics-detail?metric=steps&clientId=${id}&name=${encodeURIComponent(client?.profiles?.full_name || '')}&avatar=${encodeURIComponent(client?.profiles?.avatar_url || '')}` as any)}
                       style={{
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
+                        backgroundColor: cardBg,
+                        borderColor: cardBorder,
+                        borderWidth: 1,
                       }}
-                      className="p-6 rounded-[32px] border shadow-sm mb-4"
+                      className="p-6 rounded-[36px] mb-3 relative overflow-hidden"
                     >
+                      <View
+                        style={{ backgroundColor: `${colors.primary}0D` }}
+                        className="absolute -top-12 -right-12 w-36 h-36 rounded-full pointer-events-none"
+                      />
                       <View className="flex-row items-center justify-between">
                         <View className="flex-row items-center gap-2.5">
                           <View
                             style={{ backgroundColor: `${colors.primary}16` }}
-                            className="w-9 h-9 rounded-xl items-center justify-center"
+                            className="w-10 h-10 rounded-2xl items-center justify-center"
                           >
-                            <Flame size={18} color={colors.primary} />
+                            <Flame size={20} color={colors.primary} />
                           </View>
-                          <Text style={{ color: colors.text }} className="text-lg font-black tracking-tight">
-                            Steps
+                          <Text style={{ color: textColor }} className="text-lg font-black tracking-tight">
+                            Avg Steps
                           </Text>
                         </View>
 
                         <View className="flex-row items-center gap-1">
-                          <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">
+                          <Text style={{ color: textSecondaryColor }} className="text-xs font-semibold">
                             {stepsTimeStr}
                           </Text>
-                          <ChevronRight size={18} color={colors.textSecondary} />
+                          <ChevronRight size={18} color={textSecondaryColor} />
                         </View>
                       </View>
 
                       <View className="flex-row items-end justify-between mt-4">
                         <View className="flex-row items-baseline gap-2">
-                          <Text style={{ color: colors.text }} className="text-3xl font-black tracking-tight">
-                            {(todaySteps || 0).toLocaleString()}
+                          <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter leading-none mb-1">
+                            {(avgSteps || 0).toLocaleString()}
                           </Text>
-                          <Text style={{ color: colors.textSecondary }} className="text-base font-bold">
+                          <Text style={{ color: textSecondaryColor }} className="text-base font-bold">
                             steps
                           </Text>
                         </View>
@@ -565,125 +705,168 @@ export default function ClientDetailsScreen() {
                       </View>
                     </TouchableOpacity>
 
-                    {/* ─── 2. Quick Health Metric Cards (2x2 Grid) ─────────────── */}
-                    <View className="flex-row flex-wrap justify-between gap-3 mb-4">
+                    {/* ─── 2. Core Health Metrics Grid (2x2 with Huge Numbers) ─── */}
+                    {/* Row 1: Streak and Weight */}
+                    <View className="flex-row gap-3 mb-3">
                       {/* Active Streak */}
                       <View 
-                        className="w-[48%] rounded-[28px] p-4 border justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        className="flex-1 rounded-[32px] p-6 border relative overflow-hidden justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
-                        <View className="flex-row items-center justify-between mb-3">
-                          <View className="w-8 h-8 rounded-xl items-center justify-center bg-emerald-500/10 border border-emerald-500/20">
-                            <Award size={16} color="#10B981" />
+                        <View
+                          style={{ backgroundColor: `${colors.primary}0D` }}
+                          className="absolute -top-8 -right-8 w-24 h-24 rounded-full pointer-events-none"
+                        />
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View
+                            className="w-11 h-11 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                          >
+                            <Award size={20} color={colors.primary} />
                           </View>
-                          <Text className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Streak</Text>
+                          <View
+                            className="px-2.5 py-1 rounded-full border"
+                            style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                          >
+                            <Text style={{ color: colors.primary }} className="text-[9px] font-black uppercase tracking-wider">
+                              Streak
+                            </Text>
+                          </View>
                         </View>
                         <View>
-                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>
-                            {streak} <Text className="text-xs font-bold" style={{ color: colors.textSecondary }}>Days</Text>
+                          <View className="flex-row items-center gap-1 mb-1">
+                            <StreakFire
+                              variant={streak <= 0 ? 'zero' : isColdStreak ? 'cold' : 'active'}
+                              size={36}
+                              style={{
+                                marginLeft: -6,
+                                marginVertical: -6,
+                                transform: [{ translateY: -8 }],
+                              }}
+                            />
+                            <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter leading-none">
+                              {formatCompactNumber(streak)} <Text className="text-sm font-bold" style={{ color: textSecondaryColor }}>{streak === 1 ? 'Day' : 'Days'}</Text>
+                            </Text>
+                          </View>
+                          <Text style={{ color: textSecondaryColor }} className="text-xs font-bold uppercase tracking-wider">
+                            Active Streak
                           </Text>
-                          <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.textSecondary }}>Active Streak</Text>
                         </View>
                       </View>
 
-                      {/* Weight Card */}
+                      {/* Weight Card (Click to open Weight History) */}
                       <TouchableOpacity
                         activeOpacity={0.8}
                         onPress={() => setActiveSubView('weight_history')}
-                        className="w-[48%] rounded-[28px] p-4 border justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        className="flex-1 rounded-[32px] p-6 border relative overflow-hidden justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
-                        <View className="flex-row items-center justify-between mb-3">
-                          <View className="w-8 h-8 rounded-xl items-center justify-center bg-amber-500/10 border border-amber-500/20">
-                            <Scale size={16} color="#F59E0B" />
+                        <View
+                          style={{ backgroundColor: `${colors.primary}0D` }}
+                          className="absolute -top-8 -right-8 w-24 h-24 rounded-full pointer-events-none"
+                        />
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View
+                            className="w-11 h-11 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                          >
+                            <Scale size={20} color={colors.primary} />
                           </View>
-                          {weightDaysAgo > 5 ? (
-                            <View className="bg-red-500/10 px-1.5 py-0.5 rounded-md border border-red-500/20">
-                              <Text className="text-red-500 text-[8px] font-bold uppercase">Update</Text>
-                            </View>
-                          ) : (
-                            <ChevronRight size={14} color={colors.textSecondary} />
-                          )}
+                          <View className="flex-row items-center gap-1">
+                            {weightDaysAgo > 5 ? (
+                              <View className="bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                <Text className="text-amber-500 text-[8px] font-black uppercase">Old</Text>
+                              </View>
+                            ) : null}
+                            <ChevronRight size={16} color={textSecondaryColor} />
+                          </View>
                         </View>
                         <View>
-                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>
-                            {latestWeight ? latestWeight : '--'} <Text className="text-xs font-bold" style={{ color: colors.textSecondary }}>kg</Text>
+                          <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter leading-none mb-1">
+                            {latestWeight ? latestWeight : '--'} <Text className="text-sm font-bold" style={{ color: textSecondaryColor }}>kg</Text>
                           </Text>
-                          <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.textSecondary }}>
+                          <Text style={{ color: textSecondaryColor }} className="text-xs font-bold uppercase tracking-wider">
                             {weightDaysAgo > 5 ? `${weightDaysAgo}d ago` : 'Last Weight'}
                           </Text>
                         </View>
                       </TouchableOpacity>
+                    </View>
 
+                    {/* Row 2: Sleep and Energy */}
+                    <View className="flex-row gap-3 mb-4">
                       {/* Avg Sleep */}
                       <View 
-                        className="w-[48%] rounded-[28px] p-4 border justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        className="flex-1 rounded-[32px] p-6 border relative overflow-hidden justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
-                        <View className="flex-row items-center justify-between mb-3">
-                          <View className="w-8 h-8 rounded-xl items-center justify-center bg-indigo-500/10 border border-indigo-500/20">
-                            <Clock size={16} color="#6366F1" />
+                        <View
+                          style={{ backgroundColor: `${colors.primary}0D` }}
+                          className="absolute -top-8 -right-8 w-24 h-24 rounded-full pointer-events-none"
+                        />
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View
+                            className="w-11 h-11 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                          >
+                            <Clock size={20} color={colors.primary} />
                           </View>
-                          <Text className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Sleep</Text>
+                          <View
+                            className="px-2.5 py-1 rounded-full border"
+                            style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                          >
+                            <Text style={{ color: colors.primary }} className="text-[9px] font-black uppercase tracking-wider">
+                              Sleep
+                            </Text>
+                          </View>
                         </View>
                         <View>
-                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>
-                            {avgSleep ? avgSleep : '--'} <Text className="text-xs font-bold" style={{ color: colors.textSecondary }}>hrs</Text>
+                          <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter leading-none mb-1">
+                            {avgSleep ? avgSleep : '--'} <Text className="text-sm font-bold" style={{ color: textSecondaryColor }}>hrs</Text>
                           </Text>
-                          <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.textSecondary }}>Avg Sleep</Text>
+                          <Text style={{ color: textSecondaryColor }} className="text-xs font-bold uppercase tracking-wider">
+                            Avg Sleep
+                          </Text>
                         </View>
                       </View>
 
                       {/* Avg Energy */}
                       <View 
-                        className="w-[48%] rounded-[28px] p-4 border justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        className="flex-1 rounded-[32px] p-6 border relative overflow-hidden justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
-                        <View className="flex-row items-center justify-between mb-3">
-                          <View className="w-8 h-8 rounded-xl items-center justify-center bg-orange-500/10 border border-orange-500/20">
-                            <Zap size={16} color="#F97316" />
+                        <View
+                          style={{ backgroundColor: `${colors.primary}0D` }}
+                          className="absolute -top-8 -right-8 w-24 h-24 rounded-full pointer-events-none"
+                        />
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View
+                            className="w-11 h-11 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                          >
+                            <Zap size={20} color={colors.primary} />
                           </View>
-                          <Text className="text-[10px] font-bold uppercase tracking-wider text-orange-400">Energy</Text>
+                          <View
+                            className="px-2.5 py-1 rounded-full border"
+                            style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                          >
+                            <Text style={{ color: colors.primary }} className="text-[9px] font-black uppercase tracking-wider">
+                              Energy
+                            </Text>
+                          </View>
                         </View>
                         <View>
-                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>
-                            {avgEnergy ? avgEnergy : '--'} <Text className="text-xs font-bold" style={{ color: colors.textSecondary }}>/10</Text>
+                          <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter leading-none mb-1">
+                            {avgEnergy ? avgEnergy : '--'} <Text className="text-sm font-bold" style={{ color: textSecondaryColor }}>/10</Text>
                           </Text>
-                          <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.textSecondary }}>Avg Energy</Text>
+                          <Text style={{ color: textSecondaryColor }} className="text-xs font-bold uppercase tracking-wider">
+                            Avg Energy
+                          </Text>
                         </View>
                       </View>
                     </View>
 
-                    {/* ─── 3. Weight History Row ───────────────────────────────── */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => setActiveSubView('weight_history')}
-                      className="p-4 rounded-[24px] border flex-row items-center justify-between mb-6"
-                      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                    >
-                      <View className="flex-row items-center gap-3">
-                        <View className="w-9 h-9 rounded-xl items-center justify-center bg-amber-500/10 border border-amber-500/20">
-                          <Scale size={18} color="#F59E0B" />
-                        </View>
-                        <View>
-                          <Text className="text-sm font-black" style={{ color: colors.text }}>Weight History</Text>
-                          <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>
-                            {validWeights.length > 0 ? `${validWeights.length} logs recorded` : 'No weigh-ins yet'}
-                          </Text>
-                        </View>
-                      </View>
-                      <View className="flex-row items-center gap-1.5">
-                        {latestWeight && (
-                          <View className="px-2.5 py-1 rounded-full border mr-1" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
-                            <Text className="text-xs font-bold" style={{ color: colors.text }}>{latestWeight} kg</Text>
-                          </View>
-                        )}
-                        <ChevronRight size={18} color={colors.textSecondary} />
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* ─── 4. Manage Client Hub Cards ──────────────────────────── */}
-                    <Text className="text-xs font-bold uppercase tracking-widest mb-3 ml-1" style={{ color: colors.textSecondary }}>
+                    {/* ─── 3. Manage Section ───────────────────────────────────── */}
+                    <Text style={{ color: textColor }} className="text-2xl font-black tracking-tight mb-3 px-1">
                       Manage
                     </Text>
                     <View className="gap-3 mb-6">
@@ -691,206 +874,215 @@ export default function ClientDetailsScreen() {
                       <TouchableOpacity
                         activeOpacity={0.8}
                         onPress={() => setActiveSubView('daily_tasks')}
-                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        className="p-5 rounded-[32px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
                         <View className="flex-row items-center gap-3.5 flex-1 pr-3">
                           <View
-                            className="w-11 h-11 rounded-2xl items-center justify-center border"
-                            style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                            className="w-12 h-12 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
                           >
-                            <Target size={20} color={colors.primary} />
+                            <Target size={22} color={colors.primary} />
                           </View>
                           <View className="flex-1">
-                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                            <Text className="text-base font-black tracking-tight" style={{ color: textColor }}>
                               Daily Tasks
                             </Text>
-                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: textSecondaryColor }}>
                               {habits.length > 0 ? `${habits.length} active daily tasks` : 'Assign daily habits'}
                             </Text>
                           </View>
                         </View>
-                        <View className="flex-row items-center gap-2">
-                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
-                            <Text className="text-xs font-bold" style={{ color: colors.primary }}>{habits.length}</Text>
-                          </View>
-                          <ChevronRight size={18} color={colors.textSecondary} />
+                        <View className="flex-row items-center gap-2.5">
+                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.primary }}>
+                            {formatCompactNumber(habits.length)}
+                          </Text>
+                          <ChevronRight size={18} color={textSecondaryColor} />
                         </View>
                       </TouchableOpacity>
 
                       {/* Challenges Card */}
                       <TouchableOpacity
                         activeOpacity={0.8}
-                        onPress={() => setActiveSubView('challenges')}
-                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        onPress={() => openClientPage('challenges')}
+                        className="p-5 rounded-[32px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
                         <View className="flex-row items-center gap-3.5 flex-1 pr-3">
-                          <View className="w-11 h-11 rounded-2xl items-center justify-center bg-amber-500/10 border border-amber-500/20">
-                            <Award size={20} color="#F59E0B" />
+                          <View
+                            className="w-12 h-12 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                          >
+                            <Award size={22} color={colors.primary} />
                           </View>
                           <View className="flex-1">
-                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                            <Text className="text-base font-black tracking-tight" style={{ color: textColor }}>
                               Challenges
                             </Text>
-                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
-                              {activeChallengesCount > 0 ? `${activeChallengesCount} active challenges` : 'Start a challenge'}
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: textSecondaryColor }}>
+                              {activeChallengesCount > 0 ? `${formatCompactNumber(activeChallengesCount)} active challenges` : 'Start a challenge'}
                             </Text>
                           </View>
                         </View>
-                        <View className="flex-row items-center gap-2">
-                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
-                            <Text className="text-xs font-bold" style={{ color: '#F59E0B' }}>{activeChallengesCount}</Text>
-                          </View>
-                          <ChevronRight size={18} color={colors.textSecondary} />
+                        <View className="flex-row items-center gap-2.5">
+                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.primary }}>
+                            {formatCompactNumber(activeChallengesCount)}
+                          </Text>
+                          <ChevronRight size={18} color={textSecondaryColor} />
                         </View>
                       </TouchableOpacity>
 
                       {/* Check-ins Card */}
                       <TouchableOpacity
                         activeOpacity={0.8}
-                        onPress={() => setActiveSubView('checkins')}
-                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        onPress={() => openClientPage('checkins')}
+                        className="p-5 rounded-[32px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
                         <View className="flex-row items-center gap-3.5 flex-1 pr-3">
-                          <View className="w-11 h-11 rounded-2xl items-center justify-center bg-emerald-500/10 border border-emerald-500/20">
-                            <CalendarIcon size={20} color="#10B981" />
+                          <View
+                            className="w-12 h-12 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                          >
+                            <CalendarIcon size={22} color={colors.primary} />
                           </View>
                           <View className="flex-1">
-                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                            <Text className="text-base font-black tracking-tight" style={{ color: textColor }}>
                               Check-ins
                             </Text>
-                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
-                              {checkins.length > 0 ? `${checkins.length} check-ins logged` : 'No logs recorded'}
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: textSecondaryColor }}>
+                              {checkins.length > 0 ? `${formatCompactNumber(checkins.length)} check-ins logged` : 'No logs recorded'}
                             </Text>
                           </View>
                         </View>
-                        <View className="flex-row items-center gap-2">
-                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
-                            <Text className="text-xs font-bold" style={{ color: '#10B981' }}>{checkins.length}</Text>
-                          </View>
-                          <ChevronRight size={18} color={colors.textSecondary} />
+                        <View className="flex-row items-center gap-2.5">
+                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.primary }}>
+                            {formatCompactNumber(checkins.length)}
+                          </Text>
+                          <ChevronRight size={18} color={textSecondaryColor} />
                         </View>
                       </TouchableOpacity>
 
                       {/* Sessions Card */}
                       <TouchableOpacity
                         activeOpacity={0.8}
-                        onPress={() => setActiveSubView('sessions')}
-                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        onPress={() => openClientPage('sessions')}
+                        className="p-5 rounded-[32px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
                         <View className="flex-row items-center gap-3.5 flex-1 pr-3">
-                          <View className="w-11 h-11 rounded-2xl items-center justify-center bg-indigo-500/10 border border-indigo-500/20">
-                            <Clock size={20} color="#6366F1" />
+                          <View
+                            className="w-12 h-12 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                          >
+                            <Clock size={22} color={colors.primary} />
                           </View>
                           <View className="flex-1">
-                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                            <Text className="text-base font-black tracking-tight" style={{ color: textColor }}>
                               Sessions
                             </Text>
-                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
-                              {upcomingSessions.length > 0 ? `${upcomingSessions.length} upcoming scheduled` : 'Weekly schedule'}
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: textSecondaryColor }}>
+                              {upcomingSessions.length > 0 ? `${formatCompactNumber(upcomingSessions.length)} upcoming scheduled` : 'Weekly schedule'}
                             </Text>
                           </View>
                         </View>
-                        <View className="flex-row items-center gap-2">
-                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
-                            <Text className="text-xs font-bold" style={{ color: '#6366F1' }}>{upcomingSessions.length}</Text>
-                          </View>
-                          <ChevronRight size={18} color={colors.textSecondary} />
+                        <View className="flex-row items-center gap-2.5">
+                          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.primary }}>
+                            {formatCompactNumber(upcomingSessions.length)}
+                          </Text>
+                          <ChevronRight size={18} color={textSecondaryColor} />
                         </View>
                       </TouchableOpacity>
 
                       {/* Analytics Card */}
                       <TouchableOpacity
                         activeOpacity={0.8}
-                        onPress={() => router.push(`/(client)/analytics?clientId=${id}` as any)}
-                        className="p-5 rounded-[28px] border flex-row items-center justify-between"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        onPress={() => router.push(`/(client)/analytics?clientId=${id}&name=${encodeURIComponent(client?.profiles?.full_name || '')}&avatar=${encodeURIComponent(client?.profiles?.avatar_url || '')}` as any)}
+                        className="p-5 rounded-[32px] border flex-row items-center justify-between"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
                         <View className="flex-row items-center gap-3.5 flex-1 pr-3">
                           <View
-                            className="w-11 h-11 rounded-2xl items-center justify-center border"
-                            style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                            className="w-12 h-12 rounded-2xl items-center justify-center border"
+                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
                           >
-                            <Activity size={20} color={colors.primary} />
+                            <Activity size={22} color={colors.primary} />
                           </View>
                           <View className="flex-1">
-                            <Text className="text-base font-black tracking-tight" style={{ color: colors.text }}>
+                            <Text className="text-base font-black tracking-tight" style={{ color: textColor }}>
                               Analytics
                             </Text>
-                            <Text className="text-xs font-medium mt-0.5" style={{ color: colors.textSecondary }}>
+                            <Text className="text-xs font-medium mt-0.5" style={{ color: textSecondaryColor }}>
                               Steps, sleep, energy & trends
                             </Text>
                           </View>
                         </View>
                         <View className="flex-row items-center gap-2">
-                          <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
-                            <Text className="text-xs font-bold" style={{ color: colors.primary }}>View</Text>
+                          <View className="px-3 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: cardBorder }}>
+                            <Text className="text-xs font-black" style={{ color: colors.primary }}>View</Text>
                           </View>
-                          <ChevronRight size={18} color={colors.textSecondary} />
+                          <ChevronRight size={18} color={textSecondaryColor} />
                         </View>
                       </TouchableOpacity>
                     </View>
 
-                    {/* ─── 5. Client Info Card (Apple Grouped Style) ─────────────── */}
-                    <Text className="text-xs font-bold uppercase tracking-widest mb-3 ml-1" style={{ color: colors.textSecondary }}>
+                    {/* ─── 4. Client Info Card ─────────────────────────────────── */}
+                    <Text style={{ color: textColor }} className="text-2xl font-black tracking-tight mb-3 px-1">
                       Client Info
                     </Text>
                     <View 
-                      className="rounded-[28px] border overflow-hidden mb-8"
-                      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      className="rounded-[32px] border overflow-hidden mb-8"
+                      style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                     >
-                      <View className="p-5 border-b" style={{ borderBottomColor: colors.border }}>
-                        <View className="flex-row items-center gap-2.5 mb-1.5">
+                      <View className="p-5 border-b" style={{ borderBottomColor: cardBorder }}>
+                        <View className="flex-row items-center gap-2 mb-1.5">
                           <Target size={16} color={colors.primary} />
-                          <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Goal</Text>
+                          <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: textSecondaryColor }}>Goal</Text>
                         </View>
-                        <Text className="text-base font-bold" style={{ color: colors.text }}>{client.goal || 'Not set'}</Text>
+                        <Text className="text-base font-bold" style={{ color: textColor }}>{client.goal || 'Not set'}</Text>
                       </View>
 
-                      <View className="p-5 border-b" style={{ borderBottomColor: colors.border }}>
-                        <View className="flex-row items-center gap-2.5 mb-1.5">
+                      <View className="p-5 border-b" style={{ borderBottomColor: cardBorder }}>
+                        <View className="flex-row items-center gap-2 mb-1.5">
                           <Mail size={16} color={colors.primary} />
-                          <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Email</Text>
+                          <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: textSecondaryColor }}>Email</Text>
                         </View>
-                        <Text className="text-base font-bold" style={{ color: colors.text }} selectable>{client.profiles?.email || 'Not set'}</Text>
+                        <Text className="text-base font-bold" style={{ color: textColor }} selectable>{client.profiles?.email || 'Not set'}</Text>
                       </View>
 
-                      <View className="flex-row border-b" style={{ borderBottomColor: colors.border }}>
-                        <View className="flex-1 p-5 border-r" style={{ borderRightColor: colors.border }}>
+                      <View className="flex-row border-b" style={{ borderBottomColor: cardBorder }}>
+                        <View className="flex-1 p-5 border-r" style={{ borderRightColor: cardBorder }}>
                           <View className="flex-row items-center gap-2 mb-1.5">
                             <Award size={16} color={colors.primary} />
-                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Experience</Text>
+                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: textSecondaryColor }}>Experience</Text>
                           </View>
-                          <Text className="text-base font-bold capitalize" style={{ color: colors.text }}>{client.experience_level || 'Not set'}</Text>
+                          <Text className="text-base font-bold capitalize" style={{ color: textColor }}>{client.experience_level || 'Not set'}</Text>
                         </View>
                         <View className="flex-1 p-5">
                           <View className="flex-row items-center gap-2 mb-1.5">
                             <User size={16} color={colors.primary} />
-                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Height</Text>
+                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: textSecondaryColor }}>Height</Text>
                           </View>
-                          <Text className="text-base font-bold" style={{ color: colors.text }}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
+                          <Text className="text-base font-bold" style={{ color: textColor }}>{client.height_cm ? `${client.height_cm} cm` : 'Not set'}</Text>
                         </View>
                       </View>
 
                       <View className="flex-row">
-                        <View className="flex-1 p-5 border-r" style={{ borderRightColor: colors.border }}>
+                        <View className="flex-1 p-5 border-r" style={{ borderRightColor: cardBorder }}>
                           <View className="flex-row items-center gap-2 mb-1.5">
                             <Clock size={16} color={colors.primary} />
-                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Age</Text>
+                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: textSecondaryColor }}>Age</Text>
                           </View>
-                          <Text className="text-base font-bold" style={{ color: colors.text }}>
+                          <Text className="text-base font-bold" style={{ color: textColor }}>
                             {client.date_of_birth ? `${Math.floor((new Date().getTime() - new Date(client.date_of_birth).getTime()) / (1000 * 3600 * 24 * 365.25))} yrs` : 'Not set'}
                           </Text>
                         </View>
                         <View className="flex-1 p-5">
                           <View className="flex-row items-center gap-2 mb-1.5">
                             <Scale size={16} color={colors.primary} />
-                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Starting</Text>
+                            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: textSecondaryColor }}>Starting</Text>
                           </View>
-                          <Text className="text-base font-bold" style={{ color: colors.text }}>
+                          <Text className="text-base font-bold" style={{ color: textColor }}>
                             {validWeights.length > 0 ? `${validWeights[validWeights.length - 1].weight_kg} kg` : 'Not set'}
                           </Text>
                         </View>
@@ -898,596 +1090,142 @@ export default function ClientDetailsScreen() {
                     </View>
                   </View>
                 ) : activeSubView === 'daily_tasks' ? (
-                  <View className="px-6 py-8">
-                    <View className="flex-row items-center justify-between mb-8 ml-1">
-                        <Text className="text-[10px] font-black uppercase tracking-[4px]" style={{ color: colors.textSecondary }}>Daily Tasks</Text>
+                  <View className="px-3 pt-3">
+                    <View className="flex-row items-center justify-between mb-4 px-1">
+                        <Text className="text-2xl font-black tracking-tight" style={{ color: textColor }}>Daily Tasks</Text>
                         {habits.length > 0 && (
-                            <TouchableOpacity onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}>
-                                <Text className="text-[10px] font-black uppercase tracking-widest" style={{ color: colors.primary }}>Edit</Text>
+                            <TouchableOpacity 
+                              onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
+                              className="px-3.5 py-1.5 rounded-full border"
+                              style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}35` }}
+                            >
+                                <Text className="text-xs font-black uppercase tracking-wider" style={{ color: colors.primary }}>Edit</Text>
                             </TouchableOpacity>
                         )}
                     </View>
                     {habits.length === 0 ? (
                         <View 
-                            className="p-12 items-center justify-center rounded-[40px] border border-dashed"
-                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                            className="p-8 items-center justify-center rounded-[32px] border border-dashed"
+                            style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                         >
-                             <Zap size={32} color={colors.textSecondary} />
-                             <Text className="font-black text-xs uppercase mt-6" style={{ color: colors.text }}>No Daily Tasks</Text>
-                             <Text className="text-[10px] mt-2 text-center px-4 leading-4" style={{ color: colors.textSecondary }}>No daily habits have been assigned to this client yet.</Text>
+                             <View 
+                               className="w-12 h-12 rounded-2xl items-center justify-center border mb-3"
+                               style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                             >
+                               <Target size={24} color={colors.primary} />
+                             </View>
+                             <Text className="font-black text-base" style={{ color: textColor }}>No Daily Tasks</Text>
+                             <Text className="text-xs mt-1 text-center px-4" style={{ color: textSecondaryColor }}>No daily habits have been assigned to this client yet.</Text>
                              <TouchableOpacity 
                                 onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
-                                className="mt-8 px-6 h-12 rounded-full flex-row items-center gap-2 border"
-                                style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                                className="mt-6 px-6 h-12 rounded-2xl flex-row items-center gap-2"
+                                style={{ backgroundColor: colors.primary }}
                              >
-                                <Plus size={16} color={colors.primary} />
-                                <Text className="font-black text-[10px] uppercase tracking-widest" style={{ color: colors.primary }}>Assign Tasks</Text>
+                                <Plus size={16} color={colors.textOnPrimary || 'white'} />
+                                <Text className="font-black text-xs uppercase tracking-wider" style={{ color: colors.textOnPrimary || 'white' }}>Assign Tasks</Text>
                              </TouchableOpacity>
                         </View>
                     ) : (
                         habits.map((habit, idx) => (
-                            <Swipeable
+                            <View
                                 key={habit.id}
-                                ref={ref => { swipeableRefs.current[habit.id] = ref; }}
-                                renderRightActions={() => (
-                                    <View className="flex-row mb-4 pl-4">
-                                        <TouchableOpacity 
-                                            onPress={() => handleEditHabit(habit)}
-                                            className="w-16 h-full rounded-3xl items-center justify-center border mr-2"
-                                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                                        >
-                                            <Edit2 size={20} color={colors.text} />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity 
-                                            onPress={() => handleDeleteHabit(habit.id)}
-                                            className="w-16 h-full bg-red-500 rounded-3xl items-center justify-center shadow-lg shadow-red-500/20"
-                                        >
-                                            <Trash2 size={20} color="white" />
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
+                                style={{
+                                    borderRadius: 30,
+                                    overflow: 'hidden',
+                                    marginBottom: 12,
+                                    backgroundColor: cardBg,
+                                }}
                             >
-                                <MotiView 
-                                    from={{ opacity: 0, translateX: -10 }} 
-                                    animate={{ opacity: 1, translateX: 0 }} 
-                                    transition={{ delay: idx * 50 }}
-                                    className="rounded-[32px] p-6 mb-4 border flex-row items-center gap-4"
-                                    style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                                >
-                                    <View 
-                                        className="w-12 h-12 rounded-2xl items-center justify-center border"
-                                        style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
-                                    >
-                                        <Target size={20} color={colors.primary} />
-                                    </View>
-                                    <View className="flex-1">
-                                        <Text className="font-black text-base" style={{ color: colors.text }}>{habit.name}</Text>
-                                        <Text className="text-xs font-medium mt-1" numberOfLines={1} style={{ color: colors.textSecondary }}>{habit.description || 'No instructions provided'}</Text>
-                                    </View>
-                                    <View 
-                                        className="px-3 py-1.5 rounded-full border"
-                                        style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                                    >
-                                        <Text className="text-[8px] font-black uppercase tracking-widest" style={{ color: colors.textSecondary }}>{habit.category || 'General'}</Text>
-                                    </View>
-                                    {isEditingHabits && (
-                                        <TouchableOpacity onPress={() => handleEditHabit(habit)} className="p-2">
-                                            <ChevronRight size={16} color={colors.textSecondary} />
-                                        </TouchableOpacity>
+                                <Swipeable
+                                    ref={ref => { swipeableRefs.current[habit.id] = ref; }}
+                                    containerStyle={{
+                                        borderRadius: 30,
+                                        overflow: 'hidden',
+                                        backgroundColor: cardBg,
+                                    }}
+                                    childrenContainerStyle={{
+                                        borderRadius: 30,
+                                        overflow: 'hidden',
+                                        backgroundColor: cardBg,
+                                    }}
+                                    renderRightActions={(progress) => (
+                                        <HabitSwipeActions
+                                            progress={progress}
+                                            cardBg={cardBg}
+                                            cardBorder={cardBorder}
+                                            textColor={textColor}
+                                            onEdit={() => handleEditHabit(habit)}
+                                            onDelete={() => handleDeleteHabit(habit.id)}
+                                        />
                                     )}
-                                </MotiView>
-                            </Swipeable>
+                                >
+                                    <MotiView 
+                                        from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateX: -10 }} 
+                                        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateX: 0 }} 
+                                        transition={{ delay: reduceMotion ? 0 : idx * 50 }}
+                                        className="rounded-[30px] p-5 border flex-row items-center gap-4"
+                                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+                                    >
+                                        <View 
+                                            className="w-12 h-12 rounded-2xl items-center justify-center border"
+                                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                                        >
+                                            <Target size={20} color={colors.primary} />
+                                        </View>
+                                        <View className="flex-1">
+                                            <Text className="font-black text-base" style={{ color: textColor }}>{habit.name}</Text>
+                                            <Text className="text-xs font-medium mt-0.5" numberOfLines={1} style={{ color: textSecondaryColor }}>{habit.description || 'Daily task'}</Text>
+                                        </View>
+                                        <View 
+                                            className="px-3 py-1 rounded-full border"
+                                            style={{ backgroundColor: colors.background, borderColor: cardBorder }}
+                                        >
+                                            <Text className="text-[10px] font-black uppercase tracking-wider" style={{ color: textSecondaryColor }}>{habit.category || 'General'}</Text>
+                                        </View>
+                                        {isEditingHabits && (
+                                            <TouchableOpacity onPress={() => handleEditHabit(habit)} className="p-2">
+                                                <ChevronRight size={16} color={textSecondaryColor} />
+                                            </TouchableOpacity>
+                                        )}
+                                    </MotiView>
+                                </Swipeable>
+                            </View>
                         ))
                     )}
 
                     {habits.length > 0 && (
                         <TouchableOpacity 
                             onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
-                            className="mt-4 p-8 rounded-[40px] border items-center border-dashed"
-                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                            className="mt-2 p-5 rounded-[30px] border items-center border-dashed flex-row justify-center gap-2"
+                            style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                         >
-                            <View 
-                                className="w-12 h-12 rounded-full items-center justify-center border mb-4"
-                                style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                            >
-                                <Plus size={20} color={colors.textSecondary} />
-                            </View>
-                            <Text className="font-black text-sm uppercase tracking-widest" style={{ color: colors.text }}>Add or Edit Tasks</Text>
+                            <Plus size={18} color={colors.primary} />
+                            <Text className="font-black text-xs uppercase tracking-wider" style={{ color: colors.primary }}>Add or Edit Tasks</Text>
                         </TouchableOpacity>
                     )}
                   </View>
-                ) : activeSubView === 'challenges' ? (
-                  <View className="px-6 py-8">
-                    <View className="flex-row justify-between items-center mb-8">
-                        <View className="flex-row gap-6">
-                            <TouchableOpacity onPress={() => setChallengeFilter('active')}>
-                                <Text className="text-2xl font-black" style={{ color: challengeFilter === 'active' ? colors.text : colors.textSecondary }}>Active</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setChallengeFilter('history')}>
-                                <Text className="text-2xl font-black" style={{ color: challengeFilter === 'history' ? colors.text : colors.textSecondary }}>History</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View className="flex-row gap-2">
-                             <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)} 
-                                className="w-10 h-10 rounded-full items-center justify-center border shadow-lg"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                             >
-                                <Sparkles size={18} color={colors.primary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)} 
-                                className="h-10 px-4 rounded-full flex-row items-center gap-2 shadow-lg"
-                                style={{ backgroundColor: colors.primary }}
-                            >
-                                <Plus size={16} color={colors.textOnPrimary || 'white'} />
-                                <Text className="font-black text-xs uppercase" style={{ color: colors.textOnPrimary || 'white' }}>Create</Text>
-                            </TouchableOpacity>
-                        </View>
+                ) : activeSubView === 'weight_history' ? (
+                  <View className="px-3 pt-3">
+                    <View className="mb-4 px-1">
+                      <Text className="text-2xl font-black tracking-tight" style={{ color: textColor }}>Weight History</Text>
                     </View>
-
-                    {filteredChallenges.length === 0 ? (
-                        <View 
-                            className="p-12 items-center justify-center rounded-[40px] border border-dashed"
-                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                        >
-                             <Zap size={32} color={colors.textSecondary} />
-                             <Text className="font-black text-xs uppercase mt-6" style={{ color: colors.text }}>No Challenges</Text>
-                             <Text className="text-[10px] mt-2 text-center px-4 leading-4" style={{ color: colors.textSecondary }}>No challenges started yet.</Text>
-                        </View>
-                    ) : (
-                        filteredChallenges.map((challenge, idx) => (
-                            <ChallengeCard 
-                                key={challenge.id} 
-                                challenge={challenge} 
-                                coachId={id as string} 
-                                index={idx} 
-                                isEditing={isEditingChallenges}
-                                onDelete={() => handleDeleteChallenge(challenge.id)}
-                            />
-                        ))
-                    )}
-
-                    {/* Launch Section */}
-                    <View 
-                        className="mt-10 p-10 rounded-[48px] border items-center"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                    >
-                        <View 
-                            className="w-16 h-16 rounded-full items-center justify-center border mb-6"
-                            style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                        >
-                            <Plus size={32} color={colors.textSecondary} />
-                        </View>
-                        <Text className="text-2xl font-black mb-4 text-center" style={{ color: colors.text }}>Start a Challenge</Text>
-                        <Text className="text-xs font-medium text-center mb-10 leading-5" style={{ color: colors.textSecondary }}>
-                            Create a custom challenge or generate one with AI.
-                        </Text>
-                        <View className="flex-row gap-4 w-full">
-                            <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/clients/create-selection?clientId=${id}`)}
-                                className="flex-1 h-14 rounded-full items-center justify-center border"
-                                style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                            >
-                                <Text className="font-bold text-xs uppercase" style={{ color: colors.text }}>Custom</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/clients/ai-selection?clientId=${id}`)}
-                                className="flex-1 h-14 rounded-full items-center justify-center"
-                                style={{ backgroundColor: colors.primary }}
-                            >
-                                <Text className="font-bold text-xs uppercase" style={{ color: colors.textOnPrimary || 'white' }}>Use AI</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                  </View>
-                ) : activeSubView === 'checkins' ? (
-                  <View className="px-6 py-8">
-                    {checkins.length === 0 ? (
-                        <View 
-                            className="p-12 items-center justify-center rounded-[40px] border border-dashed"
-                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                        >
-                             <Target size={32} color={colors.textSecondary} />
-                             <Text className="font-black text-xs uppercase mt-6" style={{ color: colors.text }}>No Check-ins Yet</Text>
-                             <Text className="text-[10px] mt-2 text-center px-4 leading-4" style={{ color: colors.textSecondary }}>The client hasn't logged any daily check-ins.</Text>
-                        </View>
-                    ) : (
-                        checkins.map((checkin, idx) => (
-                            <MotiView 
-                                key={checkin.id}
-                                from={{ opacity: 0, translateY: 10 }} 
-                                animate={{ opacity: 1, translateY: 0 }} 
-                                transition={{ delay: idx * 50 }}
-                                className="rounded-[32px] p-6 mb-4 border"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                            >
-                                <View className="flex-row justify-between items-center mb-4">
-                                    <Text className="font-black text-lg" style={{ color: colors.text }}>{new Date(checkin.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</Text>
-                                    <View className="bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                                        <Text className="text-emerald-400 text-[10px] font-black uppercase tracking-[2px]">Logged</Text>
-                                    </View>
-                                </View>
-                                
-                                <View className="flex-row flex-wrap gap-y-4 mb-4">
-                                    <View className="w-1/2 flex-row items-center gap-2">
-                                        <Scale size={16} color={colors.textSecondary} />
-                                        <Text className="font-bold" style={{ color: colors.text }}>{checkin.weight_kg ? `${checkin.weight_kg} kg` : '--'}</Text>
-                                    </View>
-                                    <View className="w-1/2 flex-row items-center gap-2">
-                                        <Clock size={16} color={colors.textSecondary} />
-                                        <Text className="font-bold" style={{ color: colors.text }}>{checkin.sleep_hours ? `${checkin.sleep_hours} hrs` : '--'}</Text>
-                                    </View>
-                                    <View className="w-1/2 flex-row items-center gap-2">
-                                        <Zap size={16} color={colors.textSecondary} />
-                                        <Text className="font-bold" style={{ color: colors.text }}>Energy: {checkin.energy_level ? `${checkin.energy_level}/10` : '--'}</Text>
-                                    </View>
-                                </View>
-
-                                {checkin.notes && (
-                                    <View 
-                                        className="mt-2 p-4 rounded-2xl border"
-                                        style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                                    >
-                                        <Text className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: colors.textSecondary }}>Notes</Text>
-                                        <Text className="text-sm leading-5" style={{ color: colors.text }}>{checkin.notes}</Text>
-                                    </View>
-                                )}
-                            </MotiView>
-                        ))
-                    )}
-                  </View>
-                ) : activeSubView === 'sessions' ? (() => {
-                  // Compute Weekly Slots and Ad-Hoc/Past Sessions
-                  const activeWeeklySlots = sessionLog.filter(s => s.recurrence_rule && s.recurrence_rule.includes('WEEKLY'));
-                  const weeklySlotConfigs = activeWeeklySlots.map(s => {
-                    const d = new Date(s.scheduled_at);
-                    return {
-                      dayOfWeek: d.getDay(),
-                      hour: d.getHours(),
-                      minute: d.getMinutes(),
-                      sessionType: s.session_type,
-                      duration: s.duration_minutes || 60,
-                      session: s
-                    };
-                  });
-
-                  const upcomingSessions = sessionLog.filter(s => {
-                    return s.status === 'scheduled' && new Date(s.scheduled_at) > new Date();
-                  });
-
-                  const upcomingWeeklyOccurrences: any[] = [];
-                  const upcomingAdHocSessions: any[] = [];
-
-                  upcomingSessions.forEach(s => {
-                    const d = new Date(s.scheduled_at);
-                    const isWeeklyOccurrence = weeklySlotConfigs.some(cfg => {
-                      const dayMatches = d.getDay() === cfg.dayOfWeek;
-                      const timeDiffMin = Math.abs((d.getHours() * 60 + d.getMinutes()) - (cfg.hour * 60 + cfg.minute));
-                      return dayMatches && timeDiffMin <= 30;
-                    });
-                    
-                    if (isWeeklyOccurrence) {
-                      upcomingWeeklyOccurrences.push(s);
-                    } else {
-                      upcomingAdHocSessions.push(s);
-                    }
-                  });
-
-                  const pastSessions = sessionLog.filter(s => {
-                    const isPast = new Date(s.scheduled_at) <= new Date();
-                    const isCompletedOrCancelled = s.status === 'completed' || s.status === 'cancelled';
-                    return isPast || isCompletedOrCancelled;
-                  });
-
-                  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-                  const weeklyCadence = daysOfWeek.map((dayName, idx) => {
-                    const targetDayOfWeek = idx === 6 ? 0 : idx + 1; // 0 for Sunday, 1 for Monday, etc.
-                    const slotCfg = weeklySlotConfigs.find(cfg => cfg.dayOfWeek === targetDayOfWeek);
-                    
-                    if (slotCfg) {
-                      const conflictingSession = upcomingAdHocSessions.find(s => {
-                        const d = new Date(s.scheduled_at);
-                        return d.getDay() === targetDayOfWeek;
-                      });
-                      
-                      return {
-                        day: dayName,
-                        status: conflictingSession ? 'Rescheduled' : 'Active',
-                        is_active: true,
-                        session: slotCfg.session,
-                        rescheduled: conflictingSession ? {
-                          date: new Date(conflictingSession.scheduled_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-                          time: new Date(conflictingSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                          session: conflictingSession
-                        } : null
-                      };
-                    }
-                    
-                    return {
-                      day: dayName,
-                      status: 'Not Set',
-                      is_active: false
-                    };
-                  });
-
-                  return (
-                    <View className="px-6 py-8">
-                      {/* Action Button */}
-                      <TouchableOpacity 
-                        onPress={() => setSchedulerVisible(true)}
-                        className="mb-8 h-14 rounded-[24px] flex-row items-center justify-center gap-3 shadow-lg"
-                        style={{ backgroundColor: colors.primary }}
-                      >
-                        <Plus size={18} color={colors.textOnPrimary || 'white'} strokeWidth={3} />
-                        <Text className="font-black text-sm uppercase tracking-wider" style={{ color: colors.textOnPrimary || 'white' }}>Schedule Session</Text>
-                      </TouchableOpacity>
-
-                      {/* Primary Focus: Weekly Cadence */}
-                      <View className="mb-8">
-                        <View className="flex-row items-center justify-between mb-4">
-                          <View>
-                            <Text className="text-xl font-black" style={{ color: colors.text }}>Weekly Slots</Text>
-                            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>Regular weekly session times</Text>
-                          </View>
-                          <View 
-                            className="w-8 h-8 rounded-full border items-center justify-center"
-                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                          >
-                            <CalendarIcon size={14} color={colors.textSecondary} />
-                          </View>
-                        </View>
-                        
-                        <View className="gap-3">
-                          {weeklyCadence.map((dayItem, idx) => (
-                            <MotiView
-                              key={dayItem.day}
-                              from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
-                              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
-                              transition={{ delay: idx * 30 }}
-                              className="rounded-[24px] p-5 border flex-row items-center justify-between"
-                              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                            >
-                              <View className="flex-1">
-                                <Text className="font-black text-base" style={{ color: colors.text }}>{dayItem.day}</Text>
-                                {dayItem.is_active ? (
-                                  dayItem.status === 'Rescheduled' && dayItem.rescheduled ? (
-                                    <View className="mt-1.5 gap-1">
-                                      <Text className="font-bold text-xs" style={{ color: colors.textSecondary }}>
-                                        {dayItem.session.session_type.replace('_', ' ')} · {new Date(dayItem.session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                      </Text>
-                                      <Text className="text-amber-500 font-medium text-xs">
-                                        Moved to {dayItem.rescheduled.date} at {dayItem.rescheduled.time}
-                                      </Text>
-                                    </View>
-                                  ) : (
-                                    <Text className="font-bold text-xs mt-1" style={{ color: colors.textSecondary }}>
-                                      {dayItem.session.session_type.replace('_', ' ')} · {new Date(dayItem.session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </Text>
-                                  )
-                                ) : (
-                                  <Text className="font-medium text-xs mt-1" style={{ color: colors.textSecondary }}>Not scheduled</Text>
-                                )}
-                              </View>
-                              
-                              <View>
-                                {dayItem.is_active ? (
-                                  dayItem.status === 'Rescheduled' ? (
-                                    <View className="bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20">
-                                      <Text className="text-amber-500 font-black text-[9px] uppercase tracking-wider">Rescheduled</Text>
-                                    </View>
-                                  ) : (
-                                    <View className="bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
-                                      <Text className="text-emerald-400 font-black text-[9px] uppercase tracking-wider">Set</Text>
-                                    </View>
-                                  )
-                                ) : (
-                                  <View 
-                                    className="px-3 py-1.5 rounded-xl border"
-                                    style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                                  >
-                                    <Text className="font-black text-[9px] uppercase tracking-wider" style={{ color: colors.textSecondary }}>Not Set</Text>
-                                  </View>
-                                )}
-                              </View>
-                            </MotiView>
-                          ))}
-                        </View>
-                      </View>
-
-                      {/* Secondary Focus: Upcoming Ad-Hoc */}
-                      <View className="mb-8">
-                        <View className="flex-row items-center justify-between mb-4">
-                          <View>
-                            <Text className="text-xl font-black" style={{ color: colors.text }}>Extra Sessions</Text>
-                            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>One-time meetings and special sessions</Text>
-                          </View>
-                          <View 
-                            className="w-8 h-8 rounded-full border items-center justify-center"
-                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                          >
-                            <Plus size={14} color={colors.textSecondary} />
-                          </View>
-                        </View>
-                        
-                        {upcomingAdHocSessions.length === 0 ? (
-                          <View 
-                            className="p-8 items-center justify-center rounded-[32px] border border-dashed"
-                            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                          >
-                            <Text className="font-bold text-xs uppercase" style={{ color: colors.textSecondary }}>No extra sessions</Text>
-                            <Text className="text-[10px] mt-1 text-center" style={{ color: colors.textSecondary }}>Only your regular weekly schedule is active.</Text>
-                          </View>
-                        ) : (
-                          <View className="gap-3">
-                            {upcomingAdHocSessions.map((session, idx) => (
-                              <MotiView
-                                key={session.id}
-                                from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
-                                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
-                                transition={{ delay: idx * 30 }}
-                                className="rounded-[24px] p-5 border flex-row items-center justify-between"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                              >
-                                <View className="flex-1">
-                                  <View className="flex-row items-center gap-2 mb-1">
-                                    <CalendarIcon size={12} color={colors.textSecondary} />
-                                    <Text className="font-black text-sm" style={{ color: colors.text }}>
-                                      {new Date(session.scheduled_at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-                                    </Text>
-                                  </View>
-                                  <View className="flex-row items-center gap-4">
-                                    <View className="flex-row items-center gap-1.5">
-                                      <Clock size={12} color={colors.textSecondary} />
-                                      <Text className="font-bold text-xs" style={{ color: colors.textSecondary }}>
-                                        {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                      </Text>
-                                    </View>
-                                    <View className="w-1 h-1 rounded-full" style={{ backgroundColor: colors.border }} />
-                                    <Text className="font-bold text-xs" style={{ color: colors.textSecondary }}>{session.duration_minutes || 60} min</Text>
-                                    <View className="w-1 h-1 rounded-full" style={{ backgroundColor: colors.border }} />
-                                    <Text className="font-bold text-xs capitalize" style={{ color: colors.textSecondary }}>{session.session_type.replace('_', ' ')}</Text>
-                                  </View>
-                                </View>
-                                
-                                <View 
-                                  className="px-3 py-1.5 rounded-xl border"
-                                  style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
-                                >
-                                  <Text className="font-black text-[9px] uppercase tracking-wider" style={{ color: colors.primary }}>Upcoming</Text>
-                                </View>
-                              </MotiView>
-                            ))}
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Tertiary Focus: History */}
-                      <View className="mb-6">
-                        <TouchableOpacity
-                          onPress={() => {
-                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                            setPastSessionsExpanded(!pastSessionsExpanded);
-                          }}
-                          className="flex-row items-center justify-between p-5 rounded-[24px] border"
-                          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                        >
-                          <View className="flex-row items-center gap-3">
-                            <Clock size={16} color={colors.textSecondary} />
-                            <Text className="font-black text-sm uppercase tracking-wider" style={{ color: colors.textSecondary }}>Past Sessions ({pastSessions.length})</Text>
-                          </View>
-                          <MotiView
-                            from={{ rotate: '0deg' }}
-                            animate={{ rotate: pastSessionsExpanded ? '90deg' : '0deg' }}
-                            transition={{ type: 'timing', duration: 200 } as any}
-                          >
-                            <ChevronRight size={18} color={colors.textSecondary} />
-                          </MotiView>
-                        </TouchableOpacity>
-                        
-                        {pastSessionsExpanded && (
-                          <View className="mt-3 gap-3">
-                            {pastSessions.length === 0 ? (
-                              <View 
-                                className="p-8 items-center justify-center rounded-[32px] border border-dashed"
-                                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                              >
-                                <Text className="font-bold text-xs uppercase" style={{ color: colors.textSecondary }}>No past sessions</Text>
-                              </View>
-                            ) : (
-                              pastSessions.map((session, idx) => (
-                                <MotiView
-                                  key={session.id}
-                                  from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
-                                  animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
-                                  transition={{ delay: idx * 20 }}
-                                  className="rounded-[24px] p-5 border flex-row items-center justify-between"
-                                  style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                                >
-                                  <View className="flex-1">
-                                    <View className="flex-row items-center gap-2 mb-1">
-                                      <CalendarIcon size={12} color={colors.textSecondary} />
-                                      <Text className="font-black text-sm" style={{ color: colors.text }}>
-                                        {new Date(session.scheduled_at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-                                      </Text>
-                                    </View>
-                                    <View className="flex-row items-center gap-4">
-                                      <View className="flex-row items-center gap-1.5">
-                                        <Clock size={12} color={colors.textSecondary} />
-                                        <Text className="font-bold text-xs" style={{ color: colors.textSecondary }}>
-                                          {new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </Text>
-                                      </View>
-                                      <View className="w-1 h-1 rounded-full" style={{ backgroundColor: colors.border }} />
-                                      <Text className="font-bold text-xs" style={{ color: colors.textSecondary }}>{session.duration_minutes || 60} min</Text>
-                                      <View className="w-1 h-1 rounded-full" style={{ backgroundColor: colors.border }} />
-                                      <Text className="font-bold text-xs capitalize" style={{ color: colors.textSecondary }}>{session.session_type.replace('_', ' ')}</Text>
-                                    </View>
-                                  </View>
-                                  
-                                  {(() => {
-                                    const isCompleted = session.status === 'completed';
-                                    const isMissed = (session.status === 'scheduled' && new Date(session.scheduled_at) <= new Date()) || (session.status === 'cancelled' && session.cancellation_reason === 'Client No-Show');
-                                    const isDiscussed = session.status === 'cancelled' && session.cancellation_reason !== 'Client No-Show';
-                                    
-                                    if (isCompleted) {
-                                      return (
-                                        <View className="bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex-row items-center gap-1">
-                                          <Check size={10} color="#10B981" strokeWidth={3} />
-                                          <Text className="text-emerald-400 font-black text-[9px] uppercase tracking-wider">Completed</Text>
-                                        </View>
-                                      );
-                                    }
-                                    if (isMissed) {
-                                      return (
-                                        <View className="bg-red-500/10 px-3 py-1.5 rounded-xl border border-red-500/20 flex-row items-center gap-1">
-                                          <X size={10} color="#EF4444" strokeWidth={3} />
-                                          <Text className="text-red-400 font-black text-[9px] uppercase tracking-wider">Missed</Text>
-                                        </View>
-                                      );
-                                    }
-                                    if (isDiscussed) {
-                                      return (
-                                        <View 
-                                          className="px-3 py-1.5 rounded-xl border flex-row items-center gap-1"
-                                          style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                                        >
-                                          <Text className="font-black text-[9px] uppercase tracking-wider" style={{ color: colors.textSecondary }}>Discussed</Text>
-                                        </View>
-                                      );
-                                    }
-                                    return (
-                                      <View 
-                                        className="px-3 py-1.5 rounded-xl border flex-row items-center gap-1"
-                                        style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                                      >
-                                        <Text className="font-black text-[9px] uppercase tracking-wider capitalize" style={{ color: colors.textSecondary }}>{session.status}</Text>
-                                      </View>
-                                    );
-                                  })()}
-                                </MotiView>
-                              ))
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })() : activeSubView === 'weight_history' ? (
-                  <View className="px-6 py-6">
                     {/* Summary Card */}
                     <View 
-                      className="p-6 rounded-[28px] border mb-6"
-                      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      className="p-6 rounded-[32px] border mb-4 relative overflow-hidden"
+                      style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                     >
-                      <Text className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.textSecondary }}>
+                      <View
+                        style={{ backgroundColor: `${colors.primary}0D` }}
+                        className="absolute -top-10 -right-10 w-32 h-32 rounded-full pointer-events-none"
+                      />
+                      <Text className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: textSecondaryColor }}>
                         Current Weight
                       </Text>
                       <View className="flex-row items-baseline gap-2">
-                        <Text className="text-4xl font-black tracking-tight" style={{ color: colors.text }}>
+                        <Text className="text-4xl font-black tracking-tighter leading-none mb-1" style={{ color: textColor }}>
                           {latestWeight ? latestWeight : '--'}
                         </Text>
-                        <Text className="text-lg font-bold" style={{ color: colors.textSecondary }}>
+                        <Text className="text-base font-bold" style={{ color: textSecondaryColor }}>
                           kg
                         </Text>
                       </View>
@@ -1500,46 +1238,54 @@ export default function ClientDetailsScreen() {
                         const isLoss = totalDiff < 0;
                         const isGain = totalDiff > 0;
                         return (
-                          <View className="flex-row items-center gap-2 mt-4 pt-4 border-t" style={{ borderTopColor: colors.border }}>
-                            <View className={`px-2.5 py-1 rounded-full border flex-row items-center gap-1 ${
-                              isLoss ? 'bg-emerald-500/10 border-emerald-500/20' : isGain ? 'bg-amber-500/10 border-amber-500/20' : 'border'
-                            }`}
-                            style={totalDiff === 0 ? { backgroundColor: colors.background, borderColor: colors.border } : undefined}
+                          <View className="flex-row items-center gap-2 mt-4 pt-4 border-t" style={{ borderTopColor: cardBorder }}>
+                            <View 
+                              className="px-2.5 py-1 rounded-full border flex-row items-center gap-1"
+                              style={{ 
+                                backgroundColor: isLoss ? `${colors.primary}15` : isGain ? 'rgba(245,158,11,0.1)' : colors.background,
+                                borderColor: isLoss ? `${colors.primary}30` : isGain ? 'rgba(245,158,11,0.2)' : cardBorder 
+                              }}
                             >
                               <TrendingUp 
                                 size={12} 
-                                color={isLoss ? '#10B981' : isGain ? '#F59E0B' : colors.textSecondary} 
+                                color={isLoss ? colors.primary : isGain ? '#F59E0B' : textSecondaryColor} 
                                 style={isLoss ? { transform: [{ rotate: '180deg' }] } : undefined}
                               />
-                              <Text className={`font-black text-xs ${isLoss ? 'text-emerald-500' : isGain ? 'text-amber-500' : ''}`}
-                                style={totalDiff === 0 ? { color: colors.textSecondary } : undefined}
+                              <Text 
+                                className="font-black text-xs"
+                                style={{ color: isLoss ? colors.primary : isGain ? '#F59E0B' : textSecondaryColor }}
                               >
                                 {isLoss ? `${totalDiff} kg` : isGain ? `+${totalDiff} kg` : 'Stable'}
                               </Text>
                             </View>
-                            <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>
-                              since starting ({validWeights[validWeights.length - 1].weight_kg} kg)
+                            <Text className="text-xs font-medium" style={{ color: textSecondaryColor }}>
+                              since start ({validWeights[validWeights.length - 1].weight_kg} kg)
                             </Text>
                           </View>
                         );
                       })()}
                     </View>
 
-                    <Text className="text-xs font-bold uppercase tracking-widest mb-3 ml-1" style={{ color: colors.textSecondary }}>
+                    <Text className="text-xs font-bold uppercase tracking-widest mb-3 ml-1" style={{ color: textSecondaryColor }}>
                       All Logs ({validWeights.length})
                     </Text>
 
                     {validWeights.length === 0 ? (
                       <View 
-                        className="p-12 items-center justify-center rounded-[32px] border border-dashed"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                        className="p-8 items-center justify-center rounded-[32px] border border-dashed"
+                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                       >
-                        <Scale size={32} color={colors.textSecondary} />
-                        <Text className="font-black text-sm uppercase mt-4" style={{ color: colors.text }}>No Weight Logged</Text>
-                        <Text className="text-xs mt-1 text-center" style={{ color: colors.textSecondary }}>The client hasn't recorded any weigh-ins yet.</Text>
+                        <View 
+                          className="w-12 h-12 rounded-2xl items-center justify-center border mb-3"
+                          style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
+                        >
+                          <Scale size={24} color={colors.primary} />
+                        </View>
+                        <Text className="font-black text-base" style={{ color: textColor }}>No Weight Logged</Text>
+                        <Text className="text-xs mt-1 text-center px-4" style={{ color: textSecondaryColor }}>The client hasn't recorded any weigh-ins yet.</Text>
                       </View>
                     ) : (
-                      <View className="gap-3">
+                      <View className="gap-2.5">
                         {validWeights.map((checkin, idx) => {
                           const currentWeight = Number(checkin.weight_kg);
                           const prevCheckin = validWeights[idx + 1];
@@ -1552,42 +1298,35 @@ export default function ClientDetailsScreen() {
                               from={reduceMotion ? { opacity: 0 } : { opacity: 0, translateY: 10 }}
                               animate={reduceMotion ? { opacity: 1 } : { opacity: 1, translateY: 0 }}
                               transition={{ delay: idx * 30 }}
-                              className="rounded-[24px] p-5 border"
-                              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                              className="rounded-[28px] p-4 border"
+                              style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                             >
                               <View className="flex-row items-center justify-between">
                                 <View>
-                                  <Text className="font-black text-base" style={{ color: colors.text }}>
+                                  <Text className="font-black text-base" style={{ color: textColor }}>
                                     {currentWeight} kg
                                   </Text>
-                                  <Text className="font-medium text-xs mt-0.5" style={{ color: colors.textSecondary }}>
+                                  <Text className="font-medium text-xs mt-0.5" style={{ color: textSecondaryColor }}>
                                     {new Date(checkin.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                                   </Text>
                                 </View>
 
                                 {diff !== null && (
-                                  <View className={`px-3 py-1.5 rounded-xl border flex-row items-center gap-1 ${
-                                    diff < 0 
-                                      ? 'bg-emerald-500/10 border-emerald-500/20' 
-                                      : diff > 0 
-                                        ? 'bg-amber-500/10 border-amber-500/20'
-                                        : 'border'
-                                  }`}
-                                  style={diff === 0 ? { backgroundColor: colors.background, borderColor: colors.border } : undefined}
+                                  <View 
+                                    className="px-2.5 py-1 rounded-full border flex-row items-center gap-1"
+                                    style={{ 
+                                      backgroundColor: diff < 0 ? `${colors.primary}15` : diff > 0 ? 'rgba(245,158,11,0.1)' : colors.background,
+                                      borderColor: diff < 0 ? `${colors.primary}30` : diff > 0 ? 'rgba(245,158,11,0.2)' : cardBorder
+                                    }}
                                   >
                                     <TrendingUp 
                                       size={11} 
-                                      color={diff < 0 ? '#10B981' : diff > 0 ? '#F59E0B' : colors.textSecondary} 
+                                      color={diff < 0 ? colors.primary : diff > 0 ? '#F59E0B' : textSecondaryColor} 
                                       style={diff < 0 ? { transform: [{ rotate: '180deg' }] } : undefined}
                                     />
-                                    <Text className={`font-black text-[10px] uppercase tracking-wider ${
-                                      diff < 0 
-                                        ? 'text-emerald-500' 
-                                        : diff > 0 
-                                          ? 'text-amber-500' 
-                                          : ''
-                                    }`}
-                                    style={diff === 0 ? { color: colors.textSecondary } : undefined}
+                                    <Text 
+                                      className="font-black text-[10px] uppercase tracking-wider"
+                                      style={{ color: diff < 0 ? colors.primary : diff > 0 ? '#F59E0B' : textSecondaryColor }}
                                     >
                                       {diff < 0 ? `${diff.toFixed(1)} kg` : diff > 0 ? `+${diff.toFixed(1)} kg` : 'Stable'}
                                     </Text>
@@ -1597,10 +1336,10 @@ export default function ClientDetailsScreen() {
 
                               {checkin.notes ? (
                                 <View 
-                                  className="mt-3 pt-3 border-t"
-                                  style={{ borderTopColor: colors.border }}
+                                  className="mt-2.5 pt-2.5 border-t"
+                                  style={{ borderTopColor: cardBorder }}
                                 >
-                                  <Text className="text-xs font-normal leading-4" style={{ color: colors.textSecondary }}>
+                                  <Text className="text-xs font-normal leading-4" style={{ color: textSecondaryColor }}>
                                     "{checkin.notes}"
                                   </Text>
                                 </View>
@@ -1613,6 +1352,51 @@ export default function ClientDetailsScreen() {
                   </View>
                 ) : null}
             </ScrollView>
+
+            {/* Floating Message Button */}
+            {activeSubView === null && (
+              <MotiView
+                animate={{ scale: reduceMotion ? 1 : (messageFabPressed ? 0.82 : 1) }}
+                transition={{ type: 'spring', damping: 14, stiffness: 320 } as any}
+                style={{
+                  position: 'absolute',
+                  bottom: 24,
+                  right: 20,
+                  zIndex: 90,
+                }}
+              >
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Message Client"
+                  activeOpacity={0.88}
+                  onPressIn={() => setMessageFabPressed(true)}
+                  onPressOut={() => setMessageFabPressed(false)}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(coach)/chat/[id]',
+                      params: { id: id as string },
+                    })
+                  }
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    backgroundColor: colors.primary,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.45,
+                    shadowRadius: 12,
+                    elevation: 8,
+                    borderWidth: 1.5,
+                    borderColor: 'rgba(255, 255, 255, 0.25)',
+                  }}
+                >
+                  <MessageSquare size={24} color={colors.textOnPrimary || '#FFFFFF'} />
+                </TouchableOpacity>
+              </MotiView>
+            )}
         </View>
       </SafeAreaView>
 
@@ -1775,229 +1559,5 @@ const InfoTile = ({ icon, label, value, fullWidth, selectable }: { icon: any, la
             </View>
             <Text className="font-bold text-base" style={{ color: colors.text }} selectable={selectable}>{value}</Text>
         </View>
-    );
-};
-
-const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: any, coachId: string, index: number, isEditing?: boolean, onDelete?: () => void }) => {
-    const router = useRouter();
-    const theme = useTheme();
-    const colors = theme.colors;
-    const [showMenu, setShowMenu] = useState(false);
-    const totalSubs = Number(challenge.total_subs || 0);
-    const completedSubs = Number(challenge.completed_subs || 0);
-    const completionRate = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
-    const totalDays = Math.max(1, Math.ceil((new Date(challenge.end_date).getTime() - new Date(challenge.start_date).getTime()) / (1000 * 3600 * 24)));
-    const isCompleted = challenge.status === 'completed';
-    
-    return (
-        <Swipeable
-            renderRightActions={() => (
-                <View className="flex-row mb-6 pl-4 h-[280px]">
-                    <TouchableOpacity 
-                        onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-                        className="w-16 h-full rounded-3xl items-center justify-center border mr-2"
-                        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                    >
-                        <Edit2 size={20} color={colors.text} />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        onPress={onDelete}
-                        className="w-16 h-full bg-red-500 rounded-3xl items-center justify-center shadow-lg shadow-red-500/20"
-                    >
-                        <Trash2 size={20} color="white" />
-                    </TouchableOpacity>
-                </View>
-            )}
-            enabled={isEditing && !isCompleted}
-        >
-            <MotiView 
-                from={{ opacity: 0, scale: 0.95 }} 
-                animate={{ opacity: 1, scale: 1 }} 
-                transition={{ delay: index * 100 }}
-                className="border rounded-[40px] p-8 mb-6 overflow-hidden"
-                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-            >
-                <View className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: `${colors.primary}10` }} />
-                
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-                >
-                    <View className="flex-row justify-between items-start mb-10">
-                        <View className="flex-row items-center gap-3">
-                            <BrandedAvatar name={challenge.client_name || 'Client'} size={32} imageUrl={challenge.client_avatar} />
-                            <View>
-                                <Text className="text-[8px] font-black uppercase tracking-widest" style={{ color: colors.textSecondary }}>Client</Text>
-                                <Text className="font-bold text-sm tracking-tight" style={{ color: colors.text }}>{challenge.client_name || 'Individual'}</Text>
-                            </View>
-                        </View>
-                        <View 
-                            className="px-3 py-1.5 rounded-full border"
-                            style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                        >
-                            <Text 
-                                className="text-[8px] font-black uppercase tracking-[2px]"
-                                style={{ color: isCompleted ? '#10B981' : colors.primary }}
-                            >
-                                {isCompleted ? 'Finished' : 'Active'}
-                            </Text>
-                        </View>
-                    </View>
-
-                    <Text className="text-2xl font-black mb-4 tracking-tight" style={{ color: colors.text }}>{challenge.name}</Text>
-                    
-                    <View className="flex-row items-center gap-4 mb-10">
-                        <View className="flex-row items-center gap-2">
-                            <CalendarIcon size={14} color={colors.textSecondary} />
-                            <Text className="text-[11px] font-bold" style={{ color: colors.textSecondary }}>
-                                {new Date(challenge.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(challenge.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                            </Text>
-                        </View>
-                        <View className="w-1 h-1 rounded-full" style={{ backgroundColor: colors.border }} />
-                        <Text className="text-[11px] font-bold" style={{ color: colors.textSecondary }}>{totalDays} {totalDays === 1 ? 'Day' : 'Days'}</Text>
-                    </View>
-
-                    <View className="flex-row justify-between items-end mb-3">
-                        <Text className="text-[10px] font-black uppercase tracking-widest" style={{ color: colors.textSecondary }}>Progress</Text>
-                        <Text className="text-xl font-black tracking-tight" style={{ color: colors.text }}>{completionRate}%</Text>
-                    </View>
-
-                    <View className="w-full h-2 rounded-full overflow-hidden mb-10" style={{ backgroundColor: colors.background }}>
-                        <View className="h-full rounded-full" style={{ width: `${completionRate}%`, backgroundColor: colors.primary }} />
-                    </View>
-                </TouchableOpacity>
-
-                <View className="flex-row gap-3">
-                    <TouchableOpacity 
-                        onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-                        className="flex-1 h-16 rounded-[24px] items-center justify-center border"
-                        style={{
-                            backgroundColor: isCompleted ? colors.surface : colors.primary,
-                            borderColor: colors.border,
-                        }}
-                    >
-                        <Text 
-                            className="font-black text-base" 
-                            style={{ color: isCompleted ? colors.text : (colors.textOnPrimary || 'white') }}
-                        >
-                            {isCompleted ? 'View Results' : 'Manage Plan'}
-                        </Text>
-                    </TouchableOpacity>
-                    {!isCompleted && (
-                        isEditing ? (
-                             <TouchableOpacity onPress={onDelete} className="w-16 h-16 bg-red-500/10 rounded-[24px] items-center justify-center border border-red-500/20">
-                                <Trash2 size={20} color="#EF4444" />
-                            </TouchableOpacity>
-                        ) : (
-                        <View>
-                        {/* Full-screen backdrop to close menu on outside tap */}
-                        {showMenu && (
-                            <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
-                                <View
-                                    style={{
-                                        position: 'absolute',
-                                        top: -2000,
-                                        left: -2000,
-                                        right: -2000,
-                                        bottom: -2000,
-                                        zIndex: 40,
-                                    }}
-                                />
-                            </TouchableWithoutFeedback>
-                        )}
-
-                        <AnimatePresence>
-                            {showMenu && (
-                                <MotiView
-                                    from={{ opacity: 0, translateY: 8, scale: 0.98 }}
-                                    animate={{ opacity: 1, translateY: 0, scale: 1 }}
-                                    exit={{ opacity: 0, translateY: 8, scale: 0.98 }}
-                                    transition={{ type: 'timing', duration: 180 } as any}
-                                    style={{
-                                        position: 'absolute',
-                                        bottom: 72,
-                                        right: 0,
-                                        backgroundColor: colors.surface,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        borderRadius: 20,
-                                        padding: 8,
-                                        width: 160,
-                                        zIndex: 50,
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 8 },
-                                        shadowOpacity: 0.25,
-                                        shadowRadius: 24,
-                                        elevation: 12,
-                                    }}
-                                >
-                                    <TouchableOpacity 
-                                        onPress={() => {
-                                            setShowMenu(false);
-                                            router.push(`/(coach)/challenges/edit/${challenge.id}`);
-                                        }}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 12,
-                                            padding: 12,
-                                            borderRadius: 12,
-                                        }}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: `${colors.primary}15`, alignItems: 'center', justifyContent: 'center' }}>
-                                            <Edit2 size={16} color={colors.primary} />
-                                        </View>
-                                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>Edit</Text>
-                                    </TouchableOpacity>
-                                    
-                                    <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 8, marginVertical: 4 }} />
-                                    
-                                    <TouchableOpacity 
-                                        onPress={() => {
-                                            setShowMenu(false);
-                                            onDelete?.();
-                                        }}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 12,
-                                            padding: 12,
-                                            borderRadius: 12,
-                                        }}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Trash2 size={16} color="#EF4444" />
-                                        </View>
-                                        <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>Delete</Text>
-                                    </TouchableOpacity>
-                                </MotiView>
-                            )}
-                        </AnimatePresence>
-                        
-                        <TouchableOpacity 
-                            onPress={() => setShowMenu(!showMenu)}
-                            style={[{
-                                width: 64,
-                                height: 64,
-                                borderRadius: 24,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderWidth: 1,
-                                zIndex: 51,
-                            }, showMenu
-                                ? { backgroundColor: `${colors.primary}15`, borderColor: colors.primary }
-                                : { backgroundColor: colors.surface, borderColor: colors.border }
-                            ]}
-                        >
-                            <MoreVertical size={20} color={showMenu ? colors.primary : colors.textSecondary} />
-                        </TouchableOpacity>
-                        </View>
-                        )
-                    )}
-                </View>
-            </MotiView>
-        </Swipeable>
     );
 };

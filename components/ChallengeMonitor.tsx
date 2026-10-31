@@ -53,8 +53,9 @@ export default function ChallengeMonitor({ router }: { router: ReturnType<typeof
       checkNewChallenges();
     }, 5000);
 
+    const channelId = `challenge-monitor-${client.id}-${Date.now()}_${Math.random()}`;
     const channel = supabase
-      .channel('challenge-monitor-realtime')
+      .channel(channelId)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'mother_challenges', filter: `client_id=eq.${client.id}` },

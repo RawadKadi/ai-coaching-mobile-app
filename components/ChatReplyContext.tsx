@@ -25,7 +25,10 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
   let mediaType = '';
 
   try {
-    const content = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+    let content = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+    if (typeof content === 'string' && content.trim().startsWith('{')) {
+      content = JSON.parse(content.trim());
+    }
     if (content.type === 'image') {
       snippet = '🖼 Photo';
       mediaUrl = content.url;
@@ -42,10 +45,16 @@ export function ChatReplyContext({ message, onPress, isInsideBubble = true, isMe
       snippet = '📄 ' + (content.fileName || 'Document');
     } else if (content.type === 'task_completion') {
       snippet = '✅ Task Completed: ' + (content.taskName || '');
+      mediaUrl = content.imageUrl || content.url || '';
+      mediaType = 'image';
     } else if (content.type === 'challenge_completed') {
       snippet = '🏆 Challenge Completed: ' + (content.taskName || '');
+      mediaUrl = content.imageUrl || content.url || '';
+      mediaType = 'image';
     } else if (content.type === 'meal' || content.type === 'meal_log') {
-      snippet = '🍽️ Meal Log';
+      snippet = content.mealName ? `🍽️ Meal Log · ${content.mealName}` : '🍽️ Meal Log';
+      mediaUrl = content.imageUrl || content.photo_url || content.url || '';
+      mediaType = 'image';
     } else if (content.type === 'audio') {
       const duration = content.duration || 0;
       const mins = Math.floor(duration / 60);

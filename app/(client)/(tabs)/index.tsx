@@ -1,6 +1,12 @@
 import { useBrand, useBrandColors } from '@/contexts/BrandContext';
 import { isDarkColor } from '@/lib/theme-utils';
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from 'react';
 import {
   View,
   Text,
@@ -11,6 +17,7 @@ import {
   RefreshControl,
   Animated as RNAnimated,
   Easing,
+  AccessibilityInfo,
 } from 'react-native';
 import { Image } from 'expo-image';
 
@@ -57,6 +64,7 @@ import { useStreak } from '@/hooks/useStreak';
 import { useGreeting } from '@/hooks/useGreeting';
 import StreakBadge from '@/components/StreakBadge';
 import { processCheckInAI } from '@/lib/checkin-ai-service';
+import { getUnifiedDailyTasks, UnifiedDailyTask } from '@/lib/daily-tasks';
 
 interface TodaysChallenge {
   id: string;
@@ -90,7 +98,9 @@ export default function ClientDashboard() {
   const [todayHabitLogs, setTodayHabitLogs] = useState<HabitLog[]>([]);
 
   // Challenge State
-  const [todayChallenge, setTodayChallenge] = useState<TodaysChallenge | null>(null);
+  const [todayChallenge, setTodayChallenge] = useState<TodaysChallenge | null>(
+    null,
+  );
 
   // Nutrition & Macros States
   const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
@@ -113,7 +123,9 @@ export default function ClientDashboard() {
   // Steps State
   const [todaySteps, setTodaySteps] = useState<number | null>(null);
   const [stepsSyncEnabled, setStepsSyncEnabled] = useState<boolean>(false);
-  const [stepsHistory, setStepsHistory] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [stepsHistory, setStepsHistory] = useState<number[]>([
+    0, 0, 0, 0, 0, 0, 0,
+  ]);
 
   const nowTimeStr = useMemo(() => {
     return new Date().toLocaleTimeString('en-US', {
@@ -131,6 +143,15 @@ export default function ClientDashboard() {
     return chart;
   }, [stepsHistory, todaySteps]);
 
+  const dailyTasks = useMemo(() => {
+    return getUnifiedDailyTasks({
+      habits,
+      habitLogs: todayHabitLogs,
+      isCheckedIn: !!todayCheckIn,
+      mealsCount: todayMeals.length,
+    });
+  }, [habits, todayHabitLogs, todayCheckIn, todayMeals]);
+
   // Upcoming Session
   const [upcomingSession, setUpcomingSession] = useState<any>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
@@ -145,7 +166,11 @@ export default function ClientDashboard() {
 
   // Auto-resolve check-in AI analysis if client checked in but analysis is pending/missing
   useEffect(() => {
-    if (todayCheckIn && !todayCheckIn.ai_analysis && !isGeneratingAnalysisRef.current) {
+    if (
+      todayCheckIn &&
+      !todayCheckIn.ai_analysis &&
+      !isGeneratingAnalysisRef.current
+    ) {
       isGeneratingAnalysisRef.current = true;
       processCheckInAI(todayCheckIn.id, {
         weight: todayCheckIn.weight_kg,
@@ -157,10 +182,15 @@ export default function ClientDashboard() {
         notes: todayCheckIn.notes,
       })
         .then((analysis) => {
-          setTodayCheckIn((prev) => (prev ? { ...prev, ai_analysis: analysis } : prev));
+          setTodayCheckIn((prev) =>
+            prev ? { ...prev, ai_analysis: analysis } : prev,
+          );
         })
         .catch((err) => {
-          console.error('[Dashboard] Error auto-generating check-in AI analysis:', err);
+          console.error(
+            '[Dashboard] Error auto-generating check-in AI analysis:',
+            err,
+          );
         })
         .finally(() => {
           isGeneratingAnalysisRef.current = false;
@@ -175,7 +205,7 @@ export default function ClientDashboard() {
       refreshGreeting();
       if (client) loadDashboardData();
       else if (!authLoading) setLoading(false);
-    }, [client, authLoading, refreshBrand, refreshGreeting])
+    }, [client, authLoading, refreshBrand, refreshGreeting]),
   );
 
   // Real-time subscription for dashboard updates
@@ -197,7 +227,7 @@ export default function ClientDashboard() {
           if (payload.new && payload.new.date === today) {
             setTodayCheckIn(payload.new as CheckIn);
           }
-        }
+        },
       )
       .on(
         'postgres_changes',
@@ -207,7 +237,7 @@ export default function ClientDashboard() {
           table: 'habit_logs',
           filter: `client_id=eq.${client.id}`,
         },
-        () => loadDashboardData()
+        () => loadDashboardData(),
       )
       .on(
         'postgres_changes',
@@ -217,7 +247,7 @@ export default function ClientDashboard() {
           table: 'habits',
           filter: `client_id=eq.${client.id}`,
         },
-        () => loadDashboardData()
+        () => loadDashboardData(),
       )
       .on(
         'postgres_changes',
@@ -227,7 +257,7 @@ export default function ClientDashboard() {
           table: 'meals',
           filter: `client_id=eq.${client.id}`,
         },
-        () => loadDashboardData()
+        () => loadDashboardData(),
       )
       .on(
         'postgres_changes',
@@ -236,7 +266,7 @@ export default function ClientDashboard() {
           schema: 'public',
           table: 'sub_challenges',
         },
-        () => loadDashboardData()
+        () => loadDashboardData(),
       )
       .subscribe();
 
@@ -315,11 +345,14 @@ export default function ClientDashboard() {
           .from('daily_logs')
           .select('*')
           .eq('client_id', client.id)
-          .gte('date', (() => {
-            const d = new Date();
-            d.setDate(d.getDate() - 6);
-            return d.toISOString().split('T')[0];
-          })())
+          .gte(
+            'date',
+            (() => {
+              const d = new Date();
+              d.setDate(d.getDate() - 6);
+              return d.toISOString().split('T')[0];
+            })(),
+          )
           .order('date', { ascending: true }),
         supabase.rpc('get_todays_sub_challenges', {
           p_client_id: client.id,
@@ -332,7 +365,9 @@ export default function ClientDashboard() {
       setHabits(habitsResult.data || []);
       setTodayHabitLogs(habitLogsResult.data || []);
 
-      const logsList = Array.isArray(dailyLogResult.data) ? dailyLogResult.data : [];
+      const logsList = Array.isArray(dailyLogResult.data)
+        ? dailyLogResult.data
+        : [];
       const todayLog = logsList.find((l: any) => l.date === today) || null;
 
       // Build 7-day steps array for the steps card
@@ -350,7 +385,9 @@ export default function ClientDashboard() {
 
       // 1. Challenges
       const rawChallenges = challengeResult.data || [];
-      setTodayChallenge(rawChallenges.length > 0 ? (rawChallenges[0] as TodaysChallenge) : null);
+      setTodayChallenge(
+        rawChallenges.length > 0 ? (rawChallenges[0] as TodaysChallenge) : null,
+      );
 
       // 2. Meals & Macros
       const mealsData: Meal[] = mealsResult.data || [];
@@ -368,13 +405,16 @@ export default function ClientDashboard() {
       const targetCal = mealPlanResult.data?.daily_calories || 2000;
       setTargetCalories(targetCal);
       setTargetProtein(
-        mealPlanResult.data?.meals_data?.target_protein || Math.round((targetCal * 0.3) / 4)
+        mealPlanResult.data?.meals_data?.target_protein ||
+          Math.round((targetCal * 0.3) / 4),
       );
       setTargetCarbs(
-        mealPlanResult.data?.meals_data?.target_carbs || Math.round((targetCal * 0.45) / 4)
+        mealPlanResult.data?.meals_data?.target_carbs ||
+          Math.round((targetCal * 0.45) / 4),
       );
       setTargetFat(
-        mealPlanResult.data?.meals_data?.target_fat || Math.round((targetCal * 0.25) / 9)
+        mealPlanResult.data?.meals_data?.target_fat ||
+          Math.round((targetCal * 0.25) / 9),
       );
 
       // 3. Sleep & Recovery Score
@@ -387,15 +427,24 @@ export default function ClientDashboard() {
       setTodayRestingHR(restingHR);
 
       if (sleepHours !== null && energyLevel !== null) {
-        const sleepPts = Math.min(50, Math.max(10, Math.round((sleepHours / 8) * 50)));
-        const energyPts = Math.min(50, Math.max(10, Math.round((energyLevel / 10) * 50)));
+        const sleepPts = Math.min(
+          50,
+          Math.max(10, Math.round((sleepHours / 8) * 50)),
+        );
+        const energyPts = Math.min(
+          50,
+          Math.max(10, Math.round((energyLevel / 10) * 50)),
+        );
         const totalScore = sleepPts + energyPts;
         setRecoveryScore(totalScore);
         if (totalScore >= 80) setRecoveryStatus('Ready to Train');
         else if (totalScore >= 60) setRecoveryStatus('Steady Pace');
         else setRecoveryStatus('Take it Easy');
       } else if (sleepHours !== null) {
-        const totalScore = Math.min(100, Math.max(20, Math.round((sleepHours / 8) * 100)));
+        const totalScore = Math.min(
+          100,
+          Math.max(20, Math.round((sleepHours / 8) * 100)),
+        );
         setRecoveryScore(totalScore);
         setRecoveryStatus(totalScore >= 75 ? 'Well Rested' : 'Low Sleep');
       } else if (energyLevel !== null) {
@@ -436,7 +485,9 @@ export default function ClientDashboard() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
     // Optimistic update
-    setTodayChallenge((prev) => (prev ? { ...prev, completed: nextCompleted } : null));
+    setTodayChallenge((prev) =>
+      prev ? { ...prev, completed: nextCompleted } : null,
+    );
 
     try {
       await supabase.rpc('mark_sub_challenge', {
@@ -446,7 +497,9 @@ export default function ClientDashboard() {
       });
     } catch (err) {
       console.error('Failed to toggle challenge:', err);
-      setTodayChallenge((prev) => (prev ? { ...prev, completed: !nextCompleted } : null));
+      setTodayChallenge((prev) =>
+        prev ? { ...prev, completed: !nextCompleted } : null,
+      );
     }
   };
 
@@ -462,7 +515,9 @@ export default function ClientDashboard() {
     // Optimistic update
     if (existingLog) {
       setTodayHabitLogs((prev) =>
-        prev.map((l) => (l.id === existingLog.id ? { ...l, completed: nextCompleted } : l))
+        prev.map((l) =>
+          l.id === existingLog.id ? { ...l, completed: nextCompleted } : l,
+        ),
       );
     } else {
       const tempLog: HabitLog = {
@@ -496,7 +551,9 @@ export default function ClientDashboard() {
 
         if (data) {
           setTodayHabitLogs((prev) =>
-            prev.map((l) => (l.id.startsWith('temp-') && l.habit_id === habit.id ? data : l))
+            prev.map((l) =>
+              l.id.startsWith('temp-') && l.habit_id === habit.id ? data : l,
+            ),
           );
         }
       }
@@ -525,7 +582,9 @@ export default function ClientDashboard() {
             setTodaySteps(syncResult.steps);
           }
         }
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
       }
     }
   };
@@ -538,7 +597,14 @@ export default function ClientDashboard() {
 
   if (loading && !refreshing) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -546,21 +612,33 @@ export default function ClientDashboard() {
 
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
-  const completedHabitsCount = todayHabitLogs.filter((log) => log.completed).length;
+  const completedHabitsCount = todayHabitLogs.filter(
+    (log) => log.completed,
+  ).length;
   const rawFirstName = profile?.full_name?.split(' ')[0] || '';
-  const firstName = rawFirstName ? rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1) : '';
+  const firstName = rawFirstName
+    ? rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1)
+    : '';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        translucent
+      />
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: 140 }}
+        contentContainerStyle={{
+          paddingTop: insets.top + 20,
+          paddingBottom: 140,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -582,7 +660,13 @@ export default function ClientDashboard() {
             {brand?.logo_url ? (
               <Image
                 source={{ uri: brand.logo_url }}
-                style={{ width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: cardBorder }}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: cardBorder,
+                }}
                 contentFit="cover"
               />
             ) : (
@@ -596,12 +680,19 @@ export default function ClientDashboard() {
                 }}
                 className="border items-center justify-center shadow-lg"
               >
-                <Text style={{ color: colors.primary }} className="text-xl font-black">
+                <Text
+                  style={{ color: colors.primary }}
+                  className="text-xl font-black"
+                >
                   {brand?.name ? brand.name.charAt(0).toUpperCase() : 'C'}
                 </Text>
               </View>
             )}
-            <Text style={{ color: textColor }} className="text-xl font-black tracking-tight" numberOfLines={1}>
+            <Text
+              style={{ color: textColor }}
+              className="text-xl font-black tracking-tight"
+              numberOfLines={1}
+            >
               {brand?.name || ''}
             </Text>
           </View>
@@ -624,7 +715,11 @@ export default function ClientDashboard() {
               style={{ backgroundColor: cardBg, borderColor: cardBorder }}
               className="p-1 rounded-full border shadow-2xl relative"
             >
-              <BrandedAvatar size={44} name={profile?.full_name || 'U'} imageUrl={profile?.avatar_url} />
+              <BrandedAvatar
+                size={44}
+                name={profile?.full_name || 'U'}
+                imageUrl={profile?.avatar_url}
+              />
               <View
                 style={{ backgroundColor: colors.primary, borderColor: cardBg }}
                 className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2"
@@ -671,45 +766,84 @@ export default function ClientDashboard() {
               style={{ backgroundColor: cardBg, borderColor: cardBorder }}
               className="mb-4 overflow-hidden rounded-[40px] border shadow-2xl relative"
             >
-              <View style={{ backgroundColor: `${colors.primary}1A` }} className="absolute -top-24 -right-24 w-48 h-48 rounded-full" />
+              <View
+                style={{ backgroundColor: `${colors.primary}1A` }}
+                className="absolute -top-24 -right-24 w-48 h-48 rounded-full"
+              />
               <View className="p-8">
                 <View className="flex-row items-center gap-2 mb-3">
                   <View
-                    style={{ backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}40` }}
+                    style={{
+                      backgroundColor: `${colors.primary}20`,
+                      borderColor: `${colors.primary}40`,
+                    }}
                     className="w-6 h-6 rounded-full items-center justify-center border"
                   >
                     <CheckCircle2 size={12} color={colors.primary} />
                   </View>
-                  <Text style={{ color: colors.primary }} className="text-[10px] font-black uppercase tracking-[3px]">Plan Synced</Text>
+                  <Text
+                    style={{ color: colors.primary }}
+                    className="text-[10px] font-black uppercase tracking-[3px]"
+                  >
+                    Plan Synced
+                  </Text>
                 </View>
 
-                <Text style={{ color: textColor }} className="text-3xl font-black tracking-tight leading-8 mb-2">Metrics Logged</Text>
-                <Text style={{ color: textSecondaryColor }} className="font-medium text-sm leading-6">Your data is securely stored. The AI and your coach are analyzing your progress.</Text>
+                <Text
+                  style={{ color: textColor }}
+                  className="text-3xl font-black tracking-tight leading-8 mb-2"
+                >
+                  Metrics Logged
+                </Text>
+                <Text
+                  style={{ color: textSecondaryColor }}
+                  className="font-medium text-sm leading-6"
+                >
+                  Your data is securely stored. The AI and your coach are
+                  analyzing your progress.
+                </Text>
 
                 <View className="mt-8 flex-row items-center justify-between">
                   <MotiView
                     from={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 400 }}
-                    style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}33` }}
+                    style={{
+                      backgroundColor: `${colors.primary}18`,
+                      borderColor: `${colors.primary}33`,
+                    }}
                     className="flex-row items-center gap-2 px-4 py-2 rounded-full border"
                   >
                     <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={{ color: colors.primary }} className="font-black text-[10px] uppercase tracking-widest">AI Processing</Text>
+                    <Text
+                      style={{ color: colors.primary }}
+                      className="font-black text-[10px] uppercase tracking-widest"
+                    >
+                      AI Processing
+                    </Text>
                   </MotiView>
 
                   <View className="flex-row items-center">
                     <View
-                      style={{ backgroundColor: colors.background, borderColor: cardBorder }}
+                      style={{
+                        backgroundColor: colors.background,
+                        borderColor: cardBorder,
+                      }}
                       className="w-8 h-8 rounded-full border-2 items-center justify-center z-20"
                     >
                       <Brain size={14} color={colors.primary} />
                     </View>
                     <View
-                      style={{ backgroundColor: colors.background, borderColor: cardBorder }}
+                      style={{
+                        backgroundColor: colors.background,
+                        borderColor: cardBorder,
+                      }}
                       className="w-8 h-8 rounded-full border-2 items-center justify-center z-10 -ml-2"
                     >
-                      <Zap size={14} color={colors.secondary || colors.primary} />
+                      <Zap
+                        size={14}
+                        color={colors.secondary || colors.primary}
+                      />
                     </View>
                   </View>
                 </View>
@@ -724,17 +858,33 @@ export default function ClientDashboard() {
             >
               <View className="flex-row items-center gap-4 mb-6">
                 <View
-                  style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                  style={{
+                    backgroundColor: `${colors.primary}15`,
+                    borderColor: `${colors.primary}30`,
+                  }}
                   className="w-12 h-12 border rounded-2xl items-center justify-center"
                 >
                   <Brain size={24} color={colors.primary} />
                 </View>
                 <View>
-                  <Text style={{ color: textColor }} className="font-black text-lg tracking-tight">Today's Strategy</Text>
-                  <Text style={{ color: textSecondaryColor }} className="text-[9px] font-black uppercase tracking-widest">Feedback Loop</Text>
+                  <Text
+                    style={{ color: textColor }}
+                    className="font-black text-lg tracking-tight"
+                  >
+                    Today's Strategy
+                  </Text>
+                  <Text
+                    style={{ color: textSecondaryColor }}
+                    className="text-[9px] font-black uppercase tracking-widest"
+                  >
+                    Feedback Loop
+                  </Text>
                 </View>
               </View>
-              <Text style={{ color: textColor }} className="leading-7 font-medium text-lg">
+              <Text
+                style={{ color: textColor }}
+                className="leading-7 font-medium text-lg"
+              >
                 {(() => {
                   const aiAnalysis = todayCheckIn.ai_analysis;
                   if (!aiAnalysis) return '';
@@ -742,7 +892,13 @@ export default function ClientDashboard() {
                   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
                     try {
                       const parsed = JSON.parse(trimmed);
-                      return parsed.coaching_advice || parsed.analysis || parsed.advice || parsed.insight || trimmed;
+                      return (
+                        parsed.coaching_advice ||
+                        parsed.analysis ||
+                        parsed.advice ||
+                        parsed.insight ||
+                        trimmed
+                      );
                     } catch (e) {
                       return trimmed;
                     }
@@ -750,9 +906,17 @@ export default function ClientDashboard() {
                   return trimmed;
                 })()}
               </Text>
-              <View style={{ borderTopColor: cardBorder }} className="mt-8 pt-8 border-t flex-row items-center gap-2">
+              <View
+                style={{ borderTopColor: cardBorder }}
+                className="mt-8 pt-8 border-t flex-row items-center gap-2"
+              >
                 <Sparkles size={16} color={colors.primary} />
-                <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-[3px]">AI-Assisted Guidance</Text>
+                <Text
+                  style={{ color: textSecondaryColor }}
+                  className="text-[10px] font-black uppercase tracking-[3px]"
+                >
+                  AI-Assisted Guidance
+                </Text>
               </View>
             </MotiView>
           )}
@@ -802,9 +966,10 @@ export default function ClientDashboard() {
 
           {/* ─── 5. Quick Habit Checklist (BIG sub-cards) ─────────────── */}
           <QuickHabitList
-            habits={habits}
-            logs={todayHabitLogs}
+            tasks={dailyTasks}
             onToggleHabit={toggleHabit}
+            onCheckIn={() => router.push('/(client)/check-in')}
+            onLogMeal={() => router.push('/(client)/log-meal')}
             onViewAll={() => router.push('/(client)/(tabs)/activity')}
           />
 
@@ -821,7 +986,12 @@ export default function ClientDashboard() {
 
           {/* ─── 7. Quick Actions Grid ─────────────────────────────────── */}
           <View className="mt-6">
-            <Text style={{ color: textColor }} className="text-2xl font-black tracking-tighter mb-4 px-1">Quick Access</Text>
+            <Text
+              style={{ color: textColor }}
+              className="text-2xl font-black tracking-tighter mb-4 px-1"
+            >
+              Quick Access
+            </Text>
             <View className="flex-row gap-4">
               <ActionCard
                 label="Log Meal"
@@ -861,13 +1031,25 @@ export default function ClientDashboard() {
                     justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '900' }}>
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontSize: 10,
+                      fontWeight: '900',
+                    }}
+                  >
                     {brand?.name ? brand.name.charAt(0).toUpperCase() : 'C'}
                   </Text>
                 </View>
               )}
-              <Text style={{ color: textSecondaryColor }} className="text-xs font-semibold">
-                Powered by <Text style={{ color: textColor }} className="font-bold">{brand?.name || 'Your Coach'}</Text>
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-xs font-semibold"
+              >
+                Powered by{' '}
+                <Text style={{ color: textColor }} className="font-bold">
+                  {brand?.name || 'Your Coach'}
+                </Text>
               </Text>
             </View>
           </View>
@@ -898,9 +1080,11 @@ const RecoveryScoreCard = ({
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   return (
     <MotiView
@@ -918,16 +1102,25 @@ const RecoveryScoreCard = ({
       <View className="flex-row items-center justify-between mb-5">
         <View className="flex-row items-center gap-3.5">
           <View
-            style={{ backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}40` }}
+            style={{
+              backgroundColor: `${colors.primary}20`,
+              borderColor: `${colors.primary}40`,
+            }}
             className="w-12 h-12 rounded-2xl items-center justify-center border"
           >
             <Moon size={22} color={colors.primary} />
           </View>
           <View>
-            <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
+            <Text
+              style={{ color: textColor }}
+              className="text-xl font-black tracking-tight"
+            >
               Recovery Score
             </Text>
-            <Text style={{ color: colors.primary }} className="text-xs font-black uppercase tracking-wider mt-0.5">
+            <Text
+              style={{ color: colors.primary }}
+              className="text-xs font-black uppercase tracking-wider mt-0.5"
+            >
               {hasCheckedIn ? status || 'Daily Readiness' : 'Check-in Needed'}
             </Text>
           </View>
@@ -935,11 +1128,17 @@ const RecoveryScoreCard = ({
 
         {score !== null ? (
           <View
-            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}40` }}
+            style={{
+              backgroundColor: `${colors.primary}18`,
+              borderColor: `${colors.primary}40`,
+            }}
             className="px-4 py-2 rounded-2xl border flex-row items-center gap-1.5"
           >
             <Zap size={16} color={colors.primary} />
-            <Text style={{ color: colors.primary }} className="text-xl font-black">
+            <Text
+              style={{ color: colors.primary }}
+              className="text-xl font-black"
+            >
               {score}%
             </Text>
           </View>
@@ -958,7 +1157,9 @@ const RecoveryScoreCard = ({
       {score !== null && (
         <View className="mb-5">
           <View
-            style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0' }}
+            style={{
+              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0',
+            }}
             className="h-3 w-full rounded-full overflow-hidden"
           >
             <View
@@ -975,46 +1176,73 @@ const RecoveryScoreCard = ({
       {/* Big Stat Tiles */}
       <View className="flex-row items-center gap-3">
         <View
-          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: cardBorder }}
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+            borderColor: cardBorder,
+          }}
           className="flex-1 p-4 rounded-3xl border items-center"
         >
           <View className="flex-row items-center gap-1.5 mb-1.5">
             <Moon size={14} color={colors.primary} />
-            <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-wider">
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-[10px] font-black uppercase tracking-wider"
+            >
               Sleep
             </Text>
           </View>
-          <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
+          <Text
+            style={{ color: textColor }}
+            className="text-xl font-black tracking-tight"
+          >
             {sleepHours !== null ? `${sleepHours} hrs` : '—'}
           </Text>
         </View>
 
         <View
-          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: cardBorder }}
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+            borderColor: cardBorder,
+          }}
           className="flex-1 p-4 rounded-3xl border items-center"
         >
           <View className="flex-row items-center gap-1.5 mb-1.5">
             <Zap size={14} color={colors.secondary || colors.primary} />
-            <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-wider">
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-[10px] font-black uppercase tracking-wider"
+            >
               Energy
             </Text>
           </View>
-          <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
+          <Text
+            style={{ color: textColor }}
+            className="text-xl font-black tracking-tight"
+          >
             {energyLevel !== null ? `${energyLevel}/10` : '—'}
           </Text>
         </View>
 
         <View
-          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: cardBorder }}
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+            borderColor: cardBorder,
+          }}
           className="flex-1 p-4 rounded-3xl border items-center"
         >
           <View className="flex-row items-center gap-1.5 mb-1.5">
             <Heart size={14} color={colors.accent || colors.primary} />
-            <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-wider">
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-[10px] font-black uppercase tracking-wider"
+            >
               Heart Rate
             </Text>
           </View>
-          <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
+          <Text
+            style={{ color: textColor }}
+            className="text-xl font-black tracking-tight"
+          >
             {restingHR !== null ? `${restingHR} bpm` : 'Sync'}
           </Text>
         </View>
@@ -1036,9 +1264,11 @@ const TodaysChallengeCard = ({
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   if (!challenge) {
     return (
@@ -1048,7 +1278,10 @@ const TodaysChallengeCard = ({
       >
         <View className="flex-row items-center gap-3.5">
           <View
-            style={{ backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}40` }}
+            style={{
+              backgroundColor: `${colors.primary}20`,
+              borderColor: `${colors.primary}40`,
+            }}
             className="w-12 h-12 rounded-2xl items-center justify-center border"
           >
             <Award size={22} color={colors.primary} />
@@ -1057,7 +1290,10 @@ const TodaysChallengeCard = ({
             <Text style={{ color: textColor }} className="text-lg font-black">
               Today's Challenge
             </Text>
-            <Text style={{ color: textSecondaryColor }} className="text-sm font-medium">
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-sm font-medium"
+            >
               No challenge active today
             </Text>
           </View>
@@ -1068,7 +1304,10 @@ const TodaysChallengeCard = ({
           style={{ borderColor: cardBorder }}
           className="px-4 py-2 rounded-full border"
         >
-          <Text style={{ color: colors.primary }} className="text-xs font-black">
+          <Text
+            style={{ color: colors.primary }}
+            className="text-xs font-black"
+          >
             View All
           </Text>
         </TouchableOpacity>
@@ -1094,11 +1333,18 @@ const TodaysChallengeCard = ({
             style={{ backgroundColor: `${colors.primary}20` }}
             className="px-3 py-1 rounded-full"
           >
-            <Text style={{ color: colors.primary }} className="text-[10px] font-black uppercase tracking-wider">
+            <Text
+              style={{ color: colors.primary }}
+              className="text-[10px] font-black uppercase tracking-wider"
+            >
               {challenge.focus_type || 'Challenge'}
             </Text>
           </View>
-          <Text style={{ color: textSecondaryColor }} className="text-xs font-bold" numberOfLines={1}>
+          <Text
+            style={{ color: textSecondaryColor }}
+            className="text-xs font-bold"
+            numberOfLines={1}
+          >
             {challenge.mother_name}
           </Text>
         </View>
@@ -1120,7 +1366,10 @@ const TodaysChallengeCard = ({
       </Text>
 
       {challenge.description ? (
-        <Text style={{ color: textSecondaryColor }} className="text-sm font-medium leading-5 mb-5">
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="text-sm font-medium leading-5 mb-5"
+        >
           {challenge.description}
         </Text>
       ) : null}
@@ -1134,7 +1383,11 @@ const TodaysChallengeCard = ({
         }}
         className="w-full py-4 rounded-2xl border-2 flex-row items-center justify-center gap-2 shadow-md"
       >
-        {isCompleted ? <Check size={18} color="#FFFFFF" /> : <Circle size={18} color={colors.primary} />}
+        {isCompleted ? (
+          <Check size={18} color="#FFFFFF" />
+        ) : (
+          <Circle size={18} color={colors.primary} />
+        )}
         <Text
           style={{ color: isCompleted ? '#FFFFFF' : colors.primary }}
           className="text-sm font-black uppercase tracking-wider"
@@ -1148,25 +1401,29 @@ const TodaysChallengeCard = ({
 
 // ─── 3. Quick Habit Checklist Component (BIG SUB-CARDS) ──────────────────────
 const QuickHabitList = ({
-  habits,
-  logs,
+  tasks,
   onToggleHabit,
+  onCheckIn,
+  onLogMeal,
   onViewAll,
 }: {
-  habits: Habit[];
-  logs: HabitLog[];
+  tasks: UnifiedDailyTask[];
   onToggleHabit: (habit: Habit) => void;
+  onCheckIn: () => void;
+  onLogMeal: () => void;
   onViewAll: () => void;
 }) => {
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
-  const completedCount = logs.filter((l) => l.completed).length;
-  const previewHabits = habits.slice(0, 4);
+  const completedCount = tasks.filter((t) => t.completed).length;
+  const previewTasks = tasks.slice(0, 4);
 
   return (
     <View
@@ -1175,45 +1432,67 @@ const QuickHabitList = ({
     >
       <View className="flex-row items-center justify-between mb-5">
         <View className="flex-row items-center gap-2.5">
-          <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
-            Daily Habits
+          <Text
+            style={{ color: textColor }}
+            className="text-xl font-black tracking-tight"
+          >
+            Daily Tasks
           </Text>
           <View
             style={{ backgroundColor: `${colors.primary}20` }}
             className="px-3 py-1 rounded-full"
           >
-            <Text style={{ color: colors.primary }} className="text-xs font-black">
-              {completedCount}/{habits.length} Done
+            <Text
+              style={{ color: colors.primary }}
+              className="text-xs font-black"
+            >
+              {completedCount}/{tasks.length} Done
             </Text>
           </View>
         </View>
 
         <TouchableOpacity onPress={onViewAll}>
-          <Text style={{ color: colors.primary }} className="text-sm font-black">
+          <Text
+            style={{ color: colors.primary }}
+            className="text-sm font-black"
+          >
             See All
           </Text>
         </TouchableOpacity>
       </View>
 
-      {previewHabits.length === 0 ? (
-        <Text style={{ color: textSecondaryColor }} className="text-sm font-medium py-3">
-          No active daily habits. Tap See All to add habits.
+      {previewTasks.length === 0 ? (
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="text-sm font-medium py-3"
+        >
+          No daily tasks established. Tap See All to add tasks.
         </Text>
       ) : (
         <View className="gap-3">
-          {previewHabits.map((habit) => {
-            const isDone = logs.some((l) => l.habit_id === habit.id && l.completed);
+          {previewTasks.map((task) => {
+            const isDone = task.completed;
+            const handlePress = () => {
+              if (task.type === 'check_in') {
+                onCheckIn();
+              } else if (task.type === 'meal_log') {
+                onLogMeal();
+              } else if (task.habit) {
+                onToggleHabit(task.habit);
+              }
+            };
+
             return (
               <TouchableOpacity
-                key={habit.id}
-                onPress={() => onToggleHabit(habit)}
+                key={task.id}
+                onPress={handlePress}
                 activeOpacity={0.7}
                 style={{
                   backgroundColor: isDone
                     ? `${colors.primary}12`
                     : isDark
-                    ? 'rgba(255, 255, 255, 0.03)'
-                    : '#F8FAFC',
+                      ? 'rgba(255, 255, 255, 0.03)'
+                      : '#F8FAFC',
                   borderColor: isDone ? colors.primary : cardBorder,
                 }}
                 className="flex-row items-center justify-between p-5 rounded-[28px] border-2"
@@ -1228,10 +1507,13 @@ const QuickHabitList = ({
                     className="text-lg font-black tracking-tight mb-0.5"
                     numberOfLines={1}
                   >
-                    {habit.name}
+                    {task.name}
                   </Text>
-                  <Text style={{ color: textSecondaryColor }} className="text-xs font-bold uppercase tracking-wider">
-                    {habit.target_value ? `${habit.target_value} ${habit.unit || ''}` : habit.category || 'Daily Goal'}
+                  <Text
+                    style={{ color: textSecondaryColor }}
+                    className="text-xs font-bold uppercase tracking-wider"
+                  >
+                    {task.subtitle}
                   </Text>
                 </View>
 
@@ -1239,7 +1521,9 @@ const QuickHabitList = ({
                 <View
                   style={{
                     backgroundColor: isDone ? colors.primary : 'transparent',
-                    borderColor: isDone ? colors.primary : `${colors.primary}50`,
+                    borderColor: isDone
+                      ? colors.primary
+                      : `${colors.primary}50`,
                   }}
                   className="w-9 h-9 rounded-full border-2 items-center justify-center shadow-sm"
                 >
@@ -1282,12 +1566,135 @@ const NutritionMacroCard = ({
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   const calGoal = targetCalories || 2000;
-  const calPercent = Math.min(100, Math.round((calories / calGoal) * 100));
+  const calPercent = Math.min(
+    100,
+    Math.max(0, Math.round((calories / calGoal) * 100)),
+  );
+  const roundedCalories = Math.round(calories);
+
+  const [isFocused, setIsFocused] = useState(true);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [displayedCalories, setDisplayedCalories] = useState(0);
+
+  const progressAnim = useRef(new RNAnimated.Value(0)).current;
+  const glowAnim = useRef(new RNAnimated.Value(0)).current;
+  const calCounterAnim = useRef(new RNAnimated.Value(0)).current;
+  const committedPercentRef = useRef(0);
+  const committedCalRef = useRef(0);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    const listenerId = calCounterAnim.addListener(({ value }) => {
+      setDisplayedCalories(Math.round(value));
+    });
+    return () => calCounterAnim.removeListener(listenerId);
+  }, [calCounterAnim]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, []),
+  );
+
+  useEffect(() => {
+    // Hold animation while user is away on the Log Meal screen so they see it animate when returning
+    if (!isFocused) return;
+
+    const prevPercent = committedPercentRef.current;
+    const prevCal = committedCalRef.current;
+    if (calPercent === prevPercent && roundedCalories === prevCal) return;
+
+    const isIncreasing =
+      calPercent > prevPercent || roundedCalories > prevCal;
+
+    if (reduceMotion) {
+      progressAnim.setValue(calPercent);
+      calCounterAnim.setValue(roundedCalories);
+      setDisplayedCalories(roundedCalories);
+      committedPercentRef.current = calPercent;
+      committedCalRef.current = roundedCalories;
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      committedPercentRef.current = calPercent;
+      committedCalRef.current = roundedCalories;
+
+      if (isIncreasing && prevPercent > 0) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+
+      RNAnimated.parallel([
+        RNAnimated.timing(progressAnim, {
+          toValue: calPercent,
+          duration: 950,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        RNAnimated.timing(calCounterAnim, {
+          toValue: roundedCalories,
+          duration: 950,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        ...(isIncreasing
+          ? [
+              RNAnimated.sequence([
+                RNAnimated.timing(glowAnim, {
+                  toValue: 1,
+                  duration: 350,
+                  easing: Easing.out(Easing.quad),
+                  useNativeDriver: false,
+                }),
+                RNAnimated.timing(glowAnim, {
+                  toValue: 0,
+                  duration: 600,
+                  easing: Easing.inOut(Easing.quad),
+                  useNativeDriver: false,
+                }),
+              ]),
+            ]
+          : []),
+      ]).start();
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [
+    calPercent,
+    roundedCalories,
+    isFocused,
+    reduceMotion,
+    progressAnim,
+    calCounterAnim,
+    glowAnim,
+  ]);
+
+  const animatedBarWidth = progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+    extrapolate: 'clamp',
+  });
+
+  const animatedGlowOpacity = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.55],
+  });
 
   const protGoal = targetProtein || 150;
   const carbGoal = targetCarbs || 200;
@@ -1315,17 +1722,26 @@ const NutritionMacroCard = ({
       <View className="flex-row items-center justify-between mb-5">
         <View className="flex-row items-center gap-3.5">
           <View
-            style={{ backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}40` }}
+            style={{
+              backgroundColor: `${colors.primary}20`,
+              borderColor: `${colors.primary}40`,
+            }}
             className="w-12 h-12 rounded-2xl items-center justify-center border"
           >
             <Utensils size={22} color={colors.primary} />
           </View>
           <View>
-            <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
+            <Text
+              style={{ color: textColor }}
+              className="text-xl font-black tracking-tight"
+            >
               Today's Food
             </Text>
-            <Text style={{ color: colors.primary }} className="text-xs font-black uppercase tracking-wider mt-0.5">
-              {Math.round(calories)} / {calGoal} kcal
+            <Text
+              style={{ color: colors.primary }}
+              className="text-xs font-black uppercase tracking-wider mt-0.5"
+            >
+              {displayedCalories} / {calGoal} kcal
             </Text>
           </View>
         </View>
@@ -1341,19 +1757,33 @@ const NutritionMacroCard = ({
         </TouchableOpacity>
       </View>
 
-      {/* Big Calorie Progress Bar */}
+      {/* Big Calorie Progress Bar (Smoothly Animated) */}
       <View className="mb-5">
         <View
-          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0' }}
-          className="h-3 w-full rounded-full overflow-hidden"
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0',
+          }}
+          className="h-3.5 w-full rounded-full overflow-hidden relative"
         >
-          <View
+          <RNAnimated.View
             style={{
-              width: `${calPercent}%`,
+              width: animatedBarWidth,
               backgroundColor: colors.primary,
             }}
-            className="h-full rounded-full"
-          />
+            className="h-full rounded-full relative overflow-hidden"
+          >
+            <RNAnimated.View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: '#FFFFFF',
+                opacity: animatedGlowOpacity,
+              }}
+            />
+          </RNAnimated.View>
         </View>
       </View>
 
@@ -1361,48 +1791,75 @@ const NutritionMacroCard = ({
       <View className="flex-row items-center gap-3">
         {/* Protein */}
         <View
-          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: cardBorder }}
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+            borderColor: cardBorder,
+          }}
           className="flex-1 p-4 rounded-3xl border items-center"
         >
           <View className="flex-row items-center gap-1.5 mb-1.5">
             <Zap size={14} color={proteinColor} />
-            <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-wider">
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-[10px] font-black uppercase tracking-wider"
+            >
               Protein
             </Text>
           </View>
-          <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
+          <Text
+            style={{ color: textColor }}
+            className="text-xl font-black tracking-tight"
+          >
             {Math.round(protein)}/{protGoal}g
           </Text>
         </View>
 
         {/* Carbs */}
         <View
-          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: cardBorder }}
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+            borderColor: cardBorder,
+          }}
           className="flex-1 p-4 rounded-3xl border items-center"
         >
           <View className="flex-row items-center gap-1.5 mb-1.5">
             <Apple size={14} color={carbsColor} />
-            <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-wider">
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-[10px] font-black uppercase tracking-wider"
+            >
               Carbs
             </Text>
           </View>
-          <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
+          <Text
+            style={{ color: textColor }}
+            className="text-xl font-black tracking-tight"
+          >
             {Math.round(carbs)}/{carbGoal}g
           </Text>
         </View>
 
         {/* Fats */}
         <View
-          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: cardBorder }}
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+            borderColor: cardBorder,
+          }}
           className="flex-1 p-4 rounded-3xl border items-center"
         >
           <View className="flex-row items-center gap-1.5 mb-1.5">
             <Flame size={14} color={fatColor} />
-            <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-wider">
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-[10px] font-black uppercase tracking-wider"
+            >
               Fats
             </Text>
           </View>
-          <Text style={{ color: textColor }} className="text-xl font-black tracking-tight">
+          <Text
+            style={{ color: textColor }}
+            className="text-xl font-black tracking-tight"
+          >
             {Math.round(fat)}/{fatGoal}g
           </Text>
         </View>
@@ -1410,15 +1867,24 @@ const NutritionMacroCard = ({
 
       {/* Logged Meals Carousel if meals exist */}
       {meals.length > 0 && (
-        <View className="mt-5 pt-4" style={{ borderTopWidth: 1, borderTopColor: cardBorder }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-1 pt-0.5">
+        <View
+          className="mt-5 pt-4"
+          style={{ borderTopWidth: 1, borderTopColor: cardBorder }}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="-mx-1 pt-0.5"
+          >
             {meals.map((meal) => (
               <TouchableOpacity
                 key={meal.id}
                 activeOpacity={0.7}
                 onPress={() => router.push(`/meal-details/${meal.id}` as any)}
                 style={{
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+                  backgroundColor: isDark
+                    ? 'rgba(255,255,255,0.04)'
+                    : '#F8FAFC',
                   borderColor: cardBorder,
                 }}
                 className="mr-3 p-3 rounded-2xl border flex-row items-center gap-2.5 min-w-[150px]"
@@ -1441,11 +1907,20 @@ const NutritionMacroCard = ({
                   </View>
                 )}
                 <View className="flex-1 pr-1">
-                  <Text style={{ color: textColor }} className="text-xs font-black" numberOfLines={1}>
-                    {meal.name}
+                  <Text
+                    style={{ color: textColor }}
+                    className="text-xs font-black"
+                    numberOfLines={1}
+                  >
+                    {(meal as any).meal_name || meal.name || 'Meal'}
                   </Text>
-                  <Text style={{ color: textSecondaryColor }} className="text-[10px] font-bold mt-0.5">
-                    {meal.calories ? `${meal.calories} kcal` : meal.meal_type || 'Meal'}
+                  <Text
+                    style={{ color: textSecondaryColor }}
+                    className="text-[10px] font-bold mt-0.5"
+                  >
+                    {meal.calories
+                      ? `${meal.calories} kcal`
+                      : meal.meal_type || 'Meal'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1462,7 +1937,9 @@ const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
   const colors = useBrandColors();
   const primaryIsDark = isDarkColor(colors.primary);
   const primaryTextColor = primaryIsDark ? '#FFFFFF' : '#0F172A';
-  const primaryTextMuted = primaryIsDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(15, 23, 42, 0.8)';
+  const primaryTextMuted = primaryIsDark
+    ? 'rgba(255, 255, 255, 0.8)'
+    : 'rgba(15, 23, 42, 0.8)';
   const btnBg = primaryIsDark ? '#FFFFFF' : '#0F172A';
   const btnText = primaryIsDark ? colors.primary : '#FFFFFF';
 
@@ -1471,7 +1948,11 @@ const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
       key="checkin-cta"
       from={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      style={{ borderRadius: 40, overflow: 'hidden', backgroundColor: colors.primary }}
+      style={{
+        borderRadius: 40,
+        overflow: 'hidden',
+        backgroundColor: colors.primary,
+      }}
       className="shadow-2xl border border-white/10 relative mb-4"
     >
       <View className="absolute -top-24 -right-12 w-64 h-64 bg-white/10 rounded-full" />
@@ -1480,19 +1961,34 @@ const CheckInCTACard = ({ onPress }: { onPress: () => void }) => {
       <TouchableOpacity className="p-8 relative z-10" onPress={onPress}>
         <View className="flex-row items-center gap-2 mb-3">
           <Zap size={14} color={primaryTextColor} />
-          <Text style={{ color: primaryTextMuted }} className="text-[10px] font-black uppercase tracking-[3px]">
+          <Text
+            style={{ color: primaryTextMuted }}
+            className="text-[10px] font-black uppercase tracking-[3px]"
+          >
             Daily Goal
           </Text>
         </View>
-        <Text style={{ color: primaryTextColor }} className="text-3xl font-black tracking-tight leading-8">
+        <Text
+          style={{ color: primaryTextColor }}
+          className="text-3xl font-black tracking-tight leading-8"
+        >
           Complete Your Check-in
         </Text>
-        <Text style={{ color: primaryTextMuted }} className="mt-3 font-medium text-sm leading-6">
+        <Text
+          style={{ color: primaryTextMuted }}
+          className="mt-3 font-medium text-sm leading-6"
+        >
           Update your coach on your energy, weight, and meal progress today.
         </Text>
         <View className="mt-8 flex-row items-center justify-between">
-          <View style={{ backgroundColor: btnBg }} className="px-5 py-2.5 rounded-full">
-            <Text style={{ color: btnText }} className="font-black text-xs uppercase tracking-widest">
+          <View
+            style={{ backgroundColor: btnBg }}
+            className="px-5 py-2.5 rounded-full"
+          >
+            <Text
+              style={{ color: btnText }}
+              className="font-black text-xs uppercase tracking-widest"
+            >
               Start Now
             </Text>
           </View>
@@ -1513,12 +2009,22 @@ function MiniBarChart({
   color: string;
   isDark: boolean;
 }) {
-  const points = data.length >= 7 ? data.slice(-7) : [...Array(7 - data.length).fill(0), ...data];
+  const points =
+    data.length >= 7
+      ? data.slice(-7)
+      : [...Array(7 - data.length).fill(0), ...data];
   const max = Math.max(...points, 1);
   const inactiveColor = isDark ? 'rgba(255, 255, 255, 0.14)' : '#E2E8F0';
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 40, gap: 4 }}>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        height: 40,
+        gap: 4,
+      }}
+    >
       {points.map((val, idx) => {
         const isLast = idx === points.length - 1;
         const barHeight = val > 0 ? Math.max(8, (val / max) * 36) : 6;
@@ -1553,9 +2059,11 @@ const DashboardStepsCard = ({
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   return (
     <TouchableOpacity
@@ -1575,13 +2083,19 @@ const DashboardStepsCard = ({
           >
             <Flame size={18} color={colors.primary} />
           </View>
-          <Text style={{ color: textColor }} className="text-lg font-black tracking-tight">
+          <Text
+            style={{ color: textColor }}
+            className="text-lg font-black tracking-tight"
+          >
             Steps
           </Text>
         </View>
 
         <View className="flex-row items-center gap-1">
-          <Text style={{ color: textSecondaryColor }} className="text-xs font-semibold">
+          <Text
+            style={{ color: textSecondaryColor }}
+            className="text-xs font-semibold"
+          >
             {timeStr}
           </Text>
           <ChevronRight size={18} color={textSecondaryColor} />
@@ -1590,10 +2104,16 @@ const DashboardStepsCard = ({
 
       <View className="flex-row items-end justify-between mt-4">
         <View className="flex-row items-baseline gap-2">
-          <Text style={{ color: textColor }} className="text-3xl font-black tracking-tight">
+          <Text
+            style={{ color: textColor }}
+            className="text-3xl font-black tracking-tight"
+          >
             {(steps || 0).toLocaleString()}
           </Text>
-          <Text style={{ color: textSecondaryColor }} className="text-base font-bold">
+          <Text
+            style={{ color: textSecondaryColor }}
+            className="text-base font-bold"
+          >
             steps
           </Text>
         </View>
@@ -1617,9 +2137,11 @@ const UpcomingSessionCard = ({
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   const sessionTime = new Date(session.scheduled_at).getTime();
   const minutesUntil = (sessionTime - nowMs) / 60_000;
@@ -1627,7 +2149,11 @@ const UpcomingSessionCard = ({
   const coachName = session.coaches?.profiles?.full_name || 'Your Coach';
 
   const formatTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    new Date(iso).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
 
   const countdownLabel = () => {
     if (canJoin) return 'Ready to join';
@@ -1669,14 +2195,23 @@ const UpcomingSessionCard = ({
       )}
 
       <View style={{ padding: 24 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 16,
+          }}
+        >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View
               style={{
                 width: 28,
                 height: 28,
                 borderRadius: 8,
-                backgroundColor: canJoin ? 'rgba(255,255,255,0.15)' : `${colors.primary}20`,
+                backgroundColor: canJoin
+                  ? 'rgba(255,255,255,0.15)'
+                  : `${colors.primary}20`,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
@@ -1700,26 +2235,52 @@ const UpcomingSessionCard = ({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 4,
-              backgroundColor: canJoin ? 'rgba(255,255,255,0.12)' : `${colors.primary}15`,
+              backgroundColor: canJoin
+                ? 'rgba(255,255,255,0.12)'
+                : `${colors.primary}15`,
               paddingHorizontal: 10,
               paddingVertical: 5,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: canJoin ? 'rgba(255,255,255,0.15)' : `${colors.primary}30`,
+              borderColor: canJoin
+                ? 'rgba(255,255,255,0.15)'
+                : `${colors.primary}30`,
             }}
           >
             <Clock size={11} color={canJoin ? '#fff' : colors.primary} />
-            <Text style={{ color: canJoin ? '#fff' : colors.primary, fontSize: 11, fontWeight: '800' }}>
+            <Text
+              style={{
+                color: canJoin ? '#fff' : colors.primary,
+                fontSize: 11,
+                fontWeight: '800',
+              }}
+            >
               {countdownLabel()}
             </Text>
           </View>
         </View>
 
-        <Text style={{ color: canJoin ? '#fff' : textColor, fontSize: 22, fontWeight: '900', letterSpacing: -0.5, marginBottom: 4 }}>
+        <Text
+          style={{
+            color: canJoin ? '#fff' : textColor,
+            fontSize: 22,
+            fontWeight: '900',
+            letterSpacing: -0.5,
+            marginBottom: 4,
+          }}
+        >
           Session with {coachName.split(' ')[0]}
         </Text>
-        <Text style={{ color: canJoin ? 'rgba(255,255,255,0.6)' : textSecondaryColor, fontSize: 13, fontWeight: '600', marginBottom: 20 }}>
-          {formatTime(session.scheduled_at)} · {session.duration_minutes || 60} min
+        <Text
+          style={{
+            color: canJoin ? 'rgba(255,255,255,0.6)' : textSecondaryColor,
+            fontSize: 13,
+            fontWeight: '600',
+            marginBottom: 20,
+          }}
+        >
+          {formatTime(session.scheduled_at)} · {session.duration_minutes || 60}{' '}
+          min
         </Text>
 
         <TouchableOpacity
@@ -1759,9 +2320,11 @@ const ActionCard = ({ label, sub, icon, onPress }: any) => {
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   return (
     <TouchableOpacity
@@ -1776,10 +2339,16 @@ const ActionCard = ({ label, sub, icon, onPress }: any) => {
         {icon}
       </View>
       <View className="items-center">
-        <Text style={{ color: textColor }} className="font-black text-base tracking-tight">
+        <Text
+          style={{ color: textColor }}
+          className="font-black text-base tracking-tight"
+        >
           {label}
         </Text>
-        <Text style={{ color: textSecondaryColor }} className="text-[9px] font-black uppercase tracking-widest mt-0.5">
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="text-[9px] font-black uppercase tracking-widest mt-0.5"
+        >
           {sub}
         </Text>
       </View>

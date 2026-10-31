@@ -39,7 +39,8 @@ export default function CoachLayout() {
 
   useEffect(() => {
     if (coach?.id) {
-      const sub = supabase.channel(`coach_assignments_${coach.id}`)
+      const channelName = `coach_assignments_${coach.id}_${Date.now()}`;
+      const sub = supabase.channel(channelName)
         .on('postgres_changes', { 
           event: 'INSERT', 
           schema: 'public', 
@@ -65,7 +66,7 @@ export default function CoachLayout() {
         .subscribe();
 
       return () => {
-        sub.unsubscribe();
+        supabase.removeChannel(sub);
       };
     }
   }, [coach?.id]);
@@ -78,13 +79,19 @@ export default function CoachLayout() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="team-welcome" options={{ presentation: 'modal' }} />
         <Stack.Screen name="clients/[id]" />
+        <Stack.Screen name="clients/challenges" />
+        <Stack.Screen name="clients/checkins" />
+        <Stack.Screen name="clients/sessions" />
         <Stack.Screen name="clients/create-selection" options={{ presentation: 'modal' }} />
         <Stack.Screen name="clients/create-protocol" />
+        <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="chat/coach/[coachId]" />
+        <Stack.Screen name="client-analytics" />
       </Stack>
       
       {/* Absolute Loading Overlay to prevent UI flash, without unmounting the Stack */}
       {(loading || !session || profile?.role !== 'coach') && (
-        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: colors.background || '#010417', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}

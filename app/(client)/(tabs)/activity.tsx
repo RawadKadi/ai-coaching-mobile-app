@@ -71,6 +71,7 @@ import {
   Flame,
   Droplets,
   Footprints,
+  ClipboardCheck,
 } from 'lucide-react-native';
 
 import * as ImagePicker from 'expo-image-picker';
@@ -231,6 +232,7 @@ export default function ActivityScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>(cachedActivityData?.workouts || []);
   const [habits, setHabits] = useState<Habit[]>(cachedActivityData?.habits || []);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>(cachedActivityData?.habitLogs || []);
+  const [checkInDone, setCheckInDone] = useState(false);
   const [challenges, setChallenges] = useState<any[]>(cachedActivityData?.challenges || []);
   const [sessionsTaken, setSessionsTaken] = useState(cachedActivityData?.sessionsTaken || 0);
   const [sessionsTotal, setSessionsTotal] = useState(cachedActivityData?.sessionsTotal || 0);
@@ -423,10 +425,42 @@ export default function ActivityScreen() {
   const [showTaskDetailsModal, setShowTaskDetailsModal] = useState(false);
   const taskSheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const taskFadeAnim = useRef(new Animated.Value(0)).current;
+  const taskPanY = useRef(new Animated.Value(0)).current;
+
+  const taskPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderGrant: () => {
+        taskPanY.setValue(0);
+      },
+      onPanResponderMove: (_, gs) => {
+        // Can't go up more than current position, but follows downward movement
+        if (gs.dy > 0) {
+          taskPanY.setValue(gs.dy);
+        } else {
+          taskPanY.setValue(0);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
+          closeTaskDrawer();
+        } else {
+          Animated.spring(taskPanY, {
+            toValue: 0,
+            useNativeDriver: true,
+            damping: 24,
+            stiffness: 180,
+          }).start();
+        }
+      },
+    }),
+  ).current;
 
   const openTaskDrawer = (habit: Habit) => {
     setSelectedTask(habit);
     setShowTaskDetailsModal(true);
+    taskPanY.setValue(0);
     taskSheetAnim.setValue(SCREEN_HEIGHT);
     taskFadeAnim.setValue(0);
 
@@ -460,6 +494,7 @@ export default function ActivityScreen() {
     ]).start(() => {
       setShowTaskDetailsModal(false);
       setSelectedTask(null);
+      taskPanY.setValue(0);
     });
   };
 
@@ -485,6 +520,21 @@ export default function ActivityScreen() {
   };
 
   const getTaskVisuals = (habit: Habit) => {
+    if (habit.id === 'essential_check_in' || habit.verification_type === 'check_in') {
+      return {
+        icon: <ClipboardCheck size={22} color="#3B82F6" />,
+        color: '#3B82F6',
+        category: 'Daily Essential',
+      };
+    }
+    if (habit.id === 'essential_log_meal' || habit.verification_type === 'meal_log') {
+      return {
+        icon: <Camera size={22} color="#10B981" />,
+        color: '#10B981',
+        category: 'Daily Essential',
+      };
+    }
+
     const name = (habit.name || '').toLowerCase();
     const cat = (habit.category || '').toLowerCase();
 
@@ -699,6 +749,9 @@ export default function ActivityScreen() {
         failedResult,
         subsResult,
         pastLogsResult,
+        checkInForSelectedDate,
+        pastCheckInsResult,
+        pastMealsResult,
       ] = await Promise.all([
         supabase
           .from('meals')
@@ -749,6 +802,22 @@ export default function ActivityScreen() {
           .eq('client_id', client?.id)
           .gte('date', past90DaysStr)
           .eq('completed', true),
+        supabase
+          .from('check_ins')
+          .select('id, date, created_at')
+          .eq('client_id', client?.id)
+          .eq('date', selectedDate)
+          .maybeSingle(),
+        supabase
+          .from('check_ins')
+          .select('date')
+          .eq('client_id', client?.id)
+          .gte('date', past90DaysStr),
+        supabase
+          .from('meals')
+          .select('meal_date')
+          .eq('client_id', client?.id)
+          .gte('meal_date', past90DaysStr),
       ]);
 
       if (mealsResult.error) throw mealsResult.error;
@@ -758,6 +827,7 @@ export default function ActivityScreen() {
       if (sessionsResult.error) throw sessionsResult.error;
 
       setMeals(mealsResult.data || []);
+      setCheckInDone(!!checkInForSelectedDate?.data);
       setWorkouts(workoutsResult.data || []);
       setHabits(habitsResult.data || []);
       const logs = logsResult.data || [];
@@ -796,21 +866,36 @@ export default function ActivityScreen() {
 
       const activeHabitsList = habitsResult.data || [];
       const pastHabitLogs = pastLogsResult.data || [];
+      const checkInDatesSet = new Set(
+        (pastCheckInsResult?.data || []).map((c: any) => c.date),
+      );
+      const mealDatesSet = new Set(
+        (pastMealsResult?.data || []).map((m: any) => m.meal_date),
+      );
 
-      // Helper: check if all active habits created on or before dateStr were completed
+      // Helper: check if check-in, meal log, and coach habits on dateStr were completed
       const isDateCompleted = (dateStr: string) => {
+        // Essential 1: Check-in is required
+        if (!checkInDatesSet.has(dateStr)) return false;
+
+        // Essential 2: At least 1 logged meal is required
+        if (!mealDatesSet.has(dateStr)) return false;
+
+        // Essential 3+: Any active habits established by coach for that date
         const habitsForDate = activeHabitsList.filter((h: any) => {
           const createdDate = h.created_at
             ? h.created_at.split('T')[0]
             : '2000-01-01';
           return createdDate <= dateStr;
         });
-        if (habitsForDate.length === 0) return false;
-        return habitsForDate.every((h: any) => {
-          return pastHabitLogs?.some(
-            (l) => l.habit_id === h.id && l.date === dateStr && l.completed,
-          );
-        });
+        if (habitsForDate.length > 0) {
+          return habitsForDate.every((h: any) => {
+            return pastHabitLogs?.some(
+              (l) => l.habit_id === h.id && l.date === dateStr && l.completed,
+            );
+          });
+        }
+        return true;
       };
 
       const isTodayDone = isDateCompleted(todayStr);
@@ -821,12 +906,39 @@ export default function ActivityScreen() {
       let coldStatus = false;
       let streakLostStatus = false;
 
-      if (activeHabitsList.length > 0) {
-        if (isYesterdayDone) {
-          // Yesterday was completed -> normal active streak
+      // Essentials (Check-in + Meal) always exist, so streak calculation runs for all clients
+      if (isYesterdayDone) {
+        // Yesterday was completed -> normal active streak
+        coldStatus = false;
+        let count = isTodayDone ? 1 : 0;
+        let daysAgo = 1;
+        let consecutiveMiss = 0;
+        while (daysAgo <= 90) {
+          const dStr = getPastLocalDateString(daysAgo);
+          if (isDateCompleted(dStr)) {
+            count += 1;
+            consecutiveMiss = 0;
+          } else {
+            consecutiveMiss += 1;
+            if (consecutiveMiss >= 2) break; // 2 consecutive misses break streak
+          }
+          daysAgo += 1;
+        }
+        computedStreak = count;
+      } else {
+        // Yesterday was MISSED!
+        if (!isDayBeforeYesterdayDone) {
+          // Day before yesterday was ALSO missed -> 2 consecutive missed days!
+          // Streak is lost!
+          computedStreak = isTodayDone ? 1 : 0;
           coldStatus = false;
+          if (pastHabitLogs && pastHabitLogs.length > 0) {
+            streakLostStatus = true;
+          }
+        } else {
+          // Day before yesterday was completed -> Only 1 missed day! Streak preserved in cold state
           let count = isTodayDone ? 1 : 0;
-          let daysAgo = 1;
+          let daysAgo = 2; // count starting from day before yesterday
           let consecutiveMiss = 0;
           while (daysAgo <= 90) {
             const dStr = getPastLocalDateString(daysAgo);
@@ -835,44 +947,16 @@ export default function ActivityScreen() {
               consecutiveMiss = 0;
             } else {
               consecutiveMiss += 1;
-              if (consecutiveMiss >= 2) break; // 2 consecutive misses break streak
+              if (consecutiveMiss >= 2) break;
             }
             daysAgo += 1;
           }
           computedStreak = count;
-        } else {
-          // Yesterday was MISSED!
-          if (!isDayBeforeYesterdayDone) {
-            // Day before yesterday was ALSO missed -> 2 consecutive missed days!
-            // Streak is lost!
-            computedStreak = isTodayDone ? 1 : 0;
-            coldStatus = false;
-            if (pastHabitLogs && pastHabitLogs.length > 0) {
-              streakLostStatus = true;
-            }
-          } else {
-            // Day before yesterday was completed -> Only 1 missed day! Streak preserved in cold state
-            let count = isTodayDone ? 1 : 0;
-            let daysAgo = 2; // count starting from day before yesterday
-            let consecutiveMiss = 0;
-            while (daysAgo <= 90) {
-              const dStr = getPastLocalDateString(daysAgo);
-              if (isDateCompleted(dStr)) {
-                count += 1;
-                consecutiveMiss = 0;
-              } else {
-                consecutiveMiss += 1;
-                if (consecutiveMiss >= 2) break;
-              }
-              daysAgo += 1;
-            }
-            computedStreak = count;
 
-            if (!isTodayDone && computedStreak > 0) {
-              coldStatus = true;
-            } else {
-              coldStatus = false;
-            }
+          if (!isTodayDone && computedStreak > 0) {
+            coldStatus = true;
+          } else {
+            coldStatus = false;
           }
         }
       }
@@ -1369,12 +1453,7 @@ export default function ActivityScreen() {
       // 1. Tactile haptic feedback immediately
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
-      // 2. Smooth layout transition for list animations
-      if (Platform.OS !== 'web') {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      }
-
-      // 3. Optimistic local state update (0ms lag)
+      // 2. Optimistic local state update (0ms lag)
       const previousLogs = [...habitLogs];
       let optimisticLogs: HabitLog[];
       if (existingLog) {
@@ -1394,7 +1473,7 @@ export default function ActivityScreen() {
       }
       setHabitLogs(optimisticLogs);
 
-      // 4. Optimistic daily completion check
+      // 3. Optimistic daily completion check
       if (newCompleted) {
         const allHabitsDone = habits.every(
           (h) => optimisticLogs.find((l) => l.habit_id === h.id)?.completed,
@@ -1402,9 +1481,14 @@ export default function ActivityScreen() {
         const allChallengesDone = challenges.every((c) => c.completed);
 
         if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
-          setShowStreakGained(true);
           setIsCold(false);
           setStreak((prev) => prev + 1);
+          setTimeout(
+            () => {
+              setShowStreakGained(true);
+            },
+            showTaskDetailsModal ? 320 : 120,
+          );
         }
       }
 
@@ -1661,50 +1745,135 @@ export default function ActivityScreen() {
               </View>
               <CollapsibleContent expanded={expandedCategories.dailyTasks}>
                 <View style={{ marginBottom: 24 }}>
-                  {habits.length === 0 ? (
-                    <EmptyState message="No daily tasks established." />
-                  ) : (
-                    <View>
-                      {habits.map((habit, idx) => {
-                        const log = habitLogs.find(
-                          (l) => l.habit_id === habit.id,
-                        );
-                        const isCompleted = log?.completed || false;
-                        const visuals = getTaskVisuals(habit);
-                        return (
-                          <View
-                            key={habit.id}
-                            collapsable={false}
-                            onLayout={(e) => {
-                              taskLayouts.current[habit.id] =
-                                e.nativeEvent.layout;
-                            }}
-                          >
-                            <ActivityCard
-                              cardRef={(el: any) => {
-                                if (el) taskRefs.current[habit.id] = el;
-                              }}
-                              title={habit.name}
-                              sub={
-                                (habit.category
-                                  ? `${habit.category.toUpperCase()} • `
-                                  : '') +
-                                (habit.verification_type === 'camera'
-                                  ? 'Camera Verification Required'
-                                  : 'Manual Toggle')
-                              }
-                              completed={isCompleted}
-                              icon={visuals.icon}
-                              iconColor={visuals.color}
-                              onPress={() => openTaskDrawer(habit)}
-                              onToggle={() => toggleHabit(habit)}
-                              delay={idx * 60}
-                            />
-                          </View>
-                        );
-                      })}
+                  <View>
+                    {/* 1. Essential Top Task: Daily Check-in */}
+                    <View
+                      key="essential_check_in"
+                      collapsable={false}
+                      onLayout={(e) => {
+                        taskLayouts.current['essential_check_in'] =
+                          e.nativeEvent.layout;
+                      }}
+                    >
+                      <ActivityCard
+                        cardRef={(el: any) => {
+                          if (el) taskRefs.current['essential_check_in'] = el;
+                        }}
+                        title="Daily Check-in"
+                        sub="ESSENTIAL • COACH CHECK-IN"
+                        completed={checkInDone}
+                        icon={<ClipboardCheck size={22} color="#3B82F6" />}
+                        iconColor="#3B82F6"
+                        onPress={() => {
+                          openTaskDrawer({
+                            id: 'essential_check_in',
+                            client_id: client?.id || '',
+                            coach_id: client?.coach_id || '',
+                            name: 'Daily Check-in',
+                            description:
+                              'Check in with your coach to share how you are feeling and keep your streak alive.',
+                            category: 'Daily Essential',
+                            frequency: 'daily',
+                            target_value: 1,
+                            unit: 'Check-in',
+                            verification_type: 'manual',
+                            is_active: true,
+                            created_at: '2020-01-01',
+                          } as any);
+                        }}
+                        onToggle={() => {
+                          if (checkInDone) {
+                            router.push('/(client)/check-in');
+                          } else {
+                            openTaskDrawer({
+                              id: 'essential_check_in',
+                              client_id: client?.id || '',
+                              coach_id: client?.coach_id || '',
+                              name: 'Daily Check-in',
+                              description:
+                                'Check in with your coach to share how you are feeling and keep your streak alive.',
+                              category: 'Daily Essential',
+                              frequency: 'daily',
+                              target_value: 1,
+                              unit: 'Check-in',
+                              verification_type: 'manual',
+                              is_active: true,
+                              created_at: '2020-01-01',
+                            } as any);
+                          }
+                        }}
+                        delay={0}
+                      />
                     </View>
-                  )}
+
+                    {/* 2. Essential Top Task: Log a Meal (Direct to Camera/Meal-logger without slider) */}
+                    <View
+                      key="essential_log_meal"
+                      collapsable={false}
+                      onLayout={(e) => {
+                        taskLayouts.current['essential_log_meal'] =
+                          e.nativeEvent.layout;
+                      }}
+                    >
+                      <ActivityCard
+                        cardRef={(el: any) => {
+                          if (el) taskRefs.current['essential_log_meal'] = el;
+                        }}
+                        title="Log a Meal"
+                        sub="ESSENTIAL • AT LEAST 1 MEAL"
+                        completed={meals.length > 0}
+                        icon={<Camera size={22} color="#10B981" />}
+                        iconColor="#10B981"
+                        onPress={() => {
+                          router.push('/(client)/log-meal');
+                        }}
+                        onToggle={() => {
+                          router.push('/(client)/log-meal');
+                        }}
+                        delay={60}
+                      />
+                    </View>
+
+                    {/* 3+. Coach Assigned Habits */}
+                    {habits.map((habit, idx) => {
+                      const log = habitLogs.find(
+                        (l) => l.habit_id === habit.id,
+                      );
+                      const isCompleted = log?.completed || false;
+                      const visuals = getTaskVisuals(habit);
+                      return (
+                        <View
+                          key={habit.id}
+                          collapsable={false}
+                          onLayout={(e) => {
+                            taskLayouts.current[habit.id] =
+                              e.nativeEvent.layout;
+                          }}
+                        >
+                          <ActivityCard
+                            cardRef={(el: any) => {
+                              if (el) taskRefs.current[habit.id] = el;
+                            }}
+                            title={habit.name}
+                            sub={
+                              (habit.category
+                                ? `${habit.category.toUpperCase()} • `
+                                : '') +
+                              (habit.verification_type === 'camera'
+                                ? 'Camera Verification Required'
+                                : 'Manual Toggle')
+                            }
+                            completed={isCompleted}
+                            icon={visuals.icon}
+                            iconColor={visuals.color}
+                            onPress={() => openTaskDrawer(habit)}
+                            onToggle={() => toggleHabit(habit)}
+                            delay={(idx + 2) * 60}
+                          />
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               </CollapsibleContent>
             </View>
@@ -2001,7 +2170,14 @@ export default function ActivityScreen() {
               backgroundColor: isDark
                 ? 'rgba(0,0,0,0.75)'
                 : 'rgba(15, 23, 42, 0.6)',
-              opacity: taskFadeAnim,
+              opacity: Animated.multiply(
+                taskFadeAnim,
+                taskPanY.interpolate({
+                  inputRange: [0, 300],
+                  outputRange: [1, 0.2],
+                  extrapolate: 'clamp',
+                }),
+              ),
             }}
           >
             <TouchableWithoutFeedback onPress={closeTaskDrawer}>
@@ -2015,13 +2191,16 @@ export default function ActivityScreen() {
               backgroundColor: cardBg,
               borderTopLeftRadius: 40,
               borderTopRightRadius: 40,
-              paddingTop: 16,
+              paddingTop: 8,
               paddingHorizontal: 24,
               paddingBottom: insets.bottom + 24,
               borderTopWidth: 1,
               borderTopColor: colors.primary + (isDark ? '33' : '20'),
               maxHeight: '75%',
-              transform: [{ translateY: taskSheetAnim }],
+              transform: [
+                { translateY: taskSheetAnim },
+                { translateY: taskPanY },
+              ],
               shadowColor: isDark ? '#000000' : colors.primary,
               shadowOffset: { width: 0, height: -10 },
               shadowOpacity: isDark ? 0.5 : 0.15,
@@ -2029,24 +2208,35 @@ export default function ActivityScreen() {
               elevation: 25,
             }}
           >
-            {/* Drag handle pill */}
+            {/* Draggable handle bar container */}
             <View
+              {...taskPanResponder.panHandlers}
               style={{
-                width: 44,
-                height: 5,
-                backgroundColor: isDark
-                  ? 'rgba(255,255,255,0.2)'
-                  : 'rgba(0,0,0,0.15)',
-                borderRadius: 3,
-                alignSelf: 'center',
-                marginBottom: 20,
+                width: '100%',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingTop: 8,
+                paddingBottom: 16,
               }}
-            />
+            >
+              {/* Drag handle pill */}
+              <View
+                style={{
+                  width: 44,
+                  height: 5,
+                  backgroundColor: isDark
+                    ? 'rgba(255,255,255,0.2)'
+                    : 'rgba(0,0,0,0.15)',
+                  borderRadius: 3,
+                }}
+              />
+            </View>
 
             {selectedTask && (() => {
+              const isCheckIn = selectedTask.id === 'essential_check_in';
               const visuals = getTaskVisuals(selectedTask);
               const log = habitLogs.find((l) => l.habit_id === selectedTask.id);
-              const isDone = log?.completed || false;
+              const isDone = isCheckIn ? checkInDone : (log?.completed || false);
 
               return (
                 <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
@@ -2303,9 +2493,11 @@ export default function ActivityScreen() {
                         }}
                         numberOfLines={1}
                       >
-                        {selectedTask.verification_type === 'camera'
-                          ? 'Camera'
-                          : 'One-Tap'}
+                        {isCheckIn
+                          ? 'Form'
+                          : selectedTask.verification_type === 'camera'
+                            ? 'Camera'
+                            : 'One-Tap'}
                       </Text>
                     </View>
                   </View>
@@ -2388,6 +2580,11 @@ export default function ActivityScreen() {
                   <TouchableOpacity
                     activeOpacity={0.85}
                     onPress={() => {
+                      if (isCheckIn) {
+                        closeTaskDrawer();
+                        router.push('/(client)/check-in');
+                        return;
+                      }
                       if (
                         selectedTask.verification_type === 'camera' &&
                         !isDone
@@ -2432,7 +2629,27 @@ export default function ActivityScreen() {
                             letterSpacing: 0.8,
                           }}
                         >
-                          Completed • Tap to Undo
+                          {isCheckIn
+                            ? 'Check-In Done • View'
+                            : 'Completed • Tap to Undo'}
+                        </Text>
+                      </>
+                    ) : isCheckIn ? (
+                      <>
+                        <ClipboardCheck
+                          size={20}
+                          color={getContrastColor(colors.primary)}
+                        />
+                        <Text
+                          style={{
+                            color: getContrastColor(colors.primary),
+                            fontSize: 15,
+                            fontWeight: '800',
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.8,
+                          }}
+                        >
+                          Check In Now
                         </Text>
                       </>
                     ) : selectedTask.verification_type === 'camera' ? (
@@ -2481,14 +2698,14 @@ export default function ActivityScreen() {
       </Modal>
 
       {/* Daily Tasks Spotlight Highlight Overlay */}
-      {isHighlighting && highlightLayout && (
-        <Modal
-          visible={isHighlighting}
-          transparent
-          animationType="fade"
-          statusBarTranslucent
-          onRequestClose={handleDismissHighlight}
-        >
+      <Modal
+        visible={isHighlighting && !!highlightLayout}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleDismissHighlight}
+      >
+        {isHighlighting && highlightLayout && (
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
             {/* Dimmed Background Overlay with Rounded Cutout */}
             <TouchableWithoutFeedback onPress={handleDismissHighlight}>
@@ -2673,8 +2890,8 @@ export default function ActivityScreen() {
             );
           })()}
           </View>
-        </Modal>
-      )}
+        )}
+      </Modal>
     </View>
   );
 }

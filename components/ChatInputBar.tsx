@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/BrandContext';
 import { isDarkColor } from '@/lib/theme-utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check, Mic } from 'lucide-react-native';
+import { Send, Plus, Camera, X, Search, Film, Image as ImageIcon, FileText, ClipboardPaste, Play, Check, Mic, Utensils } from 'lucide-react-native';
 import { uploadChatMedia } from '@/lib/uploadChatMedia';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { VoiceInput } from './ui/voice-input';
@@ -580,10 +580,15 @@ export function ChatInputBar({
             <Text style={[styles.replySnippet, { color: theme.colors.textSecondary }]} numberOfLines={1}>
               {(() => {
                 try {
-                  const content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
+                  let content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
+                  if (typeof content === 'string' && content.trim().startsWith('{')) {
+                    content = JSON.parse(content.trim());
+                  }
                   if (content.type === 'task_completion') return '✅ Task Completed: ' + (content.taskName || '');
                   if (content.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (content.taskName || '');
-                  if (content.type === 'meal' || content.type === 'meal_log') return '🍽️ Meal Log';
+                  if (content.type === 'meal' || content.type === 'meal_log') {
+                    return content.mealName ? `🍽️ Meal Log · ${content.mealName}` : '🍽️ Meal Log';
+                  }
                   if (content.type === 'image') return '🖼 Photo';
                   if (content.type === 'video') return '🎥 Video';
                   if (content.type === 'gif') return '🎞 GIF';
@@ -605,11 +610,21 @@ export function ChatInputBar({
           </View>
           {(() => {
             try {
-              const content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
-              if (content.type === 'image' || content.type === 'video' || content.type === 'gif') {
-                const isVideo = content.type === 'video';
-                // For videos, prefer the thumbnailUrl (a real image); only fall back to content.url for images/gifs
-                const previewUri = isVideo ? (content.thumbnailUrl || null) : (content.url || null);
+              let content = typeof replyingTo.content === 'string' ? JSON.parse(replyingTo.content) : replyingTo.content;
+              if (typeof content === 'string' && content.trim().startsWith('{')) {
+                content = JSON.parse(content.trim());
+              }
+              const isMeal = content?.type === 'meal' || content?.type === 'meal_log' || replyingTo?.type === 'meal' || replyingTo?.type === 'meal_log';
+              const isTaskWithImage = (content?.type === 'task_completion' || content?.type === 'challenge_completed') && (content?.imageUrl || content?.url);
+              if (content?.type === 'image' || content?.type === 'video' || content?.type === 'gif' || isMeal || isTaskWithImage) {
+                const isVideo = content?.type === 'video';
+                // For videos, prefer thumbnailUrl; for meals/tasks/images, check all candidate image fields
+                const previewUri = isVideo
+                  ? (content?.thumbnailUrl || replyingTo?.thumbnailUrl || null)
+                  : (content?.imageUrl || content?.photo_url || content?.photoUrl || content?.image_url || content?.url || replyingTo?.imageUrl || replyingTo?.photo_url || replyingTo?.photoUrl || replyingTo?.image_url || replyingTo?.url || null);
+
+                if (!previewUri && !isVideo && !isMeal) return null;
+
                 return (
                   <View style={styles.replyThumbBox}>
                     {previewUri ? (
@@ -619,16 +634,18 @@ export function ChatInputBar({
                         contentFit="cover"
                         cachePolicy="memory-disk"
                       />
-                    ) : isVideo && content.url ? (
-                      // Fallback: Use Video component directly if no thumbnail is available
+                    ) : isVideo && content?.url ? (
                       <Video
                         source={{ uri: content.url }}
                         style={styles.replyThumb}
                         resizeMode={ResizeMode.COVER}
                         shouldPlay={false}
                       />
+                    ) : isMeal ? (
+                      <View style={[styles.replyThumb, { backgroundColor: theme.colors.surfaceLight || '#1E293B', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Utensils size={18} color={theme.colors.primary} />
+                      </View>
                     ) : (
-                      // Final fallback for missing media
                       <View style={[styles.replyThumb, { backgroundColor: '#1E293B' }]} />
                     )}
                     {isVideo && (
@@ -1224,12 +1241,14 @@ const getStyles = (colors: any) => StyleSheet.create({
   replyThumbBox: {
     width: 48,
     height: 48,
-    borderRadius: 6,
+    borderRadius: 8,
     overflow: 'hidden',
     marginLeft: 8,
+    marginRight: 6,
   },
   replyThumb: {
-    flex: 1,
+    width: '100%',
+    height: '100%',
   },
   replyCloseBtn: {
     marginLeft: 10,

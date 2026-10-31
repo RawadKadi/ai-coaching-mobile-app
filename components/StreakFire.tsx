@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { View, StyleProp, ViewStyle } from 'react-native';
 import LottieView from 'lottie-react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 
 const coldFireSource = require('@/assets/animations/cold-fire.json');
 const activeFireSource = require('@/assets/animations/Fire.json');
@@ -24,6 +25,7 @@ export default function StreakFire({
   style,
 }: StreakFireProps) {
   const animationRef = useRef<LottieView>(null);
+  const reduceMotion = useReducedMotion();
 
   const source =
     variant === 'cold'
@@ -48,8 +50,8 @@ export default function StreakFire({
       <LottieView
         ref={animationRef}
         source={source}
-        autoPlay={autoPlay}
-        loop={loop}
+        autoPlay={autoPlay && !reduceMotion}
+        loop={loop && !reduceMotion}
         resizeMode="contain"
         style={{
           width: size,

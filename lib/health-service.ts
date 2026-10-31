@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pedometer } from 'expo-sensors';
 import { supabase } from '@/lib/supabase';
@@ -8,10 +8,14 @@ let HealthConnect: any = null;
 
 if (Platform.OS === 'ios') {
   try {
-    const healthModule = require('react-native-health');
-    AppleHealthKit = healthModule.default || healthModule;
+    // Access NativeModules.AppleHealthKit directly so New Architecture Proxy methods are preserved
+    AppleHealthKit = NativeModules.AppleHealthKit;
+    if (!AppleHealthKit) {
+      const healthModule = require('react-native-health');
+      AppleHealthKit = healthModule.default || healthModule;
+    }
   } catch (e) {
-    // Dynamic import to prevent crash in Expo Go / web
+    // Ignore
   }
 } else if (Platform.OS === 'android') {
   try {
@@ -23,19 +27,6 @@ if (Platform.OS === 'ios') {
 
 export const HEALTH_SYNC_STORAGE_KEY = '@health_sync_status';
 export const LEGACY_STEPS_STORAGE_KEY = '@steps_sync_enabled';
-
-/**
- * Returns a realistic mock step count based on the current hour.
- */
-function getMockTodaySteps(): number {
-  const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const baseSteps = 3200;
-  const stepsPerHour = 580;
-  const stepsPerMinute = 8;
-  return baseSteps + (hours * stepsPerHour) + (minutes * stepsPerMinute);
-}
 
 /**
  * Checks if health sync is supported on this platform.
@@ -61,6 +52,16 @@ export async function isHealthSyncEnabled(): Promise<boolean> {
   }
 }
 
+export function isNativeHealthModuleAvailable(): boolean {
+  if (Platform.OS === 'ios') {
+    return !!(AppleHealthKit && typeof AppleHealthKit.initHealthKit === 'function');
+  }
+  if (Platform.OS === 'android') {
+    return !!(HealthConnect && typeof HealthConnect.initialize === 'function');
+  }
+  return false;
+}
+
 /**
  * Requests native health permissions once per install.
  * Saves the granted or denied status permanently in AsyncStorage.
@@ -71,18 +72,22 @@ export async function requestHealthPermissions(): Promise<boolean> {
   if (Platform.OS === 'ios') {
     if (AppleHealthKit && typeof AppleHealthKit.initHealthKit === 'function') {
       granted = await new Promise<boolean>((resolve) => {
-        const perms = AppleHealthKit.Constants?.Permissions;
         const permissions = {
           permissions: {
             read: [
-              perms?.Steps || 'Steps',
-              perms?.SleepAnalysis || 'SleepAnalysis',
-              perms?.Weight || 'Weight',
-              perms?.Workout || 'Workout',
-              perms?.HeartRate || 'HeartRate',
-              perms?.RestingHeartRate || 'RestingHeartRate',
+              'Steps',
+              'SleepAnalysis',
+              'Weight',
+              'Workout',
+              'HeartRate',
+              'RestingHeartRate',
             ],
-            write: [],
+            write: [
+              'Steps',
+              'SleepAnalysis',
+              'Weight',
+              'Workout',
+            ],
           },
         };
 
@@ -107,11 +112,6 @@ export async function requestHealthPermissions(): Promise<boolean> {
       } catch (e) {
         console.warn('[Pedometer] Permission request failed:', e);
       }
-    }
-
-    // Always permit mock fallback in development/simulator
-    if (!granted && __DEV__) {
-      granted = true;
     }
   } else if (Platform.OS === 'android') {
     if (HealthConnect && typeof HealthConnect.initialize === 'function' && typeof HealthConnect.requestPermission === 'function') {
@@ -142,10 +142,6 @@ export async function requestHealthPermissions(): Promise<boolean> {
       } catch (e) {
         console.warn('[Pedometer] Permission request failed:', e);
       }
-    }
-
-    if (!granted && __DEV__) {
-      granted = true;
     }
   }
 
@@ -200,10 +196,10 @@ export async function getTodaySteps(): Promise<number | null> {
         if (result && typeof result.steps === 'number') return result.steps;
       }
     } catch (e) {
-      // Fallback
+      // Ignore
     }
 
-    return getMockTodaySteps();
+    return null;
   }
 
   if (Platform.OS === 'android') {
@@ -230,10 +226,10 @@ export async function getTodaySteps(): Promise<number | null> {
         if (result && typeof result.steps === 'number') return result.steps;
       }
     } catch (e) {
-      // Fallback
+      // Ignore
     }
 
-    return getMockTodaySteps();
+    return null;
   }
 
   return null;
@@ -283,13 +279,39 @@ export async function getLastNightSleep(): Promise<number | null> {
         }
       }
     } catch (e) {
-      // Ignore and fallback
+      // Ignore
     }
   }
 
-  // Realistic fallback for development testing
-  if (__DEV__) {
-    return 7.5;
+  if (Platform.OS === 'android' && HealthConnect && typeof HealthConnect.readRecords === 'function') {
+    try {
+      const result = await HealthConnect.readRecords('SleepSession', {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime: yesterday.toISOString(),
+          endTime: todayNoon.toISOString(),
+        },
+      });
+      const records = result?.records || result || [];
+      if (Array.isArray(records) && records.length > 0) {
+        let totalMinutes = 0;
+        records.forEach((rec: any) => {
+          if (rec.startTime && rec.endTime) {
+            const start = new Date(rec.startTime).getTime();
+            const end = new Date(rec.endTime).getTime();
+            const diffMinutes = (end - start) / (1000 * 60);
+            if (diffMinutes > 0 && diffMinutes < 960) {
+              totalMinutes += diffMinutes;
+            }
+          }
+        });
+        if (totalMinutes > 60) {
+          return parseFloat((totalMinutes / 60).toFixed(1));
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
   }
 
   return null;
@@ -313,6 +335,31 @@ export async function getLatestWeight(): Promise<number | null> {
         // Convert lbs to kg and round to 1 decimal
         const kg = result.value * 0.45359237;
         return parseFloat(kg.toFixed(1));
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  if (Platform.OS === 'android' && HealthConnect && typeof HealthConnect.readRecords === 'function') {
+    try {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 90);
+      const result = await HealthConnect.readRecords('Weight', {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+        },
+      });
+      const records = result?.records || result || [];
+      if (Array.isArray(records) && records.length > 0) {
+        const latest = records[records.length - 1];
+        const kg = latest?.weight?.inKilograms ?? latest?.weight?.value;
+        if (typeof kg === 'number' && kg > 0) {
+          return parseFloat(kg.toFixed(1));
+        }
       }
     } catch (e) {
       // Ignore

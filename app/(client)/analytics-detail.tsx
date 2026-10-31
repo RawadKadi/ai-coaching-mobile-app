@@ -23,7 +23,8 @@ import Svg, {
   Stop,
   Text as SvgText,
 } from 'react-native-svg';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, Utensils } from 'lucide-react-native';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -36,11 +37,12 @@ import {
   getLastNightSleep,
   getLatestWeight,
 } from '@/lib/health-service';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_HEIGHT = 200;
 
-export type MetricTab = 'steps' | 'sleep' | 'weight' | 'energy';
+export type MetricTab = 'steps' | 'sleep' | 'weight' | 'energy' | 'nutrition';
 export type TimeRange = 'Day' | 'Week' | 'Month' | '6M' | '1Y';
 
 const TIME_RANGES: { key: TimeRange; label: string }[] = [
@@ -50,6 +52,17 @@ const TIME_RANGES: { key: TimeRange; label: string }[] = [
   { key: '6M', label: '6M' },
   { key: '1Y', label: 'Y' },
 ];
+
+interface MealEntry {
+  id: string;
+  meal_date: string;
+  meal_name?: string;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  photo_url?: string;
+}
 
 interface DailyLogEntry {
   date: string;
@@ -79,12 +92,35 @@ function getLocalDateString(d: Date = new Date()): string {
 export default function AnalyticsDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ metric?: string; clientId?: string }>();
+  const params = useLocalSearchParams<{ metric?: string; clientId?: string; name?: string; avatar?: string }>();
   const isCoachView = Boolean(params.clientId);
   const { client, profile } = useAuth();
   const theme = useTheme();
   const colors = theme.colors;
   const isDark = isDarkColor(colors.background || '#020617');
+
+  const [clientInfo, setClientInfo] = useState<{ name?: string; avatar?: string }>({
+    name: params.name,
+    avatar: params.avatar,
+  });
+
+  useEffect(() => {
+    if (params.clientId && (!params.name || !params.avatar)) {
+      supabase
+        .from('clients')
+        .select('profiles(full_name, avatar_url)')
+        .eq('id', params.clientId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data && (data as any).profiles) {
+            setClientInfo({
+              name: (data as any).profiles.full_name || 'Athlete',
+              avatar: (data as any).profiles.avatar_url || '',
+            });
+          }
+        });
+    }
+  }, [params.clientId, params.name, params.avatar]);
 
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondary = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
@@ -92,7 +128,7 @@ export default function AnalyticsDetailScreen() {
   const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
 
   const activeMetric: MetricTab = (
-    params.metric && ['steps', 'sleep', 'weight', 'energy'].includes(params.metric)
+    params.metric && ['steps', 'sleep', 'weight', 'energy', 'nutrition'].includes(params.metric)
       ? params.metric
       : 'steps'
   ) as MetricTab;
@@ -101,6 +137,11 @@ export default function AnalyticsDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([]);
   const [checkIns, setCheckIns] = useState<CheckInEntry[]>([]);
+  const [meals, setMeals] = useState<MealEntry[]>([]);
+  const [targetCalories, setTargetCalories] = useState<number>(2000);
+  const [targetProtein, setTargetProtein] = useState<number>(140);
+  const [targetCarbs, setTargetCarbs] = useState<number>(200);
+  const [targetFat, setTargetFat] = useState<number>(65);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   // Dynamic measured width for the chart inside chartSurface
@@ -151,6 +192,8 @@ export default function AnalyticsDetailScreen() {
       const [
         logsRes,
         checkInsRes,
+        mealsRes,
+        planRes,
         liveSteps,
         liveSleep,
         liveWeight,
@@ -168,6 +211,20 @@ export default function AnalyticsDetailScreen() {
           .in('client_id', clientIds)
           .gte('date', startDateStr)
           .order('date', { ascending: true }),
+        supabase
+          .from('meals')
+          .select('id, meal_date, meal_name, calories, protein_g, carbs_g, fat_g, photo_url')
+          .in('client_id', clientIds)
+          .gte('meal_date', startDateStr)
+          .order('meal_date', { ascending: true }),
+        supabase
+          .from('meal_plans')
+          .select('daily_calories, meals_data')
+          .in('client_id', clientIds)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
         isCoachView ? Promise.resolve(null) : getTodaySteps(),
         isCoachView ? Promise.resolve(null) : getLastNightSleep(),
         isCoachView ? Promise.resolve(null) : getLatestWeight(),
@@ -176,6 +233,17 @@ export default function AnalyticsDetailScreen() {
 
       const fetchedLogs: DailyLogEntry[] = [...(logsRes.data || [])];
       const fetchedCheckIns: CheckInEntry[] = [...(checkInsRes.data || [])];
+      const fetchedMeals: MealEntry[] = [...(mealsRes.data || [])];
+
+      if (planRes?.data) {
+        if (planRes.data.daily_calories && planRes.data.daily_calories > 0) {
+          setTargetCalories(planRes.data.daily_calories);
+        }
+        const mData = planRes.data.meals_data;
+        if (mData?.target_protein) setTargetProtein(Number(mData.target_protein));
+        if (mData?.target_carbs) setTargetCarbs(Number(mData.target_carbs));
+        if (mData?.target_fat) setTargetFat(Number(mData.target_fat));
+      }
 
       if (!isCoachView) {
         // Merge live steps for today so today is always fresh
@@ -218,6 +286,7 @@ export default function AnalyticsDetailScreen() {
 
       setDailyLogs(fetchedLogs);
       setCheckIns(fetchedCheckIns);
+      setMeals(fetchedMeals);
     } catch (e) {
       console.warn('Analytics detail load failed:', e);
     } finally {
@@ -235,6 +304,8 @@ export default function AnalyticsDetailScreen() {
         return 'Weight';
       case 'energy':
         return 'Energy';
+      case 'nutrition':
+        return 'Food';
     }
   }, [activeMetric]);
 
@@ -303,6 +374,15 @@ export default function AnalyticsDetailScreen() {
         } else if (activeMetric === 'energy') {
           val = latestEnergyVal;
           sec = 3;
+        } else if (activeMetric === 'nutrition') {
+          const todayMeals = meals.filter((m) => m.meal_date === todayStr);
+          const totalDayCal = todayMeals.reduce((acc, m) => acc + (m.calories || 0), 0);
+          if (slot.hour <= currentHour) {
+            const fraction = Math.min(1, slot.hour / Math.max(1, currentHour));
+            val = Math.round(totalDayCal * fraction);
+          } else {
+            val = 0;
+          }
         }
 
         list.push({
@@ -356,6 +436,9 @@ export default function AnalyticsDetailScreen() {
           const ci = checkIns.find((c) => c.date === dateStr);
           val = ci?.energy_level || 0;
           sec = ci?.stress_level || 0;
+        } else if (activeMetric === 'nutrition') {
+          const dayMeals = meals.filter((m) => m.meal_date === dateStr);
+          val = dayMeals.reduce((acc, m) => acc + (m.calories || 0), 0);
         }
 
         list.push({
@@ -409,6 +492,9 @@ export default function AnalyticsDetailScreen() {
           const ci = checkIns.find((c) => c.date === dateStr);
           val = ci?.energy_level || 0;
           sec = ci?.stress_level || 0;
+        } else if (activeMetric === 'nutrition') {
+          const dayMeals = meals.filter((m) => m.meal_date === dateStr);
+          val = dayMeals.reduce((acc, m) => acc + (m.calories || 0), 0);
         }
 
         list.push({
@@ -471,6 +557,14 @@ export default function AnalyticsDetailScreen() {
           } else if (i === 0) {
             val = latestEnergyVal;
           }
+        } else if (activeMetric === 'nutrition') {
+          const matching = meals.filter((m) => m.meal_date >= startStr && m.meal_date <= dateStr && (m.calories || 0) > 0);
+          const distinctDays = new Set(matching.map((m) => m.meal_date)).size;
+          if (distinctDays > 0) {
+            val = Math.round(matching.reduce((acc, m) => acc + (m.calories || 0), 0) / distinctDays);
+          } else {
+            val = 0;
+          }
         }
 
         list.push({
@@ -528,6 +622,14 @@ export default function AnalyticsDetailScreen() {
           } else if (i === 0) {
             val = latestEnergyVal;
           }
+        } else if (activeMetric === 'nutrition') {
+          const matching = meals.filter((m) => m.meal_date.startsWith(yearMonth) && (m.calories || 0) > 0);
+          const distinctDays = new Set(matching.map((m) => m.meal_date)).size;
+          if (distinctDays > 0) {
+            val = Math.round(matching.reduce((acc, m) => acc + (m.calories || 0), 0) / distinctDays);
+          } else {
+            val = 0;
+          }
         }
 
         list.push({
@@ -547,6 +649,7 @@ export default function AnalyticsDetailScreen() {
     activeMetric,
     dailyLogs,
     checkIns,
+    meals,
     latestStepsVal,
     latestSleepVal,
     latestWeightVal,
@@ -602,6 +705,28 @@ export default function AnalyticsDetailScreen() {
       };
     }
 
+    if (activeMetric === 'nutrition') {
+      const activeMeals = meals.filter((m) => {
+        return activePoints.some((p) => p.date === m.meal_date);
+      });
+      const loggedDays = values.filter((v) => v > 0);
+      const totalLoggedDays = loggedDays.length;
+      const metGoal = values.filter(
+        (v) => targetCalories > 0 && v >= targetCalories * 0.9 && v <= targetCalories * 1.1,
+      ).length;
+      const totalProtein = activeMeals.reduce((acc, m) => acc + (m.protein_g || 0), 0);
+      const avgProtein = totalLoggedDays > 0 ? Math.round(totalProtein / totalLoggedDays) : 0;
+
+      return {
+        stat1Label: 'Daily Avg',
+        stat1Value: values.length > 0 ? `${Math.round(avg).toLocaleString()} kcal` : '0 kcal',
+        stat2Label: 'Avg Protein',
+        stat2Value: `${avgProtein} g`,
+        stat3Label: 'Goal Met',
+        stat3Value: `${metGoal} / ${totalCount}`,
+      };
+    }
+
     // Energy tab
     const stressVals = activePoints.map((p) => p.secondary || 0).filter((v) => v > 0);
     const stressAvg = stressVals.length > 0 ? stressVals.reduce((a, b) => a + b, 0) / stressVals.length : 0;
@@ -613,7 +738,7 @@ export default function AnalyticsDetailScreen() {
       stat3Label: 'Check-ins',
       stat3Value: `${values.length}`,
     };
-  }, [activePoints, chartPoints, activeMetric, latestWeightVal]);
+  }, [activePoints, chartPoints, activeMetric, latestWeightVal, meals, targetCalories]);
 
   const benchmarkValue = useMemo(() => {
     switch (activeMetric) {
@@ -623,10 +748,12 @@ export default function AnalyticsDetailScreen() {
         return 8.0;
       case 'energy':
         return 7.0;
+      case 'nutrition':
+        return targetCalories;
       default:
         return 0;
     }
-  }, [activeMetric]);
+  }, [activeMetric, targetCalories]);
 
   const heroValue = useMemo(() => {
     if (selectedIndex !== null) {
@@ -658,30 +785,67 @@ export default function AnalyticsDetailScreen() {
           },
         ]}
       >
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => router.back()}
-          style={[
-            styles.backButton,
-            {
-              backgroundColor: cardBg,
-              borderColor: cardBorder,
-            },
-          ]}
-        >
-          <ChevronLeft size={22} color={textColor} />
-        </TouchableOpacity>
+        {isCoachView ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+              style={[
+                styles.backButton,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                },
+              ]}
+            >
+              <ChevronLeft size={22} color={textColor} />
+            </TouchableOpacity>
 
-        <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: textColor }]}>
-            {metricLabel}
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: textSecondary }]}>
-            Trends & Progress
-          </Text>
-        </View>
+            <BrandedAvatar
+              name={clientInfo.name || params.name || 'Athlete'}
+              size={40}
+              imageUrl={clientInfo.avatar || params.avatar || undefined}
+            />
 
-        <View style={styles.headerRightSpacer} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.headerTitle, { color: textColor, textAlign: 'left' }]}>
+                {metricLabel}
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: textSecondary, textAlign: 'left' }]}>
+                {clientInfo.name || params.name || 'Athlete'}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+              style={[
+                styles.backButton,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                },
+              ]}
+            >
+              <ChevronLeft size={22} color={textColor} />
+            </TouchableOpacity>
+
+            <View style={styles.headerTitleContainer}>
+              <Text style={[styles.headerTitle, { color: textColor }]}>
+                {metricLabel}
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: textSecondary }]}>
+                Trends & Progress
+              </Text>
+            </View>
+
+            <View style={styles.headerRightSpacer} />
+          </>
+        )}
       </View>
 
       <ScrollView
@@ -754,8 +918,8 @@ export default function AnalyticsDetailScreen() {
                 )}
               </View>
 
-              {/* Render Chart (Bar for steps/sleep, Smooth Line for weight/energy) */}
-              {activeMetric === 'steps' || activeMetric === 'sleep' ? (
+              {/* Render Chart (Bar for steps/sleep/nutrition, Smooth Line for weight/energy) */}
+              {activeMetric === 'steps' || activeMetric === 'sleep' || activeMetric === 'nutrition' ? (
                 <BarChartVisual
                   points={chartPoints}
                   height={CHART_HEIGHT}
@@ -810,6 +974,209 @@ export default function AnalyticsDetailScreen() {
             textSecondary={textSecondary}
           />
         </View>
+
+        {/* Nutrition Extra Details: Macro Breakdown & Recent Meals */}
+        {activeMetric === 'nutrition' && (
+          <View style={{ marginTop: 20 }}>
+            {/* Macro Breakdown Card */}
+            <View
+              style={[
+                styles.chartSurface,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                  marginBottom: 16,
+                  padding: 16,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: textColor,
+                  marginBottom: 12,
+                }}
+              >
+                Macros
+              </Text>
+
+              {(() => {
+                const totalMeals = meals.length;
+                const totalProt = meals.reduce((acc, m) => acc + (m.protein_g || 0), 0);
+                const totalCarbs = meals.reduce((acc, m) => acc + (m.carbs_g || 0), 0);
+                const totalFat = meals.reduce((acc, m) => acc + (m.fat_g || 0), 0);
+                const distinctDays = Math.max(1, new Set(meals.map((m) => m.meal_date)).size);
+
+                const avgP = Math.round(totalProt / distinctDays);
+                const avgC = Math.round(totalCarbs / distinctDays);
+                const avgF = Math.round(totalFat / distinctDays);
+
+                return (
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View
+                      style={{
+                        flex: 1,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+                        borderRadius: 12,
+                        padding: 12,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: textSecondary, fontWeight: '600' }}>
+                        Protein
+                      </Text>
+                      <Text style={{ fontSize: 18, color: textColor, fontWeight: '800', marginTop: 4 }}>
+                        {avgP} g
+                      </Text>
+                      <Text style={{ fontSize: 11, color: textSecondary, marginTop: 2 }}>
+                        Goal: {targetProtein} g
+                      </Text>
+                    </View>
+
+                    <View
+                      style={{
+                        flex: 1,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+                        borderRadius: 12,
+                        padding: 12,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: textSecondary, fontWeight: '600' }}>
+                        Carbs
+                      </Text>
+                      <Text style={{ fontSize: 18, color: textColor, fontWeight: '800', marginTop: 4 }}>
+                        {avgC} g
+                      </Text>
+                      <Text style={{ fontSize: 11, color: textSecondary, marginTop: 2 }}>
+                        Goal: {targetCarbs} g
+                      </Text>
+                    </View>
+
+                    <View
+                      style={{
+                        flex: 1,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+                        borderRadius: 12,
+                        padding: 12,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: textSecondary, fontWeight: '600' }}>
+                        Fat
+                      </Text>
+                      <Text style={{ fontSize: 18, color: textColor, fontWeight: '800', marginTop: 4 }}>
+                        {avgF} g
+                      </Text>
+                      <Text style={{ fontSize: 11, color: textSecondary, marginTop: 2 }}>
+                        Goal: {targetFat} g
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })()}
+            </View>
+
+            {/* Recent Meals Section */}
+            <View
+              style={[
+                styles.chartSurface,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                  padding: 16,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: textColor,
+                  marginBottom: 12,
+                }}
+              >
+                Logged Meals
+              </Text>
+
+              {meals.length === 0 ? (
+                <Text style={{ color: textSecondary, fontSize: 14 }}>
+                  No meals logged for this period.
+                </Text>
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {[...meals]
+                    .reverse()
+                    .slice(0, 5)
+                    .map((meal) => (
+                      <TouchableOpacity
+                        key={meal.id}
+                        activeOpacity={0.75}
+                        onPress={() => {
+                          router.push({
+                            pathname: '/meal-details/[id]',
+                            params: { id: meal.id },
+                          });
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 10,
+                          borderRadius: 12,
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC',
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 8,
+                            overflow: 'hidden',
+                            backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 12,
+                          }}
+                        >
+                          {meal.photo_url ? (
+                            <Image
+                              source={{ uri: meal.photo_url }}
+                              style={{ width: '100%', height: '100%' }}
+                              contentFit="cover"
+                            />
+                          ) : (
+                            <Utensils size={18} color={colors.primary} />
+                          )}
+                        </View>
+
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: '700',
+                              color: textColor,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {meal.meal_name || 'Meal'}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: textSecondary, marginTop: 2 }}>
+                            {meal.meal_date} · {meal.calories || 0} kcal · {meal.protein_g || 0}g protein
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -956,6 +1323,7 @@ function formatValue(val: number, tab: MetricTab): string {
   if (tab === 'steps') return `${Math.round(val).toLocaleString()} steps`;
   if (tab === 'sleep') return `${val.toFixed(1)} hrs`;
   if (tab === 'weight') return val > 0 ? `${val.toFixed(1)} kg` : '--';
+  if (tab === 'nutrition') return val > 0 ? `${Math.round(val).toLocaleString()} kcal` : '--';
   return val > 0 ? `${val.toFixed(1)} / 10` : '--';
 }
 

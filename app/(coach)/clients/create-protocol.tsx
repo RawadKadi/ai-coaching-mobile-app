@@ -1,11 +1,12 @@
-import { useBrandColors } from '@/contexts/BrandContext';
+import { useTheme } from '@/contexts/BrandContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView, AnimatePresence } from 'moti';
+import { useReducedMotion } from 'react-native-reanimated';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Plus, Trash2, Check, ChevronDown, ClipboardList, Info, Flame, Zap, ShieldCheck } from 'lucide-react-native';
+import { ArrowLeft, Plus, Trash2, Check, ChevronDown, ShieldCheck } from 'lucide-react-native';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 interface Client {
@@ -26,7 +27,10 @@ interface ProtocolTask {
 }
 
 export default function CreateProtocolScreen() {
-  const colors = useBrandColors();
+  const theme = useTheme();
+  const colors = theme.colors;
+  const buttonTheme = theme.button;
+  const reduceMotion = useReducedMotion();
   const router = useRouter();
   const { clientId } = useLocalSearchParams();
   const { coach } = useAuth();
@@ -191,26 +195,26 @@ export default function CreateProtocolScreen() {
 
   if (loading && !selectedClient) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header */}
         <View style={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <TouchableOpacity 
             onPress={() => router.back()} 
-            style={{ padding: 12, backgroundColor: '#0f172a', borderRadius: 16, borderWidth: 1, borderColor: '#1e293b' }}
+            style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}
           >
-            <ArrowLeft size={20} color="#94A3B8" />
+            <ArrowLeft size={20} color={colors.textSecondary} />
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Daily Tasks</Text>
-              <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>Protocol</Text>
+              <Text style={{ color: colors.text, fontSize: 20, fontWeight: 'bold' }}>Daily Tasks</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>Daily Habits</Text>
           </View>
           <View style={{ width: 48 }} />
         </View>
@@ -227,39 +231,39 @@ export default function CreateProtocolScreen() {
           >
             {/* Client Selection */}
             <View style={{ marginTop: 24 }}>
-                <Text style={{ color: '#64748b', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Target Client</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Target Client</Text>
                 <TouchableOpacity 
                     onPress={() => setShowClientPicker(!showClientPicker)}
                     style={{ 
-                        backgroundColor: '#0f172a', 
+                        backgroundColor: colors.surface, 
                         padding: 16, 
                         borderRadius: 16, 
                         borderWidth: 1, 
-                        borderColor: errors.client ? '#ef4444' : '#1e293b',
+                        borderColor: errors.client ? (colors.error || '#ef4444') : colors.border,
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'space-between'
                     }}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <BrandedAvatar size={36} name={selectedClient?.full_name || '?'} imageUrl={selectedClient?.avatar_url} />
+                        <BrandedAvatar size={36} name={selectedClient?.full_name || '?'} imageUrl={selectedClient?.avatar_url} useBrandColor={true} />
                         <View>
-                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: selectedClient ? 'white' : '#64748b' }}>
+                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: selectedClient ? colors.text : colors.textSecondary }}>
                                 {selectedClient ? selectedClient.full_name : 'Select Recipient'}
                             </Text>
-                            {errors.client && <Text style={{ color: '#f87171', fontSize: 10, marginTop: 2 }}>{errors.client}</Text>}
+                            {errors.client && <Text style={{ color: colors.error || '#f87171', fontSize: 10, marginTop: 2 }}>{errors.client}</Text>}
                         </View>
                     </View>
-                    <ChevronDown size={18} color={errors.client ? '#EF4444' : '#475569'} />
+                    <ChevronDown size={18} color={errors.client ? (colors.error || '#EF4444') : colors.textSecondary} />
                 </TouchableOpacity>
 
                 <AnimatePresence>
                     {showClientPicker && (
                         <MotiView 
-                            from={{ opacity: 0, height: 0 }}
+                            from={{ opacity: reduceMotion ? 1 : 0, height: reduceMotion ? 'auto' : 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            style={{ backgroundColor: '#0f172a', marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: '#1e293b', overflow: 'hidden' }}
+                            exit={{ opacity: reduceMotion ? 1 : 0, height: reduceMotion ? 'auto' : 0 }}
+                            style={{ backgroundColor: colors.surface, marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}
                         >
                             {clients.map((c) => (
                                 <TouchableOpacity 
@@ -270,10 +274,10 @@ export default function CreateProtocolScreen() {
                                         setErrors(prev => ({ ...prev, client: '' })); 
                                         loadExistingTasks(c.id);
                                     }} 
-                                    style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#1e293b' }}
+                                    style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}
                                 >
-                                    <BrandedAvatar size={28} name={c.full_name} imageUrl={c.avatar_url} />
-                                    <Text style={{ color: 'white', fontWeight: '500' }}>{c.full_name}</Text>
+                                    <BrandedAvatar size={28} name={c.full_name} imageUrl={c.avatar_url} useBrandColor={selectedClient?.id === c.id} />
+                                    <Text style={{ color: colors.text, fontWeight: '500' }}>{c.full_name}</Text>
                                     {selectedClient?.id === c.id && <Check size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
                                 </TouchableOpacity>
                             ))}
@@ -283,11 +287,11 @@ export default function CreateProtocolScreen() {
             </View>
 
             {/* Protocol Tasks */}
-            <View style={{ marginTop: 40 }}>
+            <View style={{ marginTop: 32 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                     <View>
-                        <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Tasks</Text>
-                        <Text style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>Define the daily requirements</Text>
+                        <Text style={{ color: colors.text, fontSize: 20, fontWeight: 'bold' }}>Tasks</Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4 }}>Define the daily requirements</Text>
                     </View>
                     <TouchableOpacity 
                         onPress={addTask}
@@ -301,43 +305,64 @@ export default function CreateProtocolScreen() {
                 {tasks.map((task, i) => (
                     <MotiView 
                         key={i} 
-                        from={{ opacity: 0, scale: 0.95 }}
+                        from={{ opacity: reduceMotion ? 1 : 0, scale: reduceMotion ? 1 : 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        style={{ backgroundColor: '#0f172a', padding: 24, borderRadius: 28, borderWidth: 1, borderColor: '#1e293b', marginBottom: 20 }}
+                        style={{ backgroundColor: colors.surface, padding: 24, borderRadius: 28, borderWidth: 1, borderColor: colors.border, marginBottom: 20 }}
                     >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ color: 'white', fontSize: 10, fontWeight: '900' }}>{i + 1}</Text>
+                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Text style={{ color: colors.textOnPrimary || 'white', fontSize: 10, fontWeight: '900' }}>{i + 1}</Text>
                                 </View>
-                                <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Daily Task</Text>
+                                <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' }}>Daily Task</Text>
                             </View>
                             {tasks.length > 1 && (
                                 <TouchableOpacity onPress={() => removeTask(i)} style={{ padding: 8 }}>
-                                    <Trash2 size={16} color="#ef4444" />
+                                    <Trash2 size={16} color={colors.error || '#ef4444'} />
                                 </TouchableOpacity>
                             )}
                         </View>
 
                         <TextInput 
-                            style={{ backgroundColor: '#1e293b80', padding: 16, borderRadius: 12, color: 'white', fontWeight: 'bold', fontSize: 16, marginBottom: 12 }}
+                            style={{ 
+                                backgroundColor: colors.inputBackground || colors.background, 
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: 16, 
+                                borderRadius: 12, 
+                                color: colors.text, 
+                                fontWeight: 'bold', 
+                                fontSize: 16, 
+                                marginBottom: 12 
+                            }}
                             placeholder="Habit Name (e.g. 5L Water)" 
-                            placeholderTextColor="#475569"
+                            placeholderTextColor={colors.textTertiary || '#64748b'}
                             value={task.name} 
                             onChangeText={(v) => updateTask(i, 'name', v)}
                         />
 
                         <TextInput 
-                            style={{ backgroundColor: '#1e293b80', padding: 16, borderRadius: 12, color: '#cbd5e1', fontWeight: '500', fontSize: 14, marginBottom: 16, minHeight: 60 }}
+                            style={{ 
+                                backgroundColor: colors.inputBackground || colors.background, 
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: 16, 
+                                borderRadius: 12, 
+                                color: colors.text, 
+                                fontWeight: '500', 
+                                fontSize: 14, 
+                                marginBottom: 16, 
+                                minHeight: 60 
+                            }}
                             placeholder="Optional instructions..." 
-                            placeholderTextColor="#475569"
+                            placeholderTextColor={colors.textTertiary || '#64748b'}
                             multiline
                             value={task.description} 
                             onChangeText={(v) => updateTask(i, 'description', v)}
                             textAlignVertical="top"
                         />
 
-                        <Text style={{ color: '#64748b', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Category</Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>Category</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
                             {(['training', 'nutrition', 'recovery', 'consistency'] as const).map((cat) => {
                                 const isActive = task.category === cat;
@@ -351,11 +376,11 @@ export default function CreateProtocolScreen() {
                                             borderRadius: 12, 
                                             borderWidth: 1, 
                                             marginRight: 8,
-                                            backgroundColor: isActive ? '#10B981' : '#020617',
-                                            borderColor: isActive ? '#34D399' : '#1e293b'
+                                            backgroundColor: isActive ? colors.primary : (colors.inputBackground || colors.background),
+                                            borderColor: isActive ? colors.primary : colors.border
                                         }}
                                     >
-                                        <Text style={{ fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', color: isActive ? 'white' : '#64748b' }}>{cat}</Text>
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', color: isActive ? (colors.textOnPrimary || 'white') : colors.textSecondary }}>{cat}</Text>
                                     </TouchableOpacity>
                                 );
                             })}
@@ -366,21 +391,21 @@ export default function CreateProtocolScreen() {
           </ScrollView>
 
           {/* Action Bar */}
-          <View style={{ paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#020617', borderTopWidth: 1, borderTopColor: '#0f172a' }}>
+          <View style={{ paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
               <TouchableOpacity 
                 onPress={handleCreate} 
                 disabled={creating}
                 style={{ 
                     height: 64, 
-                    borderRadius: 24, 
-                    backgroundColor: creating ? '#1e293b' : '#10B981',
+                    borderRadius: buttonTheme?.borderRadius ? Math.max(buttonTheme.borderRadius, 20) : 24, 
+                    backgroundColor: creating ? (colors.surfaceAlt || colors.surface) : colors.primary,
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 12,
-                    shadowColor: '#10B981',
+                    shadowColor: colors.primary,
                     shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.2,
+                    shadowOpacity: 0.25,
                     shadowRadius: 8,
                     elevation: 5
                 }}
@@ -388,13 +413,13 @@ export default function CreateProtocolScreen() {
               >
                 {creating ? (
                     <>
-                        <ActivityIndicator color="white" />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Saving...</Text>
+                        <ActivityIndicator color={colors.textOnPrimary || 'white'} />
+                        <Text style={{ color: colors.textOnPrimary || 'white', fontWeight: 'bold', fontSize: 18 }}>Saving...</Text>
                     </>
                 ) : (
                     <>
-                        <ShieldCheck size={22} color="white" />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Save Tasks</Text>
+                        <ShieldCheck size={22} color={colors.textOnPrimary || 'white'} />
+                        <Text style={{ color: colors.textOnPrimary || 'white', fontWeight: 'bold', fontSize: 18 }}>Save Tasks</Text>
                     </>
                 )}
               </TouchableOpacity>
@@ -405,21 +430,21 @@ export default function CreateProtocolScreen() {
       {/* Toast notification */}
       {toastVisible && (
         <MotiView
-          from={{ opacity: 0, translateY: 16 }}
+          from={{ opacity: reduceMotion ? 1 : 0, translateY: reduceMotion ? 0 : 16 }}
           animate={{ opacity: 1, translateY: 0 }}
           style={{
             position: 'absolute',
             bottom: 110,
             left: 24,
             right: 24,
-            backgroundColor: '#10B981',
+            backgroundColor: colors.primary,
             borderRadius: 20,
             paddingVertical: 16,
             paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
             gap: 12,
-            shadowColor: '#10B981',
+            shadowColor: colors.primary,
             shadowOffset: { width: 0, height: 8 },
             shadowOpacity: 0.35,
             shadowRadius: 16,
@@ -427,8 +452,8 @@ export default function CreateProtocolScreen() {
             zIndex: 100,
           }}
         >
-          <ShieldCheck size={20} color="white" />
-          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15, flex: 1 }}>
+          <ShieldCheck size={20} color={colors.textOnPrimary || 'white'} />
+          <Text style={{ color: colors.textOnPrimary || 'white', fontWeight: 'bold', fontSize: 15, flex: 1 }}>
             Daily tasks updated for {selectedClient?.full_name}
           </Text>
         </MotiView>

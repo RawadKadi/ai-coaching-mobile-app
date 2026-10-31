@@ -33,7 +33,7 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     isToastVisibleRef.current = toastVisible;
   }, [currentSession, toastType, toastVisible]);
 
-  const getAppCallLink = (sessionId: string) => generateGoogleMeetUrl(sessionId);
+  const getAppCallLink = (_sessionId?: string) => generateGoogleMeetUrl();
 
   useEffect(() => {
     if (!user) return;
@@ -133,8 +133,9 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     checkSessions();
 
     // 2. Real-time Subscription for UPDATES (Cancel/Postpone)
+    const channelId = `session-monitor-updates-${user?.id || 'anon'}-${Date.now()}_${Math.random()}`;
     const channel = supabase
-      .channel('session-monitor-updates')
+      .channel(channelId)
       .on(
         'postgres_changes',
         {

@@ -198,7 +198,7 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
     
     // Handle AppState changes to pause/resume polling
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      if (appState.current?.match(/inactive|background/) && nextAppState === 'active') {
         // App has come to the foreground!
         checkForPendingInvitation();
       }
@@ -207,8 +207,9 @@ export default function TeamInvitationMonitor({ router }: { router: ReturnType<t
 
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
 
+    const channelId = `team-invitation-${coach.id}-${Date.now()}_${Math.random()}`;
     const subscription = supabase
-      .channel(`team-invitation-${coach.id}`)
+      .channel(channelId)
       .on(
         'postgres_changes',
         {

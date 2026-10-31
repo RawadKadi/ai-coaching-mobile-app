@@ -12,18 +12,21 @@ export default function ClientLayout() {
   const { session, profile, loading } = useAuth();
   const segments = useSegments() as string[];
   const inOnboarding = segments.includes('onboarding');
+  const isAllowedCoachRoute = segments.includes('analytics') || segments.includes('analytics-detail');
 
   useEffect(() => {
     if (!loading) {
       if (!session) {
         router.replace('/(auth)/login');
       } else if (profile?.role === 'coach') {
-        router.replace('/(coach)/(tabs)');
+        if (!isAllowedCoachRoute) {
+          router.replace('/(coach)/(tabs)');
+        }
       } else if (profile?.role === 'client' && profile.onboarding_completed !== true && !inOnboarding) {
         router.replace('/(client)/onboarding');
       }
     }
-  }, [session, profile, loading, inOnboarding]);
+  }, [session, profile, loading, inOnboarding, segments, isAllowedCoachRoute]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -59,13 +62,13 @@ export default function ClientLayout() {
         />
       </Stack>
       
-      {(loading || !session || profile?.role !== 'client') && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+      {(loading || !session || (profile?.role !== 'client' && !isAllowedCoachRoute)) && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.background || '#010417', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
 
-      <SessionMonitor router={router} />
+      <SessionMonitor />
       <ChallengeMonitor router={router} />
     </View>
   );

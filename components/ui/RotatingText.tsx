@@ -1,5 +1,5 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, ViewStyle, TextStyle } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 
 export interface RotatingTextRef {
@@ -27,6 +27,8 @@ export interface RotatingTextProps {
   mainClassName?: string;
   splitLevelClassName?: string;
   elementLevelClassName?: string;
+  style?: ViewStyle;
+  elementLevelStyle?: TextStyle;
 }
 
 const RotatingText = forwardRef<RotatingTextRef, RotatingTextProps>(
@@ -49,6 +51,8 @@ const RotatingText = forwardRef<RotatingTextRef, RotatingTextProps>(
       mainClassName = '',
       splitLevelClassName = '',
       elementLevelClassName = '',
+      style,
+      elementLevelStyle,
     },
     ref
   ) => {
@@ -112,7 +116,7 @@ const RotatingText = forwardRef<RotatingTextRef, RotatingTextProps>(
     // Simple implementation for Native - rotating the entire string instead of characters
     // since character splitting in Moti/Native is very performance heavy and requires complex layout management.
     return (
-      <View className={mainClassName}>
+      <View className={mainClassName} style={style}>
         <AnimatePresence mode={animatePresenceMode}>
           <MotiView
             key={currentTextIndex}
@@ -121,7 +125,7 @@ const RotatingText = forwardRef<RotatingTextRef, RotatingTextProps>(
             exit={exit}
             transition={transition}
           >
-            <Text className={elementLevelClassName}>
+            <Text className={elementLevelClassName} style={elementLevelStyle}>
               {texts[currentTextIndex]}
             </Text>
           </MotiView>

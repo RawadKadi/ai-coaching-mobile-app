@@ -2,11 +2,15 @@ import React, { useEffect } from 'react';
 import { View, Text, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
+import { useReducedMotion } from 'react-native-reanimated';
 import { Sparkles, Brain } from 'lucide-react-native';
 import RotatingText from '@/components/ui/RotatingText';
 import { generateDailyProtocol } from '@/lib/ai-protocol-service';
+import { useBrandColors } from '@/contexts/BrandContext';
 
 export default function AIProtocolLoadingScreen() {
+    const colors = useBrandColors();
+    const reduceMotion = useReducedMotion();
     const router = useRouter();
     const { clientId, clientName, focusType, intensity } = useLocalSearchParams();
 
@@ -58,52 +62,83 @@ export default function AIProtocolLoadingScreen() {
     ];
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#020617' }}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
             <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                 <MotiView
-                    from={{ opacity: 0, scale: 0.8 }}
+                    from={{ opacity: reduceMotion ? 1 : 0, scale: reduceMotion ? 1 : 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ type: 'spring', damping: 15 }}
-                    className="items-center"
+                    style={{ alignItems: 'center' }}
                 >
-                    <View className="w-24 h-24 bg-blue-600 rounded-[32px] items-center justify-center shadow-2xl shadow-blue-500/40 mb-12">
-                        <Brain size={48} color="white" />
+                    <View 
+                        style={{ 
+                            width: 96, 
+                            height: 96, 
+                            backgroundColor: colors.primary, 
+                            borderRadius: 32, 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            shadowColor: colors.primary, 
+                            shadowOffset: { width: 0, height: 12 }, 
+                            shadowOpacity: 0.4, 
+                            shadowRadius: 16, 
+                            elevation: 8, 
+                            marginBottom: 48 
+                        }}
+                    >
+                        <Brain size={48} color={colors.textOnPrimary || 'white'} />
                         <MotiView
-                            from={{ opacity: 0, scale: 0 }}
+                            from={{ opacity: reduceMotion ? 1 : 0, scale: reduceMotion ? 1 : 0 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 500, type: 'spring' }}
-                            className="absolute -top-2 -right-2 w-8 h-8 bg-amber-500 rounded-full items-center justify-center border-4 border-slate-950"
+                            transition={{ delay: reduceMotion ? 0 : 500, type: 'spring' }}
+                            style={{ 
+                                position: 'absolute', 
+                                top: -8, 
+                                right: -8, 
+                                width: 32, 
+                                height: 32, 
+                                backgroundColor: colors.accent || '#F59E0B', 
+                                borderRadius: 16, 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                borderWidth: 4, 
+                                borderColor: colors.background 
+                            }}
                         >
                             <Sparkles size={14} color="white" />
                         </MotiView>
                     </View>
 
-                    <Text className="text-white text-2xl font-black mb-4">Strategizing</Text>
+                    <Text style={{ color: colors.text, fontSize: 24, fontWeight: '900', marginBottom: 16 }}>Planning Tasks</Text>
                     
-                    <RotatingText
-                        texts={loadingKeywords}
-                        mainClassName="px-4 py-2 bg-blue-600/10 rounded-2xl border border-blue-500/20"
-                        elementLevelClassName="text-blue-400 font-bold text-sm text-center"
-                        staggerDuration={0.025}
-                        rotationInterval={2500}
-                    />
-
-                    <View className="mt-16 flex-row gap-2">
-                        {[0, 1, 2].map((i) => (
-                            <MotiView
-                                key={i}
-                                from={{ opacity: 0.3, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{
-                                    type: 'timing',
-                                    duration: 1000,
-                                    loop: true,
-                                    delay: i * 200,
-                                }}
-                                className="w-2 h-2 rounded-full bg-blue-500"
-                            />
-                        ))}
+                    <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: `${colors.primary}15`, borderRadius: 16, borderWidth: 1, borderColor: `${colors.primary}30` }}>
+                        <RotatingText
+                            texts={loadingKeywords}
+                            elementLevelClassName="font-bold text-sm text-center"
+                            elementLevelStyle={{ color: colors.primary }}
+                            staggerDuration={0.025}
+                            rotationInterval={2500}
+                        />
                     </View>
+
+                    {!reduceMotion && (
+                        <View style={{ marginTop: 64, flexDirection: 'row', gap: 8 }}>
+                            {[0, 1, 2].map((i) => (
+                                <MotiView
+                                    key={i}
+                                    from={{ opacity: 0.3, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{
+                                        type: 'timing',
+                                        duration: 1000,
+                                        loop: true,
+                                        delay: i * 200,
+                                    }}
+                                    style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }}
+                                />
+                            ))}
+                        </View>
+                    )}
                 </MotiView>
             </SafeAreaView>
         </View>

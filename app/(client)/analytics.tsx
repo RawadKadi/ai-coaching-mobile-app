@@ -18,6 +18,7 @@ import {
   Zap,
   Dumbbell,
   Clock,
+  Utensils,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,6 +32,7 @@ import {
   getLastNightSleep,
   getLatestWeight,
 } from '@/lib/health-service';
+import { BrandedAvatar } from '@/components/BrandedAvatar';
 
 interface DailyLogEntry {
   date: string;
@@ -49,6 +51,17 @@ interface CheckInEntry {
   client_id?: string;
 }
 
+interface MealEntry {
+  id: string;
+  meal_date: string;
+  meal_name?: string;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  photo_url?: string;
+}
+
 /** Formats a date as YYYY-MM-DD in local time */
 function getLocalDateString(d: Date = new Date()): string {
   const year = d.getFullYear();
@@ -60,12 +73,35 @@ function getLocalDateString(d: Date = new Date()): string {
 export default function AnalyticsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ clientId?: string }>();
+  const params = useLocalSearchParams<{ clientId?: string; name?: string; avatar?: string }>();
   const isCoachView = Boolean(params.clientId);
   const { client, profile } = useAuth();
   const theme = useTheme();
   const colors = theme.colors;
   const isDark = isDarkColor(colors.background || '#020617');
+
+  const [clientInfo, setClientInfo] = useState<{ name?: string; avatar?: string }>({
+    name: params.name,
+    avatar: params.avatar,
+  });
+
+  useEffect(() => {
+    if (params.clientId && (!params.name || !params.avatar)) {
+      supabase
+        .from('clients')
+        .select('profiles(full_name, avatar_url)')
+        .eq('id', params.clientId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data && (data as any).profiles) {
+            setClientInfo({
+              name: (data as any).profiles.full_name || 'Athlete',
+              avatar: (data as any).profiles.avatar_url || '',
+            });
+          }
+        });
+    }
+  }, [params.clientId, params.name, params.avatar]);
 
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondary = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
@@ -74,6 +110,8 @@ export default function AnalyticsScreen() {
 
   const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([]);
   const [checkIns, setCheckIns] = useState<CheckInEntry[]>([]);
+  const [meals, setMeals] = useState<MealEntry[]>([]);
+  const [targetCalories, setTargetCalories] = useState<number>(2000);
   const [todayWorkouts, setTodayWorkouts] = useState<number>(0);
   const [todayActiveMinutes, setTodayActiveMinutes] = useState<number>(0);
 
@@ -107,6 +145,8 @@ export default function AnalyticsScreen() {
         liveWeight,
         localStepsStr,
         workoutsRes,
+        mealsRes,
+        mealPlanRes,
       ] = await Promise.all([
         supabase
           .from('daily_logs')
@@ -129,12 +169,31 @@ export default function AnalyticsScreen() {
           .select('id, duration_minutes')
           .in('client_id', clientIds)
           .eq('workout_date', todayStr),
+        supabase
+          .from('meals')
+          .select('id, meal_date, meal_name, calories, protein_g, carbs_g, fat_g, photo_url')
+          .in('client_id', clientIds)
+          .gte('meal_date', startDateStr)
+          .order('meal_date', { ascending: true }),
+        supabase
+          .from('meal_plans')
+          .select('daily_calories, meals_data')
+          .in('client_id', clientIds)
+          .eq('status', 'active')
+          .maybeSingle(),
       ]);
 
       const wData = workoutsRes.data || [];
       setTodayWorkouts(wData.length);
       const totalMins = wData.reduce((sum, w: any) => sum + (w.duration_minutes || 0), 0);
       setTodayActiveMinutes(totalMins);
+
+      if (mealsRes.data) {
+        setMeals(mealsRes.data as MealEntry[]);
+      }
+      if (mealPlanRes.data?.daily_calories) {
+        setTargetCalories(Number(mealPlanRes.data.daily_calories));
+      }
 
       const fetchedLogs: DailyLogEntry[] = [...(logsRes.data || [])];
       const fetchedCheckIns: CheckInEntry[] = [...(checkInsRes.data || [])];
@@ -308,10 +367,62 @@ export default function AnalyticsScreen() {
     };
   }, [recent7Days, checkIns, latestEnergyVal]);
 
-  const navigateToMetric = (metric: 'steps' | 'sleep' | 'weight' | 'energy') => {
+  const foodCardData = useMemo(() => {
+    const values = recent7Days.map((dateStr) => {
+      const dayMeals = meals.filter((m) => m.meal_date === dateStr);
+      return dayMeals.reduce((sum, m) => sum + (m.calories || 0), 0);
+    });
+
+    const todayMeals = meals.filter((m) => m.meal_date === todayStr);
+    const todayCal = todayMeals.reduce((sum, m) => sum + (m.calories || 0), 0);
+
+    const latestLoggedDay = [...recent7Days].reverse().find((d) => {
+      return meals.some((m) => m.meal_date === d && (m.calories || 0) > 0);
+    });
+
+    const displayVal =
+      todayCal > 0
+        ? todayCal
+        : latestLoggedDay
+          ? values[recent7Days.indexOf(latestLoggedDay)]
+          : 0;
+
+    const loggedDays = values.filter((v) => v > 0).length || 1;
+    const totalProtein = recent7Days.reduce((acc, d) => {
+      const dayMeals = meals.filter((m) => m.meal_date === d);
+      return acc + dayMeals.reduce((sum, m) => sum + (m.protein_g || 0), 0);
+    }, 0);
+    const avgProtein = Math.round(totalProtein / loggedDays);
+
+    const timeStr =
+      todayCal > 0
+        ? nowTimeStr
+        : latestLoggedDay
+          ? new Date(latestLoggedDay).toLocaleDateString([], {
+              month: 'short',
+              day: 'numeric',
+            })
+          : 'Today';
+
+    return {
+      val: displayVal,
+      targetCal: targetCalories,
+      avgProtein,
+      timeStr,
+      chartData: values,
+    };
+  }, [recent7Days, meals, todayStr, nowTimeStr, targetCalories]);
+
+  const navigateToMetric = (
+    metric: 'steps' | 'sleep' | 'weight' | 'energy' | 'nutrition',
+  ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const clientParam = params.clientId ? `&clientId=${params.clientId}` : '';
-    router.push(`/(client)/analytics-detail?metric=${metric}${clientParam}` as any);
+    const clientParam = params.clientId 
+      ? `&clientId=${params.clientId}&name=${encodeURIComponent(clientInfo.name || params.name || '')}&avatar=${encodeURIComponent(clientInfo.avatar || params.avatar || '')}` 
+      : '';
+    router.push(
+      `/(client)/analytics-detail?metric=${metric}${clientParam}` as any,
+    );
   };
 
   return (
@@ -328,30 +439,67 @@ export default function AnalyticsScreen() {
           },
         ]}
       >
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => router.back()}
-          style={[
-            styles.backButton,
-            {
-              backgroundColor: cardBg,
-              borderColor: cardBorder,
-            },
-          ]}
-        >
-          <ChevronLeft size={22} color={textColor} />
-        </TouchableOpacity>
+        {isCoachView ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+              style={[
+                styles.backButton,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                },
+              ]}
+            >
+              <ChevronLeft size={22} color={textColor} />
+            </TouchableOpacity>
 
-        <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: textColor }]}>
-            Analytics
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: textSecondary }]}>
-            Overview
-          </Text>
-        </View>
+            <BrandedAvatar
+              name={clientInfo.name || params.name || 'Athlete'}
+              size={40}
+              imageUrl={clientInfo.avatar || params.avatar || undefined}
+            />
 
-        <View style={styles.headerRightSpacer} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.headerTitle, { color: textColor, textAlign: 'left' }]}>
+                Analytics
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: textSecondary, textAlign: 'left' }]}>
+                {clientInfo.name || params.name || 'Athlete'}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+              style={[
+                styles.backButton,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                },
+              ]}
+            >
+              <ChevronLeft size={22} color={textColor} />
+            </TouchableOpacity>
+
+            <View style={styles.headerTitleContainer}>
+              <Text style={[styles.headerTitle, { color: textColor }]}>
+                Analytics
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: textSecondary }]}>
+                Overview
+              </Text>
+            </View>
+
+            <View style={styles.headerRightSpacer} />
+          </>
+        )}
       </View>
 
       <ScrollView
@@ -574,6 +722,49 @@ export default function AnalyticsScreen() {
               </View>
 
               <MiniBarChart data={energyCardData.chartData} color={colors.primary} isDark={isDark} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Food Card */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => navigateToMetric('nutrition')}
+            style={[
+              styles.metricCard,
+              {
+                backgroundColor: cardBg,
+                borderColor: cardBorder,
+              },
+            ]}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricCardTitleRow}>
+                <View style={[styles.cardIconBadge, { backgroundColor: `${colors.primary}16` }]}>
+                  <Utensils size={18} color={colors.primary} />
+                </View>
+                <Text style={[styles.metricCardTitle, { color: textColor }]}>
+                  Food
+                </Text>
+              </View>
+              <View style={styles.metricCardRightRow}>
+                <Text style={[styles.metricCardTime, { color: textSecondary }]}>
+                  {foodCardData.timeStr}
+                </Text>
+                <ChevronRight size={18} color={textSecondary} />
+              </View>
+            </View>
+
+            <View style={styles.metricCardContent}>
+              <View style={styles.metricCardValueRow}>
+                <Text style={[styles.metricCardValue, { color: textColor }]}>
+                  {foodCardData.val > 0 ? foodCardData.val.toLocaleString() : '--'}
+                </Text>
+                <Text style={[styles.metricCardUnit, { color: textSecondary }]}>
+                  kcal
+                </Text>
+              </View>
+
+              <MiniBarChart data={foodCardData.chartData} color={colors.primary} isDark={isDark} />
             </View>
           </TouchableOpacity>
         </View>

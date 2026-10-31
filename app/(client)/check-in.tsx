@@ -1,26 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, StatusBar, Alert, Dimensions, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+  StatusBar,
+  Alert,
+  Dimensions,
+  TouchableWithoutFeedback,
+  Keyboard,
+  AppState,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { MotiView } from 'moti';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withSpring, 
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
   runOnJS,
-  interpolate
+  interpolate,
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Zap, 
-  Heart, 
-  Target, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Zap,
+  Heart,
+  Target,
   CheckCircle2,
   Timer,
   Scale,
-  Check
+  Check,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +40,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/BrandContext';
 import { isDarkColor } from '@/lib/theme-utils';
 import FeedbackModal from '@/components/FeedbackModal';
-import { getLastNightSleep, getLatestWeight } from '@/lib/health-service';
+import {
+  getLastNightSleep,
+  getLatestWeight,
+  isHealthSyncEnabled,
+  requestHealthPermissions,
+  isNativeHealthModuleAvailable,
+} from '@/lib/health-service';
 import { processCheckInAI } from '@/lib/checkin-ai-service';
 
 type Step = 'metrics' | 'vitals' | 'mood';
@@ -43,9 +61,11 @@ export default function CheckInScreen() {
   // Dynamic theme contrast logic
   const isDark = isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
   const placeholderColor = isDark ? '#475569' : '#94A3B8';
 
   const [currentStep, setCurrentStep] = useState<Step>('metrics');
@@ -60,13 +80,22 @@ export default function CheckInScreen() {
   const [sleep, setSleep] = useState('');
   const [isWeightFromHealth, setIsWeightFromHealth] = useState(false);
   const [isSleepFromHealth, setIsSleepFromHealth] = useState(false);
+  const [isHealthConnected, setIsHealthConnected] = useState(false);
   const [energy, setEnergy] = useState(7);
   const [stress, setStress] = useState(3);
   const [hunger, setHunger] = useState(5);
   const [mood, setMood] = useState('Focused');
   const [notes, setNotes] = useState('');
 
-  const moods = ['Energized', 'Focused', 'Tired', 'Stressed', 'Happy', 'Calm', 'Recovering'];
+  const moods = [
+    'Energized',
+    'Focused',
+    'Tired',
+    'Stressed',
+    'Happy',
+    'Calm',
+    'Recovering',
+  ];
 
   const isMetricsValid = weight.trim() !== '' && sleep.trim() !== '';
 
@@ -74,10 +103,21 @@ export default function CheckInScreen() {
     checkTodayStatus();
     fetchLastWeight();
     fetchHealthData();
+
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        fetchHealthData();
+      }
+    });
+    return () => sub.remove();
   }, [client]);
 
   const fetchHealthData = async () => {
     try {
+      const enabled = await isHealthSyncEnabled();
+      setIsHealthConnected(enabled);
+      if (!enabled) return;
+
       const [healthSleep, healthWeight] = await Promise.all([
         getLastNightSleep(),
         getLatestWeight(),
@@ -93,6 +133,48 @@ export default function CheckInScreen() {
       }
     } catch (e) {
       console.warn('Error fetching health sync data:', e);
+    }
+  };
+
+  const handleConnectHealth = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      if (!isNativeHealthModuleAvailable()) {
+        Alert.alert(
+          'Development Build Required',
+          'Apple Health sync requires running the native development build (press "s" in the Expo terminal or run npx expo run:ios) instead of Expo Go.',
+        );
+        return;
+      }
+
+      const granted = await requestHealthPermissions();
+      if (!granted) {
+        Alert.alert(
+          'Permission Needed',
+          'Please allow Health access when prompted so we can sync your sleep and weight.',
+        );
+        return;
+      }
+
+      setIsHealthConnected(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const [healthSleep, healthWeight] = await Promise.all([
+        getLastNightSleep(),
+        getLatestWeight(),
+      ]);
+
+      if (healthWeight !== null) {
+        setWeight(healthWeight.toString());
+        setIsWeightFromHealth(true);
+      }
+      if (healthSleep !== null) {
+        setSleep(healthSleep.toString());
+        setIsSleepFromHealth(true);
+      }
+    } catch (e) {
+      console.warn('Error connecting health:', e);
     }
   };
 
@@ -127,7 +209,7 @@ export default function CheckInScreen() {
         .eq('client_id', client.id)
         .eq('date', today)
         .maybeSingle();
-      
+
       if (data) setAlreadyCheckedIn(true);
     } catch (e) {
       console.error(e);
@@ -143,22 +225,25 @@ export default function CheckInScreen() {
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('check_ins')
-        .upsert({
-          client_id: client.id,
-          date: today,
-          weight_kg: weight ? parseFloat(weight) : null,
-          sleep_hours: sleep ? parseFloat(sleep) : null,
-          energy_level: energy,
-          stress_level: stress,
-          hunger_level: hunger,
-          mood: mood,
-          notes: notes,
-        }, { onConflict: 'client_id,date' })
+        .upsert(
+          {
+            client_id: client.id,
+            date: today,
+            weight_kg: weight ? parseFloat(weight) : null,
+            sleep_hours: sleep ? parseFloat(sleep) : null,
+            energy_level: energy,
+            stress_level: stress,
+            hunger_level: hunger,
+            mood: mood,
+            notes: notes,
+          },
+          { onConflict: 'client_id,date' },
+        )
         .select()
         .single();
 
       if (error) throw error;
-      
+
       const checkinData = data;
 
       // Show modal immediately
@@ -174,7 +259,7 @@ export default function CheckInScreen() {
         mood,
         notes,
       }).catch((aiError) => {
-        console.error("AI Analysis failed in background:", aiError);
+        console.error('AI Analysis failed in background:', aiError);
       });
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save check-in');
@@ -184,8 +269,11 @@ export default function CheckInScreen() {
   };
 
   const renderHeader = () => (
-    <View style={{ paddingTop: insets.top + 20 }} className="px-6 flex-row items-center justify-between mb-8">
-      <TouchableOpacity 
+    <View
+      style={{ paddingTop: insets.top + 20 }}
+      className="px-6 flex-row items-center justify-between mb-8"
+    >
+      <TouchableOpacity
         onPress={() => router.back()}
         style={{
           backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : cardBg,
@@ -196,12 +284,20 @@ export default function CheckInScreen() {
         <ChevronLeft size={24} color={textColor} />
       </TouchableOpacity>
       <View className="items-center">
-        <Text style={{ color: textColor }} className="font-black text-xs uppercase tracking-[4px]">Daily Check-in</Text>
-        <Text style={{ color: theme.colors.primary }} className="font-bold text-[10px] mt-1">
+        <Text
+          style={{ color: textColor }}
+          className="font-black text-xs uppercase tracking-[4px]"
+        >
+          Daily Check-in
+        </Text>
+        <Text
+          style={{ color: theme.colors.primary }}
+          className="font-bold text-[10px] mt-1"
+        >
           STEP {['metrics', 'vitals', 'mood'].indexOf(currentStep) + 1} OF 3
         </Text>
       </View>
-      <TouchableOpacity 
+      <TouchableOpacity
         key={`header-check-${currentStep === 'metrics' && !isMetricsValid ? 'disabled' : 'enabled'}`}
         onPress={() => {
           if (currentStep === 'metrics') setCurrentStep('vitals');
@@ -210,14 +306,21 @@ export default function CheckInScreen() {
         }}
         disabled={currentStep === 'metrics' && !isMetricsValid}
         style={{
-          backgroundColor: currentStep === 'metrics' && !isMetricsValid 
-            ? (isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.15)') 
-            : theme.colors.primary,
+          backgroundColor:
+            currentStep === 'metrics' && !isMetricsValid
+              ? isDark
+                ? 'rgba(59, 130, 246, 0.2)'
+                : 'rgba(59, 130, 246, 0.15)'
+              : theme.colors.primary,
           opacity: currentStep === 'metrics' && !isMetricsValid ? 0.5 : 1,
         }}
         className="w-12 h-12 rounded-full items-center justify-center shadow-lg"
       >
-        <Check size={20} color={theme.colors.textOnPrimary || '#FFFFFF'} strokeWidth={3} />
+        <Check
+          size={20}
+          color={theme.colors.textOnPrimary || '#FFFFFF'}
+          strokeWidth={3}
+        />
       </TouchableOpacity>
     </View>
   );
@@ -229,130 +332,260 @@ export default function CheckInScreen() {
       className="flex-1 px-8"
     >
       <View className="mb-10">
-        <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter">Physical Status</Text>
-        <Text style={{ color: textSecondaryColor }} className="font-medium text-lg mt-2">Let's track your core metrics for today.</Text>
+        <Text
+          style={{ color: textColor }}
+          className="text-4xl font-black tracking-tighter"
+        >
+          Physical Status
+        </Text>
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="font-medium text-lg mt-2"
+        >
+          Let's track your core metrics for today.
+        </Text>
       </View>
 
       <View className="gap-6">
-        <View 
+        <View
           style={{ backgroundColor: cardBg, borderColor: cardBorder }}
           className="rounded-[32px] p-6 border shadow-sm"
         >
-          <View className="flex-row items-center justify-between mb-4">
+          <View
+            style={{ zIndex: 1 }}
+            className="flex-row items-center justify-between mb-6"
+          >
             <View className="flex-row items-center gap-3">
-              <View 
-                style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }}
+              <View
+                style={{
+                  backgroundColor: `${theme.colors.primary}15`,
+                  borderColor: `${theme.colors.primary}30`,
+                }}
                 className="w-10 h-10 rounded-xl items-center justify-center border"
               >
                 <Scale size={20} color={theme.colors.primary} />
               </View>
-              <Text style={{ color: textColor }} className="font-bold text-lg">Body Weight</Text>
+              <Text style={{ color: textColor }} className="font-bold text-lg">
+                Body Weight
+              </Text>
             </View>
             <View className="flex-row items-center gap-2">
               {isWeightFromHealth && (
                 <View className="bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
                   <Check size={12} color="#10B981" />
-                  <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-wider">From Health</Text>
+                  <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-wider">
+                    From Health
+                  </Text>
                 </View>
               )}
               {lastWeight && !isWeightFromHealth && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => {
                     setWeight(lastWeight);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }}
                   style={{
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : (colors.inputBackground || '#F1F5F9'),
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : colors.inputBackground || '#F1F5F9',
                     borderColor: cardBorder,
                   }}
                   className="px-3 py-1.5 rounded-full border"
                 >
-                  <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-wider">Same as before</Text>
+                  <Text
+                    style={{ color: textSecondaryColor }}
+                    className="text-[10px] font-black uppercase tracking-wider"
+                  >
+                    Same as before
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
           </View>
-          <View className="flex-row items-center">
-            <TextInput
-              value={weight}
-              onChangeText={(text) => {
-                setWeight(text);
-                if (isWeightFromHealth) setIsWeightFromHealth(false);
-              }}
-              placeholder="0.0"
-              placeholderTextColor={placeholderColor}
-              keyboardType="numeric"
-              style={{ color: textColor }}
-              className="text-5xl font-black flex-1"
-            />
-            <Text style={{ color: textSecondaryColor }} className="text-xl font-bold ml-2">KG</Text>
+          <View
+            style={{ zIndex: 10, position: 'relative' }}
+            className="flex-row items-center mt-2"
+          >
+            <View
+              className="flex-1 justify-center"
+              style={{ height: 64, position: 'relative' }}
+            >
+              {!weight && (
+                <Text
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    color: placeholderColor,
+                    fontSize: 48,
+                    lineHeight: 58,
+                  }}
+                  className="font-black"
+                >
+                  0.0
+                </Text>
+              )}
+              <TextInput
+                value={weight}
+                onChangeText={(text) => {
+                  setWeight(text);
+                  if (isWeightFromHealth) setIsWeightFromHealth(false);
+                }}
+                placeholder=""
+                keyboardType="numeric"
+                style={{
+                  color: textColor,
+                  fontSize: 48,
+                  height: 64,
+                  paddingVertical: 0,
+                }}
+                className="font-black flex-1"
+              />
+            </View>
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-xl font-bold ml-2"
+            >
+              KG
+            </Text>
           </View>
         </View>
 
-        <View 
+        <View
           style={{ backgroundColor: cardBg, borderColor: cardBorder }}
           className="rounded-[32px] p-6 border shadow-sm"
         >
-          <View className="flex-row items-center justify-between mb-4">
+          <View
+            style={{ zIndex: 1 }}
+            className="flex-row items-center justify-between mb-6"
+          >
             <View className="flex-row items-center gap-3">
-              <View 
-                style={{ backgroundColor: `${theme.colors.secondary || '#10B981'}15`, borderColor: `${theme.colors.secondary || '#10B981'}30` }}
+              <View
+                style={{
+                  backgroundColor: `${theme.colors.secondary || '#10B981'}15`,
+                  borderColor: `${theme.colors.secondary || '#10B981'}30`,
+                }}
                 className="w-10 h-10 rounded-xl items-center justify-center border"
               >
                 <Timer size={20} color={theme.colors.secondary || '#10B981'} />
               </View>
-              <Text style={{ color: textColor }} className="font-bold text-lg">Sleep Duration</Text>
+              <Text style={{ color: textColor }} className="font-bold text-lg">
+                Sleep Duration
+              </Text>
             </View>
-            {isSleepFromHealth && (
+            {isSleepFromHealth ? (
               <View className="bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
                 <Check size={12} color="#10B981" />
-                <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-wider">From Health</Text>
+                <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-wider">
+                  From Health
+                </Text>
               </View>
+            ) : (
+              <TouchableOpacity
+                onPress={handleConnectHealth}
+                style={{
+                  backgroundColor: `${theme.colors.primary}15`,
+                  borderColor: `${theme.colors.primary}35`,
+                }}
+                className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+              >
+                <Heart size={12} color={theme.colors.primary} />
+                <Text
+                  style={{ color: theme.colors.primary }}
+                  className="text-[10px] font-black uppercase tracking-wider"
+                >
+                  Connect Health
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
-          <View className="flex-row items-center">
-            <TextInput
-              value={sleep}
-              onChangeText={(text) => {
-                setSleep(text);
-                if (isSleepFromHealth) setIsSleepFromHealth(false);
-              }}
-              placeholder="0.0"
-              placeholderTextColor={placeholderColor}
-              keyboardType="numeric"
-              style={{ color: textColor }}
-              className="text-5xl font-black flex-1"
-            />
-            <Text style={{ color: textSecondaryColor }} className="text-xl font-bold ml-2">HOURS</Text>
+          <View
+            style={{ zIndex: 10, position: 'relative' }}
+            className="flex-row items-center mt-2"
+          >
+            <View
+              className="flex-1 justify-center"
+              style={{ height: 64, position: 'relative' }}
+            >
+              {!sleep && (
+                <Text
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    color: placeholderColor,
+                    fontSize: 48,
+                    lineHeight: 58,
+                  }}
+                  className="font-black"
+                >
+                  0.0
+                </Text>
+              )}
+              <TextInput
+                value={sleep}
+                onChangeText={(text) => {
+                  setSleep(text);
+                  if (isSleepFromHealth) setIsSleepFromHealth(false);
+                }}
+                placeholder=""
+                keyboardType="numeric"
+                style={{
+                  color: textColor,
+                  fontSize: 48,
+                  height: 64,
+                  paddingVertical: 0,
+                }}
+                className="font-black flex-1"
+              />
+            </View>
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-xl font-bold ml-2"
+            >
+              HOURS
+            </Text>
           </View>
         </View>
       </View>
 
       <View className="flex-1" />
-      <TouchableOpacity 
+      <TouchableOpacity
         key={`continue-btn-${isMetricsValid}`}
         onPress={() => isMetricsValid && setCurrentStep('vitals')}
         disabled={!isMetricsValid}
         style={{
-          backgroundColor: isMetricsValid ? theme.colors.primary : (isDark ? '#1E293B' : '#E2E8F0'),
+          backgroundColor: isMetricsValid
+            ? theme.colors.primary
+            : isDark
+              ? '#1E293B'
+              : '#E2E8F0',
           opacity: isMetricsValid ? 1 : 0.6,
         }}
         className="h-20 rounded-[32px] items-center justify-center flex-row gap-3 mb-10 shadow-2xl"
       >
-        <Text 
-          style={{ 
-            color: isMetricsValid 
-              ? (theme.colors.textOnPrimary || '#FFFFFF') 
-              : (isDark ? '#64748B' : '#94A3B8') 
-          }} 
+        <Text
+          style={{
+            color: isMetricsValid
+              ? theme.colors.textOnPrimary || '#FFFFFF'
+              : isDark
+                ? '#64748B'
+                : '#94A3B8',
+          }}
           className="font-black text-lg uppercase tracking-widest"
         >
           Continue
         </Text>
-        <ChevronRight 
-          size={20} 
-          color={isMetricsValid ? (theme.colors.textOnPrimary || '#FFFFFF') : (isDark ? '#64748B' : '#94A3B8')} 
-          strokeWidth={3} 
+        <ChevronRight
+          size={20}
+          color={
+            isMetricsValid
+              ? theme.colors.textOnPrimary || '#FFFFFF'
+              : isDark
+                ? '#64748B'
+                : '#94A3B8'
+          }
+          strokeWidth={3}
         />
       </TouchableOpacity>
     </MotiView>
@@ -365,16 +598,27 @@ export default function CheckInScreen() {
       className="flex-1 px-8"
     >
       <View className="mb-10">
-        <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter">Energy & Recovery</Text>
-        <Text style={{ color: textSecondaryColor }} className="font-medium text-lg mt-2">How are your internal levels today?</Text>
+        <Text
+          style={{ color: textColor }}
+          className="text-4xl font-black tracking-tighter"
+        >
+          Energy & Recovery
+        </Text>
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="font-medium text-lg mt-2"
+        >
+          How are your internal levels today?
+        </Text>
       </View>
 
       <View className="gap-10">
-        <ElasticSlider 
-          label="Energy Level" 
-          value={energy} 
-          min={1} max={10} 
-          onChange={setEnergy} 
+        <ElasticSlider
+          label="Energy Level"
+          value={energy}
+          min={1}
+          max={10}
+          onChange={setEnergy}
           icon={<Zap size={18} color={theme.colors.primary} />}
           color={theme.colors.primary}
           textColor={textColor}
@@ -382,11 +626,12 @@ export default function CheckInScreen() {
           isDark={isDark}
           cardBorder={cardBorder}
         />
-        <ElasticSlider 
-          label="Stress Level" 
-          value={stress} 
-          min={1} max={10} 
-          onChange={setStress} 
+        <ElasticSlider
+          label="Stress Level"
+          value={stress}
+          min={1}
+          max={10}
+          onChange={setStress}
           icon={<Heart size={18} color={theme.colors.primary} />}
           color={theme.colors.primary}
           textColor={textColor}
@@ -394,11 +639,12 @@ export default function CheckInScreen() {
           isDark={isDark}
           cardBorder={cardBorder}
         />
-        <ElasticSlider 
-          label="Hunger Level" 
-          value={hunger} 
-          min={1} max={10} 
-          onChange={setHunger} 
+        <ElasticSlider
+          label="Hunger Level"
+          value={hunger}
+          min={1}
+          max={10}
+          onChange={setHunger}
           icon={<Target size={18} color={theme.colors.primary} />}
           color={theme.colors.primary}
           textColor={textColor}
@@ -410,7 +656,7 @@ export default function CheckInScreen() {
 
       <View className="flex-1" />
       <View className="flex-row gap-4 mb-10">
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => setCurrentStep('metrics')}
           style={{
             backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : cardBg,
@@ -420,15 +666,22 @@ export default function CheckInScreen() {
         >
           <ChevronLeft size={24} color={textColor} />
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => setCurrentStep('mood')}
           style={{ backgroundColor: theme.colors.primary }}
           className="flex-1 h-20 rounded-[32px] items-center justify-center flex-row gap-3 shadow-2xl"
         >
-          <Text style={{ color: theme.colors.textOnPrimary || '#FFFFFF' }} className="font-black text-lg uppercase tracking-widest">
+          <Text
+            style={{ color: theme.colors.textOnPrimary || '#FFFFFF' }}
+            className="font-black text-lg uppercase tracking-widest"
+          >
             Continue
           </Text>
-          <ChevronRight size={20} color={theme.colors.textOnPrimary || '#FFFFFF'} strokeWidth={3} />
+          <ChevronRight
+            size={20}
+            color={theme.colors.textOnPrimary || '#FFFFFF'}
+            strokeWidth={3}
+          />
         </TouchableOpacity>
       </View>
     </MotiView>
@@ -441,34 +694,49 @@ export default function CheckInScreen() {
       className="flex-1 px-8"
     >
       <View className="mb-10">
-        <Text style={{ color: textColor }} className="text-4xl font-black tracking-tighter">Mindset & Notes</Text>
-        <Text style={{ color: textSecondaryColor }} className="font-medium text-lg mt-2">Capture your mental state and any notes.</Text>
+        <Text
+          style={{ color: textColor }}
+          className="text-4xl font-black tracking-tighter"
+        >
+          Mindset & Notes
+        </Text>
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="font-medium text-lg mt-2"
+        >
+          Capture your mental state and any notes.
+        </Text>
       </View>
 
-      <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-[3px] mb-4">Core Mindset</Text>
+      <Text
+        style={{ color: textSecondaryColor }}
+        className="text-[10px] font-black uppercase tracking-[3px] mb-4"
+      >
+        Core Mindset
+      </Text>
       <View className="flex-row flex-wrap gap-2 mb-10">
         {moods.map((m) => {
           const isSelected = mood === m;
           return (
-            <TouchableOpacity 
+            <TouchableOpacity
               key={m}
               onPress={() => setMood(m)}
               style={{
-                backgroundColor: isSelected 
-                  ? theme.colors.primary 
-                  : (isDark ? 'rgba(255, 255, 255, 0.05)' : cardBg),
-                borderColor: isSelected 
-                  ? theme.colors.primary 
-                  : cardBorder,
+                backgroundColor: isSelected
+                  ? theme.colors.primary
+                  : isDark
+                    ? 'rgba(255, 255, 255, 0.05)'
+                    : cardBg,
+                borderColor: isSelected ? theme.colors.primary : cardBorder,
               }}
               className="px-6 py-3 rounded-2xl border"
             >
-              <Text 
-                style={{ 
-                  color: isSelected 
-                    ? (theme.colors.textOnPrimary || '#FFFFFF') 
-                    : textColor 
-                }} 
+              <Text
+                style={{
+                  color: isSelected
+                    ? theme.colors.textOnPrimary || '#FFFFFF'
+                    : textColor,
+                }}
                 className="font-bold"
               >
                 {m}
@@ -478,8 +746,13 @@ export default function CheckInScreen() {
         })}
       </View>
 
-      <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-[3px] mb-4">Notes for Coach</Text>
-      <View 
+      <Text
+        style={{ color: textSecondaryColor }}
+        className="text-[10px] font-black uppercase tracking-[3px] mb-4"
+      >
+        Notes for Coach
+      </Text>
+      <View
         style={{
           backgroundColor: cardBg,
           borderColor: cardBorder,
@@ -492,9 +765,9 @@ export default function CheckInScreen() {
           placeholderTextColor={placeholderColor}
           value={notes}
           onChangeText={setNotes}
-          style={{ 
-            color: textColor, 
-            textAlignVertical: 'top' 
+          style={{
+            color: textColor,
+            textAlignVertical: 'top',
           }}
           className="font-medium text-lg flex-1"
         />
@@ -502,7 +775,7 @@ export default function CheckInScreen() {
 
       <View className="flex-1" />
       <View className="flex-row gap-4 mb-10">
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => setCurrentStep('vitals')}
           style={{
             backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : cardBg,
@@ -512,20 +785,29 @@ export default function CheckInScreen() {
         >
           <ChevronLeft size={24} color={textColor} />
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={handleSave}
           disabled={saveLoading}
           style={{ backgroundColor: theme.colors.primary }}
           className="flex-1 h-20 rounded-[32px] items-center justify-center flex-row gap-3 shadow-2xl"
         >
           {saveLoading ? (
-            <ActivityIndicator color={theme.colors.textOnPrimary || '#FFFFFF'} />
+            <ActivityIndicator
+              color={theme.colors.textOnPrimary || '#FFFFFF'}
+            />
           ) : (
             <>
-              <Text style={{ color: theme.colors.textOnPrimary || '#FFFFFF' }} className="font-black text-lg uppercase tracking-widest">
+              <Text
+                style={{ color: theme.colors.textOnPrimary || '#FFFFFF' }}
+                className="font-black text-lg uppercase tracking-widest"
+              >
                 Submit Check-in
               </Text>
-              <Check size={20} color={theme.colors.textOnPrimary || '#FFFFFF'} strokeWidth={3} />
+              <Check
+                size={20}
+                color={theme.colors.textOnPrimary || '#FFFFFF'}
+                strokeWidth={3}
+              />
             </>
           )}
         </TouchableOpacity>
@@ -535,8 +817,12 @@ export default function CheckInScreen() {
 
   if (loading) {
     return (
-      <View 
-        style={{ flex: 1, backgroundColor: colors.background || (isDark ? '#020617' : '#F8FAFC') }} 
+      <View
+        style={{
+          flex: 1,
+          backgroundColor:
+            colors.background || (isDark ? '#020617' : '#F8FAFC'),
+        }}
         className="items-center justify-center"
       >
         <ActivityIndicator color={theme.colors.primary} size="large" />
@@ -546,26 +832,38 @@ export default function CheckInScreen() {
 
   if (alreadyCheckedIn) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background || (isDark ? '#020617' : '#F8FAFC') }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor:
+            colors.background || (isDark ? '#020617' : '#F8FAFC'),
+        }}
+      >
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         {renderHeader()}
         <View className="flex-1 px-8 items-center justify-center">
-          <View 
-            style={{ 
-              backgroundColor: `${theme.colors.primary}15`, 
-              borderColor: `${theme.colors.primary}30` 
+          <View
+            style={{
+              backgroundColor: `${theme.colors.primary}15`,
+              borderColor: `${theme.colors.primary}30`,
             }}
             className="w-24 h-24 rounded-[32px] items-center justify-center border mb-8"
           >
             <Heart size={40} color={theme.colors.primary} />
           </View>
-          <Text style={{ color: textColor }} className="text-3xl font-black tracking-tighter text-center">
+          <Text
+            style={{ color: textColor }}
+            className="text-3xl font-black tracking-tighter text-center"
+          >
             Already Checked In
           </Text>
-          <Text style={{ color: textSecondaryColor }} className="font-medium text-lg mt-4 text-center px-10">
+          <Text
+            style={{ color: textSecondaryColor }}
+            className="font-medium text-lg mt-4 text-center px-10"
+          >
             You've already completed your check-in for today. Rest up!
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => router.back()}
             style={{
               backgroundColor: cardBg,
@@ -573,7 +871,10 @@ export default function CheckInScreen() {
             }}
             className="mt-12 px-10 py-5 rounded-[24px] border"
           >
-            <Text style={{ color: textColor }} className="font-black text-xs uppercase tracking-widest">
+            <Text
+              style={{ color: textColor }}
+              className="font-black text-xs uppercase tracking-widest"
+            >
               Back to Dashboard
             </Text>
           </TouchableOpacity>
@@ -584,9 +885,15 @@ export default function CheckInScreen() {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={{ flex: 1, backgroundColor: colors.background || (isDark ? '#020617' : '#F8FAFC') }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor:
+            colors.background || (isDark ? '#020617' : '#F8FAFC'),
+        }}
+      >
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        
+
         {renderHeader()}
 
         <View className="flex-1">
@@ -626,13 +933,13 @@ interface ElasticSliderProps {
   cardBorder: string;
 }
 
-const ElasticSlider = ({ 
-  label, 
-  value, 
-  min, 
-  max, 
-  onChange, 
-  icon, 
+const ElasticSlider = ({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+  icon,
   color,
   textColor,
   textSecondaryColor,
@@ -640,12 +947,12 @@ const ElasticSlider = ({
   cardBorder,
 }: ElasticSliderProps) => {
   const [containerWidth, setContainerWidth] = useState(0);
-  
+
   // Shared values for high-performance UI thread animations
   const translationX = useSharedValue(0);
   const startX = useSharedValue(0);
   const isPressed = useSharedValue(false);
-  
+
   // Update translationX when value prop changes (initial or external change)
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -669,21 +976,21 @@ const ElasticSlider = ({
     })
     .onUpdate((event) => {
       let newX = startX.value + event.translationX;
-      
+
       // Elastic stretch logic
       if (newX < 0) {
         newX = newX * 0.35; // Apply tension
       } else if (newX > containerWidth) {
         newX = containerWidth + (newX - containerWidth) * 0.35; // Apply tension
       }
-      
+
       translationX.value = newX;
-      
+
       // Calculate and trigger state update
       const clampedX = Math.max(0, Math.min(containerWidth, newX));
       const percentage = clampedX / containerWidth;
       const newValue = Math.round(percentage * (max - min) + min);
-      
+
       if (newValue !== value) {
         runOnJS(onChange)(newValue);
         runOnJS(Haptics.selectionAsync)();
@@ -691,7 +998,7 @@ const ElasticSlider = ({
     })
     .onFinalize(() => {
       isPressed.value = false;
-      
+
       // Snap back to boundaries if stretched
       if (translationX.value < 0) {
         translationX.value = withSpring(0);
@@ -702,14 +1009,14 @@ const ElasticSlider = ({
       } else {
         startX.value = translationX.value;
       }
-      
+
       runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Medium);
     });
 
   const animatedThumbStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translationX.value },
-      { scale: withSpring(isPressed.value ? 1.2 : 1) }
+      { scale: withSpring(isPressed.value ? 1.2 : 1) },
     ],
   }));
 
@@ -718,7 +1025,7 @@ const ElasticSlider = ({
       translationX.value,
       [0, containerWidth],
       [0, containerWidth],
-      'clamp'
+      'clamp',
     ),
   }));
 
@@ -726,36 +1033,49 @@ const ElasticSlider = ({
     <View className="mb-8">
       <View className="flex-row items-center justify-between mb-6">
         <View className="flex-row items-center gap-3">
-          <View style={{ backgroundColor: `${color}1a`, borderColor: `${color}33` }} className="w-10 h-10 rounded-xl items-center justify-center border">
+          <View
+            style={{ backgroundColor: `${color}1a`, borderColor: `${color}33` }}
+            className="w-10 h-10 rounded-xl items-center justify-center border"
+          >
             {icon}
           </View>
-          <Text style={{ color: textColor }} className="font-black text-lg tracking-tight">{label}</Text>
+          <Text
+            style={{ color: textColor }}
+            className="font-black text-lg tracking-tight"
+          >
+            {label}
+          </Text>
         </View>
-        <Text style={{ color }} className="text-2xl font-black">{value}</Text>
+        <Text style={{ color }} className="text-2xl font-black">
+          {value}
+        </Text>
       </View>
-      
+
       <GestureDetector gesture={gesture}>
-        <View 
+        <View
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
           style={{ height: 44, justifyContent: 'center' }}
         >
           {/* Background Track */}
-          <View 
-            style={{ 
+          <View
+            style={{
               backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
               borderColor: cardBorder,
-            }} 
+            }}
             className="h-3 rounded-full border overflow-hidden"
           >
-            <Animated.View 
-              style={[{ height: '100%', backgroundColor: color }, animatedProgressStyle]} 
+            <Animated.View
+              style={[
+                { height: '100%', backgroundColor: color },
+                animatedProgressStyle,
+              ]}
             />
           </View>
-          
+
           {/* Elastic Thumb */}
           <Animated.View
             style={[
-              { 
+              {
                 position: 'absolute',
                 width: 24,
                 height: 24,
@@ -768,17 +1088,27 @@ const ElasticSlider = ({
                 shadowOpacity: 0.4,
                 shadowRadius: 10,
                 elevation: 8,
-                left: -16
+                left: -16,
               },
-              animatedThumbStyle
+              animatedThumbStyle,
             ]}
           />
         </View>
       </GestureDetector>
 
       <View className="flex-row justify-between mt-3 px-1">
-        <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-widest">Low</Text>
-        <Text style={{ color: textSecondaryColor }} className="text-[10px] font-black uppercase tracking-widest">Peak</Text>
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="text-[10px] font-black uppercase tracking-widest"
+        >
+          Low
+        </Text>
+        <Text
+          style={{ color: textSecondaryColor }}
+          className="text-[10px] font-black uppercase tracking-widest"
+        >
+          Peak
+        </Text>
       </View>
     </View>
   );

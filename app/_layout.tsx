@@ -8,7 +8,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useAppFonts } from '@/hooks/useAppFonts';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { BrandProvider } from '@/contexts/BrandContext';
+import { BrandProvider, useBrand, useBrandColors } from '@/contexts/BrandContext';
 import { UnreadProvider } from '@/contexts/UnreadContext';
 import { NotificationProvider, useNotification } from '@/contexts/NotificationContext';
 import { TabBarScrollProvider } from '@/contexts/TabBarScrollContext';
@@ -46,6 +46,17 @@ function AuthGuard() {
 }
 
 function RootLayoutNav() {
+  const { isCacheHydrated } = useBrand();
+  const colors = useBrandColors();
+
+  if (!isCacheHydrated) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background || '#010417', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <>
       <AuthGuard />
@@ -56,6 +67,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(client)" />
         <Stack.Screen name="(coach)" />
         <Stack.Screen name="(admin)" />
+        <Stack.Screen name="meal-details/[id]" />
         <Stack.Screen
           name="call/[id]"
           options={{ headerShown: false, presentation: 'fullScreenModal' }}

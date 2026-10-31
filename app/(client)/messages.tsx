@@ -113,6 +113,19 @@ export default function ClientMessagesScreen() {
   }, [coachUserId]);
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
+
+  const enrichReplyMessage = useCallback(
+    (msg: any) => {
+      if (!msg) return null;
+      const isOwn = msg.sender_id === user?.id;
+      return {
+        ...msg,
+        isOwn,
+        sender_name: isOwn ? 'You' : (coachProfile?.full_name || 'Coach'),
+      };
+    },
+    [user?.id, coachProfile?.full_name],
+  );
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [activeMessageForMenu, setActiveMessageForMenu] = useState<Message | null>(null);
   const [pressedMessageId, setPressedMessageId] = useState<string | null>(null);
@@ -475,7 +488,7 @@ export default function ClientMessagesScreen() {
       setActiveMessageForMenu(null);
       return;
     } else if (action === 'reply') {
-      setReplyingTo(activeMessageForMenu);
+      setReplyingTo(enrichReplyMessage(activeMessageForMenu));
     } else if (action === 'copy') {
       let textToCopy = activeMessageForMenu.content;
       try {
@@ -639,7 +652,7 @@ function SwipeReplyAction({ progress, color }: { progress: any; color: string })
         <Swipeable
           ref={ref => { if (ref) swipeableRefs.current[item.id] = ref; }}
           renderLeftActions={renderLeftActions}
-          onSwipeableWillOpen={() => { setReplyingTo(item); swipeableRefs.current[item.id]?.close(); }}
+          onSwipeableWillOpen={() => { setReplyingTo(enrichReplyMessage(item)); swipeableRefs.current[item.id]?.close(); }}
           friction={1} overshootLeft={false} containerStyle={{ marginBottom: 16 }}
         >
           <BubblePuff isMe={isMe}>
@@ -995,54 +1008,97 @@ const MessageBubble = ({
               className={`px-5 py-3.5 rounded-[28px] ${isMe ? 'rounded-br-none' : 'rounded-bl-none border'}`}
               style={{ maxWidth: SCREEN_WIDTH * 0.75, minWidth: isMe ? 0 : 120, backgroundColor: isMe ? theme.colors.primary : theme.colors.surface, borderColor: isMe ? 'transparent' : theme.colors.border }}
           >
-          {repliedMsg && (
-             <TouchableOpacity 
+          {repliedMsg && (() => {
+            let replySnippet = repliedMsg.content;
+            let replyMediaUrl: string | null = null;
+            try {
+              let p: any = repliedMsg.content;
+              if (typeof p === 'string') {
+                const trimmed = p.trim();
+                if (trimmed.startsWith('{') || trimmed.startsWith('"') || trimmed.startsWith('[')) {
+                  p = JSON.parse(trimmed);
+                  if (typeof p === 'string' && (p.trim().startsWith('{') || p.trim().startsWith('['))) {
+                    p = JSON.parse(p.trim());
+                  }
+                }
+              }
+              if (p && typeof p === 'object') {
+                if (p.type === 'task_completion') {
+                  replySnippet = '✅ Task Completed: ' + (p.taskName || '');
+                  replyMediaUrl = p.imageUrl || p.url || null;
+                } else if (p.type === 'challenge_completed') {
+                  replySnippet = '🏆 Challenge Completed: ' + (p.taskName || '');
+                  replyMediaUrl = p.imageUrl || p.url || null;
+                } else if (p.type === 'meal' || p.type === 'meal_log') {
+                  replySnippet = p.mealName ? `🍽️ Meal Log · ${p.mealName}` : '🍽️ Meal Log';
+                  replyMediaUrl = p.imageUrl || p.photo_url || p.url || null;
+                } else if (p.type === 'image') {
+                  replySnippet = '🖼 Photo';
+                  replyMediaUrl = p.url || p.imageUrl || null;
+                } else if (p.type === 'video') {
+                  replySnippet = '🎥 Video';
+                  replyMediaUrl = p.thumbnailUrl || p.url || null;
+                } else if (p.type === 'gif') {
+                  replySnippet = '🎞 GIF';
+                  replyMediaUrl = p.url || null;
+                } else if (p.type === 'document') {
+                  replySnippet = '📄 ' + (p.fileName || 'Document');
+                } else if (p.type === 'audio') {
+                  let dStr = '';
+                  if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
+                    const d = Math.floor(Number(p.duration));
+                    dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
+                  }
+                  replySnippet = `🎤 Voice message${dStr}`;
+                } else if (p.type === 'session_invite' || p.type === 'call_invite') {
+                  replySnippet = '📹 Session Invitation';
+                } else {
+                  replySnippet = p.text || (typeof repliedMsg.content === 'string' ? repliedMsg.content : JSON.stringify(repliedMsg.content));
+                }
+              } else {
+                replySnippet = typeof repliedMsg.content === 'string' ? repliedMsg.content : JSON.stringify(repliedMsg.content);
+              }
+            } catch {
+              replySnippet = repliedMsg.content;
+            }
+
+            return (
+              <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={onReplyPress}
-                className="px-4 py-3 rounded-2xl mb-2 border-l-4 min-h-[44px]"
+                className="px-4 py-2.5 rounded-2xl mb-2 border-l-4 min-h-[48px] flex-row items-center justify-between"
                 style={{ backgroundColor: 'rgba(0,0,0,0.15)', borderColor: mutedTextColor }}
-             >
-                <Text style={{ fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2, color: mutedTextColor }}>{repliedMsg.sender_id === user?.id ? 'You' : 'Coach'}</Text>
-                <Text style={{ color: textColor, fontSize: 12, opacity: 0.8 }} numberOfLines={1}>
-                  {(() => {
-                    try { 
-                      let p: any = repliedMsg.content;
-                      if (typeof p === 'string') {
-                        const trimmed = p.trim();
-                        if (trimmed.startsWith('{') || trimmed.startsWith('"') || trimmed.startsWith('[')) {
-                          p = JSON.parse(trimmed);
-                          if (typeof p === 'string' && (p.trim().startsWith('{') || p.trim().startsWith('['))) {
-                            p = JSON.parse(p.trim());
-                          }
-                        }
-                      }
-                      if (p && typeof p === 'object') {
-                        if (p.type === 'task_completion') return '✅ Task Completed: ' + (p.taskName || '');
-                        if (p.type === 'challenge_completed') return '🏆 Challenge Completed: ' + (p.taskName || '');
-                        if (p.type === 'meal' || p.type === 'meal_log') return '🍽️ Meal Log';
-                        if (p.type === 'image') return '🖼 Photo';
-                        if (p.type === 'video') return '🎥 Video';
-                        if (p.type === 'gif') return '🎞 GIF';
-                        if (p.type === 'document') return '📄 ' + (p.fileName || 'Document');
-                        if (p.type === 'audio') {
-                          let dStr = '';
-                          if (p.duration && !isNaN(Math.floor(Number(p.duration)))) {
-                            const d = Math.floor(Number(p.duration));
-                            dStr = ` (${Math.floor(d / 60)}:${(d % 60).toString().padStart(2, '0')})`;
-                          }
-                          return `🎤 Voice message${dStr}`;
-                        }
-                        if (p.type === 'session_invite' || p.type === 'call_invite') return '📹 Session Invitation';
-                        return p.text || (typeof repliedMsg.content === 'string' ? repliedMsg.content : JSON.stringify(repliedMsg.content)); 
-                      }
-                      return typeof repliedMsg.content === 'string' ? repliedMsg.content : JSON.stringify(repliedMsg.content);
-                    } catch { 
-                      return repliedMsg.content; 
-                    }
-                  })()}
-                </Text>
-             </TouchableOpacity>
-          )}
+              >
+                <View style={{ flex: 1, marginRight: replyMediaUrl ? 10 : 0 }}>
+                  <Text
+                    style={{
+                      fontSize: 9,
+                      fontWeight: '900',
+                      textTransform: 'uppercase',
+                      letterSpacing: 1,
+                      marginBottom: 2,
+                      color: mutedTextColor,
+                    }}
+                  >
+                    {repliedMsg.sender_id === user?.id ? 'You' : (coachName || 'Coach')}
+                  </Text>
+                  <Text style={{ color: textColor, fontSize: 12, opacity: 0.85 }} numberOfLines={1}>
+                    {replySnippet}
+                  </Text>
+                </View>
+                {replyMediaUrl ? (
+                  <View style={{ width: 40, height: 40, borderRadius: 8, overflow: 'hidden', marginLeft: 4 }}>
+                    <Image
+                      source={{ uri: replyMediaUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })()}
           <Text style={{ fontSize: 15, fontWeight: '500', lineHeight: 22, color: textColor }}>
             {truncatedContent}
           </Text>
