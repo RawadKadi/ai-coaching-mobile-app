@@ -268,7 +268,7 @@ export default function TeamManagementScreen() {
             backgroundColor: colors.surface,
             borderColor: colors.border,
           }}
-          className="mx-6 mt-8 p-8 rounded-[40px] border items-center overflow-hidden shadow-sm"
+          className="mx-3 mt-8 p-8 rounded-[40px] border items-center overflow-hidden shadow-sm"
         >
           <View className="absolute top-0 right-0 p-4 opacity-10">
             <Shield size={120} color={colors.primary} />
@@ -296,7 +296,7 @@ export default function TeamManagementScreen() {
             backgroundColor: colors.surface,
             borderColor: colors.border,
           }}
-          className="mx-6 mt-6 p-6 rounded-[32px] border shadow-sm"
+          className="mx-3 mt-6 p-6 rounded-[32px] border shadow-sm"
         >
           <View className="flex-row items-center justify-between mb-6">
             <View className="flex-row items-center gap-2.5">
@@ -341,7 +341,7 @@ export default function TeamManagementScreen() {
         </MotiView>
 
         {/* Team Members List */}
-        <View className="px-6 mt-8">
+        <View className="px-3 mt-8">
           <View className="flex-row items-center justify-between mb-4">
             <Text style={{ color: colors.text }} className="text-lg font-black tracking-tight">
               Team Coaches

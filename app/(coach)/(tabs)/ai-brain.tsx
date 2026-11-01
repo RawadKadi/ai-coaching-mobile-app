@@ -97,7 +97,7 @@ export default function AIBrainScreen() {
           <MotiView 
             from={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="mx-6 mt-8 p-10 rounded-[48px] border items-center overflow-hidden"
+            className="mx-3 mt-8 p-10 rounded-[48px] border items-center overflow-hidden"
             style={{ backgroundColor: colors.surface, borderColor: colors.border }}
           >
               <MotiView 
@@ -116,7 +116,7 @@ export default function AIBrainScreen() {
           </MotiView>
 
           {/* Configuration Forms */}
-          <View className="px-6 mt-10">
+          <View className="px-3 mt-10">
               <ConfigSection 
                 title="Tone of Voice" 
                 desc="How your AI should sound"

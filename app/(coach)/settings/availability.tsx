@@ -198,9 +198,9 @@ export default function AvailabilitySettings() {
           <MotiView 
             from={{ opacity: 0, translateY: -10 }}
             animate={{ opacity: 1, translateY: 0 }}
-            className="px-6 py-8"
+            className="px-3 py-8"
           >
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6 px-6">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-3 px-3">
                   <View className="flex-row gap-3 pr-12">
                       {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
                           const dayIdx = (i + 1) % 7;
@@ -220,7 +220,7 @@ export default function AvailabilitySettings() {
           </MotiView>
 
           {/* Slots Content */}
-          <View className="px-6">
+          <View className="px-3">
               <View className="flex-row justify-between items-center mb-6">
                   <View className="flex-1 mr-4">
                     <Text className="text-white text-lg font-bold">
@@ -307,7 +307,7 @@ export default function AvailabilitySettings() {
           </View>
 
           {/* Exceptions */}
-          <View className="mt-12 px-6">
+          <View className="mt-12 px-3">
               <View className="flex-row justify-between items-center mb-6">
                 <Text className="text-white text-lg font-bold">Time Off</Text>
                 <TouchableOpacity onPress={() => setBlockModalVisible(true)} className="flex-row items-center gap-2">

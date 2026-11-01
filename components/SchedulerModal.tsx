@@ -9,7 +9,7 @@ import ConflictResolutionModal from './ConflictResolutionModal';
 import { ConflictInfo, Resolution } from '@/types/conflict';
 import { findAvailableSlots } from '@/lib/time-slot-finder';
 import { supabase } from '@/lib/supabase';
-import { generateGoogleMeetUrl } from '@/utils/session';
+import { generateGoogleMeetUrl, createSessionMeetLink } from '@/utils/session';
 import { useAuth } from '@/contexts/AuthContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useEffect, useMemo } from 'react';
@@ -583,6 +583,8 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                 }
             }
             
+            const meetLink = await createSessionMeetLink(coach?.id);
+
             for (const proposed of proposedSessions) {
                 const recurrenceRule = proposed.recurrence === 'weekly' ? `FREQ=WEEKLY;BYDAY=${proposed.day_of_week?.substring(0, 2).toUpperCase()}` : null;
                 
@@ -601,7 +603,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                         status: 'scheduled',
                         is_locked: true,
                         ai_generated: true,
-                        meet_link: generateGoogleMeetUrl(),
+                        meet_link: meetLink || generateGoogleMeetUrl(),
                         notes: proposed.notes || `AI Scheduled session for ${clientContext?.name || 'Athlete'}`,
                         recurrence_rule: i === 0 ? recurrenceRule : null // Store RRULE on the first instance
                     });
@@ -766,7 +768,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                           transition={{ type: 'timing', duration: 300 }}
                           className="flex-1"
                         >
-                        <ScrollView className="flex-1 px-6 pt-8" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
+                        <ScrollView className="flex-1 px-3 pt-6" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
                             <View 
                                 style={{ 
                                     backgroundColor: `${colors.primary}15`, 
@@ -1034,7 +1036,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             animate={{ opacity: 1, translateX: 0 }}
                             exit={{ opacity: 0, translateX: 20 }}
                             transition={{ type: 'timing', duration: 300 }}
-                            className="flex-1 px-6 pt-8"
+                            className="flex-1 px-3 pt-6"
                         >
                             <ScrollView showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
                                 <View className="mb-8 flex-row items-center gap-4">
@@ -1150,7 +1152,7 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             animate={{ opacity: 1, translateX: 0 }}
                             exit={{ opacity: 0, translateX: 20 }}
                             transition={{ type: 'timing', duration: 300 }}
-                            className="flex-1 px-6 pt-8 pb-32"
+                            className="flex-1 px-3 pt-6 pb-32"
                             style={{ overflow: 'visible' }}
                         >
                             <View className="mb-8 flex-row items-center gap-4">

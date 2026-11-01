@@ -185,7 +185,7 @@ export default function AddSubCoachScreen() {
             backgroundColor: colors.surface,
             borderColor: colors.border,
           }}
-          className="mx-6 mt-8 p-8 rounded-[40px] border items-center overflow-hidden shadow-sm"
+          className="mx-3 mt-8 p-8 rounded-[40px] border items-center overflow-hidden shadow-sm"
         >
           <View className="absolute top-0 right-0 p-4 opacity-10">
             <UserPlus size={120} color={colors.primary} />
@@ -204,7 +204,7 @@ export default function AddSubCoachScreen() {
           </Text>
         </MotiView>
 
-        <View className="px-6 mt-8">
+        <View className="px-3 mt-8">
           <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase tracking-widest mb-3 ml-1">
             Coach Email
           </Text>

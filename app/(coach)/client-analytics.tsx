@@ -169,7 +169,7 @@ export default function ClientAnalyticsPickerScreen() {
             backgroundColor: colors.surface,
             borderColor: colors.border,
           }}
-          className="mx-6 mt-6 p-8 rounded-[40px] border items-center overflow-hidden"
+          className="mx-3 mt-6 p-8 rounded-[40px] border items-center overflow-hidden"
         >
           <View className="absolute top-0 right-0 p-4 opacity-10">
             <BarChart2 size={120} color={colors.primary} />
@@ -200,7 +200,7 @@ export default function ClientAnalyticsPickerScreen() {
             backgroundColor: colors.surface,
             borderColor: colors.border,
           }}
-          className="mx-6 mt-6 p-6 rounded-[32px] border"
+          className="mx-3 mt-6 p-6 rounded-[32px] border"
         >
           <View className="flex-row items-center gap-2 mb-6">
             <View
@@ -288,7 +288,7 @@ export default function ClientAnalyticsPickerScreen() {
         </View>
 
         {/* Search Bar */}
-        <View className="px-6 mt-8 mb-6 flex-row gap-3">
+        <View className="px-3 mt-8 mb-6 flex-row gap-3">
           <View
             style={{
               backgroundColor: colors.surface,
@@ -319,7 +319,7 @@ export default function ClientAnalyticsPickerScreen() {
         </View>
 
         {/* Client Cards List */}
-        <View className="px-6">
+        <View className="px-3">
           {loading ? (
             <ClientCardsSkeleton count={3} />
           ) : filteredClients.length === 0 ? (

@@ -29,6 +29,10 @@ export interface Coach {
     is_active: boolean;
     subscription_tier: string;
     meeting_link?: string | null;
+    google_meet_connected?: boolean | null;
+    google_access_token?: string | null;
+    google_refresh_token?: string | null;
+    google_token_expiry?: string | null;
     // VERSION 2.0: Whitelabel fields
     brand_id?: string | null;
     is_parent_coach?: boolean;

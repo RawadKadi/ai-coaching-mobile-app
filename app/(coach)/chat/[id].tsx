@@ -49,6 +49,8 @@ import { Component as GradientBackground } from '@/components/ui/gradient-backgr
 import { ChatInputBar } from '@/components/ChatInputBar';
 import ChatMediaMessage from '@/components/ChatMediaMessage';
 import SchedulerModal from '@/components/SchedulerModal';
+import GoogleMeetGateModal from '@/components/GoogleMeetGateModal';
+import { googleMeetService } from '@/lib/google-meet-service';
 import { MessageOverlay } from '@/components/MessageOverlay';
 import ForwardModal from '@/components/ForwardModal';
 import MealMessageCard from '@/components/MealMessageCard';
@@ -123,7 +125,7 @@ export default function CoachChatScreen() {
     replyToClientName?: string;
   }>();
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user, profile, coach } = useAuth();
   const theme = useTheme();
   const styles = getStyles(theme.colors);
   const isScreenDark = isDarkColor(theme.colors.background || '#020617');
@@ -178,6 +180,17 @@ export default function CoachChatScreen() {
     [user?.id, clientProfile?.profiles?.full_name, replyToClientName],
   );
   const [schedulerVisible, setSchedulerVisible] = useState(false);
+  const [showGoogleMeetGate, setShowGoogleMeetGate] = useState(false);
+  const [isMeetConnected, setIsMeetConnected] = useState(() =>
+    googleMeetService.isConnectedSync(coach),
+  );
+
+  useEffect(() => {
+    if (coach?.id) {
+      setIsMeetConnected(googleMeetService.isConnectedSync(coach));
+      googleMeetService.isConnected(coach).then(setIsMeetConnected);
+    }
+  }, [coach?.id]);
   const [menuVisible, setMenuVisible] = useState(false);
   const menuFadeAnim = useRef(new Animated.Value(0)).current;
   const menuSlideAnim = useRef(new Animated.Value(350)).current;
@@ -390,18 +403,10 @@ export default function CoachChatScreen() {
         }
       }
 
-      const resolvedPhoto =
-        replyToMealPhoto ||
-        mealRow?.photo_url ||
-        '';
+      const resolvedPhoto = replyToMealPhoto || mealRow?.photo_url || '';
       const resolvedMealName =
-        replyToMealName ||
-        mealRow?.meal_name ||
-        'Meal Log';
-      const resolvedSenderName =
-        replyToClientName ||
-        cName ||
-        'Athlete';
+        replyToMealName || mealRow?.meal_name || 'Meal Log';
+      const resolvedSenderName = replyToClientName || cName || 'Athlete';
 
       if (matchedMsg) {
         let enrichedContent = matchedMsg.content;
@@ -428,7 +433,8 @@ export default function CoachChatScreen() {
           imageUrl: finalPhoto,
           photo_url: finalPhoto,
           isOwn: matchedMsg.sender_id === user?.id,
-          sender_name: matchedMsg.sender_id === user?.id ? 'You' : resolvedSenderName,
+          sender_name:
+            matchedMsg.sender_id === user?.id ? 'You' : resolvedSenderName,
         };
         setMessages((prev) =>
           prev.some((m) => m.id === matchedMsg!.id)
@@ -1827,7 +1833,16 @@ export default function CoachChatScreen() {
           </View>
           <View className="flex-row items-center gap-2">
             <TouchableOpacity
-              onPress={() => setSchedulerVisible(true)}
+              onPress={() => {
+                if (
+                  !isMeetConnected &&
+                  !googleMeetService.isConnectedSync(coach)
+                ) {
+                  setShowGoogleMeetGate(true);
+                  return;
+                }
+                setSchedulerVisible(true);
+              }}
               className={`w-10 h-10 items-center justify-center rounded-full ${todaySession ? 'bg-emerald-500/10 border border-emerald-500/20' : isScreenDark ? 'bg-white/10' : 'bg-black/5'}`}
             >
               <Calendar
@@ -2057,6 +2072,17 @@ export default function CoachChatScreen() {
         reschedulingMessageId={reschedulingMessageId}
       />
 
+      <GoogleMeetGateModal
+        visible={showGoogleMeetGate}
+        coachId={coach?.id}
+        expectedEmail={user?.email}
+        onClose={() => setShowGoogleMeetGate(false)}
+        onConnected={() => {
+          setShowGoogleMeetGate(false);
+          setSchedulerVisible(true);
+        }}
+      />
+
       <Modal
         visible={menuVisible}
         transparent
@@ -2123,7 +2149,18 @@ export default function CoachChatScreen() {
                 icon={<Calendar size={20} color={theme.colors.primary} />}
                 title="AI Scheduler"
                 sub="Find the next available gap"
-                onPress={() => closeMenu(() => setSchedulerVisible(true))}
+                onPress={() =>
+                  closeMenu(() => {
+                    if (
+                      !isMeetConnected &&
+                      !googleMeetService.isConnectedSync(coach)
+                    ) {
+                      setShowGoogleMeetGate(true);
+                      return;
+                    }
+                    setSchedulerVisible(true);
+                  })
+                }
               />
               <OptionItem
                 theme={theme}
@@ -2878,11 +2915,17 @@ const MessageBubble = ({
             <View
               key={emoji}
               className="rounded-full px-2 py-0.5 border flex-row items-center mr-1 mb-1"
-              style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.border }}
+              style={{
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              }}
             >
               <Text className="text-[12px]">{emoji}</Text>
               {count > 1 && (
-                <Text className="text-[10px] ml-1 font-bold" style={{ color: theme.colors.text }}>
+                <Text
+                  className="text-[10px] ml-1 font-bold"
+                  style={{ color: theme.colors.text }}
+                >
                   {count}
                 </Text>
               )}

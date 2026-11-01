@@ -226,7 +226,7 @@ export default function CreateProtocolScreen() {
         >
           <ScrollView 
             style={{ flex: 1 }}
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 120 }}
+            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingBottom: 120 }}
             showsVerticalScrollIndicator={false}
           >
             {/* Client Selection */}
@@ -391,7 +391,7 @@ export default function CreateProtocolScreen() {
           </ScrollView>
 
           {/* Action Bar */}
-          <View style={{ paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
+          <View style={{ paddingHorizontal: 12, paddingVertical: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
               <TouchableOpacity 
                 onPress={handleCreate} 
                 disabled={creating}

@@ -424,7 +424,7 @@ export default function AISuggestChallengeScreen() {
 
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
           {step === 1 && (
@@ -844,7 +844,7 @@ export default function AISuggestChallengeScreen() {
         {/* Footer Navigation */}
         <View
           style={{
-            paddingHorizontal: 24,
+            paddingHorizontal: 12,
             paddingTop: 16,
             paddingBottom: Math.max(insets.bottom, 16),
             backgroundColor: colors.background,

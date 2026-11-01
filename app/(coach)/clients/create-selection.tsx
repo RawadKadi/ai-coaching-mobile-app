@@ -49,7 +49,7 @@ export default function CreateSelectionScreen() {
                     </View>
                 </View>
 
-                <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+                <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 40 }}>
                     {/* Hero Section */}
                     <MotiView
                         from={{ opacity: reduceMotion ? 1 : 0, translateY: reduceMotion ? 0 : 20 }}

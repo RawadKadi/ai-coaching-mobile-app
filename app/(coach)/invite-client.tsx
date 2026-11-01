@@ -326,7 +326,7 @@ export default function InviteClientScreen() {
             backgroundColor: colors.surface,
             borderColor: colors.border,
           }}
-          className="mx-6 mt-8 p-8 rounded-[40px] border items-center overflow-hidden shadow-sm"
+          className="mx-3 mt-8 p-8 rounded-[40px] border items-center overflow-hidden shadow-sm"
         >
           <View className="absolute top-0 right-0 p-4 opacity-10">
             <Users size={120} color={colors.primary} />
@@ -365,7 +365,7 @@ export default function InviteClientScreen() {
             backgroundColor: colors.surface,
             borderColor: colors.border,
           }}
-          className="mx-6 mt-6 p-7 rounded-[36px] border shadow-sm"
+          className="mx-3 mt-6 p-7 rounded-[36px] border shadow-sm"
         >
           <View className="flex-row items-center gap-3 mb-6">
             <View
@@ -439,7 +439,7 @@ export default function InviteClientScreen() {
         </MotiView>
 
         {/* How It Works Section */}
-        <View className="px-6 mt-10 mb-8">
+        <View className="px-3 mt-10 mb-8">
           <View className="flex-row items-center justify-between mb-6">
             <Text
               style={{ color: colors.text }}
@@ -514,7 +514,7 @@ export default function InviteClientScreen() {
                 transform: [{ translateY: slideAnim }],
               },
             ]}
-            className="rounded-t-[36px] px-6 pt-3 shadow-2xl"
+            className="rounded-t-[36px] px-3 pt-3 shadow-2xl"
           >
             {/* Drag Handle */}
             <View

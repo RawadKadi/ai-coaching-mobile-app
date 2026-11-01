@@ -387,7 +387,7 @@ export default function CoachMessagesScreen() {
 
           {/* Search Bar */}
           {isSearching && (
-            <View className="px-6 mb-6">
+            <View className="px-3 mb-6">
               <View className="flex-row items-center rounded-3xl px-4 py-2 border shadow-sm" style={{ backgroundColor: colors.surface, borderColor: colors.border }}>
                 <Search size={20} color={colors.primary} />
                 <TextInput
@@ -404,7 +404,7 @@ export default function CoachMessagesScreen() {
           )}
 
           {/* Tab Switch */}
-          <View className="px-6 mb-8">
+          <View className="px-3 mb-8">
             <View 
               onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
               style={{ backgroundColor: colors.surface, borderColor: colors.border }} 
@@ -482,7 +482,7 @@ export default function CoachMessagesScreen() {
                 }
               }}
               keyExtractor={item => 'id' in item ? item.id : item.coach_id}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140 }}
+              contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 140 }}
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               ListEmptyComponent={

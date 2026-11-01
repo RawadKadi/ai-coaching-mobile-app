@@ -87,6 +87,13 @@ export default function CoachLayout() {
         <Stack.Screen name="chat/[id]" />
         <Stack.Screen name="chat/coach/[coachId]" />
         <Stack.Screen name="client-analytics" />
+        <Stack.Screen 
+          name="client-activity" 
+          options={{ 
+            gestureEnabled: true,
+            animation: 'slide_from_right',
+          }} 
+        />
       </Stack>
       
       {/* Absolute Loading Overlay to prevent UI flash, without unmounting the Stack */}

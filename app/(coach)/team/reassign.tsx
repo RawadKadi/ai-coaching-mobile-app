@@ -137,7 +137,7 @@ export default function ReassignClientsScreen() {
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Step 1: Select Clients */}
-        <View className="px-6 mt-8">
+        <View className="px-3 mt-8">
             <View className="flex-row items-center justify-between mb-6">
                 <Text className="text-white text-xl font-black tracking-tighter">1. Select Target Athletes</Text>
                 <View className="bg-blue-600/10 px-3 py-1 rounded-full border border-blue-600/20">
@@ -197,7 +197,7 @@ export default function ReassignClientsScreen() {
 
         {/* Step 2: Select Coach */}
         {clients.length > 0 && (
-          <View className="px-6 mt-10">
+          <View className="px-3 mt-10">
             <Text className="text-white text-xl font-black tracking-tighter mb-6">2. Strategic Deployment</Text>
             
             {coaches.map((c, index) => {

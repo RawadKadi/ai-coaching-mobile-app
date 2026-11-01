@@ -386,7 +386,7 @@ export default function ReviewChallengesScreen() {
             from={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             style={{ backgroundColor: colors.primary }}
-            className="mx-6 mt-8 p-8 rounded-[40px] shadow-2xl"
+            className="mx-3 mt-8 p-8 rounded-[40px] shadow-2xl"
           >
               <View className="flex-row justify-between items-center mb-6">
                  <View className="bg-white/20 px-3 py-1 rounded-full border border-white/30">
@@ -407,7 +407,7 @@ export default function ReviewChallengesScreen() {
 
                   return (
                       <View key={date} className="mb-8">
-                          <View className="px-6 flex-row items-center gap-4 mb-4">
+                          <View className="px-3 flex-row items-center gap-4 mb-4">
                               <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="w-10 h-10 rounded-full items-center justify-center border">
                                   <Calendar size={18} color={colors.textSecondary} />
                               </View>
@@ -417,7 +417,7 @@ export default function ReviewChallengesScreen() {
                               </View>
                           </View>
 
-                          <View className="px-6">
+                          <View className="px-3">
                               {dayTasks.map((task, tidx) => (
                                   <MotiView 
                                     key={task.index}

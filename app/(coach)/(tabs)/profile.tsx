@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   SafeAreaView,
   StatusBar,
   RefreshControl,
+  Animated,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand, useTheme, useBrandColors } from '@/contexts/BrandContext';
@@ -34,16 +36,92 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
+import GoogleIcon from '@/components/GoogleIcon';
+import GoogleMeetGateModal from '@/components/GoogleMeetGateModal';
+import { googleMeetService } from '@/lib/google-meet-service';
 
 export default function CoachProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ scrollToTop?: string }>();
+  const scrollViewRef = useRef<any>(null);
   const { profile, signOut, coach, refreshProfile, user } = useAuth();
-  const { handleScroll } = useTabBarScroll();
+  const { handleScroll, isShrunk } = useTabBarScroll();
+
+  const resetToTop = useCallback(() => {
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    if (isShrunk) {
+      Animated.spring(isShrunk, {
+        toValue: 0,
+        useNativeDriver: false,
+        friction: 8,
+        tension: 50,
+      }).start();
+    }
+  }, [isShrunk]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (params?.scrollToTop) {
+        resetToTop();
+        const timer = setTimeout(resetToTop, 50);
+        router.setParams({ scrollToTop: '' });
+        return () => clearTimeout(timer);
+      }
+    }, [params?.scrollToTop, resetToTop]),
+  );
+
+  useEffect(() => {
+    if (params?.scrollToTop) {
+      resetToTop();
+      const timer = setTimeout(resetToTop, 50);
+      router.setParams({ scrollToTop: '' });
+      return () => clearTimeout(timer);
+    }
+  }, [params?.scrollToTop, resetToTop]);
   const { brand, canManageBrand } = useBrand();
   const colors = useBrandColors();
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isMeetConnected, setIsMeetConnected] = useState(() =>
+    googleMeetService.isConnectedSync(coach),
+  );
+  const [showGoogleMeetGate, setShowGoogleMeetGate] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (coach?.id) {
+        setIsMeetConnected(googleMeetService.isConnectedSync(coach));
+        googleMeetService.isConnected(coach).then(setIsMeetConnected);
+      }
+    }, [coach?.id]),
+  );
+
+  const handleGoogleMeetPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (!coach?.id) return;
+    if (!isMeetConnected) {
+      setShowGoogleMeetGate(true);
+    } else {
+      Alert.alert('Google Meet', 'Google Meet is connected to your account.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            await googleMeetService.disconnect(coach.id);
+            await refreshProfile();
+            setIsMeetConnected(false);
+            Alert.alert('Disconnected', 'Google Meet disconnected.');
+          },
+        },
+        {
+          text: 'Reconnect',
+          onPress: () => setShowGoogleMeetGate(true),
+        },
+      ]);
+    }
+  };
 
   const handleSignOut = async () => {
     console.log('[Coach Logout] Initiate');
@@ -165,6 +243,7 @@ export default function CoachProfileScreen() {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <ScrollView
+          ref={scrollViewRef}
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 140 }}
@@ -186,7 +265,7 @@ export default function CoachProfileScreen() {
           <MotiView
             from={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="items-center pt-10 pb-10 px-6"
+            className="items-center pt-10 pb-10 px-3"
           >
             <View className="relative">
               <View
@@ -294,7 +373,7 @@ export default function CoachProfileScreen() {
           </MotiView>
 
           {/* Menu Sections */}
-          <View className="px-6 space-y-4">
+          <View className="px-3 space-y-4">
             <SectionLabel label="Account" color={colors.primary} />
             <ProfileMenuItem
               icon={<User size={20} color={colors.primary} />}
@@ -303,11 +382,27 @@ export default function CoachProfileScreen() {
               colors={colors}
             />
 
-            <SectionLabel label="Application" color={colors.primary} />
+            <SectionLabel label="Preferences" color={colors.primary} />
             <ProfileMenuItem
-              icon={<Settings size={20} color={colors.textSecondary} />}
-              label="App Settings"
-              onPress={() => router.push('/(coach)/settings')}
+              icon={<Settings size={20} color={colors.primary} />}
+              label="Settings"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                router.push('/(coach)/settings');
+              }}
+              colors={colors}
+            />
+            <ProfileMenuItem
+              icon={<GoogleIcon size={20} />}
+              label="Google Meet"
+              sub={
+                isMeetConnected
+                  ? 'Connected for video calls'
+                  : 'Connect for session links'
+              }
+              onPress={handleGoogleMeetPress}
+              badge={isMeetConnected ? 'Connected' : 'Connect'}
+              badgeColor={isMeetConnected ? '#10B981' : colors.primary}
               colors={colors}
             />
             <ProfileMenuItem
@@ -379,6 +474,18 @@ export default function CoachProfileScreen() {
           </View>
         </ScrollView>
       </View>
+
+      <GoogleMeetGateModal
+        visible={showGoogleMeetGate}
+        coachId={coach?.id}
+        expectedEmail={user?.email}
+        onClose={() => setShowGoogleMeetGate(false)}
+        onConnected={() => {
+          setIsMeetConnected(true);
+          setShowGoogleMeetGate(false);
+          refreshProfile();
+        }}
+      />
     </View>
   );
 }
@@ -398,6 +505,7 @@ const ProfileMenuItem = ({
   sub,
   onPress,
   badge,
+  badgeColor,
   highlighted,
   colors,
 }: any) => (
@@ -426,8 +534,17 @@ const ProfileMenuItem = ({
       )}
     </View>
     {badge && (
-      <View className="bg-blue-600/10 border border-blue-600/20 px-3 py-1 rounded-full mr-3">
-        <Text className="text-blue-500 font-black text-[9px] uppercase">
+      <View
+        style={{
+          backgroundColor: (badgeColor || '#3B82F6') + '15',
+          borderColor: (badgeColor || '#3B82F6') + '30',
+        }}
+        className="border px-3 py-1 rounded-full mr-3"
+      >
+        <Text
+          style={{ color: badgeColor || '#3B82F6' }}
+          className="font-black text-[9px] uppercase"
+        >
           {badge}
         </Text>
       </View>

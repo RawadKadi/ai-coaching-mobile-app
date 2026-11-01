@@ -50,6 +50,8 @@ import { useTheme } from '@/contexts/BrandContext';
 import { isDarkColor } from '@/lib/theme-utils';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import SchedulerModal from '@/components/SchedulerModal';
+import GoogleMeetGateModal from '@/components/GoogleMeetGateModal';
+import { googleMeetService } from '@/lib/google-meet-service';
 import { CoachClientDetailsSkeleton } from '@/components/CoachClientDetailsSkeleton';
 import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
@@ -157,7 +159,7 @@ function MiniBarChart({
 export default function ClientDetailsScreen() {
   const { id, tab } = useLocalSearchParams();
   const router = useRouter();
-  const { coach } = useAuth();
+  const { coach, user } = useAuth();
   const theme = useTheme();
   const colors = theme.colors;
   const [loading, setLoading] = useState(true);
@@ -165,6 +167,8 @@ export default function ClientDetailsScreen() {
   const [client, setClient] = useState<any>(null);
   const [challenges, setChallenges] = useState<any[]>([]);
   const [schedulerVisible, setSchedulerVisible] = useState(false);
+  const [showGoogleMeetGate, setShowGoogleMeetGate] = useState(false);
+  const [isMeetConnected, setIsMeetConnected] = useState(() => googleMeetService.isConnectedSync(coach));
   const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
@@ -597,7 +601,13 @@ export default function ClientDetailsScreen() {
                     </View>
                     <View className="flex-row items-center gap-2">
                         <TouchableOpacity 
-                          onPress={() => setSchedulerVisible(true)} 
+                          onPress={() => {
+                            if (!isMeetConnected && !googleMeetService.isConnectedSync(coach)) {
+                              setShowGoogleMeetGate(true);
+                              return;
+                            }
+                            setSchedulerVisible(true);
+                          }} 
                           className="w-10 h-10 rounded-2xl items-center justify-center border"
                           style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                         >
@@ -1520,6 +1530,18 @@ export default function ClientDetailsScreen() {
           targetClientId={id as string}
         />
       )}
+
+      <GoogleMeetGateModal
+        visible={showGoogleMeetGate}
+        coachId={coach?.id}
+        expectedEmail={user?.email}
+        onClose={() => setShowGoogleMeetGate(false)}
+        onConnected={() => {
+          setIsMeetConnected(true);
+          setShowGoogleMeetGate(false);
+          setSchedulerVisible(true);
+        }}
+      />
 
       {/* Pending Resolutions Modal */}
       <PendingResolutionsModal

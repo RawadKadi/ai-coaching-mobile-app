@@ -90,7 +90,7 @@ export default function CoachPersonalInformationScreen() {
         </View>
 
         <ScrollView 
-          className="flex-1 px-6 pt-6"
+          className="flex-1 px-3 pt-6"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 100 }}
         >

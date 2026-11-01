@@ -58,7 +58,7 @@ export default function TeamWelcomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#020617' }}>
       <SafeAreaView style={{ flex: 1 }}>
-        <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }], paddingHorizontal: 24, justifyContent: 'center', gap: 36 }}>
+        <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }], paddingHorizontal: 12, justifyContent: 'center', gap: 36 }}>
           
           {/* Hero */}
           <View style={{ alignItems: 'center', gap: 20 }}>

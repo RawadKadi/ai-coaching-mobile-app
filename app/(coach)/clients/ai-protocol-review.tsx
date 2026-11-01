@@ -89,7 +89,7 @@ export default function AIProtocolReviewScreen() {
           </View>
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 40 }}>
           <MotiView 
             from={{ opacity: reduceMotion ? 1 : 0, scale: reduceMotion ? 1 : 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -165,7 +165,7 @@ export default function AIProtocolReviewScreen() {
         </ScrollView>
 
         {/* Footer */}
-        <View style={{ paddingHorizontal: 24, paddingVertical: 24, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
+        <View style={{ paddingHorizontal: 12, paddingVertical: 24, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
           <TouchableOpacity 
             onPress={handleSave}
             disabled={saving || selectedIds.length === 0}

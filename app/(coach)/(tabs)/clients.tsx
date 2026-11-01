@@ -392,7 +392,7 @@ export default function ClientsScreen() {
         }
       >
         {/* Tab Switch */}
-        <View className="px-6 mt-8 mb-8">
+        <View className="px-3 mt-8 mb-8">
           <View
             onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
             style={{
@@ -488,7 +488,7 @@ export default function ClientsScreen() {
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
                 }}
-                className="mx-6 p-10 rounded-[48px] border items-center overflow-hidden"
+                className="mx-3 p-10 rounded-[48px] border items-center overflow-hidden"
               >
                 <View className="absolute top-0 right-0 p-4 opacity-10">
                   <Activity size={120} color={colors.primary} />
@@ -524,7 +524,7 @@ export default function ClientsScreen() {
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
                 }}
-                className="mx-6 mt-8 p-8 rounded-[40px] border"
+                className="mx-3 mt-8 p-8 rounded-[40px] border"
               >
                 <View className="flex-row items-center gap-2 mb-8">
                   <View
@@ -572,7 +572,7 @@ export default function ClientsScreen() {
               </View>
 
               {/* Search Bar */}
-              <View className="px-6 mt-10 mb-6 flex-row gap-3">
+              <View className="px-3 mt-10 mb-6 flex-row gap-3">
                 <View
                   style={{
                     backgroundColor: colors.surface,
@@ -593,7 +593,7 @@ export default function ClientsScreen() {
               </View>
 
               {/* Athletes List */}
-              <View className="px-6">
+              <View className="px-3">
                 {loading ? (
                   <ClientCardsSkeleton count={4} />
                 ) : filteredClients.length === 0 ? (
@@ -697,7 +697,7 @@ export default function ClientsScreen() {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
                   }}
-                  className="mx-6 py-20 items-center justify-center rounded-[40px] border border-dashed"
+                  className="mx-3 py-20 items-center justify-center rounded-[40px] border border-dashed"
                 >
                   <Award size={64} color={colors.textSecondary} />
                   <Text
@@ -721,7 +721,7 @@ export default function ClientsScreen() {
                       backgroundColor: colors.surface,
                       borderColor: colors.border,
                     }}
-                    className="mx-6 p-10 rounded-[48px] border items-center overflow-hidden"
+                    className="mx-3 p-10 rounded-[48px] border items-center overflow-hidden"
                   >
                     <View className="absolute top-0 right-0 p-4 opacity-10">
                       <Shield size={120} color={colors.primary} />
@@ -757,7 +757,7 @@ export default function ClientsScreen() {
                       backgroundColor: colors.surface,
                       borderColor: colors.border,
                     }}
-                    className="mx-6 mt-8 p-8 rounded-[40px] border"
+                    className="mx-3 mt-8 p-8 rounded-[40px] border"
                   >
                     <View className="flex-row items-center gap-2 mb-8">
                       <View
@@ -807,7 +807,7 @@ export default function ClientsScreen() {
                   </View>
 
                   {/* Search Bar */}
-                  <View className="px-6 mt-10 mb-6 flex-row gap-3">
+                  <View className="px-3 mt-10 mb-6 flex-row gap-3">
                     <View
                       style={{
                         backgroundColor: colors.surface,
@@ -828,7 +828,7 @@ export default function ClientsScreen() {
                   </View>
 
                   {/* Coaches List */}
-                  <View className="px-6">
+                  <View className="px-3">
                     {loading ? (
                       <ClientCardsSkeleton count={3} />
                     ) : filteredCoaches.length === 0 ? (

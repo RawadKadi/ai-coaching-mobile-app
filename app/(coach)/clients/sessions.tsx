@@ -18,14 +18,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/BrandContext';
 import { isDarkColor } from '@/lib/theme-utils';
 import CoachSubpageHeader from '@/components/CoachSubpageHeader';
+import * as Haptics from 'expo-haptics';
 import SchedulerModal from '@/components/SchedulerModal';
+import GoogleMeetGateModal from '@/components/GoogleMeetGateModal';
+import { googleMeetService } from '@/lib/google-meet-service';
 import PendingResolutionsModal from '@/components/PendingResolutionsModal';
 import ConflictResolutionModal from '@/components/ConflictResolutionModal';
 
 export default function CoachClientSessionsScreen() {
   const { clientId, name, avatar } = useLocalSearchParams<{ clientId: string; name?: string; avatar?: string }>();
   const id = clientId;
-  const { coach } = useAuth();
+  const { coach, user } = useAuth();
   const theme = useTheme();
   const colors = theme.colors;
   const reduceMotion = useReducedMotion();
@@ -40,6 +43,8 @@ export default function CoachClientSessionsScreen() {
   const [allCoachSessions, setAllCoachSessions] = useState<any[]>([]);
   const [pendingResolutions, setPendingResolutions] = useState<any[]>([]);
   const [schedulerVisible, setSchedulerVisible] = useState(false);
+  const [showGoogleMeetGate, setShowGoogleMeetGate] = useState(false);
+  const [isMeetConnected, setIsMeetConnected] = useState(() => googleMeetService.isConnectedSync(coach));
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
   const [currentConflict, setCurrentConflict] = useState<any>(null);
@@ -215,7 +220,14 @@ export default function CoachClientSessionsScreen() {
                     <View className="px-3 pt-3">
                       {/* Action Button */}
                       <TouchableOpacity 
-                        onPress={() => setSchedulerVisible(true)}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                          if (!isMeetConnected && !googleMeetService.isConnectedSync(coach)) {
+                            setShowGoogleMeetGate(true);
+                            return;
+                          }
+                          setSchedulerVisible(true);
+                        }}
                         className="mb-6 h-14 rounded-2xl flex-row items-center justify-center gap-2"
                         style={{ backgroundColor: colors.primary }}
                       >
@@ -502,6 +514,17 @@ export default function CoachClientSessionsScreen() {
           targetClientId={id as string}
         />
       )}
+
+      <GoogleMeetGateModal
+        visible={showGoogleMeetGate}
+        coachId={coach?.id}
+        expectedEmail={user?.email}
+        onClose={() => setShowGoogleMeetGate(false)}
+        onConnected={() => {
+          setShowGoogleMeetGate(false);
+          setSchedulerVisible(true);
+        }}
+      />
 
       <PendingResolutionsModal
         visible={pendingModalVisible}

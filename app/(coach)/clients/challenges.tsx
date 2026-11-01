@@ -165,7 +165,7 @@ export default function CoachClientChallengesScreen() {
       />
 
       {/* Tabs */}
-      <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingVertical: 16 }}>
+      <View style={{ flexDirection: 'row', paddingHorizontal: 12, gap: 8, paddingVertical: 16 }}>
         {(['active', 'history'] as const).map((t) => {
           const selected = tab === t;
           const count = t === 'active' ? activeList.length : historyList.length;

@@ -5,7 +5,7 @@ import { X, Calendar, Clock, AlertCircle, Check, User, ChevronDown, Repeat, Spar
 import { useTheme } from '@/contexts/BrandContext';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
-import { generateGoogleMeetUrl } from '@/utils/session';
+import { generateGoogleMeetUrl, createSessionMeetLink } from '@/utils/session';
 import { availabilityService } from '@/lib/availability-service';
 import { supabase } from '@/lib/supabase';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
@@ -459,11 +459,12 @@ export default function ManualSchedulerModal({
         if (!selectedClient || !selectedTime || !coachId) return;
         setLoading(true);
         try {
+            const meetLink = await createSessionMeetLink(coachId);
             const sessionsToInsert: any[] = [];
             if (recurrence === 'once') {
                 for (const date of selectedDates) {
                     const sessionTime = new Date(date); sessionTime.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
-                    sessionsToInsert.push(generateSessionObject(sessionTime));
+                    sessionsToInsert.push(generateSessionObject(sessionTime, meetLink));
                 }
             } else {
                 const WEEKS = 4; const nextOccurrences = getNextOccurrencesOfWeekdays();
@@ -471,7 +472,7 @@ export default function ManualSchedulerModal({
                     const baseDate = new Date(date); baseDate.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
                     for (let i = 0; i < WEEKS; i++) {
                         const sessionTime = new Date(baseDate); sessionTime.setDate(baseDate.getDate() + (i * 7));
-                        sessionsToInsert.push(generateSessionObject(sessionTime));
+                        sessionsToInsert.push(generateSessionObject(sessionTime, meetLink));
                     }
                 }
             }
@@ -482,10 +483,10 @@ export default function ManualSchedulerModal({
         } catch (e: any) { Alert.alert('Error', e.message); } finally { setLoading(false); }
     };
 
-    const generateSessionObject = (time: Date) => ({
+    const generateSessionObject = (time: Date, meetLink?: string) => ({
         coach_id: coachId, client_id: selectedClient?.id, scheduled_at: time.toISOString(),
         duration_minutes: duration, session_type: sessionType, status: 'scheduled', is_locked: true, ai_generated: false,
-        meet_link: generateGoogleMeetUrl(),
+        meet_link: meetLink || generateGoogleMeetUrl(),
         notes: notes || `Manual ${sessionType} session with ${selectedClient?.profiles.full_name}`
     });
 
@@ -597,7 +598,7 @@ export default function ManualSchedulerModal({
                     </View>
 
                     <ScrollView ref={scrollRef} className="flex-1 px-0" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                        <View className="px-6 pt-8 pb-12">
+                        <View className="px-3 pt-6 pb-12">
                                 {step === 'client' && (
                                     <View>
                                         {/* Banner Hero Section */}
@@ -726,7 +727,7 @@ export default function ManualSchedulerModal({
                                                          <ArrowRight size={10} color={colors.textSecondary} />
                                                     </View>
                                                 </View>
-                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6 mb-12 px-6">
+                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-3 mb-12 px-3">
                                                     <View className="flex-row gap-3 pr-12">
                                                         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
                                                             const dayIdx = (i + 1) % 7;
@@ -1100,7 +1101,7 @@ export default function ManualSchedulerModal({
                             borderTopColor: colors.border,
                             paddingBottom: Math.max(insets.bottom + 16, 28)
                         }}
-                        className="p-6 border-t flex-row gap-4 items-center"
+                        className="px-3 py-4 border-t flex-row gap-3 items-center"
                     >
                         <Pressable 
                             onPressIn={() => handlePressIn(backBtnScale)}

@@ -711,9 +711,16 @@ export default function ClientDashboard() {
             />
 
             <TouchableOpacity
-              onPress={() => router.push('/(client)/(tabs)/profile')}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                router.push({
+                  pathname: '/(client)/(tabs)/profile',
+                  params: { scrollToTop: Date.now().toString() },
+                });
+              }}
               style={{ backgroundColor: cardBg, borderColor: cardBorder }}
               className="p-1 rounded-full border shadow-2xl relative"
+              activeOpacity={0.7}
             >
               <BrandedAvatar
                 size={44}

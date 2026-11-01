@@ -217,7 +217,7 @@ export default function CoachChallengesDashboard() {
             <MotiView 
               from={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="px-6 mt-12 items-center"
+              className="px-3 mt-12 items-center"
             >
               <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="w-20 h-20 rounded-full items-center justify-center border mb-6">
                 <Target size={32} color={colors.textSecondary} />
@@ -296,7 +296,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                 animate={{ opacity: 1, scale: 1 }} 
                 transition={{ delay: index * 100 }}
                 style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                className="mx-6 border rounded-[40px] p-8 mb-6 overflow-hidden"
+                className="mx-3 border rounded-[40px] p-8 mb-6 overflow-hidden"
             >
                 <View style={{ backgroundColor: colors.primary + '10' }} className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-16 -mt-16" />
                 

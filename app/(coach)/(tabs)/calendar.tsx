@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Platform, RefreshControl, ScrollView, Animated, StatusBar, Dimensions, Alert, Modal, TouchableOpacity } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -15,9 +16,11 @@ import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import PostponeModal from '@/components/PostponeModal';
+import GoogleMeetGateModal from '@/components/GoogleMeetGateModal';
+import { googleMeetService } from '@/lib/google-meet-service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CALENDAR_BOX_MARGIN = 24;
+const CALENDAR_BOX_MARGIN = 12;
 const CALENDAR_BOX_PADDING = 24;
 const PAGE_WIDTH = SCREEN_WIDTH - (CALENDAR_BOX_MARGIN * 2) - (CALENDAR_BOX_PADDING * 2);
 
@@ -138,7 +141,7 @@ const AnimatedSessionCard = React.memo(({ session, onPress, onLongPress }: Anima
 AnimatedSessionCard.displayName = 'AnimatedSessionCard';
 
 export default function CalendarScreen() {
-  const { profile, coach } = useAuth();
+  const { profile, coach, user } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
@@ -153,6 +156,8 @@ export default function CalendarScreen() {
   const [viewingMonth, setViewingMonth] = useState(new Date());
   const [showManualScheduler, setShowManualScheduler] = useState(false);
   const [showAIScheduler, setShowAIScheduler] = useState(false);
+  const [showGoogleMeetGate, setShowGoogleMeetGate] = useState(false);
+  const [isMeetConnected, setIsMeetConnected] = useState(() => googleMeetService.isConnectedSync(coach));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [initialClientData, setInitialClientData] = useState<any>(null);
@@ -377,6 +382,12 @@ export default function CalendarScreen() {
   }, [selectedClient, showManualScheduler, showAIScheduler]);
 
   useFocusEffect(useCallback(() => {
+    if (coach?.id) {
+      googleMeetService.isConnected(coach).then(setIsMeetConnected);
+    }
+  }, [coach?.id]));
+
+  useFocusEffect(useCallback(() => {
     if (coach?.id) loadSessions();
     if (params?.resetToToday === 'true') {
       const today = new Date();
@@ -492,14 +503,14 @@ export default function CalendarScreen() {
                   You have {currentDaySessions.length} sessions scheduled for today.
               </Text>
           </View>
-          <View className="px-8 flex-row justify-end mb-2 opacity-40">
+          <View className="px-4 flex-row justify-end mb-2 opacity-40">
               <View className="flex-row items-center gap-1">
                   <ChevronsLeftRight size={14} color={colors.textSecondary} />
                   <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase">Swipe</Text>
               </View>
           </View>
           {/* Calendar Box */}
-          <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="rounded-[48px] p-6 mx-6 my-4 border">
+          <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="rounded-[48px] p-6 mx-3 my-4 border">
               <View className="flex-row justify-between mb-6 px-2">
                   <View className="flex-row flex-1 justify-between">
                     {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, i) => (
@@ -537,7 +548,7 @@ export default function CalendarScreen() {
           </View>
 
           <ScrollView 
-              className="flex-1 px-4 mt-6"
+              className="flex-1 px-3 mt-4"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 160 }}
               onScroll={handleScroll}
@@ -629,7 +640,14 @@ export default function CalendarScreen() {
            <Pressable 
                onPressIn={() => handlePressIn(plusBtnScale)}
                onPressOut={() => handlePressOut(plusBtnScale)}
-               onPress={() => setShowManualScheduler(true)}
+               onPress={() => {
+                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                   if (!isMeetConnected && !googleMeetService.isConnectedSync(coach)) {
+                       setShowGoogleMeetGate(true);
+                       return;
+                   }
+                   setShowManualScheduler(true);
+               }}
                style={{ 
                    bottom: insets.bottom + 90, 
                    position: 'absolute',
@@ -665,6 +683,18 @@ export default function CalendarScreen() {
                   clientContext={selectedClient} targetClientId={selectedClient.id} existingSessions={sessions}
               />
           )}
+          <GoogleMeetGateModal
+            visible={showGoogleMeetGate}
+            coachId={coach?.id}
+            expectedEmail={user?.email}
+            onClose={() => setShowGoogleMeetGate(false)}
+            onConnected={() => {
+              setIsMeetConnected(true);
+              setShowGoogleMeetGate(false);
+              setShowManualScheduler(true);
+            }}
+          />
+
           {/* Date Picker Overlay */}
           <DatePickerOverlay
             visible={showDatePicker}

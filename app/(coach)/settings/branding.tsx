@@ -2225,7 +2225,7 @@ function FullPreviewContent({
         contentContainerStyle={{
           paddingTop: insets.top + 40,
           paddingBottom: 60,
-          paddingHorizontal: 20,
+          paddingHorizontal: 12,
         }}
       >
         {/* Brand Header */}
@@ -2410,7 +2410,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     paddingTop: 20,
   },
   cardsStack: {
@@ -2826,7 +2826,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     paddingTop: 12,
     borderTopWidth: 1,
   },

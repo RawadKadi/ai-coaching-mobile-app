@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
   StatusBar,
   RefreshControl,
+  Animated,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
@@ -118,6 +119,8 @@ const ProfileMenuItem = ({
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ scrollToTop?: string }>();
+  const scrollViewRef = useRef<any>(null);
   const {
     profile,
     client,
@@ -126,7 +129,39 @@ export default function ProfileScreen() {
     loading: authLoading,
     user,
   } = useAuth();
-  const { handleScroll } = useTabBarScroll();
+  const { handleScroll, isShrunk } = useTabBarScroll();
+
+  const resetToTop = useCallback(() => {
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    if (isShrunk) {
+      Animated.spring(isShrunk, {
+        toValue: 0,
+        useNativeDriver: false,
+        friction: 8,
+        tension: 50,
+      }).start();
+    }
+  }, [isShrunk]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (params?.scrollToTop) {
+        resetToTop();
+        const timer = setTimeout(resetToTop, 50);
+        router.setParams({ scrollToTop: '' });
+        return () => clearTimeout(timer);
+      }
+    }, [params?.scrollToTop, resetToTop]),
+  );
+
+  useEffect(() => {
+    if (params?.scrollToTop) {
+      resetToTop();
+      const timer = setTimeout(resetToTop, 50);
+      router.setParams({ scrollToTop: '' });
+      return () => clearTimeout(timer);
+    }
+  }, [params?.scrollToTop, resetToTop]);
   const theme = useTheme();
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#020617');
@@ -325,6 +360,7 @@ export default function ProfileScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <ScrollView
+          ref={scrollViewRef}
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 140 }}
@@ -429,9 +465,12 @@ export default function ProfileScreen() {
             <SectionLabel label="Preferences" color={colors.primary} />
 
             <ProfileMenuItem
-              icon={<Settings size={20} color={colors.textSecondary} />}
-              label="App Settings"
-              onPress={() => {}}
+              icon={<Settings size={20} color={colors.primary} />}
+              label="Settings"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                router.push('/(client)/settings');
+              }}
               colors={colors}
             />
             <ProfileMenuItem

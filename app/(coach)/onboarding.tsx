@@ -27,6 +27,7 @@ import { getFontFamily } from '@/hooks/useAppFonts';
 import Step2 from '@/components/onboarding/coach/Step2';
 import Slide2b from '@/components/onboarding/coach/Slide2b';
 import Step3 from '@/components/onboarding/coach/Step3';
+import GoogleMeetStep from '@/components/onboarding/coach/GoogleMeetStep';
 import Step4 from '@/components/onboarding/coach/Step4';
 
 // Auto-persist Formik values to AsyncStorage
@@ -40,7 +41,7 @@ const PersistFormikValues = () => {
   return null;
 };
 
-const TOTAL_FORM_STEPS = 6; // Form inputs and informational slides; step 7 is success
+const TOTAL_FORM_STEPS = 7; // Form inputs, Google Meet connect, and slides; step 8 is success
 
 export default function CoachOnboardingScreen() {
   const router = useRouter();
@@ -444,6 +445,9 @@ export default function CoachOnboardingScreen() {
                     toggleWeekday={toggleWeekday}
                   />
                 )}
+                {!success && step === 7 && (
+                  <GoogleMeetStep />
+                )}
                 {success && (
                   <Step4 coachName={profile?.full_name?.split(' ')[0]} />
                 )}
@@ -479,7 +483,7 @@ export default function CoachOnboardingScreen() {
                     ) : (
                       <>
                         <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 17, fontFamily: activeHeadingFont }}>
-                          {step === 6 ? 'Activate Workspace' : 'Next'}
+                          {step === TOTAL_FORM_STEPS ? 'Activate Workspace' : 'Next'}
                         </Text>
                         <ChevronRight size={20} color="white" />
                       </>

@@ -1,17 +1,35 @@
 import { Alert, Linking } from 'react-native';
+import { googleMeetService } from '@/lib/google-meet-service';
 
 /**
- * Generates a clean default Google Meet URL (https://meet.google.com/new).
- * Google Meet creates live meeting rooms on-demand via /new.
+ * Creates a real Google Meet space using Google Meet REST API v2 if connected,
+ * or returns a fallback Google Meet URL.
+ */
+export async function createSessionMeetLink(coachId?: string): Promise<string> {
+  if (coachId) {
+    try {
+      const isConnected = await googleMeetService.isConnected({ id: coachId } as any);
+      if (isConnected) {
+        const spaceUrl = await googleMeetService.createMeetingSpace(coachId);
+        if (spaceUrl) return spaceUrl;
+      }
+    } catch (e) {
+      console.warn('[Session] Failed to auto-create Google Meet space:', e);
+    }
+  }
+  return 'https://meet.google.com';
+}
+
+/**
+ * Default generator (synchronous fallback)
  */
 export function generateGoogleMeetUrl(): string {
-  return 'https://meet.google.com/new';
+  return 'https://meet.google.com';
 }
 
 /**
  * Validates and opens a Google Meet session link via external deep linking.
  * - If a custom valid Google Meet URL is stored (e.g. https://meet.google.com/abc-defg-hij), opens that meeting room.
- * - If missing, legacy, or unformatted, opens https://meet.google.com/new to launch an instant meeting cleanly without "No such meeting" errors.
  */
 export async function joinSession(meetingUrl?: string | null, sessionId?: string) {
   let targetUrl = meetingUrl ? meetingUrl.trim() : '';
@@ -20,10 +38,9 @@ export async function joinSession(meetingUrl?: string | null, sessionId?: string
   if (
     !targetUrl ||
     targetUrl.startsWith('coachingapp://') ||
-    targetUrl.includes('jit.si') ||
     targetUrl.includes('pending')
   ) {
-    targetUrl = 'https://meet.google.com/new';
+    targetUrl = 'https://meet.google.com';
   } else if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
     targetUrl = `https://${targetUrl}`;
   }

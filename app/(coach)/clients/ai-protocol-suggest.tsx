@@ -153,7 +153,7 @@ export default function AIProtocolSuggestScreen() {
 
         <ScrollView 
             style={{ flex: 1 }} 
-            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 40 }}
             showsVerticalScrollIndicator={false}
         >
             {step === 1 && (
@@ -275,7 +275,7 @@ export default function AIProtocolSuggestScreen() {
         </ScrollView>
 
         {/* Footer Navigation */}
-        <View style={{ paddingHorizontal: 24, paddingVertical: 24, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
+        <View style={{ paddingHorizontal: 12, paddingVertical: 24, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
             <TouchableOpacity 
               onPress={() => {
                 if (step < 3) setStep(step + 1);

@@ -267,7 +267,7 @@ export default function SubCoachDetailsScreen() {
         <MotiView
           from={{ opacity: 0, translateY: 20 }}
           animate={{ opacity: 1, translateY: 0 }}
-          className="mx-6 mt-8 p-10 rounded-[48px] bg-slate-900/40 border border-white/5 items-center overflow-hidden"
+          className="mx-3 mt-8 p-10 rounded-[48px] bg-slate-900/40 border border-white/5 items-center overflow-hidden"
         >
             <View className="absolute top-0 right-0 p-4 opacity-10">
                 <Shield size={120} color={theme.colors.primary} />
@@ -300,7 +300,7 @@ export default function SubCoachDetailsScreen() {
         </MotiView>
 
         {/* Stats Section */}
-        <View className="flex-row px-6 mt-8 gap-4">
+        <View className="flex-row px-3 mt-8 gap-4">
             <MotiView 
                 from={{ opacity: 0, scale: 0.9 }} 
                 animate={{ opacity: 1, scale: 1 }}
@@ -328,7 +328,7 @@ export default function SubCoachDetailsScreen() {
         </View>
 
         {/* Clients Section */}
-        <View className="px-6 mt-10">
+        <View className="px-3 mt-10">
             <View className="flex-row items-center justify-between mb-8">
                 <Text className="text-white text-xl font-black tracking-tighter">Assigned Roster</Text>
                 <TouchableOpacity 

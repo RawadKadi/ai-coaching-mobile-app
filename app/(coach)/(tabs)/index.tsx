@@ -1,6 +1,6 @@
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
-import { isDarkColor } from '@/lib/theme-utils';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { isDarkColor, hexToRGB } from '@/lib/theme-utils';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -12,16 +12,23 @@ import {
   Modal,
   TextInput,
   Dimensions,
+  StyleSheet,
+  Platform,
+  Animated,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/BrandedText';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { MotiView } from 'moti';
+import * as Haptics from 'expo-haptics';
+import { MotiView, AnimatePresence } from 'moti';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnread } from '@/contexts/UnreadContext';
 import { supabase } from '@/lib/supabase';
 import {
+  User,
   Users,
   MessageSquare,
   ClipboardCheck,
@@ -49,7 +56,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePresence } from '@/contexts/PresenceContext';
 import SchedulerModal from '@/components/SchedulerModal';
 import { AnalyticsSparkline } from '@/components/AnalyticsSparkline';
-import { AnalyticsDetailedModal } from '@/components/AnalyticsDetailedModal';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import { useGreeting } from '@/hooks/useGreeting';
 import { joinSession } from '@/utils/session';
@@ -98,7 +104,15 @@ export default function CoachDashboard() {
   const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
   const [hasMoreCheckins, setHasMoreCheckins] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const { onlineUserIds } = usePresence();
+  const reduceMotion = useReducedMotion();
+  const { onlineUserIds, isUserOnline } = usePresence();
+  const [isPresenceDropdownOpen, setIsPresenceDropdownOpen] = useState(false);
+  const touchInsideDropdownRef = useRef(false);
+  const [dashboardClients, setDashboardClients] = useState<any[]>([]);
+  const [teamCoaches, setTeamCoaches] = useState<any[]>([]);
+  const [recentInteractionMap, setRecentInteractionMap] = useState<
+    Record<string, number>
+  >({});
   const [clientUserIds, setClientUserIds] = useState<string[]>([]);
   const [stats, setStats] = useState({
     totalClients: 0,
@@ -150,7 +164,6 @@ export default function CoachDashboard() {
   const [allSessions, setAllSessions] = useState<any[]>([]);
   const [clientSearch, setClientSearch] = useState('');
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
-  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
 
   // Plan sent success modal
@@ -269,12 +282,16 @@ export default function CoachDashboard() {
       const todayEnd = new Date();
       todayEnd.setHours(23, 59, 59, 999);
 
+      const coachUserId = profile?.id || (coach as any)?.user_id;
+
       const [
         statsResult,
         checkinsResult,
         clientsResult,
         challengesResult,
         sessionResult,
+        teamCoachesResult,
+        recentMessagesResult,
       ] = await Promise.all([
         supabase.rpc('get_coach_stats'),
         supabase.rpc('get_recent_checkins', { p_cursor: null, p_limit: 15 }),
@@ -292,6 +309,15 @@ export default function CoachDashboard() {
           .order('scheduled_at', { ascending: true })
           .limit(1)
           .maybeSingle(),
+        supabase.rpc('get_team_coaches'),
+        coachUserId
+          ? supabase
+              .from('messages')
+              .select('created_at, sender_id, recipient_id')
+              .or(`sender_id.eq.${coachUserId},recipient_id.eq.${coachUserId}`)
+              .order('created_at', { ascending: false })
+              .limit(250)
+          : Promise.resolve({ data: [] }),
       ]);
 
       const activeChallengesCount = (challengesResult?.data || []).filter(
@@ -354,6 +380,21 @@ export default function CoachDashboard() {
         );
         setStreakChampions(activeStreakList);
       }
+
+      setDashboardClients(clientsResult.data || []);
+      setTeamCoaches(teamCoachesResult?.data || []);
+
+      const interactionMap: Record<string, number> = {};
+      if (recentMessagesResult?.data) {
+        recentMessagesResult.data.forEach((m: any) => {
+          const otherId =
+            m.sender_id === coachUserId ? m.recipient_id : m.sender_id;
+          if (otherId && !interactionMap[otherId]) {
+            interactionMap[otherId] = new Date(m.created_at).getTime();
+          }
+        });
+      }
+      setRecentInteractionMap(interactionMap);
 
       setRecentCheckins(checkinsResult.data || []);
       setHasMoreCheckins((checkinsResult.data || []).length === 15);
@@ -709,10 +750,286 @@ export default function CoachDashboard() {
     borderWidth: 1,
   };
 
+  const brandBgHex = isDark
+    ? (brand?.dark_background_color || colors.background || '#0F172A')
+    : (brand?.background_color || colors.background || '#FFFFFF');
+  const bgRgb = hexToRGB(brandBgHex);
+  const topBarBg = `rgba(${bgRgb.r}, ${bgRgb.g}, ${bgRgb.b}, ${isDark ? 0.72 : 0.82})`;
+
+  const borderHex = colors.border || (isDark ? '#334155' : '#E2E8F0');
+  const borderRgb = hexToRGB(borderHex);
+  const topBarBorder = `rgba(${borderRgb.r}, ${borderRgb.g}, ${borderRgb.b}, ${isDark ? 0.35 : 0.55})`;
+
+  const topBarHeight = insets.top + 68;
+  const headerAnim = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
+  const isHeaderHidden = useRef(false);
+
+  const handleDashboardScroll = (event: any) => {
+    handleScroll(event);
+
+    const currentScrollY = event.nativeEvent.contentOffset.y;
+
+    if (currentScrollY <= 15) {
+      if (isHeaderHidden.current) {
+        isHeaderHidden.current = false;
+        Animated.spring(headerAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 8,
+          tension: 50,
+        }).start();
+      }
+      lastScrollY.current = currentScrollY;
+      return;
+    }
+
+    const diff = currentScrollY - lastScrollY.current;
+
+    if (Math.abs(diff) > 8) {
+      if (diff > 0 && currentScrollY > 60) {
+        // Scrolling DOWN -> Hide bar
+        if (!isHeaderHidden.current) {
+          isHeaderHidden.current = true;
+          if (isPresenceDropdownOpen) {
+            setIsPresenceDropdownOpen(false);
+          }
+          Animated.timing(headerAnim, {
+            toValue: -topBarHeight,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        }
+      } else if (diff < 0) {
+        // Scrolling UP -> Show bar
+        if (isHeaderHidden.current) {
+          isHeaderHidden.current = false;
+          Animated.spring(headerAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 8,
+            tension: 50,
+          }).start();
+        }
+      }
+      lastScrollY.current = currentScrollY;
+    }
+  };
+
   const rawFirstName = profile?.full_name?.split(' ')[0] || '';
   const firstName = rawFirstName
     ? rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1)
     : '';
+
+  useEffect(() => {
+    const coachUserId = profile?.id || (coach as any)?.user_id;
+    if (!coachUserId) return;
+
+    const sub = supabase
+      .channel('coach-dashboard-messages-presence')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const msg = payload.new;
+          if (
+            msg &&
+            (msg.sender_id === coachUserId || msg.recipient_id === coachUserId)
+          ) {
+            const otherId =
+              msg.sender_id === coachUserId
+                ? msg.recipient_id
+                : msg.sender_id;
+            if (otherId) {
+              setRecentInteractionMap((prev) => ({
+                ...prev,
+                [otherId]: new Date(msg.created_at).getTime(),
+              }));
+            }
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [profile?.id, coach?.user_id]);
+
+  const { onlineClients, onlineCoaches, offlineUsers, totalOnline } = useMemo(() => {
+    const onClients: any[] = [];
+    const offClients: any[] = [];
+
+    (dashboardClients || []).forEach((c: any) => {
+      const uId = c.user_id || c.client_user_id;
+      const online = uId ? isUserOnline(uId) : false;
+      const item = {
+        type: 'client',
+        id: c.client_id,
+        userId: uId,
+        name: c.client_name || 'Client',
+        avatarUrl: c.client_avatar,
+        isOnline: online,
+        lastInteractionTime: uId ? recentInteractionMap[uId] || 0 : 0,
+      };
+      if (online) {
+        onClients.push(item);
+      } else {
+        offClients.push(item);
+      }
+    });
+
+    const onCoaches: any[] = [];
+    const offCoaches: any[] = [];
+
+    (teamCoaches || []).forEach((tc: any) => {
+      const uId = tc.user_id;
+      const online = uId ? isUserOnline(uId) : false;
+      const item = {
+        type: 'coach',
+        coachId: tc.coach_id,
+        userId: uId,
+        name: tc.full_name || 'Coach',
+        avatarUrl: tc.avatar_url,
+        isOnline: online,
+        lastInteractionTime: uId ? recentInteractionMap[uId] || 0 : 0,
+      };
+      if (online) {
+        onCoaches.push(item);
+      } else {
+        offCoaches.push(item);
+      }
+    });
+
+    // Offline section includes all offline coaches and offline clients
+    // Sorted by recent interactions (latest message time first)
+    const combinedOffline = [...offClients, ...offCoaches].sort((a, b) => {
+      if (b.lastInteractionTime !== a.lastInteractionTime) {
+        return b.lastInteractionTime - a.lastInteractionTime;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    return {
+      onlineClients: onClients,
+      onlineCoaches: onCoaches,
+      offlineUsers: combinedOffline,
+      totalOnline: onClients.length + onCoaches.length,
+    };
+  }, [
+    dashboardClients,
+    teamCoaches,
+    recentInteractionMap,
+    onlineUserIds,
+    isUserOnline,
+  ]);
+
+  const handleNavigateToMessage = (item: any) => {
+    setIsPresenceDropdownOpen(false);
+    if (item.type === 'client') {
+      router.push({
+        pathname: '/(coach)/chat/[id]',
+        params: { id: item.id },
+      });
+    } else if (item.type === 'coach') {
+      router.push({
+        pathname: '/(coach)/chat/coach/[coachId]',
+        params: {
+          coachId: item.coachId,
+          userId: item.userId,
+          fullName: item.name,
+          avatarUrl: item.avatarUrl || '',
+        },
+      });
+    }
+  };
+
+  const renderUserCard = (item: any) => (
+    <TouchableOpacity
+      key={`${item.type}-${item.id || item.coachId || item.userId}`}
+      activeOpacity={0.7}
+      onPress={() => handleNavigateToMessage(item)}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 16,
+        backgroundColor: isDark
+          ? 'rgba(255, 255, 255, 0.04)'
+          : 'rgba(0, 0, 0, 0.02)',
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: isDark
+          ? 'rgba(255, 255, 255, 0.06)'
+          : 'rgba(0, 0, 0, 0.05)',
+      }}
+    >
+      <View style={{ position: 'relative', marginRight: 12 }}>
+        <BrandedAvatar name={item.name} imageUrl={item.avatarUrl} size={38} />
+        {item.isOnline && (
+          <View
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: 10,
+              height: 10,
+              borderRadius: 5,
+              backgroundColor: '#22C55E',
+              borderWidth: 1.5,
+              borderColor: cardBg,
+            }}
+          />
+        )}
+      </View>
+
+      <View style={{ flex: 1, marginRight: 8 }}>
+        <Text
+          numberOfLines={1}
+          style={{
+            color: textColor,
+            fontSize: 14,
+            fontWeight: '700',
+          }}
+        >
+          {item.name}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={{
+            color: textSecondaryColor,
+            fontSize: 11,
+            fontWeight: '500',
+            marginTop: 1,
+          }}
+        >
+          {item.type === 'coach' ? 'Coach' : 'Client'}
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => handleNavigateToMessage(item)}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: `${colors.primary}18`,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`Message ${item.name}`}
+      >
+        <MessageSquare size={16} color={colors.primary} />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
 
   if (loading && !refreshing) {
     return (
@@ -732,17 +1049,496 @@ export default function CoachDashboard() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+
+      {/* Fixed Blur Top Bar */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          transform: [{ translateY: headerAnim }],
+        }}
+      >
+        <View
+          style={{
+            borderBottomWidth: 1,
+            borderColor: topBarBorder,
+            overflow: 'hidden',
+          }}
+        >
+          <BlurView
+            intensity={Platform.OS === 'ios' ? 70 : 100}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: topBarBg,
+              },
+            ]}
+          />
+
+          <View
+            style={{
+              paddingTop: insets.top + 8,
+              paddingBottom: 12,
+              paddingHorizontal: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+          {/* Brand profile & name */}
+          <View className="flex-row items-center gap-3">
+            {brand?.logo_url ? (
+              <Image
+                source={{ uri: brand.logo_url }}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: isDark
+                    ? 'rgba(255,255,255,0.12)'
+                    : 'rgba(0,0,0,0.06)',
+                }}
+                contentFit="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  backgroundColor: colors.primary + '20',
+                  borderColor: colors.primary + '35',
+                }}
+                className="border items-center justify-center"
+              >
+                <Text
+                  style={{ color: colors.primary }}
+                  className="text-xl font-black"
+                >
+                  {brand?.name
+                    ? brand.name.charAt(0).toUpperCase()
+                    : coach?.business_name
+                      ? coach.business_name.charAt(0).toUpperCase()
+                      : 'C'}
+                </Text>
+              </View>
+            )}
+            <View>
+              <Text
+                style={{ color: textColor }}
+                className="text-lg font-black tracking-tight"
+                numberOfLines={1}
+              >
+                {brand?.name || coach?.business_name || 'Coaching'}
+              </Text>
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-[10px] font-bold uppercase tracking-wider"
+              >
+                Coach Portal
+              </Text>
+            </View>
+          </View>
+
+          {/* Right section: Online Tag + Coach Profile */}
+          <View className="flex-row items-center gap-2.5">
+            {/* Online Tag */}
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                setIsPresenceDropdownOpen((prev) => !prev);
+              }}
+              style={{
+                backgroundColor: cardBg,
+                borderColor: isPresenceDropdownOpen
+                  ? colors.primary
+                  : cardBorder,
+                borderWidth: 1,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 20,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Online now: ${totalOnline}`}
+            >
+              <View style={{ position: 'relative' }}>
+                <User size={18} color={textColor} />
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -1,
+                    right: -3,
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: '#22C55E',
+                    borderWidth: 1.5,
+                    borderColor: cardBg,
+                  }}
+                />
+              </View>
+              <Text
+                style={{
+                  color: textColor,
+                  fontSize: 13,
+                  fontWeight: '700',
+                }}
+              >
+                {totalOnline}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Coach Profile Avatar */}
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                router.push({
+                  pathname: '/(coach)/(tabs)/profile',
+                  params: { scrollToTop: Date.now().toString() },
+                });
+              }}
+              className="p-1 rounded-full relative"
+              style={{
+                backgroundColor: colors.surface,
+                borderColor: cardBorder,
+                borderWidth: 1,
+              }}
+              activeOpacity={0.7}
+            >
+              <BrandedAvatar
+                name={profile?.full_name || 'Coach'}
+                imageUrl={profile?.avatar_url}
+                size={42}
+              />
+              <View
+                style={{ backgroundColor: colors.primary }}
+                className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-slate-900"
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Animated.View>
+
+      {/* Floating Tooltip Dropdown for Online People */}
+      <AnimatePresence>
+        {isPresenceDropdownOpen && (
+          <MotiView
+            key="presence-dropdown-bubble"
+            from={{
+              opacity: reduceMotion ? 1 : 0,
+              scale: reduceMotion ? 1 : 0.05,
+              translateY: reduceMotion ? 0 : -20,
+            }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              translateY: 0,
+            }}
+            exit={{
+              opacity: reduceMotion ? 1 : 0,
+              scale: reduceMotion ? 1 : 0.05,
+              translateY: reduceMotion ? 0 : -20,
+            }}
+            transition={{
+              type: 'spring',
+              damping: 18,
+              stiffness: 240,
+              mass: 0.65,
+            } as any}
+            exitTransition={{
+              type: 'spring',
+              damping: 22,
+              stiffness: 280,
+              mass: 0.6,
+            } as any}
+            style={{
+              position: 'absolute',
+              top: insets.top + 64,
+              right: 16,
+              width: Math.min(SCREEN_WIDTH - 32, 340),
+              zIndex: 150,
+              transformOrigin: '76% 0%',
+            }}
+          >
+            {/* Tooltip arrow pointing up to the online tag */}
+            <View
+              style={{
+                position: 'absolute',
+                top: -5,
+                right: 76,
+                width: 12,
+                height: 12,
+                backgroundColor: cardBg,
+                borderColor: cardBorder,
+                borderTopWidth: 1,
+                borderLeftWidth: 1,
+                transform: [{ rotate: '45deg' }],
+                zIndex: 10,
+              }}
+            />
+
+            <View
+              onTouchStart={() => {
+                touchInsideDropdownRef.current = true;
+              }}
+              onTouchEnd={() => {
+                setTimeout(() => {
+                  touchInsideDropdownRef.current = false;
+                }, 200);
+              }}
+              onTouchCancel={() => {
+                touchInsideDropdownRef.current = false;
+              }}
+              style={{
+                backgroundColor: cardBg,
+                borderColor: cardBorder,
+                borderWidth: 1,
+                borderRadius: 24,
+                maxHeight: 380,
+                overflow: 'hidden',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: isDark ? 0.45 : 0.15,
+                shadowRadius: 18,
+                elevation: 16,
+              }}
+            >
+              <ScrollView
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+                style={{ maxHeight: 380 }}
+                contentContainerStyle={{ padding: 16 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Section 1: Online Clients */}
+                {onlineClients.length > 0 && (
+                  <View style={{ marginBottom: 16 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginBottom: 8,
+                        paddingHorizontal: 4,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: '#22C55E',
+                          marginRight: 8,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: textColor,
+                          fontSize: 12,
+                          fontWeight: '800',
+                          letterSpacing: 0.5,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Online Clients
+                      </Text>
+                      <View
+                        style={{
+                          marginLeft: 8,
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                          borderRadius: 10,
+                          backgroundColor: '#22C55E20',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: '#22C55E',
+                            fontSize: 11,
+                            fontWeight: '700',
+                          }}
+                        >
+                          {onlineClients.length}
+                        </Text>
+                      </View>
+                    </View>
+                    {onlineClients.map(renderUserCard)}
+                  </View>
+                )}
+
+                {/* Section 2: Online Coaches */}
+                {onlineCoaches.length > 0 && (
+                  <View style={{ marginBottom: 16 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginBottom: 8,
+                        paddingHorizontal: 4,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: '#22C55E',
+                          marginRight: 8,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: textColor,
+                          fontSize: 12,
+                          fontWeight: '800',
+                          letterSpacing: 0.5,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Online Coaches
+                      </Text>
+                      <View
+                        style={{
+                          marginLeft: 8,
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                          borderRadius: 10,
+                          backgroundColor: '#22C55E20',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: '#22C55E',
+                            fontSize: 11,
+                            fontWeight: '700',
+                          }}
+                        >
+                          {onlineCoaches.length}
+                        </Text>
+                      </View>
+                    </View>
+                    {onlineCoaches.map(renderUserCard)}
+                  </View>
+                )}
+
+                {/* Section 3: Offline */}
+                {offlineUsers.length > 0 && (
+                  <View style={{ marginBottom: 4 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginBottom: 8,
+                        paddingHorizontal: 4,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: textSecondaryColor,
+                          opacity: 0.5,
+                          marginRight: 8,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: textSecondaryColor,
+                          fontSize: 12,
+                          fontWeight: '800',
+                          letterSpacing: 0.5,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Offline
+                      </Text>
+                      <View
+                        style={{
+                          marginLeft: 8,
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                          borderRadius: 10,
+                          backgroundColor: isDark
+                            ? 'rgba(255, 255, 255, 0.08)'
+                            : 'rgba(0, 0, 0, 0.06)',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: textSecondaryColor,
+                            fontSize: 11,
+                            fontWeight: '700',
+                          }}
+                        >
+                          {offlineUsers.length}
+                        </Text>
+                      </View>
+                    </View>
+                    {offlineUsers.map(renderUserCard)}
+                  </View>
+                )}
+
+                {/* Empty state if all sections are empty */}
+                {onlineClients.length === 0 &&
+                  onlineCoaches.length === 0 &&
+                  offlineUsers.length === 0 && (
+                    <View
+                      style={{
+                        paddingVertical: 24,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: textSecondaryColor,
+                          fontSize: 13,
+                          fontWeight: '500',
+                        }}
+                      >
+                        No users found
+                      </Text>
+                    </View>
+                  )}
+              </ScrollView>
+            </View>
+          </MotiView>
+        )}
+      </AnimatePresence>
+
       <SectionList
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingTop: insets.top + 16,
+          paddingTop: insets.top + 76,
           paddingBottom: 130,
         }}
         sections={groupedCheckins}
         keyExtractor={(item, index) => item.checkin_id + index}
-        onScroll={handleScroll}
+        onScroll={handleDashboardScroll}
         scrollEventThrottle={16}
+        onTouchStart={() => {
+          if (isPresenceDropdownOpen && !touchInsideDropdownRef.current) {
+            setIsPresenceDropdownOpen(false);
+          }
+        }}
+        onScrollBeginDrag={() => {
+          if (isPresenceDropdownOpen) {
+            setIsPresenceDropdownOpen(false);
+          }
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -752,95 +1548,13 @@ export default function CoachDashboard() {
               loadDashboardData();
             }}
             tintColor={colors.primary}
-            progressViewOffset={insets.top + 10}
+            progressViewOffset={insets.top + 76}
           />
         }
         onEndReached={loadMoreCheckins}
         onEndReachedThreshold={0.5}
         ListHeaderComponent={
           <View>
-            {/* Top Brand Bar */}
-            <MotiView
-              from={{ opacity: 0, translateY: -8 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              className="px-6 pb-4 flex-row items-center justify-between"
-            >
-              <View className="flex-row items-center gap-3">
-                {brand?.logo_url ? (
-                  <Image
-                    source={{ uri: brand.logo_url }}
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: isDark
-                        ? 'rgba(255,255,255,0.12)'
-                        : 'rgba(0,0,0,0.06)',
-                    }}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 14,
-                      backgroundColor: colors.primary + '20',
-                      borderColor: colors.primary + '35',
-                    }}
-                    className="border items-center justify-center"
-                  >
-                    <Text
-                      style={{ color: colors.primary }}
-                      className="text-xl font-black"
-                    >
-                      {brand?.name
-                        ? brand.name.charAt(0).toUpperCase()
-                        : coach?.business_name
-                          ? coach.business_name.charAt(0).toUpperCase()
-                          : 'C'}
-                    </Text>
-                  </View>
-                )}
-                <View>
-                  <Text
-                    style={{ color: textColor }}
-                    className="text-lg font-black tracking-tight"
-                    numberOfLines={1}
-                  >
-                    {brand?.name || coach?.business_name || 'Coaching'}
-                  </Text>
-                  <Text
-                    style={{ color: textSecondaryColor }}
-                    className="text-[10px] font-bold uppercase tracking-wider"
-                  >
-                    Coach Portal
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => router.push('/(coach)/(tabs)/profile')}
-                className="p-1 rounded-full relative"
-                style={{
-                  backgroundColor: colors.surface,
-                  borderColor: cardBorder,
-                  borderWidth: 1,
-                }}
-              >
-                <BrandedAvatar
-                  name={profile?.full_name || 'Coach'}
-                  imageUrl={profile?.avatar_url}
-                  size={44}
-                />
-                <View
-                  style={{ backgroundColor: colors.primary }}
-                  className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-slate-900"
-                />
-              </TouchableOpacity>
-            </MotiView>
-
             {/* Greeting Section */}
             <MotiView
               from={{ opacity: 0, translateY: -4 }}
@@ -1025,14 +1739,12 @@ export default function CoachDashboard() {
                     session={upcomingSession}
                     nowMs={nowMs}
                     onJoin={() => {
-                      if (
+                      const link =
+                        upcomingSession.meet_link ||
                         upcomingSession.meet_url ||
-                        upcomingSession.external_meeting_url
-                      ) {
-                        joinSession(
-                          upcomingSession.meet_url ||
-                            upcomingSession.external_meeting_url,
-                        );
+                        upcomingSession.external_meeting_url;
+                      if (link) {
+                        joinSession(link);
                       } else {
                         router.push({
                           pathname: '/(coach)/chat/[id]',
@@ -1123,10 +1835,10 @@ export default function CoachDashboard() {
                     </View>
                   </TouchableOpacity>
 
-                  {/* 2. Active Now (with live sparkline) */}
+                  {/* 2. Daily Active (with live sparkline) */}
                   <TouchableOpacity
                     activeOpacity={0.8}
-                    onPress={() => setShowAnalyticsModal(true)}
+                    onPress={() => router.push('/(coach)/client-activity')}
                     className="flex-1 rounded-[36px] p-6 border overflow-hidden relative"
                     style={cardStyle}
                   >
@@ -1156,14 +1868,14 @@ export default function CoachDashboard() {
                       style={{ color: textSecondaryColor }}
                       className="text-xs font-bold uppercase tracking-wider"
                     >
-                      Active Now
+                      Daily Active
                     </Text>
 
                     <View className="h-7 mt-1.5 opacity-70">
                       <AnalyticsSparkline
                         data={analyticsData}
                         heroNumber={displayActiveCount}
-                        label="Active Now"
+                        label="Daily Active"
                         loading={loadingAnalytics}
                         dataKey="high_performers"
                       />
@@ -1801,14 +2513,6 @@ export default function CoachDashboard() {
           existingSessions={allSessions}
         />
       )}
-
-      {/* Analytics Detailed Modal */}
-      <AnalyticsDetailedModal
-        visible={showAnalyticsModal}
-        onClose={() => setShowAnalyticsModal(false)}
-        data={analyticsData}
-        currentActive={displayActiveCount}
-      />
 
       {/* Feedback Modal after Plan Sent */}
       <FeedbackModal

@@ -168,7 +168,7 @@ export default function ChallengeDetailScreen() {
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {/* Dynamic Challenge Name/Title in Main Content */}
-        <View className="mx-6 mt-8">
+        <View className="mx-3 mt-8">
           <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>{challenge.name}</Text>
           {challenge.description && (
             <Text className="text-sm font-medium mt-2 leading-5" style={{ color: colors.textSecondary }}>{challenge.description}</Text>
@@ -179,7 +179,7 @@ export default function ChallengeDetailScreen() {
         <MotiView 
           from={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="mx-6 mt-6 p-6 rounded-[32px] border"
+          className="mx-3 mt-6 p-6 rounded-[32px] border"
           style={{ backgroundColor: colors.surface, borderColor: colors.border }}
         >
           <View className="flex-row justify-between items-center mb-6">
@@ -249,7 +249,7 @@ export default function ChallengeDetailScreen() {
         </MotiView>
 
         {/* Task List */}
-        <View className="mt-10 px-6">
+        <View className="mt-10 px-3">
            <Text className="text-lg font-bold mb-6" style={{ color: colors.text }}>Daily Tasks</Text>
            
            {todayDates.length > 0 && (

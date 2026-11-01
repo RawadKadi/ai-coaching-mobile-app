@@ -485,7 +485,7 @@ export default function EditChallengeScreen() {
         >
           <ScrollView 
             style={{ flex: 1 }}
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 40 }}
+            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingBottom: 40 }}
             showsVerticalScrollIndicator={false}
           >
             {/* Phase 1: Configuration */}
@@ -867,7 +867,7 @@ export default function EditChallengeScreen() {
           </ScrollView>
 
           {/* Action Bar */}
-          <View style={{ paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
+          <View style={{ paddingHorizontal: 12, paddingVertical: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
               <TouchableOpacity 
                 onPress={handleSave} 
                 disabled={saving}

@@ -1,23 +1,62 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  Linking, Modal, SafeAreaView, Animated, Dimensions, Pressable,
-  ActivityIndicator, PanResponder, ScrollView
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Linking,
+  Modal,
+  SafeAreaView,
+  Animated,
+  Dimensions,
+  Pressable,
+  ActivityIndicator,
+  PanResponder,
+  ScrollView,
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
-import { Video, ResizeMode, AVPlaybackStatus, VideoFullscreenUpdate, Audio } from 'expo-av';
+import {
+  Video,
+  ResizeMode,
+  AVPlaybackStatus,
+  VideoFullscreenUpdate,
+  Audio,
+} from 'expo-av';
 import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from "@/contexts/BrandContext";
-import { isDarkColor } from "@/lib/theme-utils";
-import { FileText, FileAudio, Play, Download, RefreshCw, Check, CheckCheck, ChevronLeft, ChevronDown, Pause, X, Trophy, Zap, Target, Loader2, Clock, Video as LucideVideo, Forward } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
+import { isDarkColor } from '@/lib/theme-utils';
+import {
+  FileText,
+  FileAudio,
+  Play,
+  Download,
+  RefreshCw,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  ChevronDown,
+  Pause,
+  X,
+  Trophy,
+  Zap,
+  Target,
+  Loader2,
+  Clock,
+  Video as LucideVideo,
+  Forward,
+} from 'lucide-react-native';
 import { MotiView } from 'moti';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { ChatReplyContext } from './ChatReplyContext';
 import { mediaDownloadManager } from '@/lib/MediaDownloadManager';
@@ -28,7 +67,7 @@ import MealMessageCard from './MealMessageCard';
 
 // ── Global playback speed (persisted, shared across all voice note players) ───
 const SPEED_STEPS = [1, 1.5, 2] as const;
-type PlaybackSpeed = typeof SPEED_STEPS[number];
+type PlaybackSpeed = (typeof SPEED_STEPS)[number];
 const SPEED_KEY = 'voice_note_playback_speed';
 let _cachedSpeed: PlaybackSpeed = 1; // in-memory cache so all mounted players share it
 let _speedListeners: Array<(s: PlaybackSpeed) => void> = [];
@@ -51,8 +90,10 @@ async function loadGlobalSpeed(): Promise<PlaybackSpeed> {
 
 async function saveGlobalSpeed(speed: PlaybackSpeed) {
   _cachedSpeed = speed;
-  _speedListeners.forEach(cb => cb(speed));
-  try { await AsyncStorage.setItem(SPEED_KEY, String(speed)); } catch {}
+  _speedListeners.forEach((cb) => cb(speed));
+  try {
+    await AsyncStorage.setItem(SPEED_KEY, String(speed));
+  } catch {}
 }
 
 function nextSpeed(current: PlaybackSpeed): PlaybackSpeed {
@@ -64,7 +105,18 @@ const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const BUBBLE_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 320);
 
 type MediaContent = {
-  type: 'image' | 'video' | 'document' | 'audio' | 'gif' | 'challenge_completed' | 'task_completion' | 'meal' | 'meal_log' | 'session_invite' | 'call_invite';
+  type:
+    | 'image'
+    | 'video'
+    | 'document'
+    | 'audio'
+    | 'gif'
+    | 'challenge_completed'
+    | 'task_completion'
+    | 'meal'
+    | 'meal_log'
+    | 'session_invite'
+    | 'call_invite';
   url?: string;
   previewUrl?: string;
   thumbnailUrl?: string;
@@ -91,50 +143,59 @@ type MediaContent = {
 
 // ── Media Caching Hook ──────────────────────────────────────────────────────
 const useMediaCache = (url?: string, type?: string) => {
-    const [localUri, setLocalUri] = useState<string | null>(null);
-    const [isCaching, setIsCaching] = useState(false);
-    const [downloadProgress, setDownloadProgress] = useState(0);
+  const [localUri, setLocalUri] = useState<string | null>(null);
+  const [isCaching, setIsCaching] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
-    useEffect(() => {
-        if (!url) return;
+  useEffect(() => {
+    if (!url) return;
 
-        // GIFs: expo-image handles animation natively. Bypass download pipeline.
-        if (type === 'gif') { setLocalUri(url); return; }
+    // GIFs: expo-image handles animation natively. Bypass download pipeline.
+    if (type === 'gif') {
+      setLocalUri(url);
+      return;
+    }
 
-        // Videos: stream directly from CDN — large files, no local caching needed.
-        // Caching videos was causing corrupt local files and black-screen playback.
-        if (type === 'video') { setLocalUri(url); return; }
+    // Videos: stream directly from CDN — large files, no local caching needed.
+    // Caching videos was causing corrupt local files and black-screen playback.
+    if (type === 'video') {
+      setLocalUri(url);
+      return;
+    }
 
-        // Non-http: local file (own upload in progress)
-        if (!url.startsWith('http')) { setLocalUri(url); return; }
+    // Non-http: local file (own upload in progress)
+    if (!url.startsWith('http')) {
+      setLocalUri(url);
+      return;
+    }
 
-        // Images: download and cache permanently for instant re-load
-        mediaDownloadManager.getOrDownload(url).then(uri => {
-            if (uri) {
-                setLocalUri(uri);
-                setIsCaching(false);
-                setDownloadProgress(100);
-            }
-        });
+    // Images: download and cache permanently for instant re-load
+    mediaDownloadManager.getOrDownload(url).then((uri) => {
+      if (uri) {
+        setLocalUri(uri);
+        setIsCaching(false);
+        setDownloadProgress(100);
+      }
+    });
 
-        const unsubscribe = mediaDownloadManager.subscribe(url, (state) => {
-            if (state.status === 'finished' && state.localUri) {
-                setLocalUri(state.localUri);
-                setIsCaching(false);
-                setDownloadProgress(100);
-            } else if (state.status === 'downloading') {
-                setIsCaching(true);
-                setDownloadProgress(state.progress);
-            } else if (state.status === 'error') {
-                setIsCaching(false);
-                setLocalUri(url); // Fallback to remote on error
-            }
-        });
+    const unsubscribe = mediaDownloadManager.subscribe(url, (state) => {
+      if (state.status === 'finished' && state.localUri) {
+        setLocalUri(state.localUri);
+        setIsCaching(false);
+        setDownloadProgress(100);
+      } else if (state.status === 'downloading') {
+        setIsCaching(true);
+        setDownloadProgress(state.progress);
+      } else if (state.status === 'error') {
+        setIsCaching(false);
+        setLocalUri(url); // Fallback to remote on error
+      }
+    });
 
-        return unsubscribe;
-    }, [url, type]);
+    return unsubscribe;
+  }, [url, type]);
 
-    return { localUri, isCaching, downloadProgress };
+  return { localUri, isCaching, downloadProgress };
 };
 
 interface Props {
@@ -152,8 +213,8 @@ interface Props {
   isPressed?: boolean;
   onCancelSession?: (sessionId: string) => void;
   onRescheduleSession?: (sessionId: string) => void;
-  senderAvatarUrl?: string;   // profile photo of the message sender
-  senderName?: string;        // fallback for initials
+  senderAvatarUrl?: string; // profile photo of the message sender
+  senderName?: string; // fallback for initials
 }
 
 // ── Circular download progress ring ──────────────────────────────────────────
@@ -167,14 +228,18 @@ function DownloadProgressRing({ pct }: { pct: number }) {
       <Svg width={70} height={70}>
         {/* Track */}
         <Circle
-          cx="35" cy="35" r={RADIUS}
+          cx="35"
+          cy="35"
+          r={RADIUS}
           stroke="rgba(255,255,255,0.2)"
           strokeWidth={5}
           fill="rgba(0,0,0,0.3)"
         />
         {/* Progress arc */}
         <Circle
-          cx="35" cy="35" r={RADIUS}
+          cx="35"
+          cy="35"
+          r={RADIUS}
           stroke="#FFFFFF"
           strokeWidth={5}
           fill="none"
@@ -185,7 +250,13 @@ function DownloadProgressRing({ pct }: { pct: number }) {
           origin="35,35"
         />
       </Svg>
-      <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '900' }}>
           {pct < 100 ? `${pct}%` : '✓'}
         </Text>
@@ -203,10 +274,16 @@ const formatDuration = (millis: number) => {
 };
 
 // ── Fullscreen Video Player Component ────────────────────────────────────────
-function FullscreenVideoModal({ uri, onClose }: { uri: string, onClose: () => void }) {
+function FullscreenVideoModal({
+  uri,
+  onClose,
+}: {
+  uri: string;
+  onClose: () => void;
+}) {
   const videoRef = useRef<Video>(null);
   const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
-  
+
   const panY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
     PanResponder.create({
@@ -218,18 +295,35 @@ function FullscreenVideoModal({ uri, onClose }: { uri: string, onClose: () => vo
       },
       onPanResponderRelease: (_, state) => {
         if (state.dy > 150 || state.vy > 1.5) {
-          Animated.timing(panY, { toValue: Dimensions.get('window').height, duration: 200, useNativeDriver: true }).start(onClose);
+          Animated.timing(panY, {
+            toValue: Dimensions.get('window').height,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(onClose);
         } else {
-          Animated.spring(panY, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 0,
+          }).start();
         }
-      }
-    })
+      },
+    }),
   ).current;
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', transform: [{ translateY: panY }] }]} {...panResponder.panHandlers}>
+    <Animated.View
+      style={[
+        StyleSheet.absoluteFill,
+        { backgroundColor: '#000000', transform: [{ translateY: panY }] },
+      ]}
+      {...panResponder.panHandlers}
+    >
       <SafeAreaView style={{ flex: 1 }}>
-        <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 50, right: 20, zIndex: 20 }}>
+        <TouchableOpacity
+          onPress={onClose}
+          style={{ position: 'absolute', top: 50, right: 20, zIndex: 20 }}
+        >
           <X size={32} color="#FFFFFF" />
         </TouchableOpacity>
         {/* No spinner overlay — native AVPlayer shows its own buffering indicator.
@@ -250,45 +344,84 @@ function FullscreenVideoModal({ uri, onClose }: { uri: string, onClose: () => vo
 }
 
 // ── Fullscreen Image Modal ──────────────────────────────────────────────────
-function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'image' | 'gif' | 'task_completion', onClose: () => void }) {
+function FullscreenImageModal({
+  uri,
+  type,
+  onClose,
+}: {
+  uri: string;
+  type: 'image' | 'gif' | 'task_completion';
+  onClose: () => void;
+}) {
   const panY = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10 && Math.abs(gs.dy) > Math.abs(gs.dx * 2),
+      onMoveShouldSetPanResponder: (_, gs) =>
+        gs.dy > 10 && Math.abs(gs.dy) > Math.abs(gs.dx * 2),
       onPanResponderMove: (_, state) => {
         if (state.dy > 0) panY.setValue(state.dy);
       },
       onPanResponderRelease: (_, state) => {
         if (state.dy > 100 || state.vy > 1) {
-          Animated.timing(panY, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: true }).start(onClose);
+          Animated.timing(panY, {
+            toValue: SCREEN_HEIGHT,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(onClose);
         } else {
-          Animated.spring(panY, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 0,
+          }).start();
         }
-      }
-    })
+      },
+    }),
   ).current;
 
   const handlePress = () => {
-    Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(onClose);
+    Animated.timing(opacity, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(onClose);
   };
 
   return (
-    <Animated.View 
-      style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity, transform: [{ translateY: panY }] }]} 
+    <Animated.View
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          backgroundColor: '#000000',
+          opacity,
+          transform: [{ translateY: panY }],
+        },
+      ]}
       {...panResponder.panHandlers}
     >
       <SafeAreaView style={{ flex: 1 }}>
-        <TouchableOpacity 
-          onPress={onClose} 
-          style={{ position: 'absolute', top: 50, right: 20, zIndex: 100, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 22 }}
+        <TouchableOpacity
+          onPress={onClose}
+          style={{
+            position: 'absolute',
+            top: 50,
+            right: 20,
+            zIndex: 100,
+            width: 44,
+            height: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            borderRadius: 22,
+          }}
         >
           <X size={28} color="#FFFFFF" />
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          activeOpacity={1} 
+
+        <TouchableOpacity
+          activeOpacity={1}
           onPress={handlePress}
           style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
         >
@@ -305,19 +438,37 @@ function FullscreenImageModal({ uri, type, onClose }: { uri: string, type: 'imag
 }
 
 // ── Custom Video Player (Inline) ─────────────────────────────────────────────
-function CustomVideoPlayer({ 
-  uri: remoteUri, thumbnailUrl, isUploading, progress, onCancel, onLongPress, onPressIn, onPressOut
-}: { 
-  uri: string, thumbnailUrl?: string, isUploading?: boolean, progress?: number, onCancel?: () => void,
-  onLongPress?: () => void, onPressIn?: () => void, onPressOut?: () => void
+function CustomVideoPlayer({
+  uri: remoteUri,
+  thumbnailUrl,
+  isUploading,
+  progress,
+  onCancel,
+  onLongPress,
+  onPressIn,
+  onPressOut,
+}: {
+  uri: string;
+  thumbnailUrl?: string;
+  isUploading?: boolean;
+  progress?: number;
+  onCancel?: () => void;
+  onLongPress?: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   // Freeze the URI at the moment the user taps — prevents black screen caused by
   // localUri updating mid-playback (background download finishing while modal is open).
   const [frozenUri, setFrozenUri] = useState<string>('');
 
-  const { localUri, isCaching, downloadProgress } = useMediaCache(remoteUri, 'video');
-  const [inlineStatus, setInlineStatus] = useState<AVPlaybackStatus | null>(null);
+  const { localUri, isCaching, downloadProgress } = useMediaCache(
+    remoteUri,
+    'video',
+  );
+  const [inlineStatus, setInlineStatus] = useState<AVPlaybackStatus | null>(
+    null,
+  );
   const inlineVideoRef = useRef<Video>(null);
   const playAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
@@ -325,7 +476,11 @@ function CustomVideoPlayer({
   useEffect(() => {
     if (isCaching && downloadProgress === 0) {
       Animated.loop(
-        Animated.timing(spinAnim, { toValue: 1, duration: 1000, useNativeDriver: true })
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
       ).start();
     } else {
       spinAnim.setValue(0);
@@ -334,22 +489,25 @@ function CustomVideoPlayer({
 
   const spin = spinAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg']
+    outputRange: ['0deg', '360deg'],
   });
 
   // Use localUri for instant local playback once cached.
   // Fall back to remoteUri for immediate streaming while download runs.
   const activeUri = localUri || remoteUri;
-  const isReceiving = isCaching && !localUri && downloadProgress > 0 && !isUploading;
-  const durationMillis = inlineStatus?.isLoaded ? inlineStatus.durationMillis || 0 : 0;
+  const isReceiving =
+    isCaching && !localUri && downloadProgress > 0 && !isUploading;
+  const durationMillis = inlineStatus?.isLoaded
+    ? inlineStatus.durationMillis || 0
+    : 0;
 
   useEffect(() => {
     // Only hide the play button when the video is ACTIVELY PLAYING.
     // When null/loading/paused/error — always show the play button.
     if (inlineStatus?.isLoaded && inlineStatus.isPlaying) {
-        Animated.spring(playAnim, { toValue: 0, useNativeDriver: true }).start();
+      Animated.spring(playAnim, { toValue: 0, useNativeDriver: true }).start();
     } else {
-        Animated.spring(playAnim, { toValue: 1, useNativeDriver: true }).start();
+      Animated.spring(playAnim, { toValue: 1, useNativeDriver: true }).start();
     }
   }, [inlineStatus]);
 
@@ -367,7 +525,10 @@ function CustomVideoPlayer({
         await inlineVideoRef.current.presentFullscreenPlayer();
         return;
       } catch (e) {
-        console.warn('[VideoPlayer] presentFullscreenPlayerAsync failed, falling back to modal:', e);
+        console.warn(
+          '[VideoPlayer] presentFullscreenPlayerAsync failed, falling back to modal:',
+          e,
+        );
       }
     }
 
@@ -384,7 +545,15 @@ function CustomVideoPlayer({
   };
 
   return (
-    <View style={{ width: '100%', height: 180, borderRadius: 16, overflow: 'hidden', backgroundColor: '#0F172A' }}>
+    <View
+      style={{
+        width: '100%',
+        height: 180,
+        borderRadius: 16,
+        overflow: 'hidden',
+        backgroundColor: '#0F172A',
+      }}
+    >
       <View style={StyleSheet.absoluteFill}>
         {/* Inline video — always mounted so it pre-buffers and can hand off to presentFullscreenPlayerAsync instantly */}
         {activeUri && (
@@ -398,7 +567,9 @@ function CustomVideoPlayer({
             isMuted={true}
             onPlaybackStatusUpdate={setInlineStatus}
             onFullscreenUpdate={async ({ fullscreenUpdate }) => {
-              if (fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_DISMISS) {
+              if (
+                fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_DISMISS
+              ) {
                 // Reset inline player to silent/paused state after native fullscreen closes
                 try {
                   await inlineVideoRef.current?.setIsMutedAsync(true);
@@ -411,8 +582,8 @@ function CustomVideoPlayer({
         )}
 
         {/* Thumbnail overlay while uploading or if video not playing yet */}
-        {(isUploading || !inlineStatus?.isLoaded || !inlineStatus.isPlaying) && (
-          thumbnailUrl ? (
+        {(isUploading || !inlineStatus?.isLoaded || !inlineStatus.isPlaying) &&
+          (thumbnailUrl ? (
             <Image
               source={{ uri: thumbnailUrl }}
               style={StyleSheet.absoluteFill}
@@ -429,25 +600,46 @@ function CustomVideoPlayer({
             />
           ) : (
             // Uploading placeholder
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.05)' }]} />
-          )
-        )}
-        
-        <TouchableOpacity 
-          activeOpacity={0.9} 
-          onPress={openFullscreen} 
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: 'rgba(255,255,255,0.05)' },
+              ]}
+            />
+          ))}
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={openFullscreen}
           onLongPress={onLongPress}
           delayLongPress={200}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
-          style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: (isReceiving || isUploading) ? 'rgba(0,0,0,0.4)' : 'transparent' }]}
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor:
+                isReceiving || isUploading ? 'rgba(0,0,0,0.4)' : 'transparent',
+            },
+          ]}
         >
           {isReceiving && !isUploading && (
             <View style={{ alignItems: 'center' }}>
               {downloadProgress > 0 ? (
                 <View style={{ alignItems: 'center' }}>
                   <DownloadProgressRing pct={downloadProgress} />
-                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800', marginTop: 8 }}>RECEIVING {downloadProgress}%</Text>
+                  <Text
+                    style={{
+                      color: '#FFFFFF',
+                      fontSize: 10,
+                      fontWeight: '800',
+                      marginTop: 8,
+                    }}
+                  >
+                    RECEIVING {downloadProgress}%
+                  </Text>
                 </View>
               ) : (
                 <Animated.View style={{ transform: [{ rotate: spin }] }}>
@@ -458,33 +650,79 @@ function CustomVideoPlayer({
           )}
 
           {!isUploading && !isReceiving && (
-             <Animated.View style={{ 
-               width: 54, height: 54, borderRadius: 27, 
-               backgroundColor: 'rgba(0,0,0,0.5)', 
-               justifyContent: 'center', alignItems: 'center',
-               transform: [{ scale: playAnim }],
-               opacity: playAnim
-             }}>
-               <Play size={24} color="#FFFFFF" style={{ marginLeft: 3 }} fill="#FFFFFF" />
-             </Animated.View>
+            <Animated.View
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: 27,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                transform: [{ scale: playAnim }],
+                opacity: playAnim,
+              }}
+            >
+              <Play
+                size={24}
+                color="#FFFFFF"
+                style={{ marginLeft: 3 }}
+                fill="#FFFFFF"
+              />
+            </Animated.View>
           )}
         </TouchableOpacity>
 
         {durationMillis > 0 && !isUploading && !isReceiving && (
-          <View style={{ position: 'absolute', bottom: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8 }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{formatDuration(durationMillis)}</Text>
+          <View
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              left: 8,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              paddingHorizontal: 6,
+              paddingVertical: 3,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
+              {formatDuration(durationMillis)}
+            </Text>
           </View>
         )}
 
         {isUploading && (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 10 }]}>
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 10,
+              },
+            ]}
+          >
             <DownloadProgressRing pct={progress || 0} />
-            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800', marginTop: 8 }}>SENDING {progress || 0}%</Text>
+            <Text
+              style={{
+                color: '#FFFFFF',
+                fontSize: 10,
+                fontWeight: '800',
+                marginTop: 8,
+              }}
+            >
+              SENDING {progress || 0}%
+            </Text>
           </View>
         )}
       </View>
 
-      <Modal visible={isExpanded} transparent animationType="fade" statusBarTranslucent>
+      <Modal
+        visible={isExpanded}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
         {/* Only render if frozenUri is set — prevents empty Video mount */}
         {frozenUri ? (
           <FullscreenVideoModal uri={frozenUri} onClose={closeFullscreen} />
@@ -496,11 +734,27 @@ function CustomVideoPlayer({
 
 // ── Custom Image Player (Inline) ─────────────────────────────────────────────
 function CustomImagePlayer({
-  uri, previewUrl, type, isOwn, isUploading, progress, onCancel, onLongPress, onPressIn, onPressOut
+  uri,
+  previewUrl,
+  type,
+  isOwn,
+  isUploading,
+  progress,
+  onCancel,
+  onLongPress,
+  onPressIn,
+  onPressOut,
 }: {
-  uri: string, previewUrl?: string, type: 'image' | 'gif', isOwn: boolean,
-  isUploading?: boolean, progress?: number, onCancel?: () => void, onLongPress?: () => void,
-  onPressIn?: () => void, onPressOut?: () => void
+  uri: string;
+  previewUrl?: string;
+  type: 'image' | 'gif';
+  isOwn: boolean;
+  isUploading?: boolean;
+  progress?: number;
+  onCancel?: () => void;
+  onLongPress?: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { localUri } = useMediaCache(uri, type);
@@ -508,9 +762,9 @@ function CustomImagePlayer({
 
   return (
     <>
-      <TouchableOpacity 
-        activeOpacity={0.9} 
-        onPress={() => !isUploading && setIsExpanded(true)} 
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => !isUploading && setIsExpanded(true)}
         onLongPress={onLongPress}
         delayLongPress={200}
         onPressIn={onPressIn}
@@ -523,14 +777,37 @@ function CustomImagePlayer({
           contentFit="cover"
           // GIFs: disable disk cache to prevent stale/wrong GIF from showing.
           // Images: if it's a local file:// uri, caching to disk again breaks expo-image on iOS.
-          cachePolicy={type === 'gif' || cachedUri.startsWith('file:') ? 'none' : 'memory-disk'}
+          cachePolicy={
+            type === 'gif' || cachedUri.startsWith('file:')
+              ? 'none'
+              : 'memory-disk'
+          }
         />
 
         {isUploading && (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }]}>
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                justifyContent: 'center',
+                alignItems: 'center',
+              },
+            ]}
+          >
             <DownloadProgressRing pct={progress || 0} />
             {onCancel && (
-              <TouchableOpacity onPress={onCancel} style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}>
+              <TouchableOpacity
+                onPress={onCancel}
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  borderRadius: 12,
+                  padding: 4,
+                }}
+              >
                 <X size={16} color="#FFFFFF" />
               </TouchableOpacity>
             )}
@@ -538,36 +815,65 @@ function CustomImagePlayer({
         )}
       </TouchableOpacity>
 
-      <Modal visible={isExpanded} transparent={true} animationType="fade" onRequestClose={() => setIsExpanded(false)}>
-        <FullscreenImageModal uri={cachedUri} type={type} onClose={() => setIsExpanded(false)} />
+      <Modal
+        visible={isExpanded}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsExpanded(false)}
+      >
+        <FullscreenImageModal
+          uri={cachedUri}
+          type={type}
+          onClose={() => setIsExpanded(false)}
+        />
       </Modal>
     </>
   );
 }
 
 // ── Challenge Card Components ────────────────────────────────────────────────
-function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media: MediaContent, onPressImage?: () => void, onPressDetails?: () => void }) {
+function ChallengeCompletedCard({
+  media,
+  onPressImage,
+  onPressDetails,
+}: {
+  media: MediaContent;
+  onPressImage?: () => void;
+  onPressDetails?: () => void;
+}) {
   const theme = useTheme();
   const styles = getStyles(theme.colors);
   const intensityColor = (intensity?: string) => {
-    switch(intensity?.toLowerCase()) {
-      case 'high': return '#EF4444';
-      case 'medium': return '#F59E0B';
-      case 'low': return '#10B981';
-      default: return '#64748B';
+    switch (intensity?.toLowerCase()) {
+      case 'high':
+        return '#EF4444';
+      case 'medium':
+        return '#F59E0B';
+      case 'low':
+        return '#10B981';
+      default:
+        return '#64748B';
     }
   };
 
   return (
-    <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+    <View
+      style={[
+        styles.challengeCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+        },
+      ]}
+    >
       {media.imageUrl && (
-        <TouchableOpacity 
-          activeOpacity={0.9} 
+        <TouchableOpacity
+          activeOpacity={0.9}
           onPress={onPressImage}
           style={styles.cardImageContainer}
         >
-          <Image 
-            source={{ uri: media.imageUrl }} 
+          <Image
+            source={{ uri: media.imageUrl }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
           />
@@ -575,34 +881,113 @@ function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media
       )}
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
-          <View style={styles.challengeIconBox}><Trophy size={18} color={theme.colors.primary} /></View>
-          <Text style={[styles.challengeTitle, { fontFamily: theme.typography.fontFamily }]}>Challenge Completed</Text>
+          <View style={styles.challengeIconBox}>
+            <Trophy size={18} color={theme.colors.primary} />
+          </View>
+          <Text
+            style={[
+              styles.challengeTitle,
+              { fontFamily: theme.typography.fontFamily },
+            ]}
+          >
+            Challenge Completed
+          </Text>
         </View>
         <View style={styles.challengeBody}>
-          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text }]} numberOfLines={2}>{media.taskName || 'Daily Mission'}</Text>
+          <Text
+            style={[
+              styles.challengeTaskName,
+              {
+                fontFamily: theme.typography.fontFamily,
+                color: theme.colors.text,
+              },
+            ]}
+            numberOfLines={2}
+          >
+            {media.taskName || 'Daily Mission'}
+          </Text>
           <View style={styles.challengeDetailsRow}>
-             <View style={[styles.challengeDetailItem, { backgroundColor: theme.colors.background }]}><Target size={12} color={theme.colors.textSecondary} /><Text style={[styles.challengeDetailText, { color: theme.colors.textSecondary }]}>{media.focusType || 'Training'}</Text></View>
-             <View style={[styles.challengeDetailItem, { marginLeft: 12, backgroundColor: theme.colors.background }]}><Zap size={12} color={intensityColor(media.intensity)} /><Text style={[styles.challengeDetailText, { color: intensityColor(media.intensity) }]}>{media.intensity || 'Normal'}</Text></View>
+            <View
+              style={[
+                styles.challengeDetailItem,
+                { backgroundColor: theme.colors.background },
+              ]}
+            >
+              <Target size={12} color={theme.colors.textSecondary} />
+              <Text
+                style={[
+                  styles.challengeDetailText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                {media.focusType || 'Training'}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.challengeDetailItem,
+                { marginLeft: 12, backgroundColor: theme.colors.background },
+              ]}
+            >
+              <Zap size={12} color={intensityColor(media.intensity)} />
+              <Text
+                style={[
+                  styles.challengeDetailText,
+                  { color: intensityColor(media.intensity) },
+                ]}
+              >
+                {media.intensity || 'Normal'}
+              </Text>
+            </View>
           </View>
         </View>
-        <View style={[styles.challengeFooter, { borderTopColor: theme.colors.border }]}><Text style={[styles.challengeFooterText, { color: theme.colors.textSecondary }]}>Completed at {media.completedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
-        
+        <View
+          style={[
+            styles.challengeFooter,
+            { borderTopColor: theme.colors.border },
+          ]}
+        >
+          <Text
+            style={[
+              styles.challengeFooterText,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            Completed at{' '}
+            {media.completedAt ||
+              new Date().toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              })}
+          </Text>
+        </View>
+
         {onPressDetails && (
-          <TouchableOpacity 
-            onPress={onPressDetails} 
+          <TouchableOpacity
+            onPress={onPressDetails}
             activeOpacity={0.7}
-            style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center', 
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
               justifyContent: 'center',
-              marginTop: 12, 
-              paddingTop: 12, 
-              borderTopWidth: 1, 
+              marginTop: 12,
+              paddingTop: 12,
+              borderTopWidth: 1,
               borderTopColor: theme.colors.border,
-              gap: 4
+              gap: 4,
             }}
           >
-            <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '600', fontFamily: theme.typography.fontFamily }}>View details</Text>
+            <Text
+              style={{
+                color: theme.colors.primary,
+                fontSize: 13,
+                fontWeight: '600',
+                fontFamily: theme.typography.fontFamily,
+              }}
+            >
+              View details
+            </Text>
             <ChevronDown size={14} color={theme.colors.primary} />
           </TouchableOpacity>
         )}
@@ -611,19 +996,33 @@ function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media
   );
 }
 
-function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPressImage?: () => void }) {
+function TaskCompletedCard({
+  media,
+  onPressImage,
+}: {
+  media: MediaContent;
+  onPressImage?: () => void;
+}) {
   const theme = useTheme();
   const styles = getStyles(theme.colors);
   return (
-    <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+    <View
+      style={[
+        styles.challengeCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+        },
+      ]}
+    >
       {media.imageUrl && (
-        <TouchableOpacity 
-          activeOpacity={0.9} 
+        <TouchableOpacity
+          activeOpacity={0.9}
           onPress={onPressImage}
           style={styles.cardImageContainer}
         >
-          <Image 
-            source={{ uri: media.imageUrl }} 
+          <Image
+            source={{ uri: media.imageUrl }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
           />
@@ -631,65 +1030,215 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
       )}
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
-          <View style={[styles.challengeIconBox, { backgroundColor: `${theme.colors.primary}20` }]}><Check size={18} color={theme.colors.primary} /></View>
-          <Text style={[styles.challengeTitle, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Task Completed</Text>
+          <View
+            style={[
+              styles.challengeIconBox,
+              { backgroundColor: `${theme.colors.primary}20` },
+            ]}
+          >
+            <Check size={18} color={theme.colors.primary} />
+          </View>
+          <Text
+            style={[
+              styles.challengeTitle,
+              {
+                color: theme.colors.primary,
+                fontFamily: theme.typography.fontFamily,
+              },
+            ]}
+          >
+            Task Completed
+          </Text>
         </View>
         <View style={styles.challengeBody}>
-          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text }]} numberOfLines={2}>{media.taskName || 'Daily Task'}</Text>
+          <Text
+            style={[
+              styles.challengeTaskName,
+              {
+                fontFamily: theme.typography.fontFamily,
+                color: theme.colors.text,
+              },
+            ]}
+            numberOfLines={2}
+          >
+            {media.taskName || 'Daily Task'}
+          </Text>
         </View>
-        <View style={[styles.challengeFooter, { borderTopColor: theme.colors.border }]}><Text style={[styles.challengeFooterText, { color: theme.colors.textSecondary }]}>Completed at {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</Text></View>
+        <View
+          style={[
+            styles.challengeFooter,
+            { borderTopColor: theme.colors.border },
+          ]}
+        >
+          <Text
+            style={[
+              styles.challengeFooterText,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            Completed at{' '}
+            {media.timestamp
+              ? new Date(media.timestamp).toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })
+              : new Date().toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })}
+          </Text>
+        </View>
       </View>
     </View>
   );
 }
 
-function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: any, isOwn: boolean, onCancel?: (id: string) => void, onReschedule?: (id: string) => void }) {
+function SessionInviteCard({
+  media,
+  isOwn,
+  onCancel,
+  onReschedule,
+}: {
+  media: any;
+  isOwn: boolean;
+  onCancel?: (id: string) => void;
+  onReschedule?: (id: string) => void;
+}) {
   const theme = useTheme();
   const styles = getStyles(theme.colors);
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
-  
-  const isPostponed = media.status === 'postponed' || (media.status === 'cancelled' && media.cancellation_reason?.toLowerCase().includes('postpone'));
+
+  const isPostponed =
+    media.status === 'postponed' ||
+    (media.status === 'cancelled' &&
+      media.cancellation_reason?.toLowerCase().includes('postpone'));
   const isCancelled = media.status === 'cancelled' && !isPostponed;
   const isRescheduled = media.status === 'rescheduled';
-  
+
   const handleJoin = () => {
     joinSession(media.link || media.external_meeting_url || media.meet_link);
   };
 
   if (isCancelled || isRescheduled || isPostponed) {
-    const title = isPostponed ? 'Session Postponed' : isCancelled ? 'Session Cancelled' : 'Session Rescheduled';
-    const accentColor = isPostponed ? '#EAB308' : isCancelled ? '#EF4444' : theme.colors.primary;
-    const icon = isPostponed ? <Clock size={18} color={accentColor} /> : isCancelled ? <X size={18} color={accentColor} /> : <RefreshCw size={18} color={accentColor} />;
-    
+    const title = isPostponed
+      ? 'Session Postponed'
+      : isCancelled
+        ? 'Session Cancelled'
+        : 'Session Rescheduled';
+    const accentColor = isPostponed
+      ? '#EAB308'
+      : isCancelled
+        ? '#EF4444'
+        : theme.colors.primary;
+    const icon = isPostponed ? (
+      <Clock size={18} color={accentColor} />
+    ) : isCancelled ? (
+      <X size={18} color={accentColor} />
+    ) : (
+      <RefreshCw size={18} color={accentColor} />
+    );
+
     return (
-      <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: `${accentColor}40`, minWidth: 260 }]}>
+      <View
+        style={[
+          styles.challengeCard,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: `${accentColor}40`,
+            minWidth: 260,
+          },
+        ]}
+      >
         <View style={{ padding: 16 }}>
           <View style={styles.challengeHeader}>
-            <View style={[styles.challengeIconBox, { backgroundColor: `${accentColor}26` }]}>{icon}</View>
-            <Text style={[styles.challengeTitle, { color: accentColor, fontFamily: theme.typography.fontFamily }]}>{title}</Text>
+            <View
+              style={[
+                styles.challengeIconBox,
+                { backgroundColor: `${accentColor}26` },
+              ]}
+            >
+              {icon}
+            </View>
+            <Text
+              style={[
+                styles.challengeTitle,
+                { color: accentColor, fontFamily: theme.typography.fontFamily },
+              ]}
+            >
+              {title}
+            </Text>
           </View>
           <View style={styles.challengeBody}>
-            <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text }]}>
+            <Text
+              style={[
+                styles.challengeTaskName,
+                {
+                  fontFamily: theme.typography.fontFamily,
+                  color: theme.colors.text,
+                },
+              ]}
+            >
               {isPostponed
-                ? (isOwn ? 'You postponed this session' : 'Coach postponed this session')
-                : isCancelled 
-                  ? (isOwn ? 'You cancelled this session' : 'Coach cancelled this session')
-                  : (isOwn ? 'You rescheduled this session' : 'Coach rescheduled this session')
-              }
+                ? isOwn
+                  ? 'You postponed this session'
+                  : 'Coach postponed this session'
+                : isCancelled
+                  ? isOwn
+                    ? 'You cancelled this session'
+                    : 'Coach cancelled this session'
+                  : isOwn
+                    ? 'You rescheduled this session'
+                    : 'Coach rescheduled this session'}
             </Text>
             {(isCancelled || isPostponed) && media.cancellation_reason && (
-              <View style={{ marginTop: 8, backgroundColor: isPostponed ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)', padding: 10, borderRadius: 8 }}>
-                <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontStyle: 'italic' }}>"{media.cancellation_reason}"</Text>
+              <View
+                style={{
+                  marginTop: 8,
+                  backgroundColor: isPostponed
+                    ? 'rgba(234, 179, 8, 0.1)'
+                    : 'rgba(239, 68, 68, 0.1)',
+                  padding: 10,
+                  borderRadius: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontSize: 12,
+                    fontStyle: 'italic',
+                  }}
+                >
+                  "{media.cancellation_reason}"
+                </Text>
               </View>
             )}
             {isRescheduled && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => router.push('/(client)/(tabs)/calendar' as any)}
-                style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                style={{
+                  marginTop: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
               >
-                <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '700' }}>View New Schedule</Text>
-                <ChevronLeft size={14} color={theme.colors.primary} style={{ transform: [{ rotate: '180deg' }] }} />
+                <Text
+                  style={{
+                    color: theme.colors.primary,
+                    fontSize: 13,
+                    fontWeight: '700',
+                  }}
+                >
+                  View New Schedule
+                </Text>
+                <ChevronLeft
+                  size={14}
+                  color={theme.colors.primary}
+                  style={{ transform: [{ rotate: '180deg' }] }}
+                />
               </TouchableOpacity>
             )}
           </View>
@@ -699,82 +1248,164 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
   }
 
   return (
-    <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, minWidth: 260 }]}>
+    <View
+      style={[
+        styles.challengeCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+          minWidth: 260,
+        },
+      ]}
+    >
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
-          <View style={[styles.challengeIconBox, { backgroundColor: `${theme.colors.primary}20`, borderRadius: 12, width: 36, height: 36 }]}>
+          <View
+            style={[
+              styles.challengeIconBox,
+              {
+                backgroundColor: `${theme.colors.primary}20`,
+                borderRadius: 12,
+                width: 36,
+                height: 36,
+              },
+            ]}
+          >
             <LucideVideo size={18} color={theme.colors.primary} />
           </View>
-          <Text style={[styles.challengeTitle, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Session Invitation</Text>
+          <Text
+            style={[
+              styles.challengeTitle,
+              {
+                color: theme.colors.primary,
+                fontFamily: theme.typography.fontFamily,
+              },
+            ]}
+          >
+            Session Invitation
+          </Text>
         </View>
         <View style={styles.challengeBody}>
-          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text, fontSize: 18, fontWeight: '700', marginBottom: 8 }]} numberOfLines={2}>
+          <Text
+            style={[
+              styles.challengeTaskName,
+              {
+                fontFamily: theme.typography.fontFamily,
+                color: theme.colors.text,
+                fontSize: 18,
+                fontWeight: '700',
+                marginBottom: 8,
+              },
+            ]}
+            numberOfLines={2}
+          >
             {media.description || 'Scheduled Session'}
           </Text>
           <View style={styles.challengeDetailsRow}>
-             <View style={[styles.challengeDetailItem, { backgroundColor: theme.colors.background, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: theme.colors.border }]}>
-                <Clock size={13} color={theme.colors.textSecondary} />
-                <Text style={[styles.challengeDetailText, { color: theme.colors.textSecondary, fontSize: 11, fontWeight: '600' }]}>
-                  {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : 'Now'}
-                </Text>
-             </View>
+            <View
+              style={[
+                styles.challengeDetailItem,
+                {
+                  backgroundColor: theme.colors.background,
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Clock size={13} color={theme.colors.textSecondary} />
+              <Text
+                style={[
+                  styles.challengeDetailText,
+                  {
+                    color: theme.colors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: '600',
+                  },
+                ]}
+              >
+                {media.timestamp
+                  ? new Date(media.timestamp).toLocaleTimeString([], {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                    })
+                  : 'Now'}
+              </Text>
+            </View>
           </View>
         </View>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           onPress={handleJoin}
           activeOpacity={0.8}
-          style={{ 
-            backgroundColor: theme.colors.primary, 
-            borderRadius: 16, 
-            paddingVertical: 12, 
-            alignItems: 'center', 
+          style={{
+            backgroundColor: theme.colors.primary,
+            borderRadius: 16,
+            paddingVertical: 12,
+            alignItems: 'center',
             justifyContent: 'center',
-            marginTop: 16 
+            marginTop: 16,
           }}
         >
-          <Text style={{ 
-            color: isDarkColor(theme.colors.primary) ? '#FFFFFF' : '#000000', 
-            fontWeight: '700', 
-            fontSize: 15 
-          }}>
+          <Text
+            style={{
+              color: isDarkColor(theme.colors.primary) ? '#FFFFFF' : '#000000',
+              fontWeight: '700',
+              fontSize: 15,
+            }}
+          >
             Join Session
           </Text>
         </TouchableOpacity>
 
         {isOwn && (
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => onReschedule?.(media.sessionId)}
               activeOpacity={0.8}
-              style={{ 
+              style={{
                 flex: 1,
-                backgroundColor: theme.colors.background, 
-                borderRadius: 14, 
-                paddingVertical: 10, 
+                backgroundColor: theme.colors.background,
+                borderRadius: 14,
+                paddingVertical: 10,
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: theme.colors.border
+                borderColor: theme.colors.border,
               }}
             >
-              <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }}>Reschedule</Text>
+              <Text
+                style={{
+                  color: theme.colors.text,
+                  fontWeight: '600',
+                  fontSize: 13,
+                }}
+              >
+                Reschedule
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => onCancel?.(media.sessionId)}
               activeOpacity={0.8}
-              style={{ 
+              style={{
                 flex: 1,
-                backgroundColor: 'rgba(239, 68, 68, 0.08)', 
-                borderRadius: 14, 
-                paddingVertical: 10, 
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                borderRadius: 14,
+                paddingVertical: 10,
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: 'rgba(239, 68, 68, 0.2)'
+                borderColor: 'rgba(239, 68, 68, 0.2)',
               }}
             >
-              <Text style={{ color: '#EF4444', fontWeight: '600', fontSize: 13 }}>Cancel</Text>
+              <Text
+                style={{ color: '#EF4444', fontWeight: '600', fontSize: 13 }}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -786,7 +1417,9 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
         session={{
           id: media.sessionId || '',
           meeting_provider: media.meetingProvider || 'STREAM',
-          external_meeting_url: media.externalMeetingUrl || (media.link && !media.link.includes('jit.si') ? media.link : null),
+          external_meeting_url:
+            media.externalMeetingUrl ||
+            (media.link && !media.link.includes('jit.si') ? media.link : null),
         }}
         isCoach={isOwn}
         participantName={isOwn ? 'Coach' : 'Client'}
@@ -797,8 +1430,14 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
 
 // ── Voice Note Player ────────────────────────────────────────────────────────
 function VoiceNotePlayer({
-  uri, duration, isOwn, theme, senderAvatarUrl, senderName,
-  createdAt, isRead,
+  uri,
+  duration,
+  isOwn,
+  theme,
+  senderAvatarUrl,
+  senderName,
+  createdAt,
+  isRead,
 }: {
   uri: string;
   duration?: number;
@@ -812,10 +1451,13 @@ function VoiceNotePlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [position, setPosition] = useState(0);
-  const [totalDuration, setTotalDuration] = useState(duration ? duration * 1000 : 0);
+  const [totalDuration, setTotalDuration] = useState(
+    duration ? duration * 1000 : 0,
+  );
   const [barWidth, setBarWidth] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(_cachedSpeed);
+  const [playbackSpeed, setPlaybackSpeed] =
+    useState<PlaybackSpeed>(_cachedSpeed);
 
   // Player references
   const audioWebRef = useRef<any>(null);
@@ -827,12 +1469,16 @@ function VoiceNotePlayer({
   // Load persisted speed on mount & subscribe to global changes
   useEffect(() => {
     let active = true;
-    loadGlobalSpeed().then(s => { if (active) setPlaybackSpeed(s); });
-    const listener = (s: PlaybackSpeed) => { if (active) setPlaybackSpeed(s); };
+    loadGlobalSpeed().then((s) => {
+      if (active) setPlaybackSpeed(s);
+    });
+    const listener = (s: PlaybackSpeed) => {
+      if (active) setPlaybackSpeed(s);
+    };
     _speedListeners.push(listener);
     return () => {
       active = false;
-      _speedListeners = _speedListeners.filter(l => l !== listener);
+      _speedListeners = _speedListeners.filter((l) => l !== listener);
     };
   }, []);
 
@@ -859,11 +1505,17 @@ function VoiceNotePlayer({
   const pausePlayback = useCallback(() => {
     setIsPlaying(false);
     if (Platform.OS === 'web' && audioWebRef.current) {
-      try { audioWebRef.current.pause(); } catch {}
+      try {
+        audioWebRef.current.pause();
+      } catch {}
     } else if (nativePlayerRef.current) {
-      try { nativePlayerRef.current.pause(); } catch {}
+      try {
+        nativePlayerRef.current.pause();
+      } catch {}
     } else if (soundAvRef.current) {
-      try { soundAvRef.current.pauseAsync().catch(() => {}); } catch {}
+      try {
+        soundAvRef.current.pauseAsync().catch(() => {});
+      } catch {}
     }
   }, []);
 
@@ -909,7 +1561,10 @@ function VoiceNotePlayer({
     }
 
     // Stop any other currently playing voice note
-    if (activeGlobalVoiceNoteStopper && activeGlobalVoiceNoteStopper !== pausePlayback) {
+    if (
+      activeGlobalVoiceNoteStopper &&
+      activeGlobalVoiceNoteStopper !== pausePlayback
+    ) {
       activeGlobalVoiceNoteStopper();
     }
     activeGlobalVoiceNoteStopper = pausePlayback;
@@ -924,7 +1579,11 @@ function VoiceNotePlayer({
           audioWebRef.current = audio;
 
           audio.onloadedmetadata = () => {
-            if (audio?.duration && !isNaN(audio.duration) && audio.duration > 0) {
+            if (
+              audio?.duration &&
+              !isNaN(audio.duration) &&
+              audio.duration > 0
+            ) {
               setTotalDuration(audio.duration * 1000);
             }
           };
@@ -982,7 +1641,10 @@ function VoiceNotePlayer({
         player.addListener('playbackStatusUpdate', (status: any) => {
           if (!status) return;
           setIsPlaying(!!status.playing);
-          if (!isDraggingRef.current && typeof status.currentTime === 'number') {
+          if (
+            !isDraggingRef.current &&
+            typeof status.currentTime === 'number'
+          ) {
             setPosition(status.currentTime * 1000);
           }
           if (status.duration && status.duration > 0) {
@@ -1015,7 +1677,10 @@ function VoiceNotePlayer({
       setIsPlaying(true);
       setIsLoading(false);
     } catch (e) {
-      console.warn('[VoiceNotePlayer Native] expo-audio error, trying expo-av fallback:', e);
+      console.warn(
+        '[VoiceNotePlayer Native] expo-audio error, trying expo-av fallback:',
+        e,
+      );
       try {
         let snd = soundAvRef.current;
         if (!snd) {
@@ -1025,7 +1690,8 @@ function VoiceNotePlayer({
             (status) => {
               if (status.isLoaded) {
                 if (!isDraggingRef.current) setPosition(status.positionMillis);
-                if (status.durationMillis) setTotalDuration(status.durationMillis);
+                if (status.durationMillis)
+                  setTotalDuration(status.durationMillis);
                 setIsPlaying(status.isPlaying);
                 if (status.didJustFinish) {
                   setIsPlaying(false);
@@ -1036,7 +1702,7 @@ function VoiceNotePlayer({
                   }
                 }
               }
-            }
+            },
           );
           snd = newSound;
           soundAvRef.current = newSound;
@@ -1060,7 +1726,10 @@ function VoiceNotePlayer({
 
   const handleSeek = async (seekProgress: number) => {
     if (totalDuration <= 0) return;
-    const targetMs = Math.max(0, Math.min(totalDuration, seekProgress * totalDuration));
+    const targetMs = Math.max(
+      0,
+      Math.min(totalDuration, seekProgress * totalDuration),
+    );
     setPosition(targetMs);
 
     if (Platform.OS === 'web' && audioWebRef.current) {
@@ -1091,7 +1760,11 @@ function VoiceNotePlayer({
         const newProgress = Math.max(0, Math.min(1, x / barWidth));
         setPosition(newProgress * totalDuration);
       }
-    } else if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
+    } else if (
+      state === State.END ||
+      state === State.CANCELLED ||
+      state === State.FAILED
+    ) {
       setIsDragging(false);
       if (barWidth > 0) {
         const newProgress = Math.max(0, Math.min(1, x / barWidth));
@@ -1121,14 +1794,31 @@ function VoiceNotePlayer({
 
   // Initials fallback for avatar
   const initials = senderName
-    ? senderName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+    ? senderName
+        .split(' ')
+        .map((w) => w[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
     : '?';
 
-  const isBgDark = isOwn ? isDarkColor(theme.colors.primary) : isDarkColor(theme.colors.surface);
+  const isBgDark = isOwn
+    ? isDarkColor(theme.colors.primary)
+    : isDarkColor(theme.colors.surface);
   const textColor = isBgDark ? '#FFFFFF' : '#0F172A';
-  const mutedTextColor = isBgDark ? 'rgba(255,255,255,0.7)' : 'rgba(15, 23, 42, 0.6)';
-  const trackBg = isBgDark ? (isOwn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)') : 'rgba(15, 23, 42, 0.12)';
-  const speedBadgeBg = isBgDark ? (isOwn ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)') : 'rgba(15, 23, 42, 0.08)';
+  const mutedTextColor = isBgDark
+    ? 'rgba(255,255,255,0.7)'
+    : 'rgba(15, 23, 42, 0.6)';
+  const trackBg = isBgDark
+    ? isOwn
+      ? 'rgba(255,255,255,0.3)'
+      : 'rgba(255,255,255,0.15)'
+    : 'rgba(15, 23, 42, 0.12)';
+  const speedBadgeBg = isBgDark
+    ? isOwn
+      ? 'rgba(255,255,255,0.18)'
+      : 'rgba(255,255,255,0.1)'
+    : 'rgba(15, 23, 42, 0.08)';
 
   // Avatar/speed slot — extracted so it can be placed before or after the main content
   const avatarOrSpeedSlot = (
@@ -1156,38 +1846,69 @@ function VoiceNotePlayer({
             />
           ) : (
             // Fallback initials circle
-            <View style={{
-              width: 44, height: 44, borderRadius: 22,
-              backgroundColor: isOwn ? 'rgba(255,255,255,0.25)' : (isBgDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.08)'),
-              justifyContent: 'center', alignItems: 'center',
-            }}>
-              <Text style={{ color: textColor, fontSize: 14, fontWeight: '700' }}>{initials}</Text>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: isOwn
+                  ? 'rgba(255,255,255,0.25)'
+                  : isBgDark
+                    ? 'rgba(255,255,255,0.12)'
+                    : 'rgba(15,23,42,0.08)',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Text
+                style={{ color: textColor, fontSize: 14, fontWeight: '700' }}
+              >
+                {initials}
+              </Text>
             </View>
           )}
           {/* Mic badge bottom-right */}
-          <View style={{
-            position: 'absolute', bottom: -2, right: -2,
-            width: 20, height: 20, borderRadius: 10,
-            backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
-            borderWidth: 2,
-            borderColor: isOwn ? theme.colors.primary : theme.colors.border,
-            justifyContent: 'center', alignItems: 'center',
-          }}>
+          <View
+            style={{
+              position: 'absolute',
+              bottom: -2,
+              right: -2,
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              backgroundColor: isOwn
+                ? theme.colors.primary
+                : theme.colors.surface,
+              borderWidth: 2,
+              borderColor: isOwn ? theme.colors.primary : theme.colors.border,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
             <Text style={{ fontSize: 9 }}>🎤</Text>
           </View>
         </View>
       ) : (
         // Speed badge
-        <View style={{
-          minWidth: 40,
-          height: 28,
-          borderRadius: 8,
-          backgroundColor: speedBadgeBg,
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingHorizontal: 6,
-        }}>
-          <Text style={{ color: textColor, fontSize: 11, fontWeight: '800', letterSpacing: -0.3 }}>
+        <View
+          style={{
+            minWidth: 40,
+            height: 28,
+            borderRadius: 8,
+            backgroundColor: speedBadgeBg,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 6,
+          }}
+        >
+          <Text
+            style={{
+              color: textColor,
+              fontSize: 11,
+              fontWeight: '800',
+              letterSpacing: -0.3,
+            }}
+          >
             {playbackSpeed === 1 ? '1×' : `${playbackSpeed}×`}
           </Text>
         </View>
@@ -1202,13 +1923,13 @@ function VoiceNotePlayer({
         {isOwn && avatarOrSpeedSlot}
 
         {/* Play/Pause button — always leftmost for received, second for sent */}
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={togglePlayback}
           disabled={isLoading}
-          style={{ 
-            width: 44, 
-            height: 44, 
-            justifyContent: 'center', 
+          style={{
+            width: 44,
+            height: 44,
+            justifyContent: 'center',
             alignItems: 'center',
             flexShrink: 0,
           }}
@@ -1218,7 +1939,12 @@ function VoiceNotePlayer({
           ) : isPlaying ? (
             <Pause size={22} color={textColor} fill={textColor} />
           ) : (
-            <Play size={22} color={textColor} fill={textColor} style={{ marginLeft: 3 }} />
+            <Play
+              size={22}
+              color={textColor}
+              fill={textColor}
+              style={{ marginLeft: 3 }}
+            />
           )}
         </TouchableOpacity>
 
@@ -1231,24 +1957,37 @@ function VoiceNotePlayer({
             disallowInterruption={true}
             shouldCancelWhenOutside={false}
           >
-            <View 
+            <View
               onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
               style={{ height: 28, justifyContent: 'center' }}
             >
               {/* Track background */}
-              <View style={{ height: 4, backgroundColor: trackBg, borderRadius: 2, overflow: 'hidden' }}>
-                <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: textColor }} />
+              <View
+                style={{
+                  height: 4,
+                  backgroundColor: trackBg,
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                }}
+              >
+                <View
+                  style={{
+                    width: `${progress * 100}%`,
+                    height: '100%',
+                    backgroundColor: textColor,
+                  }}
+                />
               </View>
-              
+
               {/* Draggable thumb/knob */}
-              <View 
-                style={{ 
-                  position: 'absolute', 
-                  left: `${progress * 100}%`, 
+              <View
+                style={{
+                  position: 'absolute',
+                  left: `${progress * 100}%`,
                   marginLeft: -8,
-                  width: 16, 
-                  height: 16, 
-                  borderRadius: 8, 
+                  width: 16,
+                  height: 16,
+                  borderRadius: 8,
                   backgroundColor: textColor,
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 2 },
@@ -1256,8 +1995,8 @@ function VoiceNotePlayer({
                   shadowRadius: 3,
                   elevation: 4,
                   borderWidth: 1,
-                  borderColor: 'rgba(0,0,0,0.05)'
-                }} 
+                  borderColor: 'rgba(0,0,0,0.05)',
+                }}
               />
             </View>
           </PanGestureHandler>
@@ -1268,45 +2007,76 @@ function VoiceNotePlayer({
       </View>
 
       {/* Bottom Row: Voice duration & message time/status */}
-      <View style={{ 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginTop: 2,
-        paddingLeft: isOwn ? 100 : 56,
-        paddingRight: isOwn ? 12 : 64,
-      }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: 2,
+          paddingLeft: isOwn ? 100 : 56,
+          paddingRight: isOwn ? 12 : 64,
+        }}
+      >
         <Text style={{ fontSize: 9, color: mutedTextColor, fontWeight: '700' }}>
           {formatTime(totalDuration)}
         </Text>
         {createdAt && (
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ 
-              fontSize: 9, 
-              color: mutedTextColor, 
-              fontWeight: '700' 
-            }}>
-              {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            <Text
+              style={{
+                fontSize: 9,
+                color: mutedTextColor,
+                fontWeight: '700',
+              }}
+            >
+              {new Date(createdAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </Text>
-            {isOwn && (
-              isRead 
-                ? <CheckCheck size={11} color="#10B981" style={{ marginLeft: 3 }} /> 
-                : <Check size={11} color={mutedTextColor} style={{ marginLeft: 3 }} />
-            )}
+            {isOwn &&
+              (isRead ? (
+                <CheckCheck
+                  size={11}
+                  color="#10B981"
+                  style={{ marginLeft: 3 }}
+                />
+              ) : (
+                <Check
+                  size={11}
+                  color={mutedTextColor}
+                  style={{ marginLeft: 3 }}
+                />
+              ))}
           </View>
         )}
       </View>
     </View>
   );
 }
-const ChatMediaMessage: React.FC<Props> = ({ 
-  content, isOwn, createdAt, isRead, isUploading, progress = 0, onCancel, replyTo, onPressReply, isHighlighted, onLongPress,
-  onCancelSession, onRescheduleSession, senderAvatarUrl, senderName,
+const ChatMediaMessage: React.FC<Props> = ({
+  content,
+  isOwn,
+  createdAt,
+  isRead,
+  isUploading,
+  progress = 0,
+  onCancel,
+  replyTo,
+  onPressReply,
+  isHighlighted,
+  onLongPress,
+  onCancelSession,
+  onRescheduleSession,
+  senderAvatarUrl,
+  senderName,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme.colors);
-  
-  const isBgDark = isOwn ? isDarkColor(theme.colors.primary) : isDarkColor(theme.colors.surface);
+
+  const isBgDark = isOwn
+    ? isDarkColor(theme.colors.primary)
+    : isDarkColor(theme.colors.surface);
   const textColor = isBgDark ? '#FFFFFF' : '#000000';
   const mutedTextColor = isBgDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
   const scale = useSharedValue(1);
@@ -1322,27 +2092,48 @@ const ChatMediaMessage: React.FC<Props> = ({
   const [isLocalPressed, setIsLocalPressed] = useState(false);
   const [documentModalVisible, setDocumentModalVisible] = useState(false);
   const [documentModalUrl, setDocumentModalUrl] = useState<string | null>(null);
-  const [documentModalName, setDocumentModalName] = useState<string | null>(null);
+  const [documentModalName, setDocumentModalName] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (isHighlighted) {
       Animated.sequence([
-        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
-        Animated.timing(highlightAnim, { toValue: 0, duration: 300, useNativeDriver: false }),
-        Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
-        Animated.timing(highlightAnim, { toValue: 0, duration: 600, useNativeDriver: false }),
+        Animated.timing(highlightAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(highlightAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(highlightAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(highlightAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: false,
+        }),
       ]).start();
     }
   }, [isHighlighted]);
 
   const highlightOverlayColor = highlightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', isOwn ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)']
+    outputRange: [
+      'transparent',
+      isOwn ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)',
+    ],
   });
 
   let media: MediaContent | null = null;
   let isEdited = false;
-  try { 
+  try {
     const trimmed = content.trim();
     let p = JSON.parse(trimmed);
     // Handle double stringification
@@ -1351,7 +2142,7 @@ const ChatMediaMessage: React.FC<Props> = ({
     }
     media = p;
     isEdited = !!media?.is_edited;
-  } catch { 
+  } catch {
     // Manual fallback parsing if JSON.parse fails but it looks like our media structure
     const trimmed = content.trim();
     if (trimmed.startsWith('{')) {
@@ -1360,14 +2151,14 @@ const ChatMediaMessage: React.FC<Props> = ({
       const textMatch = trimmed.match(/"text"\s*:\s*"([^"]+)"/);
       const durationMatch = trimmed.match(/"duration"\s*:\s*(\d+)/);
       const fileNameMatch = trimmed.match(/"fileName"\s*:\s*"([^"]+)"/);
-      
+
       if (typeMatch) {
         media = {
           type: typeMatch[1] as any,
           url: urlMatch ? urlMatch[1] : undefined,
           text: textMatch ? textMatch[1] : undefined,
           duration: durationMatch ? parseInt(durationMatch[1]) : undefined,
-          fileName: fileNameMatch ? fileNameMatch[1] : undefined
+          fileName: fileNameMatch ? fileNameMatch[1] : undefined,
         };
       }
     }
@@ -1384,49 +2175,65 @@ const ChatMediaMessage: React.FC<Props> = ({
     const imageHeight = isVeryLongCaption ? 320 : 240;
 
     messageBody = (
-      <View style={[
-        isOwn ? styles.myBubble : styles.theirBubble, 
-        { 
-          width: currentWidth, 
-          backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
-          borderRadius: 20,
-          borderWidth: isOwn ? 0 : 1,
-          borderColor: isOwn ? 'transparent' : theme.colors.border,
-          overflow: 'visible'
-        }
-      ]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10, borderRadius: 20 }]} pointerEvents="none" />
-        
+      <View
+        style={[
+          isOwn ? styles.myBubble : styles.theirBubble,
+          {
+            width: currentWidth,
+            backgroundColor: isOwn
+              ? theme.colors.primary
+              : theme.colors.surface,
+            borderRadius: 20,
+            borderWidth: isOwn ? 0 : 1,
+            borderColor: isOwn ? 'transparent' : theme.colors.border,
+            overflow: 'visible',
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: highlightOverlayColor,
+              zIndex: 10,
+              borderRadius: 20,
+            },
+          ]}
+          pointerEvents="none"
+        />
+
         {/* Media Container with clipping */}
-        <View style={{ 
-          width: '100%', 
-          height: imageHeight, 
-          borderTopLeftRadius: 18, 
-          borderTopRightRadius: 18,
-          borderBottomLeftRadius: hasCaption ? 0 : 18,
-          borderBottomRightRadius: hasCaption ? 0 : 4,
-          overflow: 'hidden',
-          backgroundColor: 'rgba(255,255,255,0.05)'
-        }}>
+        <View
+          style={{
+            width: '100%',
+            height: imageHeight,
+            borderTopLeftRadius: 18,
+            borderTopRightRadius: 18,
+            borderBottomLeftRadius: hasCaption ? 0 : 18,
+            borderBottomRightRadius: hasCaption ? 0 : 4,
+            overflow: 'hidden',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+          }}
+        >
           {replyTo && (
             <View style={{ padding: 4, backgroundColor: 'rgba(0,0,0,0.1)' }}>
-              <ChatReplyContext 
-                message={replyTo} 
-                onPress={() => replyTo.id && onPressReply?.(replyTo.id)} 
-                isMe={isOwn} 
+              <ChatReplyContext
+                message={replyTo}
+                onPress={() => replyTo.id && onPressReply?.(replyTo.id)}
+                isMe={isOwn}
               />
             </View>
           )}
 
-          <CustomImagePlayer 
-            uri={media.url} 
-            previewUrl={media.previewUrl} 
-            type={media.type as 'image' | 'gif'} 
-            isOwn={isOwn} 
-            isUploading={isUploading} 
-            progress={progress} 
-            onCancel={onCancel} 
-            onLongPress={onLongPress} 
+          <CustomImagePlayer
+            uri={media.url}
+            previewUrl={media.previewUrl}
+            type={media.type as 'image' | 'gif'}
+            isOwn={isOwn}
+            isUploading={isUploading}
+            progress={progress}
+            onCancel={onCancel}
+            onLongPress={onLongPress}
             onPressIn={() => {
               scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
             }}
@@ -1434,53 +2241,100 @@ const ChatMediaMessage: React.FC<Props> = ({
               scale.value = withSpring(1, { stiffness: 450, damping: 25 });
             }}
           />
-          
+
           {!hasCaption && createdAt && (
             <View style={styles.timeBadgeContainer}>
-              {isEdited && <Text style={[styles.timeBadgeText, { opacity: 0.6, fontStyle: 'italic', marginRight: 4 }]}>Edited</Text>}
-              <Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-              {isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}
+              {isEdited && (
+                <Text
+                  style={[
+                    styles.timeBadgeText,
+                    { opacity: 0.6, fontStyle: 'italic', marginRight: 4 },
+                  ]}
+                >
+                  Edited
+                </Text>
+              )}
+              <Text style={styles.timeBadgeText}>
+                {new Date(createdAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+              {isOwn &&
+                (isRead ? (
+                  <CheckCheck
+                    size={12}
+                    color="#FFFFFF"
+                    style={{ marginLeft: 4 }}
+                  />
+                ) : (
+                  <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />
+                ))}
             </View>
           )}
         </View>
 
         {media.text && (
-          <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 }}>
-            <Text style={{ 
-              color: textColor, 
-              fontSize: 15, 
-              lineHeight: 22,
-              fontFamily: theme.typography.fontFamily 
-            }}>
+          <View
+            style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 }}
+          >
+            <Text
+              style={{
+                color: textColor,
+                fontSize: 15,
+                lineHeight: 22,
+                fontFamily: theme.typography.fontFamily,
+              }}
+            >
               {media.text}
             </Text>
-            
-            <View style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center', 
-              justifyContent: 'flex-end',
-              marginTop: 8
-            }}>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                marginTop: 8,
+              }}
+            >
               {isEdited && (
-                <Text style={{ 
-                  fontSize: 10, 
-                  color: mutedTextColor, 
-                  fontStyle: 'italic', 
-                  marginRight: 4 
-                }}>Edited</Text>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    color: mutedTextColor,
+                    fontStyle: 'italic',
+                    marginRight: 4,
+                  }}
+                >
+                  Edited
+                </Text>
               )}
-              <Text style={{ 
-                fontSize: 10, 
-                color: mutedTextColor, 
-                fontWeight: '700' 
-              }}>
-                {new Date(createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <Text
+                style={{
+                  fontSize: 10,
+                  color: mutedTextColor,
+                  fontWeight: '700',
+                }}
+              >
+                {new Date(createdAt || '').toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </Text>
-              {isOwn && (
-                isRead 
-                  ? <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} /> 
-                  : <Check size={13} color="rgba(255,255,255,0.6)" style={{ marginLeft: 4 }} />
-              )}
+              {isOwn &&
+                (isRead ? (
+                  <CheckCheck
+                    size={13}
+                    color="#10B981"
+                    style={{ marginLeft: 4 }}
+                  />
+                ) : (
+                  <Check
+                    size={13}
+                    color="rgba(255,255,255,0.6)"
+                    style={{ marginLeft: 4 }}
+                  />
+                ))}
             </View>
           </View>
         )}
@@ -1488,25 +2342,39 @@ const ChatMediaMessage: React.FC<Props> = ({
     );
   } else if (media.type === 'audio' && media.url) {
     messageBody = (
-      <View style={[
-        isOwn ? styles.myBubble : styles.theirBubble, 
-        { 
-          backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
-          borderRadius: 20,
-          borderWidth: isOwn ? 0 : 1,
-          borderColor: isOwn ? 'transparent' : theme.colors.border,
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          minWidth: 240,
-        }
-      ]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10, borderRadius: 20 }]} pointerEvents="none" />
-        
+      <View
+        style={[
+          isOwn ? styles.myBubble : styles.theirBubble,
+          {
+            backgroundColor: isOwn
+              ? theme.colors.primary
+              : theme.colors.surface,
+            borderRadius: 20,
+            borderWidth: isOwn ? 0 : 1,
+            borderColor: isOwn ? 'transparent' : theme.colors.border,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            minWidth: 240,
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: highlightOverlayColor,
+              zIndex: 10,
+              borderRadius: 20,
+            },
+          ]}
+          pointerEvents="none"
+        />
+
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <VoiceNotePlayer 
-            uri={media.url} 
-            duration={media.duration} 
-            isOwn={isOwn} 
+          <VoiceNotePlayer
+            uri={media.url}
+            duration={media.duration}
+            isOwn={isOwn}
             theme={theme}
             senderAvatarUrl={senderAvatarUrl}
             senderName={senderName}
@@ -1524,46 +2392,62 @@ const ChatMediaMessage: React.FC<Props> = ({
     const videoHeight = isVeryLongCaption ? 220 : 180;
 
     messageBody = (
-      <View style={[
-        isOwn ? styles.myBubble : styles.theirBubble, 
-        { 
-          width: currentWidth, 
-          backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
-          borderRadius: 20,
-          borderWidth: isOwn ? 0 : 1,
-          borderColor: isOwn ? 'transparent' : theme.colors.border,
-          overflow: 'visible'
-        }
-      ]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: highlightOverlayColor, zIndex: 10, borderRadius: 20 }]} pointerEvents="none" />
-        
+      <View
+        style={[
+          isOwn ? styles.myBubble : styles.theirBubble,
+          {
+            width: currentWidth,
+            backgroundColor: isOwn
+              ? theme.colors.primary
+              : theme.colors.surface,
+            borderRadius: 20,
+            borderWidth: isOwn ? 0 : 1,
+            borderColor: isOwn ? 'transparent' : theme.colors.border,
+            overflow: 'visible',
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: highlightOverlayColor,
+              zIndex: 10,
+              borderRadius: 20,
+            },
+          ]}
+          pointerEvents="none"
+        />
+
         {/* Media Container with clipping */}
-        <View style={{ 
-          width: '100%', 
-          height: videoHeight, 
-          borderTopLeftRadius: 18, 
-          borderTopRightRadius: 18,
-          borderBottomLeftRadius: hasCaption ? 0 : 18,
-          borderBottomRightRadius: hasCaption ? 0 : 4,
-          overflow: 'hidden',
-          backgroundColor: '#000'
-        }}>
+        <View
+          style={{
+            width: '100%',
+            height: videoHeight,
+            borderTopLeftRadius: 18,
+            borderTopRightRadius: 18,
+            borderBottomLeftRadius: hasCaption ? 0 : 18,
+            borderBottomRightRadius: hasCaption ? 0 : 4,
+            overflow: 'hidden',
+            backgroundColor: '#000',
+          }}
+        >
           {replyTo && (
             <View style={{ padding: 4, backgroundColor: 'rgba(0,0,0,0.1)' }}>
-              <ChatReplyContext 
-                message={replyTo} 
-                onPress={() => replyTo.id && onPressReply?.(replyTo.id)} 
-                isMe={isOwn} 
+              <ChatReplyContext
+                message={replyTo}
+                onPress={() => replyTo.id && onPressReply?.(replyTo.id)}
+                isMe={isOwn}
               />
             </View>
           )}
 
-          <CustomVideoPlayer 
-            uri={media.url} 
+          <CustomVideoPlayer
+            uri={media.url}
             thumbnailUrl={media.thumbnailUrl}
-            isUploading={isUploading} 
-            progress={progress} 
-            onCancel={onCancel} 
+            isUploading={isUploading}
+            progress={progress}
+            onCancel={onCancel}
             onLongPress={onLongPress}
             onPressIn={() => {
               scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
@@ -1572,53 +2456,100 @@ const ChatMediaMessage: React.FC<Props> = ({
               scale.value = withSpring(1, { stiffness: 450, damping: 25 });
             }}
           />
-          
+
           {!hasCaption && createdAt && (
             <View style={[styles.timeBadgeContainer, { bottom: 8, right: 8 }]}>
-              {isEdited && <Text style={[styles.timeBadgeText, { opacity: 0.6, fontStyle: 'italic', marginRight: 4 }]}>Edited</Text>}
-              <Text style={styles.timeBadgeText}>{new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-              {isOwn && (isRead ? <CheckCheck size={12} color="#FFFFFF" style={{ marginLeft: 4 }} /> : <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />)}
+              {isEdited && (
+                <Text
+                  style={[
+                    styles.timeBadgeText,
+                    { opacity: 0.6, fontStyle: 'italic', marginRight: 4 },
+                  ]}
+                >
+                  Edited
+                </Text>
+              )}
+              <Text style={styles.timeBadgeText}>
+                {new Date(createdAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+              {isOwn &&
+                (isRead ? (
+                  <CheckCheck
+                    size={12}
+                    color="#FFFFFF"
+                    style={{ marginLeft: 4 }}
+                  />
+                ) : (
+                  <Check size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />
+                ))}
             </View>
           )}
         </View>
 
         {media.text && (
-          <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 }}>
-            <Text style={{ 
-              color: textColor, 
-              fontSize: 15, 
-              lineHeight: 22,
-              fontFamily: theme.typography.fontFamily 
-            }}>
+          <View
+            style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 }}
+          >
+            <Text
+              style={{
+                color: textColor,
+                fontSize: 15,
+                lineHeight: 22,
+                fontFamily: theme.typography.fontFamily,
+              }}
+            >
               {media.text}
             </Text>
-            
-            <View style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center', 
-              justifyContent: 'flex-end',
-              marginTop: 8
-            }}>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                marginTop: 8,
+              }}
+            >
               {isEdited && (
-                <Text style={{ 
-                  fontSize: 10, 
-                  color: mutedTextColor, 
-                  fontStyle: 'italic', 
-                  marginRight: 4 
-                }}>Edited</Text>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    color: mutedTextColor,
+                    fontStyle: 'italic',
+                    marginRight: 4,
+                  }}
+                >
+                  Edited
+                </Text>
               )}
-              <Text style={{ 
-                fontSize: 10, 
-                color: mutedTextColor, 
-                fontWeight: '700' 
-              }}>
-                {new Date(createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <Text
+                style={{
+                  fontSize: 10,
+                  color: mutedTextColor,
+                  fontWeight: '700',
+                }}
+              >
+                {new Date(createdAt || '').toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </Text>
-              {isOwn && (
-                isRead 
-                  ? <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} /> 
-                  : <Check size={13} color="rgba(255,255,255,0.6)" style={{ marginLeft: 4 }} />
-              )}
+              {isOwn &&
+                (isRead ? (
+                  <CheckCheck
+                    size={13}
+                    color="#10B981"
+                    style={{ marginLeft: 4 }}
+                  />
+                ) : (
+                  <Check
+                    size={13}
+                    color="rgba(255,255,255,0.6)"
+                    style={{ marginLeft: 4 }}
+                  />
+                ))}
             </View>
           </View>
         )}
@@ -1626,17 +2557,19 @@ const ChatMediaMessage: React.FC<Props> = ({
     );
   } else if (media.type === 'document' || media.type === 'audio') {
     const isAudio = media.type === 'audio';
-    
+
     messageBody = (
-      <View 
+      <View
         style={[
-          styles.bubble, 
-          isOwn ? styles.myBubble : styles.theirBubble, 
-          { 
-            backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
+          styles.bubble,
+          isOwn ? styles.myBubble : styles.theirBubble,
+          {
+            backgroundColor: isOwn
+              ? theme.colors.primary
+              : theme.colors.surface,
             borderWidth: isOwn ? 0 : 1,
             borderColor: isOwn ? 'transparent' : theme.colors.border,
-            minWidth: 260, 
+            minWidth: 260,
             maxWidth: '85%',
             padding: 12,
             borderRadius: 20,
@@ -1646,23 +2579,23 @@ const ChatMediaMessage: React.FC<Props> = ({
             shadowOpacity: 0.2,
             shadowRadius: 8,
             elevation: 4,
-          }
-        ]} 
+          },
+        ]}
       >
         {isAudio && !isUploading ? (
-          <VoiceNotePlayer 
-            uri={media.url!} 
-            duration={media.duration} 
-            isOwn={isOwn} 
-            theme={theme} 
+          <VoiceNotePlayer
+            uri={media.url!}
+            duration={media.duration}
+            isOwn={isOwn}
+            theme={theme}
             senderAvatarUrl={senderAvatarUrl}
             senderName={senderName}
           />
         ) : (
-          <TouchableOpacity 
-            activeOpacity={0.9} 
-            delayLongPress={200} 
-            onLongPress={onLongPress} 
+          <TouchableOpacity
+            activeOpacity={0.9}
+            delayLongPress={200}
+            onLongPress={onLongPress}
             onPressIn={() => {
               scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
             }}
@@ -1676,108 +2609,164 @@ const ChatMediaMessage: React.FC<Props> = ({
                 setDocumentModalVisible(true);
               }
             }}
-            style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}
+            style={{
+              width: '100%',
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
           >
-            <View style={{ 
-              width: 52, 
-              height: 52, 
-              borderRadius: 14, 
-              backgroundColor: isOwn ? 'rgba(255,255,255,0.15)' : `${theme.colors.primary}20`, 
-              justifyContent: 'center', 
-              alignItems: 'center' 
-            }}>
-              {isAudio ? <FileAudio size={26} color={isOwn ? '#FFFFFF' : theme.colors.primary} /> : <FileText size={26} color={isOwn ? '#FFFFFF' : theme.colors.primary} />}
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 14,
+                backgroundColor: isOwn
+                  ? 'rgba(255,255,255,0.15)'
+                  : `${theme.colors.primary}20`,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              {isAudio ? (
+                <FileAudio
+                  size={26}
+                  color={isOwn ? '#FFFFFF' : theme.colors.primary}
+                />
+              ) : (
+                <FileText
+                  size={26}
+                  color={isOwn ? '#FFFFFF' : theme.colors.primary}
+                />
+              )}
             </View>
-            
+
             <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
-              <Text 
-                style={{ 
-                  color: textColor, 
-                  fontSize: 15, 
+              <Text
+                style={{
+                  color: textColor,
+                  fontSize: 15,
                   fontWeight: '700',
-                  letterSpacing: -0.3
-                }} 
-                numberOfLines={1} 
+                  letterSpacing: -0.3,
+                }}
+                numberOfLines={1}
                 ellipsizeMode="tail"
               >
                 {media.fileName || (isUploading ? 'Uploading…' : 'Document')}
               </Text>
-              <Text 
-                style={{ 
-                  color: mutedTextColor, 
-                  fontSize: 12, 
+              <Text
+                style={{
+                  color: mutedTextColor,
+                  fontSize: 12,
                   marginTop: 3,
-                  fontWeight: '500'
+                  fontWeight: '500',
                 }}
               >
-                {isUploading ? `Uploading… ${progress}%` : isAudio ? 'Voice message' : 'Document'}
+                {isUploading
+                  ? `Uploading… ${progress}%`
+                  : isAudio
+                    ? 'Voice message'
+                    : 'Document'}
               </Text>
             </View>
           </TouchableOpacity>
         )}
-        
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          justifyContent: 'flex-end', 
-          marginTop: 8,
-          alignSelf: 'stretch'
-        }}>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            marginTop: 8,
+            alignSelf: 'stretch',
+          }}
+        >
           {isEdited && (
-            <Text style={{ 
-              fontSize: 10, 
-              color: mutedTextColor, 
-              fontStyle: 'italic', 
-              marginRight: 6 
-            }}>Edited</Text>
+            <Text
+              style={{
+                fontSize: 10,
+                color: mutedTextColor,
+                fontStyle: 'italic',
+                marginRight: 6,
+              }}
+            >
+              Edited
+            </Text>
           )}
-          <Text style={{ 
-            fontSize: 10, 
-            color: mutedTextColor, 
-            fontWeight: '700' 
-          }}>
-            {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <Text
+            style={{
+              fontSize: 10,
+              color: mutedTextColor,
+              fontWeight: '700',
+            }}
+          >
+            {new Date(createdAt).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </Text>
-          {isOwn && (
-            isRead 
-              ? <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} /> 
-              : <Check size={13} color="rgba(255,255,255,0.6)" style={{ marginLeft: 4 }} />
-          )}
+          {isOwn &&
+            (isRead ? (
+              <CheckCheck size={13} color="#10B981" style={{ marginLeft: 4 }} />
+            ) : (
+              <Check
+                size={13}
+                color="rgba(255,255,255,0.6)"
+                style={{ marginLeft: 4 }}
+              />
+            ))}
         </View>
 
-        <DocumentPreviewModal 
-          visible={documentModalVisible} 
+        <DocumentPreviewModal
+          visible={documentModalVisible}
           uri={documentModalUrl}
           type={isAudio ? 'audio' : 'document'}
-          fileName={documentModalName} 
-          onClose={() => setDocumentModalVisible(false)} 
+          fileName={documentModalName}
+          onClose={() => setDocumentModalVisible(false)}
         />
       </View>
     );
   } else if (media.type === 'task_completion') {
     messageBody = (
       <>
-        <TouchableOpacity 
-          activeOpacity={0.9} 
-          delayLongPress={200} 
-          onLongPress={onLongPress} 
+        <TouchableOpacity
+          activeOpacity={0.9}
+          delayLongPress={200}
+          onLongPress={onLongPress}
           onPressIn={() => {
             scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
           }}
           onPressOut={() => {
             scale.value = withSpring(1, { stiffness: 450, damping: 25 });
           }}
-          style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}
+          style={[
+            styles.bubble,
+            isOwn ? styles.myBubble : styles.theirBubble,
+            {
+              backgroundColor: 'transparent',
+              borderWidth: 0,
+              padding: 0,
+              maxWidth: '100%',
+              overflow: 'visible',
+            },
+          ]}
         >
-          <TaskCompletedCard media={media} onPressImage={() => media.imageUrl && setIsTaskExpanded(true)} />
+          <TaskCompletedCard
+            media={media}
+            onPressImage={() => media.imageUrl && setIsTaskExpanded(true)}
+          />
         </TouchableOpacity>
 
         {media.imageUrl && (
-          <Modal visible={isTaskExpanded} transparent animationType="fade" statusBarTranslucent>
-            <FullscreenImageModal 
-              uri={media.imageUrl} 
-              type="task_completion" 
-              onClose={() => setIsTaskExpanded(false)} 
+          <Modal
+            visible={isTaskExpanded}
+            transparent
+            animationType="fade"
+            statusBarTranslucent
+          >
+            <FullscreenImageModal
+              uri={media.imageUrl}
+              type="task_completion"
+              onClose={() => setIsTaskExpanded(false)}
             />
           </Modal>
         )}
@@ -1785,19 +2774,51 @@ const ChatMediaMessage: React.FC<Props> = ({
     );
   } else if (media.type === 'session_invite' || media.type === 'call_invite') {
     messageBody = (
-      <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}>
-        <SessionInviteCard 
-          media={media} 
-          isOwn={isOwn} 
+      <View
+        style={[
+          styles.bubble,
+          isOwn ? styles.myBubble : styles.theirBubble,
+          {
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+            padding: 0,
+            maxWidth: '100%',
+            overflow: 'visible',
+          },
+        ]}
+      >
+        <SessionInviteCard
+          media={media}
+          isOwn={isOwn}
           onCancel={onCancelSession}
           onReschedule={onRescheduleSession}
         />
         {createdAt && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4, paddingRight: 4 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              marginTop: 4,
+              paddingRight: 4,
+            }}
+          >
             <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>
-              {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {new Date(createdAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </Text>
-            {isOwn && (isRead ? <CheckCheck size={12} color="#34D399" style={{ marginLeft: 4 }} /> : <Check size={12} color="#94A3B8" style={{ marginLeft: 4 }} />)}
+            {isOwn &&
+              (isRead ? (
+                <CheckCheck
+                  size={12}
+                  color="#34D399"
+                  style={{ marginLeft: 4 }}
+                />
+              ) : (
+                <Check size={12} color="#94A3B8" style={{ marginLeft: 4 }} />
+              ))}
           </View>
         )}
       </View>
@@ -1805,152 +2826,418 @@ const ChatMediaMessage: React.FC<Props> = ({
   } else if (media.type === 'challenge_completed') {
     messageBody = (
       <>
-        <TouchableOpacity 
-          activeOpacity={0.9} 
-          delayLongPress={200} 
-          onLongPress={onLongPress} 
+        <TouchableOpacity
+          activeOpacity={0.9}
+          delayLongPress={200}
+          onLongPress={onLongPress}
           onPressIn={() => {
             scale.value = withSpring(0.9, { stiffness: 450, damping: 25 });
           }}
           onPressOut={() => {
             scale.value = withSpring(1, { stiffness: 450, damping: 25 });
           }}
-          style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: 'transparent', borderWidth: 0, padding: 0, maxWidth: '100%', overflow: 'visible' }]}
+          style={[
+            styles.bubble,
+            isOwn ? styles.myBubble : styles.theirBubble,
+            {
+              backgroundColor: 'transparent',
+              borderWidth: 0,
+              padding: 0,
+              maxWidth: '100%',
+              overflow: 'visible',
+            },
+          ]}
         >
-          <ChallengeCompletedCard 
-            media={media} 
-            onPressImage={() => media.imageUrl && setIsChallengeExpanded(true)} 
+          <ChallengeCompletedCard
+            media={media}
+            onPressImage={() => media.imageUrl && setIsChallengeExpanded(true)}
             onPressDetails={() => setIsDetailsVisible(true)}
           />
         </TouchableOpacity>
 
         {media.imageUrl && (
-          <Modal visible={isChallengeExpanded} transparent animationType="fade" statusBarTranslucent>
-            <FullscreenImageModal 
-              uri={media.imageUrl} 
-              type="task_completion" 
-              onClose={() => setIsChallengeExpanded(false)} 
+          <Modal
+            visible={isChallengeExpanded}
+            transparent
+            animationType="fade"
+            statusBarTranslucent
+          >
+            <FullscreenImageModal
+              uri={media.imageUrl}
+              type="task_completion"
+              onClose={() => setIsChallengeExpanded(false)}
             />
           </Modal>
         )}
 
-        <Modal 
-          visible={isDetailsVisible} 
-          transparent 
-          animationType="slide" 
+        <Modal
+          visible={isDetailsVisible}
+          transparent
+          animationType="slide"
           onRequestClose={() => setIsDetailsVisible(false)}
         >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-            <View style={{ 
-              backgroundColor: '#0F172A', 
-              borderTopLeftRadius: 20, 
-              borderTopRightRadius: 20, 
-              borderWidth: 1, 
-              borderColor: 'rgba(255,255,255,0.08)', 
-              paddingBottom: 40,
-              maxHeight: '60%' 
-            }}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              justifyContent: 'flex-end',
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: '#0F172A',
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.08)',
+                paddingBottom: 40,
+                maxHeight: '60%',
+              }}
+            >
               {/* Header */}
-              <View style={{ 
-                flexDirection: 'row', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                padding: 20, 
-                borderBottomWidth: 1, 
-                borderBottomColor: 'rgba(255, 255, 255, 0.08)' 
-              }}>
-                <Text style={{ fontSize: 18, fontWeight: '700', color: 'white', fontFamily: theme.typography.fontFamily }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: 20,
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: '700',
+                    color: 'white',
+                    fontFamily: theme.typography.fontFamily,
+                  }}
+                >
                   Challenge Details
                 </Text>
-                <TouchableOpacity onPress={() => setIsDetailsVisible(false)} style={{ padding: 4 }}>
+                <TouchableOpacity
+                  onPress={() => setIsDetailsVisible(false)}
+                  style={{ padding: 4 }}
+                >
                   <X size={24} color="#94A3B8" />
                 </TouchableOpacity>
               </View>
 
               {/* Content */}
               <ScrollView contentContainerStyle={{ padding: 20 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 16,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
                     <Trophy size={20} color="#10B981" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 13, color: '#94A3B8', fontFamily: theme.typography.fontFamily }}>Task Name</Text>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: 'white', fontFamily: theme.typography.fontFamily }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: '#94A3B8',
+                        fontFamily: theme.typography.fontFamily,
+                      }}
+                    >
+                      Task Name
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: '700',
+                        color: 'white',
+                        fontFamily: theme.typography.fontFamily,
+                      }}
+                    >
                       {media.taskName || 'Daily Mission'}
                     </Text>
                   </View>
                 </View>
 
                 {media.taskDescription ? (
-                  <View style={{ marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                  <View
+                    style={{
+                      marginBottom: 16,
+                      backgroundColor: 'rgba(255,255,255,0.03)',
+                      padding: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.05)',
+                    }}
+                  >
                     {(() => {
-                        try {
-                            const parsed = JSON.parse(media.taskDescription);
-                            if (parsed.sub_tasks) {
-                                return (
-                                    <View>
-                                        <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 8, fontFamily: theme.typography.fontFamily }}>Daily Plan</Text>
-                                        {parsed.global_rule ? (
-                                            <View style={{ marginBottom: 12, padding: 10, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 8, borderLeftWidth: 3, borderLeftColor: theme.colors.primary }}>
-                                                <Text style={{ color: '#E2E8F0', fontSize: 13, fontFamily: theme.typography.fontFamily, fontStyle: 'italic' }}>"{parsed.global_rule}"</Text>
-                                            </View>
-                                        ) : null}
-                                        {parsed.sub_tasks.map((task: any, idx: number) => (
-                                            <View key={task.id || idx} style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start' }}>
-                                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primary, marginTop: 6, marginRight: 8 }} />
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={{ color: 'white', fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily }}>{task.exercise}</Text>
-                                                    <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 2, fontFamily: theme.typography.fontFamily }}>{task.sets} {task.sets === 1 ? 'SET' : 'SETS'} • {task.notes}</Text>
-                                                </View>
-                                            </View>
-                                        ))}
-                                    </View>
-                                );
-                            }
-                        } catch (e) {
-                            // Fallback to normal text rendering
-                        }
-                        
-                        return (
+                      try {
+                        const parsed = JSON.parse(media.taskDescription);
+                        if (parsed.sub_tasks) {
+                          return (
                             <View>
-                                <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Description</Text>
-                                <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 20, fontFamily: theme.typography.fontFamily }}>
-                                  {media.taskDescription}
-                                </Text>
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  color: '#94A3B8',
+                                  marginBottom: 8,
+                                  fontFamily: theme.typography.fontFamily,
+                                }}
+                              >
+                                Daily Plan
+                              </Text>
+                              {parsed.global_rule ? (
+                                <View
+                                  style={{
+                                    marginBottom: 12,
+                                    padding: 10,
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    borderRadius: 8,
+                                    borderLeftWidth: 3,
+                                    borderLeftColor: theme.colors.primary,
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      color: '#E2E8F0',
+                                      fontSize: 13,
+                                      fontFamily: theme.typography.fontFamily,
+                                      fontStyle: 'italic',
+                                    }}
+                                  >
+                                    "{parsed.global_rule}"
+                                  </Text>
+                                </View>
+                              ) : null}
+                              {parsed.sub_tasks.map(
+                                (task: any, idx: number) => (
+                                  <View
+                                    key={task.id || idx}
+                                    style={{
+                                      marginBottom: 10,
+                                      flexDirection: 'row',
+                                      alignItems: 'flex-start',
+                                    }}
+                                  >
+                                    <View
+                                      style={{
+                                        width: 6,
+                                        height: 6,
+                                        borderRadius: 3,
+                                        backgroundColor: theme.colors.primary,
+                                        marginTop: 6,
+                                        marginRight: 8,
+                                      }}
+                                    />
+                                    <View style={{ flex: 1 }}>
+                                      <Text
+                                        style={{
+                                          color: 'white',
+                                          fontSize: 14,
+                                          fontWeight: '600',
+                                          fontFamily:
+                                            theme.typography.fontFamily,
+                                        }}
+                                      >
+                                        {task.exercise}
+                                      </Text>
+                                      <Text
+                                        style={{
+                                          color: '#94A3B8',
+                                          fontSize: 12,
+                                          marginTop: 2,
+                                          fontFamily:
+                                            theme.typography.fontFamily,
+                                        }}
+                                      >
+                                        {task.sets}{' '}
+                                        {task.sets === 1 ? 'SET' : 'SETS'} •{' '}
+                                        {task.notes}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                ),
+                              )}
                             </View>
-                        );
+                          );
+                        }
+                      } catch (e) {
+                        // Fallback to normal text rendering
+                      }
+
+                      return (
+                        <View>
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: '#94A3B8',
+                              marginBottom: 4,
+                              fontFamily: theme.typography.fontFamily,
+                            }}
+                          >
+                            Description
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              color: '#E2E8F0',
+                              lineHeight: 20,
+                              fontFamily: theme.typography.fontFamily,
+                            }}
+                          >
+                            {media.taskDescription}
+                          </Text>
+                        </View>
+                      );
                     })()}
                   </View>
                 ) : null}
 
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                    <Text style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Focus</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View
+                  style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}
+                >
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'rgba(255,255,255,0.03)',
+                      padding: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.05)',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: '#94A3B8',
+                        marginBottom: 4,
+                        fontFamily: theme.typography.fontFamily,
+                      }}
+                    >
+                      Focus
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
                       <Target size={14} color={theme.colors.primary} />
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: 'white', fontFamily: theme.typography.fontFamily }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: '600',
+                          color: 'white',
+                          fontFamily: theme.typography.fontFamily,
+                        }}
+                      >
                         {media.focusType || 'Training'}
                       </Text>
                     </View>
                   </View>
 
-                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                    <Text style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Intensity</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Zap size={14} color={media.intensity?.toLowerCase() === 'high' ? '#EF4444' : media.intensity?.toLowerCase() === 'medium' ? '#F59E0B' : '#10B981'} />
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: 'white', fontFamily: theme.typography.fontFamily }}>
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'rgba(255,255,255,0.03)',
+                      padding: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.05)',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: '#94A3B8',
+                        marginBottom: 4,
+                        fontFamily: theme.typography.fontFamily,
+                      }}
+                    >
+                      Intensity
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Zap
+                        size={14}
+                        color={
+                          media.intensity?.toLowerCase() === 'high'
+                            ? '#EF4444'
+                            : media.intensity?.toLowerCase() === 'medium'
+                              ? '#F59E0B'
+                              : '#10B981'
+                        }
+                      />
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: '600',
+                          color: 'white',
+                          fontFamily: theme.typography.fontFamily,
+                        }}
+                      >
                         {media.intensity || 'Normal'}
                       </Text>
                     </View>
                   </View>
                 </View>
 
-                <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                  <Text style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, fontFamily: theme.typography.fontFamily }}>Completed At</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View
+                  style={{
+                    backgroundColor: 'rgba(255,255,255,0.03)',
+                    padding: 12,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.05)',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: '#94A3B8',
+                      marginBottom: 4,
+                      fontFamily: theme.typography.fontFamily,
+                    }}
+                  >
+                    Completed At
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
                     <Clock size={14} color="#10B981" />
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: 'white', fontFamily: theme.typography.fontFamily }}>
-                      {media.completedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: '600',
+                        color: 'white',
+                        fontFamily: theme.typography.fontFamily,
+                      }}
+                    >
+                      {media.completedAt ||
+                        new Date().toLocaleTimeString([], {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
                     </Text>
                   </View>
                 </View>
@@ -1961,14 +3248,44 @@ const ChatMediaMessage: React.FC<Props> = ({
       </>
     );
   } else if (media.type === 'meal' || media.type === 'meal_log') {
-    messageBody = <MealMessageCard content={content} isOwn={isOwn} onLongPress={onLongPress} />;
+    messageBody = (
+      <MealMessageCard
+        content={content}
+        isOwn={isOwn}
+        onLongPress={onLongPress}
+      />
+    );
   } else {
     messageBody = (
-      <View style={[styles.bubble, isOwn ? styles.myBubble : styles.theirBubble, { backgroundColor: theme.colors.surface, padding: 12, borderWidth: 1, borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
+      <View
+        style={[
+          styles.bubble,
+          isOwn ? styles.myBubble : styles.theirBubble,
+          {
+            backgroundColor: theme.colors.surface,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+          },
+        ]}
+      >
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            fontSize: 13,
+            fontStyle: 'italic',
+          }}
+        >
           [Media: {media.type || 'Unknown'}]
         </Text>
-        {media.url && <Text style={{ color: theme.colors.primary, fontSize: 11, marginTop: 4 }} numberOfLines={1}>{media.url}</Text>}
+        {media.url && (
+          <Text
+            style={{ color: theme.colors.primary, fontSize: 11, marginTop: 4 }}
+            numberOfLines={1}
+          >
+            {media.url}
+          </Text>
+        )}
       </View>
     );
   }
@@ -1976,9 +3293,20 @@ const ChatMediaMessage: React.FC<Props> = ({
   return (
     <View style={{ position: 'relative' }}>
       {media?.is_forwarded && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: isOwn ? 0 : 4, alignSelf: isOwn ? 'flex-end' : 'flex-start', opacity: 0.6 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 4,
+            marginLeft: isOwn ? 0 : 4,
+            alignSelf: isOwn ? 'flex-end' : 'flex-start',
+            opacity: 0.6,
+          }}
+        >
           <Forward size={12} color="#94A3B8" style={{ marginRight: 4 }} />
-          <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Forwarded</Text>
+          <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>
+            Forwarded
+          </Text>
         </View>
       )}
       <Pressable
@@ -1991,35 +3319,121 @@ const ChatMediaMessage: React.FC<Props> = ({
         }}
         onLongPress={onLongPress}
       >
-        <Reanimated.View style={animatedStyle}>
-          {messageBody}
-        </Reanimated.View>
+        <Reanimated.View style={animatedStyle}>{messageBody}</Reanimated.View>
       </Pressable>
     </View>
   );
-}
+};
 
-const getStyles = (colors: any) => StyleSheet.create({
-  bubble: { maxWidth: '80%', borderRadius: 16, marginBottom: 4, overflow: 'hidden' },
-  myBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-  theirBubble: { alignSelf: 'flex-start', borderBottomLeftRadius: 4, borderWidth: 1 },
-  docContainer: { flexDirection: 'row', alignItems: 'center', padding: 12, minWidth: 200, maxWidth: 260 },
-  docName: { fontSize: 14, fontWeight: '600' },
-  docHint: { fontSize: 11, marginTop: 2 },
-  timeBadgeContainer: { position: 'absolute', bottom: 6, right: 6, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 12 },
-  timeBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '500' },
-  challengeCard: { width: 260, borderRadius: 24, borderWidth: 1, overflow: 'hidden', backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
-  challengeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  challengeIconBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: `${colors.primary}20`, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  challengeTitle: { color: colors.primary, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },
-  challengeBody: { marginBottom: 16 },
-  challengeTaskName: { color: colors.text, fontSize: 18, fontWeight: '800', lineHeight: 24, marginBottom: 8 },
-  challengeDetailsRow: { flexDirection: 'row', alignItems: 'center' },
-  challengeDetailItem: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  challengeDetailText: { color: colors.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  challengeFooter: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
-  challengeFooterText: { color: colors.textTertiary || colors.textSecondary, fontSize: 10, fontWeight: '600' },
-  cardImageContainer: { width: '100%', height: 180, overflow: 'hidden', backgroundColor: colors.background },
-});
+const getStyles = (colors: any) =>
+  StyleSheet.create({
+    bubble: {
+      maxWidth: '80%',
+      borderRadius: 16,
+      marginBottom: 4,
+      overflow: 'hidden',
+    },
+    myBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
+    theirBubble: {
+      alignSelf: 'flex-start',
+      borderBottomLeftRadius: 4,
+      borderWidth: 1,
+    },
+    docContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 12,
+      minWidth: 200,
+      maxWidth: 260,
+    },
+    docName: { fontSize: 14, fontWeight: '600' },
+    docHint: { fontSize: 11, marginTop: 2 },
+    timeBadgeContainer: {
+      position: 'absolute',
+      bottom: 6,
+      right: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+      borderRadius: 12,
+    },
+    timeBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '500' },
+    challengeCard: {
+      width: 260,
+      borderRadius: 24,
+      borderWidth: 1,
+      overflow: 'hidden',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    challengeHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    challengeIconBox: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: `${colors.primary}20`,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 10,
+    },
+    challengeTitle: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 1.5,
+    },
+    challengeBody: { marginBottom: 16 },
+    challengeTaskName: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+      lineHeight: 24,
+      marginBottom: 8,
+    },
+    challengeDetailsRow: { flexDirection: 'row', alignItems: 'center' },
+    challengeDetailItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.background,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    challengeDetailText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+    },
+    challengeFooter: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 12,
+    },
+    challengeFooterText: {
+      color: colors.textTertiary || colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '600',
+    },
+    cardImageContainer: {
+      width: '100%',
+      height: 180,
+      overflow: 'hidden',
+      backgroundColor: colors.background,
+    },
+  });
 
 export default ChatMediaMessage;
