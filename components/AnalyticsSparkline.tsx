@@ -72,14 +72,16 @@ export const AnalyticsSparkline: React.FC<AnalyticsSparklineProps> = ({
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaPath = `${linePath} L ${width} ${height} L 0 ${height} Z`;
 
+  const sparkColor = colors.primary || '#3B82F6';
+
   return (
     <View className="flex-1 relative">
       <View className="absolute bottom-0 left-0 right-0 top-0 opacity-60">
         <Svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
           <Defs>
             <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#A855F7" stopOpacity="0.4" />
-              <Stop offset="100%" stopColor="#A855F7" stopOpacity="0" />
+              <Stop offset="0" stopColor={sparkColor} stopOpacity="0.4" />
+              <Stop offset="100%" stopColor={sparkColor} stopOpacity="0" />
             </LinearGradient>
           </Defs>
           <Path
@@ -89,7 +91,7 @@ export const AnalyticsSparkline: React.FC<AnalyticsSparklineProps> = ({
           <Path
             d={linePath}
             fill="none"
-            stroke="#A855F7"
+            stroke={sparkColor}
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"

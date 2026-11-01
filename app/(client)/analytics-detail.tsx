@@ -124,8 +124,8 @@ export default function AnalyticsDetailScreen() {
 
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondary = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
-  const cardBg = isDark ? '#0F172A' : '#FFFFFF';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   const activeMetric: MetricTab = (
     params.metric && ['steps', 'sleep', 'weight', 'energy', 'nutrition'].includes(params.metric)

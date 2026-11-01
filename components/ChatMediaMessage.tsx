@@ -429,7 +429,7 @@ function CustomVideoPlayer({
             />
           ) : (
             // Uploading placeholder
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1E293B' }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.05)' }]} />
           )
         )}
         
@@ -575,7 +575,7 @@ function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media
       )}
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
-          <View style={styles.challengeIconBox}><Trophy size={18} color="#10B981" /></View>
+          <View style={styles.challengeIconBox}><Trophy size={18} color={theme.colors.primary} /></View>
           <Text style={[styles.challengeTitle, { fontFamily: theme.typography.fontFamily }]}>Challenge Completed</Text>
         </View>
         <View style={styles.challengeBody}>
@@ -602,8 +602,8 @@ function ChallengeCompletedCard({ media, onPressImage, onPressDetails }: { media
               gap: 4
             }}
           >
-            <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '600', fontFamily: theme.typography.fontFamily }}>View details</Text>
-            <ChevronDown size={14} color="#10B981" />
+            <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '600', fontFamily: theme.typography.fontFamily }}>View details</Text>
+            <ChevronDown size={14} color={theme.colors.primary} />
           </TouchableOpacity>
         )}
       </View>
@@ -631,7 +631,7 @@ function TaskCompletedCard({ media, onPressImage }: { media: MediaContent, onPre
       )}
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
-          <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}><Check size={18} color={theme.colors.primary} /></View>
+          <View style={[styles.challengeIconBox, { backgroundColor: `${theme.colors.primary}20` }]}><Check size={18} color={theme.colors.primary} /></View>
           <Text style={[styles.challengeTitle, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Task Completed</Text>
         </View>
         <View style={styles.challengeBody}>
@@ -702,15 +702,19 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
     <View style={[styles.challengeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, minWidth: 260 }]}>
       <View style={{ padding: 16 }}>
         <View style={styles.challengeHeader}>
-          <View style={[styles.challengeIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}><LucideVideo size={18} color="#10B981" /></View>
-          <Text style={[styles.challengeTitle, { color: '#10B981', fontFamily: theme.typography.fontFamily }]}>Session Invitation</Text>
+          <View style={[styles.challengeIconBox, { backgroundColor: `${theme.colors.primary}20`, borderRadius: 12, width: 36, height: 36 }]}>
+            <LucideVideo size={18} color={theme.colors.primary} />
+          </View>
+          <Text style={[styles.challengeTitle, { color: theme.colors.primary, fontFamily: theme.typography.fontFamily }]}>Session Invitation</Text>
         </View>
         <View style={styles.challengeBody}>
-          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text }]} numberOfLines={2}>{media.description || 'Live Coaching Session'}</Text>
+          <Text style={[styles.challengeTaskName, { fontFamily: theme.typography.fontFamily, color: theme.colors.text, fontSize: 18, fontWeight: '700', marginBottom: 8 }]} numberOfLines={2}>
+            {media.description || 'Scheduled Session'}
+          </Text>
           <View style={styles.challengeDetailsRow}>
-             <View style={[styles.challengeDetailItem, { backgroundColor: theme.colors.background }]}>
-                <Clock size={12} color={theme.colors.textSecondary} />
-                <Text style={[styles.challengeDetailText, { color: theme.colors.textSecondary }]}>
+             <View style={[styles.challengeDetailItem, { backgroundColor: theme.colors.background, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: theme.colors.border }]}>
+                <Clock size={13} color={theme.colors.textSecondary} />
+                <Text style={[styles.challengeDetailText, { color: theme.colors.textSecondary, fontSize: 11, fontWeight: '600' }]}>
                   {media.timestamp ? new Date(media.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : 'Now'}
                 </Text>
              </View>
@@ -719,46 +723,58 @@ function SessionInviteCard({ media, isOwn, onCancel, onReschedule }: { media: an
         
         <TouchableOpacity 
           onPress={handleJoin}
+          activeOpacity={0.8}
           style={{ 
-            backgroundColor: '#10B981', 
-            borderRadius: 12, 
-            paddingVertical: 10, 
+            backgroundColor: theme.colors.primary, 
+            borderRadius: 16, 
+            paddingVertical: 12, 
             alignItems: 'center', 
-            marginTop: 12 
+            justifyContent: 'center',
+            marginTop: 16 
           }}
         >
-          <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 14 }}>Join Session</Text>
+          <Text style={{ 
+            color: isDarkColor(theme.colors.primary) ? '#FFFFFF' : '#000000', 
+            fontWeight: '700', 
+            fontSize: 15 
+          }}>
+            Join Session
+          </Text>
         </TouchableOpacity>
 
         {isOwn && (
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
             <TouchableOpacity 
               onPress={() => onReschedule?.(media.sessionId)}
+              activeOpacity={0.8}
               style={{ 
                 flex: 1,
                 backgroundColor: theme.colors.background, 
-                borderRadius: 12, 
+                borderRadius: 14, 
                 paddingVertical: 10, 
                 alignItems: 'center',
+                justifyContent: 'center',
                 borderWidth: 1,
                 borderColor: theme.colors.border
               }}
             >
-              <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 13 }}>Reschedule</Text>
+              <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }}>Reschedule</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               onPress={() => onCancel?.(media.sessionId)}
+              activeOpacity={0.8}
               style={{ 
                 flex: 1,
-                backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-                borderRadius: 12, 
+                backgroundColor: 'rgba(239, 68, 68, 0.08)', 
+                borderRadius: 14, 
                 paddingVertical: 10, 
                 alignItems: 'center',
+                justifyContent: 'center',
                 borderWidth: 1,
                 borderColor: 'rgba(239, 68, 68, 0.2)'
               }}
             >
-              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>Cancel</Text>
+              <Text style={{ color: '#EF4444', fontWeight: '600', fontSize: 13 }}>Cancel</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1372,10 +1388,10 @@ const ChatMediaMessage: React.FC<Props> = ({
         isOwn ? styles.myBubble : styles.theirBubble, 
         { 
           width: currentWidth, 
-          backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
+          backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
           borderRadius: 20,
           borderWidth: isOwn ? 0 : 1,
-          borderColor: 'rgba(255,255,255,0.08)',
+          borderColor: isOwn ? 'transparent' : theme.colors.border,
           overflow: 'visible'
         }
       ]}>
@@ -1617,9 +1633,9 @@ const ChatMediaMessage: React.FC<Props> = ({
           styles.bubble, 
           isOwn ? styles.myBubble : styles.theirBubble, 
           { 
-            backgroundColor: isOwn ? theme.colors.primary : '#1E293B',
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.08)',
+            backgroundColor: isOwn ? theme.colors.primary : theme.colors.surface,
+            borderWidth: isOwn ? 0 : 1,
+            borderColor: isOwn ? 'transparent' : theme.colors.border,
             minWidth: 260, 
             maxWidth: '85%',
             padding: 12,
@@ -1666,11 +1682,11 @@ const ChatMediaMessage: React.FC<Props> = ({
               width: 52, 
               height: 52, 
               borderRadius: 14, 
-              backgroundColor: isOwn ? 'rgba(255,255,255,0.15)' : 'rgba(59, 130, 246, 0.15)', 
+              backgroundColor: isOwn ? 'rgba(255,255,255,0.15)' : `${theme.colors.primary}20`, 
               justifyContent: 'center', 
               alignItems: 'center' 
             }}>
-              {isAudio ? <FileAudio size={26} color={isOwn ? '#FFFFFF' : '#60A5FA'} /> : <FileText size={26} color={isOwn ? '#FFFFFF' : '#60A5FA'} />}
+              {isAudio ? <FileAudio size={26} color={isOwn ? '#FFFFFF' : theme.colors.primary} /> : <FileText size={26} color={isOwn ? '#FFFFFF' : theme.colors.primary} />}
             </View>
             
             <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
@@ -1688,7 +1704,7 @@ const ChatMediaMessage: React.FC<Props> = ({
               </Text>
               <Text 
                 style={{ 
-                  color: isOwn ? 'rgba(255,255,255,0.6)' : '#94A3B8', 
+                  color: mutedTextColor, 
                   fontSize: 12, 
                   marginTop: 3,
                   fontWeight: '500'
@@ -1994,8 +2010,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   timeBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '500' },
   challengeCard: { width: 260, borderRadius: 24, borderWidth: 1, overflow: 'hidden', backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
   challengeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  challengeIconBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(16, 185, 129, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  challengeTitle: { color: '#10B981', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },
+  challengeIconBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: `${colors.primary}20`, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  challengeTitle: { color: colors.primary, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },
   challengeBody: { marginBottom: 16 },
   challengeTaskName: { color: colors.text, fontSize: 18, fontWeight: '800', lineHeight: 24, marginBottom: 8 },
   challengeDetailsRow: { flexDirection: 'row', alignItems: 'center' },

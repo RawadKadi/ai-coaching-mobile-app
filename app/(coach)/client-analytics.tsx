@@ -246,7 +246,7 @@ export default function ClientAnalyticsPickerScreen() {
 
             <View className="flex-1 items-center">
               <View className="flex-row items-center gap-1.5 mb-1">
-                <Activity size={13} color="#10B981" />
+                <Activity size={13} color={colors.primary} />
                 <Text
                   style={{ color: colors.textSecondary }}
                   className="text-[9px] font-black uppercase tracking-[2px]"
@@ -269,7 +269,7 @@ export default function ClientAnalyticsPickerScreen() {
 
             <View className="flex-1 items-center">
               <View className="flex-row items-center gap-1.5 mb-1">
-                <Flame size={13} color="#F59E0B" />
+                <Flame size={13} color={colors.primary} />
                 <Text
                   style={{ color: colors.textSecondary }}
                   className="text-[9px] font-black uppercase tracking-[2px]"
@@ -359,11 +359,8 @@ export default function ClientAnalyticsPickerScreen() {
                         useBrandColor={true}
                       />
                       <View
-                        className={`absolute bottom-0 right-0 w-4.5 h-4.5 rounded-full border-[3px] border-slate-900 ${
-                          item.status === 'active' || !item.status
-                            ? 'bg-emerald-500'
-                            : 'bg-amber-500'
-                        }`}
+                        className="absolute bottom-0 right-0 w-4.5 h-4.5 rounded-full border-[3px] border-slate-900"
+                        style={{ backgroundColor: item.status === 'active' || !item.status ? colors.primary : colors.textSecondary }}
                       />
                     </View>
                     <View className="flex-1">

@@ -21,6 +21,9 @@ const CALENDAR_BOX_MARGIN = 24;
 const CALENDAR_BOX_PADDING = 24;
 const PAGE_WIDTH = SCREEN_WIDTH - (CALENDAR_BOX_MARGIN * 2) - (CALENDAR_BOX_PADDING * 2);
 
+// Remembers sessions in memory so the page opens instantly next time.
+const cachedSessions: Record<string, any[]> = {};
+
 import CalendarTwoWeekPage from '@/components/CalendarTwoWeekPage';
 import { CalendarSkeleton } from '@/components/CalendarSkeleton';
 
@@ -143,8 +146,8 @@ export default function CalendarScreen() {
   const { isDarkMode } = useTheme();
   const { primary, secondary } = colors;
   const { handleScroll } = useTabBarScroll();
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<any[]>(coach?.id ? cachedSessions[coach.id] || [] : []);
+  const [loading, setLoading] = useState(!(coach?.id && cachedSessions[coach.id]));
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewingMonth, setViewingMonth] = useState(new Date());
@@ -374,7 +377,7 @@ export default function CalendarScreen() {
   }, [selectedClient, showManualScheduler, showAIScheduler]);
 
   useFocusEffect(useCallback(() => {
-    if (profile) loadSessions();
+    if (coach?.id) loadSessions();
     if (params?.resetToToday === 'true') {
       const today = new Date();
       setSelectedDate(today);
@@ -384,13 +387,26 @@ export default function CalendarScreen() {
       }, 100);
       router.setParams({ resetToToday: '' });
     }
-  }, [profile, params?.resetToToday]));
+  }, [coach?.id, params?.resetToToday]));
 
   const loadSessions = async () => {
+    if (!coach?.id) return;
     try {
-      setLoading(true);
-      const { data, error } = await supabase.from('sessions').select('*, client:clients(profiles(full_name, avatar_url))').eq('coach_id', coach?.id).order('scheduled_at', { ascending: true });
+      // Only show the skeleton on the very first load. Later loads refresh quietly.
+      if (!cachedSessions[coach.id]) setLoading(true);
+
+      // Skip very old sessions (older than 90 days) to keep the query small.
+      const since = new Date();
+      since.setDate(since.getDate() - 90);
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*, client:clients(profiles(full_name, avatar_url))')
+        .eq('coach_id', coach.id)
+        .gte('scheduled_at', since.toISOString())
+        .order('scheduled_at', { ascending: true });
       if (error) throw error;
+      cachedSessions[coach.id] = data || [];
       setSessions(data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
   };  const sessionDatesSet = React.useMemo(() => {
@@ -505,6 +521,10 @@ export default function CalendarScreen() {
                   data={PAGE_INDICES}
                   keyExtractor={(item) => item.toString()}
                   initialScrollIndex={INITIAL_PAGE_INDEX}
+                  initialNumToRender={3}
+                  maxToRenderPerBatch={2}
+                  windowSize={5}
+                  removeClippedSubviews
                   getItemLayout={(_, index) => ({
                       length: PAGE_WIDTH,
                       offset: PAGE_WIDTH * index,

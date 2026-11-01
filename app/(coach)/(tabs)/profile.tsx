@@ -323,7 +323,7 @@ export default function CoachProfileScreen() {
               <>
                 <SectionLabel label="Management" color={colors.primary} />
                 <ProfileMenuItem
-                  icon={<Palette size={20} color="#F59E0B" />}
+                  icon={<Palette size={20} color={colors.primary} />}
                   label="Brand Settings"
                   sub="Customize app colors & logo"
                   onPress={() => router.push('/(coach)/settings/branding')}

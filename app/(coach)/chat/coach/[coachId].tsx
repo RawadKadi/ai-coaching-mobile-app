@@ -733,7 +733,7 @@ function CoachToCoachSwipeReplyAction({ progress, color }: { progress: any; colo
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, marginLeft: isMe ? 0 : 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
                           {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
                             .map(([emoji, count]: any) => (
-                              <View key={emoji} style={{ backgroundColor: '#1E293B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                              <View key={emoji} style={{ backgroundColor: theme.colors.surface, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
                                 <Text style={{ fontSize: 12 }}>{emoji}</Text>
                                 {count > 1 && <Text style={{ fontSize: 10, color: 'white', marginLeft: 4, fontWeight: 'bold' }}>{count}</Text>}
                               </View>
@@ -864,9 +864,9 @@ function CoachToCoachSwipeReplyAction({ progress, color }: { progress: any; colo
                   <TouchableOpacity 
                     onPress={scrollToBottom}
                     activeOpacity={0.8}
-                    style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#1E293B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}
+                    style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}
                   >
-                    <ArrowDown size={20} color="#FFFFFF" />
+                    <ArrowDown size={20} color={theme.colors.text} />
                     {newMessagesCount > 0 && (
                       <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' }}>
                         <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{newMessagesCount}</Text>
@@ -1147,9 +1147,9 @@ const MessageBubble = ({
         <View className="flex-row flex-wrap mt-[-8px] ml-2">
           {Object.entries(reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {}))
             .map(([emoji, count]: any) => (
-              <View key={emoji} className="bg-slate-800 rounded-full px-2 py-0.5 border border-white/5 flex-row items-center mr-1 mb-1">
+              <View key={emoji} className="rounded-full px-2 py-0.5 border flex-row items-center mr-1 mb-1" style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.border }}>
                 <Text className="text-[12px]">{emoji}</Text>
-                {count > 1 && <Text className="text-[10px] text-white ml-1 font-bold">{count}</Text>}
+                {count > 1 && <Text className="text-[10px] ml-1 font-bold" style={{ color: theme.colors.text }}>{count}</Text>}
               </View>
           ))}
         </View>

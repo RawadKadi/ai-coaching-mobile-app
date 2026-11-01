@@ -41,6 +41,9 @@ import {
   Flame,
   Activity,
   MessageSquare,
+  BarChart2,
+  Utensils,
+  Moon,
 } from 'lucide-react-native';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useTheme } from '@/contexts/BrandContext';
@@ -479,6 +482,8 @@ export default function ClientDetailsScreen() {
   }, [id, coach]);
 
   const isDark = isDarkColor(colors.background || '#010417');
+  const primaryColor = colors.primary || '#3B82F6';
+  const isPrimaryDark = isDarkColor(primaryColor);
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
@@ -636,14 +641,15 @@ export default function ClientDetailsScreen() {
 
             {pendingResolutions.length > 0 && activeSubView === null && (
                 <TouchableOpacity 
-                    className="mx-3 mt-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex-row items-center justify-between"
+                    style={{ backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}25` }}
+                    className="mx-3 mt-3 border rounded-2xl p-4 flex-row items-center justify-between"
                     onPress={() => setPendingModalVisible(true)}
                 >
                     <View className="flex-row items-center gap-3">
-                        <View className="w-2 h-2 rounded-full bg-amber-500" />
-                        <Text className="text-amber-500 font-bold text-xs uppercase tracking-widest">{pendingResolutions.length} Resolutions Pending</Text>
+                        <View style={{ backgroundColor: colors.primary }} className="w-2 h-2 rounded-full" />
+                        <Text style={{ color: colors.primary }} className="font-bold text-xs uppercase tracking-widest">{pendingResolutions.length} Resolutions Pending</Text>
                     </View>
-                    <ChevronRight size={16} color="#F59E0B" />
+                    <ChevronRight size={16} color={colors.primary} />
                 </TouchableOpacity>
             )}
 
@@ -774,8 +780,8 @@ export default function ClientDetailsScreen() {
                           </View>
                           <View className="flex-row items-center gap-1">
                             {weightDaysAgo > 5 ? (
-                              <View className="bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                                <Text className="text-amber-500 text-[8px] font-black uppercase">Old</Text>
+                              <View style={{ backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}25` }} className="px-2 py-0.5 rounded-full border">
+                                <Text style={{ color: colors.primary }} className="text-[8px] font-black uppercase">Old</Text>
                               </View>
                             ) : null}
                             <ChevronRight size={16} color={textSecondaryColor} />
@@ -869,6 +875,140 @@ export default function ClientDetailsScreen() {
                     <Text style={{ color: textColor }} className="text-2xl font-black tracking-tight mb-3 px-1">
                       Manage
                     </Text>
+
+                    {/* Big Branded Analytics Card (matching Coach Dashboard) */}
+                    <View className="mb-3">
+                      <TouchableOpacity
+                        activeOpacity={0.88}
+                        onPress={() => router.push(`/(client)/analytics?clientId=${id}&name=${encodeURIComponent(client?.profiles?.full_name || '')}&avatar=${encodeURIComponent(client?.profiles?.avatar_url || '')}` as any)}
+                        className="rounded-[36px] p-6 border relative overflow-hidden"
+                        style={{
+                          backgroundColor: isDark
+                            ? `${primaryColor}15`
+                            : `${primaryColor}10`,
+                          borderColor: `${primaryColor}40`,
+                        }}
+                      >
+                        {/* Glow ambient background circles */}
+                        <View
+                          style={{ backgroundColor: `${primaryColor}25` }}
+                          className="absolute -top-16 -right-16 w-56 h-56 rounded-full pointer-events-none"
+                        />
+                        <View
+                          style={{ backgroundColor: `${primaryColor}15` }}
+                          className="absolute -bottom-12 -left-12 w-44 h-44 rounded-full pointer-events-none"
+                        />
+
+                        {/* Top Header Row */}
+                        <View className="flex-row items-center justify-between mb-4">
+                          <View className="flex-row items-center gap-3.5">
+                            <View
+                              className="rounded-2xl items-center justify-center border"
+                              style={{
+                                width: 52,
+                                height: 52,
+                                backgroundColor: primaryColor,
+                                borderColor: `${primaryColor}80`,
+                              }}
+                            >
+                              <BarChart2
+                                size={26}
+                                color={colors.textOnPrimary || (isPrimaryDark ? '#FFFFFF' : '#0F172A')}
+                                strokeWidth={2.3}
+                              />
+                            </View>
+                            <View>
+                              <Text
+                                style={{ color: textColor }}
+                                className="text-2xl font-black tracking-tight"
+                              >
+                                Client Analytics
+                              </Text>
+                              <Text
+                                style={{ color: primaryColor }}
+                                className="text-xs font-black uppercase tracking-wider mt-0.5"
+                              >
+                                Nutrition, Steps & Health
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View
+                            className="w-10 h-10 rounded-full items-center justify-center border"
+                            style={{
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                              borderColor: `${primaryColor}50`,
+                            }}
+                          >
+                            <ChevronRight size={20} color={primaryColor} />
+                          </View>
+                        </View>
+
+                        {/* Description */}
+                        <Text
+                          style={{ color: textSecondaryColor }}
+                          className="text-sm font-medium leading-5 mb-4"
+                        >
+                          Check client calories, macros, sleep, and daily habits with interactive charts.
+                        </Text>
+
+                        {/* Feature Pills */}
+                        <View className="flex-row items-center gap-2 flex-wrap">
+                          <View
+                            className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+                            style={{
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+                              borderColor: `${primaryColor}30`,
+                            }}
+                          >
+                            <Utensils size={13} color={primaryColor} />
+                            <Text style={{ color: textColor }} className="text-xs font-bold">
+                              Food & Macros
+                            </Text>
+                          </View>
+
+                          <View
+                            className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+                            style={{
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+                              borderColor: `${primaryColor}30`,
+                            }}
+                          >
+                            <Flame size={13} color={primaryColor} />
+                            <Text style={{ color: textColor }} className="text-xs font-bold">
+                              Steps
+                            </Text>
+                          </View>
+
+                          <View
+                            className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+                            style={{
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+                              borderColor: `${primaryColor}30`,
+                            }}
+                          >
+                            <Moon size={13} color={primaryColor} />
+                            <Text style={{ color: textColor }} className="text-xs font-bold">
+                              Sleep
+                            </Text>
+                          </View>
+
+                          <View
+                            className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+                            style={{
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+                              borderColor: `${primaryColor}30`,
+                            }}
+                          >
+                            <Zap size={13} color={primaryColor} />
+                            <Text style={{ color: textColor }} className="text-xs font-bold">
+                              Energy
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
                     <View className="gap-3 mb-6">
                       {/* Daily Tasks Card */}
                       <TouchableOpacity
@@ -990,37 +1130,6 @@ export default function ClientDetailsScreen() {
                           <Text className="text-2xl font-black tracking-tight" style={{ color: colors.primary }}>
                             {formatCompactNumber(upcomingSessions.length)}
                           </Text>
-                          <ChevronRight size={18} color={textSecondaryColor} />
-                        </View>
-                      </TouchableOpacity>
-
-                      {/* Analytics Card */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => router.push(`/(client)/analytics?clientId=${id}&name=${encodeURIComponent(client?.profiles?.full_name || '')}&avatar=${encodeURIComponent(client?.profiles?.avatar_url || '')}` as any)}
-                        className="p-5 rounded-[32px] border flex-row items-center justify-between"
-                        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
-                      >
-                        <View className="flex-row items-center gap-3.5 flex-1 pr-3">
-                          <View
-                            className="w-12 h-12 rounded-2xl items-center justify-center border"
-                            style={{ backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }}
-                          >
-                            <Activity size={22} color={colors.primary} />
-                          </View>
-                          <View className="flex-1">
-                            <Text className="text-base font-black tracking-tight" style={{ color: textColor }}>
-                              Analytics
-                            </Text>
-                            <Text className="text-xs font-medium mt-0.5" style={{ color: textSecondaryColor }}>
-                              Steps, sleep, energy & trends
-                            </Text>
-                          </View>
-                        </View>
-                        <View className="flex-row items-center gap-2">
-                          <View className="px-3 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: cardBorder }}>
-                            <Text className="text-xs font-black" style={{ color: colors.primary }}>View</Text>
-                          </View>
                           <ChevronRight size={18} color={textSecondaryColor} />
                         </View>
                       </TouchableOpacity>

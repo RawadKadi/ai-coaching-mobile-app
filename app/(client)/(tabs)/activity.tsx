@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import {
   View,
   Text,
@@ -81,6 +81,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatCompactNumber } from '@/lib/format-utils';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import MagicRings from '@/components/ui/MagicRings';
+import { getUnifiedDailyTasks, UnifiedDailyTask } from '@/lib/daily-tasks';
 
 /** Returns today's date as YYYY-MM-DD in the device's local timezone, not UTC. */
 function getLocalDateString(): string {
@@ -294,22 +295,27 @@ export default function ActivityScreen() {
     setIsHighlighting(false);
     if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
 
-    // Identify target task (first unfinished task or first task)
-    const targetHabit =
-      habits.find((h) => {
+    // Identify target task (first unfinished task including essentials, or first task)
+    let targetTaskId: string | null = null;
+    if (!checkInDone) {
+      targetTaskId = 'essential_check_in';
+    } else if (meals.length === 0) {
+      targetTaskId = 'essential_log_meal';
+    } else {
+      const unfinishedHabit = habits.find((h) => {
         const log = habitLogs.find((l) => l.habit_id === h.id);
         return !log?.completed;
-      }) ||
-      habits[0] ||
-      null;
+      });
+      targetTaskId = unfinishedHabit ? unfinishedHabit.id : (habits[0]?.id || 'essential_check_in');
+    }
 
     // 2. Smoothly scroll down to the target task
     setTimeout(() => {
       const baseLogsY = logsContainerYRef.current || 0;
       const dailyTasksY = dailyTasksLayoutRef.current?.y || 0;
       const taskOffsetY =
-        targetHabit && taskLayouts.current[targetHabit.id]
-          ? taskLayouts.current[targetHabit.id].y
+        targetTaskId && taskLayouts.current[targetTaskId]
+          ? taskLayouts.current[targetTaskId].y
           : 0;
 
       const screenH = Dimensions.get('window').height;
@@ -329,7 +335,7 @@ export default function ActivityScreen() {
       // 3. Measure target task in window to place spotlight highlight & adaptive card
       setTimeout(() => {
         const targetElementRef =
-          (targetHabit && taskRefs.current[targetHabit.id]) ||
+          (targetTaskId && taskRefs.current[targetTaskId]) ||
           dailyTasksContainerRef.current;
 
         targetElementRef?.measureInWindow(
@@ -520,17 +526,19 @@ export default function ActivityScreen() {
   };
 
   const getTaskVisuals = (habit: Habit) => {
+    const primaryColor = theme.colors.primary || '#3B82F6';
+
     if (habit.id === 'essential_check_in' || habit.verification_type === 'check_in') {
       return {
-        icon: <ClipboardCheck size={22} color="#3B82F6" />,
-        color: '#3B82F6',
+        icon: <ClipboardCheck size={22} color={primaryColor} />,
+        color: primaryColor,
         category: 'Daily Essential',
       };
     }
     if (habit.id === 'essential_log_meal' || habit.verification_type === 'meal_log') {
       return {
-        icon: <Camera size={22} color="#10B981" />,
-        color: '#10B981',
+        icon: <Camera size={22} color={primaryColor} />,
+        color: primaryColor,
         category: 'Daily Essential',
       };
     }
@@ -546,8 +554,8 @@ export default function ActivityScreen() {
       cat.includes('hydrat')
     ) {
       return {
-        icon: <Droplets size={22} color="#0284C7" />,
-        color: '#0284C7',
+        icon: <Droplets size={22} color={primaryColor} />,
+        color: primaryColor,
         category: 'Hydration',
       };
     }
@@ -560,8 +568,8 @@ export default function ActivityScreen() {
       cat.includes('walk')
     ) {
       return {
-        icon: <Footprints size={22} color="#8B5CF6" />,
-        color: '#8B5CF6',
+        icon: <Footprints size={22} color={primaryColor} />,
+        color: primaryColor,
         category: 'Steps & Walking',
       };
     }
@@ -575,8 +583,8 @@ export default function ActivityScreen() {
       cat.includes('workout')
     ) {
       return {
-        icon: <Dumbbell size={22} color="#EC4899" />,
-        color: '#EC4899',
+        icon: <Dumbbell size={22} color={primaryColor} />,
+        color: primaryColor,
         category: 'Workout',
       };
     }
@@ -588,8 +596,8 @@ export default function ActivityScreen() {
       cat.includes('nutrition')
     ) {
       return {
-        icon: <Apple size={22} color="#10B981" />,
-        color: '#10B981',
+        icon: <Apple size={22} color={primaryColor} />,
+        color: primaryColor,
         category: 'Nutrition',
       };
     }
@@ -601,22 +609,22 @@ export default function ActivityScreen() {
       cat.includes('sleep')
     ) {
       return {
-        icon: <Moon size={22} color="#6366F1" />,
-        color: '#6366F1',
+        icon: <Moon size={22} color={primaryColor} />,
+        color: primaryColor,
         category: 'Sleep & Recovery',
       };
     }
     if (habit.verification_type === 'camera') {
       return {
-        icon: <Camera size={22} color="#F97316" />,
-        color: '#F97316',
+        icon: <Camera size={22} color={primaryColor} />,
+        color: primaryColor,
         category: 'Photo Task',
       };
     }
 
     return {
-      icon: <Target size={22} color={theme.colors.primary} />,
-      color: theme.colors.primary,
+      icon: <Target size={22} color={primaryColor} />,
+      color: primaryColor,
       category: habit.category
         ? habit.category.charAt(0).toUpperCase() + habit.category.slice(1)
         : 'Daily Task',
@@ -718,6 +726,16 @@ export default function ActivityScreen() {
           event: '*',
           schema: 'public',
           table: 'habits',
+          filter: `client_id=eq.${client.id}`,
+        },
+        () => loadActivityData(),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'check_ins',
           filter: `client_id=eq.${client.id}`,
         },
         () => loadActivityData(),
@@ -1188,6 +1206,7 @@ export default function ActivityScreen() {
           habits.every(
             (h) => habitLogs.find((l) => l.habit_id === h.id)?.completed,
           );
+        const allEssentialsDone = checkInDone && meals.length > 0;
         const otherChallengesDone = updatedChallenges
           .filter((c) => c.id !== challenge.id)
           .every((c) => c.completed);
@@ -1195,7 +1214,7 @@ export default function ActivityScreen() {
           (c) => c.completed,
         );
 
-        if (allHabitsDone && otherChallengesDone) {
+        if (allEssentialsDone && allHabitsDone && otherChallengesDone) {
           setShowStreakGained(true);
           setIsCold(false);
           setStreak((prev) => prev + 1); // Optimistic streak update
@@ -1479,8 +1498,9 @@ export default function ActivityScreen() {
           (h) => optimisticLogs.find((l) => l.habit_id === h.id)?.completed,
         );
         const allChallengesDone = challenges.every((c) => c.completed);
+        const allEssentialsDone = checkInDone && meals.length > 0;
 
-        if (allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
+        if (allEssentialsDone && allHabitsDone && (challenges.length === 0 || allChallengesDone)) {
           setIsCold(false);
           setStreak((prev) => prev + 1);
           setTimeout(
@@ -1691,6 +1711,8 @@ export default function ActivityScreen() {
             <DailyTasksHeroCard
               habits={habits}
               habitLogs={habitLogs}
+              checkInDone={checkInDone}
+              mealsCount={meals.length}
               onPress={() =>
                 triggerDailyTasksHighlight(
                   'Finish these tasks to earn your streaks',
@@ -1762,8 +1784,8 @@ export default function ActivityScreen() {
                         title="Daily Check-in"
                         sub="ESSENTIAL • COACH CHECK-IN"
                         completed={checkInDone}
-                        icon={<ClipboardCheck size={22} color="#3B82F6" />}
-                        iconColor="#3B82F6"
+                        icon={<ClipboardCheck size={22} color={colors.primary} />}
+                        iconColor={colors.primary}
                         onPress={() => {
                           openTaskDrawer({
                             id: 'essential_check_in',
@@ -1822,8 +1844,8 @@ export default function ActivityScreen() {
                         title="Log a Meal"
                         sub="ESSENTIAL • AT LEAST 1 MEAL"
                         completed={meals.length > 0}
-                        icon={<Camera size={22} color="#10B981" />}
-                        iconColor="#10B981"
+                        icon={<Camera size={22} color={colors.primary} />}
+                        iconColor={colors.primary}
                         onPress={() => {
                           router.push('/(client)/log-meal');
                         }}
@@ -1942,7 +1964,7 @@ export default function ActivityScreen() {
         visible={showChallengeSuccessModal}
         onClose={() => setShowChallengeSuccessModal(false)}
         variant="success"
-        icon={<Target size={52} color="#10B981" />}
+        icon={<Target size={52} color={colors.primary} />}
         title="Objective Secured"
         body={
           allChallengesFinished
@@ -3148,10 +3170,14 @@ const SmoothProgressBar = ({
 const DailyTasksHeroCard = ({
   habits,
   habitLogs,
+  checkInDone = false,
+  mealsCount = 0,
   onPress,
 }: {
   habits: Habit[];
   habitLogs: HabitLog[];
+  checkInDone?: boolean;
+  mealsCount?: number;
   onPress: () => void;
 }) => {
   const theme = useTheme();
@@ -3160,11 +3186,20 @@ const DailyTasksHeroCard = ({
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondaryColor =
     colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
-  const cardBg = isDark ? '#0F172A' : '#FFFFFF';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
-  const completedCount = habitLogs.filter((log) => log.completed).length;
-  const totalCount = habits.length;
+  const unifiedTasks = useMemo(() => {
+    return getUnifiedDailyTasks({
+      habits,
+      habitLogs,
+      isCheckedIn: checkInDone,
+      mealsCount,
+    });
+  }, [habits, habitLogs, checkInDone, mealsCount]);
+
+  const completedCount = unifiedTasks.filter((t) => t.completed).length;
+  const totalCount = unifiedTasks.length;
   const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
   const isAllDone = totalCount > 0 && completedCount === totalCount;
 
@@ -3249,9 +3284,7 @@ const DailyTasksHeroCard = ({
   }, [isAllDone, reduceMotion]);
 
   // Next up pending tasks for the preview pills
-  const pendingHabits = habits.filter(
-    (h) => !habitLogs.find((l) => l.habit_id === h.id)?.completed,
-  );
+  const pendingTasks = unifiedTasks.filter((t) => !t.completed);
 
   const animatedBg = completeAnim.interpolate({
     inputRange: [0, 1],
@@ -3517,11 +3550,11 @@ const DailyTasksHeroCard = ({
           </View>
 
           {/* Preview Chips */}
-          {pendingHabits.length > 0 ? (
+          {pendingTasks.length > 0 ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {pendingHabits.slice(0, 2).map((h) => (
+              {pendingTasks.slice(0, 2).map((t) => (
                 <View
-                  key={h.id}
+                  key={t.id}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -3547,11 +3580,11 @@ const DailyTasksHeroCard = ({
                     }}
                     numberOfLines={1}
                   >
-                    {h.name}
+                    {t.name}
                   </Text>
                 </View>
               ))}
-              {pendingHabits.length > 2 && (
+              {pendingTasks.length > 2 && (
                 <View
                   style={{
                     paddingHorizontal: 10,
@@ -3574,7 +3607,7 @@ const DailyTasksHeroCard = ({
                       fontWeight: '700',
                     }}
                   >
-                    +{pendingHabits.length - 2} more
+                    +{pendingTasks.length - 2} more
                   </Text>
                 </View>
               )}
@@ -3612,8 +3645,8 @@ const BentoActionsRow = ({
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondaryColor =
     colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
-  const cardBg = isDark ? '#0F172A' : '#FFFFFF';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   return (
     <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
@@ -3649,12 +3682,12 @@ const BentoActionsRow = ({
               width: 42,
               height: 42,
               borderRadius: 14,
-              backgroundColor: 'rgba(99, 102, 241, 0.12)',
+              backgroundColor: `${colors.primary}18`,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <CalendarIcon size={20} color="#6366F1" />
+            <CalendarIcon size={20} color={colors.primary} />
           </View>
           <ChevronRight size={18} color={textSecondaryColor} />
         </View>
@@ -3715,12 +3748,12 @@ const BentoActionsRow = ({
               width: 42,
               height: 42,
               borderRadius: 14,
-              backgroundColor: 'rgba(245, 158, 11, 0.12)',
+              backgroundColor: `${colors.primary}18`,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Target size={20} color="#F59E0B" />
+            <Target size={20} color={colors.primary} />
           </View>
           <View
             style={{
@@ -3785,8 +3818,8 @@ const AppleAnalyticsCard = ({ onPress }: { onPress: () => void }) => {
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondaryColor =
     colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
-  const cardBg = isDark ? '#0F172A' : '#FFFFFF';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   return (
     <TouchableOpacity

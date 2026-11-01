@@ -147,20 +147,21 @@ export default function ChallengeDetailScreen() {
           </View>
         </View>
         {isFailed ? (
-          <View className="px-3 py-1.5 bg-red-950/50 rounded-full border border-red-900/50">
-            <Text className="text-red-500 text-xs font-semibold">⚠️ Closed</Text>
+          <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border }} className="px-3 py-1.5 rounded-full border">
+            <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">Closed</Text>
           </View>
         ) : isCompleted ? (
-          <View className="px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-            <Text className="text-emerald-500 text-xs font-semibold">✅ Completed</Text>
+          <View style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }} className="px-3 py-1.5 rounded-full border">
+            <Text style={{ color: colors.primary }} className="text-xs font-semibold">Completed</Text>
           </View>
         ) : (
           <TouchableOpacity 
             onPress={handleCancel} 
-            className="flex-row items-center gap-1.5 px-3 py-1.5 bg-red-500/10 rounded-full border border-red-500/20"
+            style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border }}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border"
           >
-            <X size={12} color="#EF4444" />
-            <Text className="text-red-500 text-xs font-semibold">Cancel Plan</Text>
+            <X size={12} color={colors.textSecondary} />
+            <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">Cancel Plan</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -424,9 +425,9 @@ const TaskCard = ({ task, index, isFailed, isCompleted }: { task: any, index: nu
   const getIcon = (type: string) => {
     switch (type?.toLowerCase()) {
       case 'training': return <Dumbbell size={22} color={colors.primary} />;
-      case 'nutrition': return <Apple size={22} color="#10B981" />;
-      case 'recovery': return <Moon size={22} color="#8B5CF6" />;
-      default: return <Zap size={22} color="#F59E0B" />;
+      case 'nutrition': return <Apple size={22} color={colors.primary} />;
+      case 'recovery': return <Moon size={22} color={colors.primary} />;
+      default: return <Zap size={22} color={colors.primary} />;
     }
   };
 
@@ -462,16 +463,16 @@ const TaskCard = ({ task, index, isFailed, isCompleted }: { task: any, index: nu
 
         <View className="flex-shrink-0 pt-0.5">
           {isFailed ? (
-            <View className="bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20">
-               <Text className="text-red-500 text-[10px] font-bold uppercase">Unfulfilled</Text>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border }} className="px-2.5 py-1 rounded-full border">
+               <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase">Unfulfilled</Text>
             </View>
           ) : task.completed ? (
-            <View className="bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-               <Text className="text-emerald-500 text-[10px] font-bold uppercase">Done</Text>
+            <View style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }} className="px-2.5 py-1 rounded-full border">
+               <Text style={{ color: colors.primary }} className="text-[10px] font-bold uppercase">Done</Text>
             </View>
           ) : isPast ? (
-              <View className="bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20">
-                  <Text className="text-red-500 text-[10px] font-bold uppercase">Missed</Text>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border }} className="px-2.5 py-1 rounded-full border">
+                  <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase">Missed</Text>
               </View>
           ) : (
             <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>

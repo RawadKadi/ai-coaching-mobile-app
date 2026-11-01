@@ -258,17 +258,17 @@ export default function AddSubCoachScreen() {
                 from={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 style={{ 
-                  backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : '#F0FDF4',
-                  borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#BBF7D0',
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
                 }}
                 className="mt-4 p-7 rounded-[36px] border shadow-sm"
               >
                 <View className="flex-row items-center gap-3 mb-5">
                   <View 
-                    style={{ backgroundColor: colors.success || '#10B981' }}
+                    style={{ backgroundColor: colors.primary }}
                     className="w-10 h-10 rounded-2xl items-center justify-center shadow-md"
                   >
-                    <Check size={20} color="white" strokeWidth={3} />
+                    <Check size={20} color={colors.textOnPrimary} strokeWidth={3} />
                   </View>
                   <Text style={{ color: colors.text }} className="font-black text-xl tracking-tight">
                     Coach Found
@@ -283,8 +283,8 @@ export default function AddSubCoachScreen() {
                     {foundCoach.email}
                   </Text>
                   <View className="flex-row items-center gap-2">
-                    <View style={{ backgroundColor: colors.success || '#10B981' }} className="w-2 h-2 rounded-full" />
-                    <Text style={{ color: colors.success || '#10B981' }} className="text-[10px] font-black uppercase tracking-widest">
+                    <View style={{ backgroundColor: colors.primary }} className="w-2 h-2 rounded-full" />
+                    <Text style={{ color: colors.primary }} className="text-[10px] font-black uppercase tracking-widest">
                       Active Coach
                     </Text>
                   </View>
@@ -293,16 +293,16 @@ export default function AddSubCoachScreen() {
                 <TouchableOpacity
                   onPress={() => handleInvite(true)}
                   disabled={loading}
-                  style={{ backgroundColor: colors.success || '#10B981' }}
+                  style={{ backgroundColor: colors.primary }}
                   className="h-16 rounded-[22px] flex-row items-center justify-center gap-3 shadow-lg"
                   activeOpacity={0.85}
                 >
                   {loading ? (
-                    <ActivityIndicator color="white" />
+                    <ActivityIndicator color={colors.textOnPrimary} />
                   ) : (
                     <>
-                      <Send size={18} color="white" strokeWidth={2.5} />
-                      <Text className="text-white font-black text-base tracking-tight">
+                      <Send size={18} color={colors.textOnPrimary} strokeWidth={2.5} />
+                      <Text style={{ color: colors.textOnPrimary }} className="font-black text-base tracking-tight">
                         Send Team Invite
                       </Text>
                     </>
@@ -316,14 +316,14 @@ export default function AddSubCoachScreen() {
                 from={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 style={{ 
-                  backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB',
-                  borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A',
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
                 }}
                 className="mt-4 p-7 rounded-[36px] border shadow-sm"
               >
                 <View className="flex-row items-center gap-3 mb-5">
-                  <View className="w-10 h-10 rounded-2xl bg-amber-500 items-center justify-center shadow-md">
-                    <AlertTriangle size={20} color="white" strokeWidth={3} />
+                  <View style={{ backgroundColor: colors.primary }} className="w-10 h-10 rounded-2xl items-center justify-center shadow-md">
+                    <AlertTriangle size={20} color={colors.textOnPrimary} strokeWidth={3} />
                   </View>
                   <Text style={{ color: colors.text }} className="font-black text-xl tracking-tight">
                     New Coach

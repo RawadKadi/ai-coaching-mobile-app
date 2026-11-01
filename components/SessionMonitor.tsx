@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { Video, X, AlertCircle, Clock } from 'lucide-react-native';
 import JoinSessionModal from './JoinSessionModal';
 import { joinSession, generateGoogleMeetUrl } from '@/utils/session';
+import { useBrandColors } from '@/contexts/BrandContext';
+import { getContrastColor } from '@/lib/theme-utils';
 
 interface SessionMonitorProps {
   children?: React.ReactNode;
@@ -350,13 +352,20 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     hideToast();
   };
 
+  const brandColors = useBrandColors();
+  const toastBg = brandColors.surface || '#0f172a';
+  const toastBorder = brandColors.border || 'rgba(255,255,255,0.08)';
+  const toastText = brandColors.text || '#ffffff';
+  const toastTextMuted = brandColors.textSecondary || '#94a3b8';
+  const joinColor = brandColors.primary || '#10B981';
+
   if (!toastVisible) return null;
 
   const getToastStyle = () => {
     switch (toastType) {
-      case 'cancelled': return { backgroundColor: '#0f172a', borderColor: 'rgba(239, 68, 68, 0.2)', borderWidth: 1 };
-      case 'postponed': return { backgroundColor: '#0f172a', borderColor: 'rgba(234, 179, 8, 0.2)', borderWidth: 1 };
-      default: return { backgroundColor: '#0f172a', borderColor: 'rgba(16, 185, 129, 0.2)', borderWidth: 1 };
+      case 'cancelled': return { backgroundColor: toastBg, borderColor: 'rgba(239, 68, 68, 0.3)', borderWidth: 1 };
+      case 'postponed': return { backgroundColor: toastBg, borderColor: 'rgba(234, 179, 8, 0.3)', borderWidth: 1 };
+      default: return { backgroundColor: toastBg, borderColor: `${joinColor}55`, borderWidth: 1 };
     }
   };
 
@@ -364,7 +373,7 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     switch (toastType) {
       case 'cancelled': return '#EF4444';
       case 'postponed': return '#EAB308';
-      default: return '#10B981';
+      default: return joinColor;
     }
   };
 
@@ -372,7 +381,7 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     switch (toastType) {
       case 'cancelled': return 'rgba(239, 68, 68, 0.1)';
       case 'postponed': return 'rgba(234, 179, 8, 0.1)';
-      default: return 'rgba(16, 185, 129, 0.1)';
+      default: return `${joinColor}22`;
     }
   };
 
@@ -393,23 +402,23 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
               {toastType === 'postponed' && <Clock size={20} color={getIconColor()} />}
             </View>
             <View style={styles.textContainer}>
-              <Text style={styles.title}>
+              <Text style={[styles.title, { color: toastText }]}>
                 {toastType === 'join' ? 'Session Starting' : (toastType === 'postponed' ? 'Session Postponed' : 'Session Cancelled')}
               </Text>
-              <Text style={styles.message}>
+              <Text style={[styles.message, { color: toastTextMuted }]}>
                 {toastMessage}
               </Text>
             </View>
             {getButtonText() && (
               <View style={[styles.button, { backgroundColor: getIconColor() }]}>
-                <Text style={styles.buttonText}>
+                <Text style={[styles.buttonText, toastType === 'join' && { color: getContrastColor(joinColor) }]}>
                   {getButtonText()}
                 </Text>
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.closeButton} onPress={hideToast}>
-            <X size={18} color="#64748b" />
+          <TouchableOpacity style={[styles.closeButton, { borderLeftColor: toastBorder }]} onPress={hideToast}>
+            <X size={18} color={toastTextMuted} />
           </TouchableOpacity>
         </Animated.View>
       </SafeAreaView>

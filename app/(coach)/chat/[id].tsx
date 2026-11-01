@@ -1644,12 +1644,12 @@ export default function CoachChatScreen() {
                               <View
                                 key={emoji}
                                 style={{
-                                  backgroundColor: '#1E293B',
+                                  backgroundColor: theme.colors.surface,
                                   borderRadius: 999,
                                   paddingHorizontal: 8,
                                   paddingVertical: 3,
                                   borderWidth: 1,
-                                  borderColor: 'rgba(255,255,255,0.08)',
+                                  borderColor: theme.colors.border,
                                   flexDirection: 'row',
                                   alignItems: 'center',
                                   marginRight: 4,
@@ -1915,9 +1915,9 @@ export default function CoachChatScreen() {
                     width: 44,
                     height: 44,
                     borderRadius: 22,
-                    backgroundColor: '#1E293B',
+                    backgroundColor: theme.colors.surface,
                     borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderColor: theme.colors.border,
                     justifyContent: 'center',
                     alignItems: 'center',
                     shadowColor: '#000',
@@ -1927,7 +1927,7 @@ export default function CoachChatScreen() {
                     elevation: 5,
                   }}
                 >
-                  <ArrowDown size={20} color="#FFFFFF" />
+                  <ArrowDown size={20} color={theme.colors.text} />
                   {newMessagesCount > 0 && (
                     <View
                       style={{
@@ -2877,11 +2877,12 @@ const MessageBubble = ({
           ).map(([emoji, count]: any) => (
             <View
               key={emoji}
-              className="bg-slate-800 rounded-full px-2 py-0.5 border border-white/5 flex-row items-center mr-1 mb-1"
+              className="rounded-full px-2 py-0.5 border flex-row items-center mr-1 mb-1"
+              style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.border }}
             >
               <Text className="text-[12px]">{emoji}</Text>
               {count > 1 && (
-                <Text className="text-[10px] text-white ml-1 font-bold">
+                <Text className="text-[10px] ml-1 font-bold" style={{ color: theme.colors.text }}>
                   {count}
                 </Text>
               )}

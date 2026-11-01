@@ -295,7 +295,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                 from={{ opacity: 0, scale: 0.95 }} 
                 animate={{ opacity: 1, scale: 1 }} 
                 transition={{ delay: index * 100 }}
-                style={{ backgroundColor: colors.surface, borderColor: isFailed ? '#ef444480' : isCompleted ? '#10b98150' : isWarning ? '#f59e0b50' : colors.border }}
+                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
                 className="mx-6 border rounded-[40px] p-8 mb-6 overflow-hidden"
             >
                 <View style={{ backgroundColor: colors.primary + '10' }} className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-16 -mt-16" />
@@ -313,15 +313,15 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                             </View>
                         </View>
                         <View 
-                            className={`px-3 py-1.5 rounded-full border ${isFailed ? 'bg-red-950 border-red-900/50' : isCompleted ? 'bg-emerald-500/10 border-emerald-500/30' : isWarning ? 'bg-amber-500/10 border-amber-500/30' : ''}`}
-                            style={!isFailed && !isCompleted && !isWarning ? { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` } : undefined}
+                            className="px-3 py-1.5 rounded-full border"
+                            style={isFailed ? { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border } : isCompleted ? { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` } : isWarning ? { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}25` } : { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
                         >
                             {isFailed ? (
-                                <Text className="text-red-500 text-[8px] font-black uppercase tracking-[2px]">❌ Failed Plan</Text>
+                                <Text style={{ color: colors.textSecondary }} className="text-[8px] font-black uppercase tracking-[2px]">Failed Plan</Text>
                             ) : isCompleted ? (
-                                <Text className="text-emerald-500 text-[8px] font-black uppercase tracking-[2px]">✅ Completed</Text>
+                                <Text style={{ color: colors.primary }} className="text-[8px] font-black uppercase tracking-[2px]">Completed</Text>
                             ) : isWarning ? (
-                                <Text className="text-amber-500 text-[8px] font-black uppercase tracking-[2px]">⚠️ {missedSubs} Missed</Text>
+                                <Text style={{ color: colors.primary }} className="text-[8px] font-black uppercase tracking-[2px]">{missedSubs} Missed</Text>
                             ) : (
                                 <Text style={{ color: colors.primary }} className="text-[8px] font-black uppercase tracking-[2px]">Active</Text>
                             )}

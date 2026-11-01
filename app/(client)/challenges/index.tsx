@@ -421,11 +421,7 @@ export default function ClientChallengesScreen() {
                         borderRadius: 32,
                         padding: 24,
                         borderWidth: 1,
-                        borderColor: isFailed
-                          ? '#ef444450'
-                          : isCompleted
-                            ? '#10b98150'
-                            : cardBorder,
+                        borderColor: cardBorder,
                         opacity: isFailed || isCompleted ? 0.65 : 1,
                         position: 'relative',
                         overflow: 'hidden',
@@ -441,8 +437,8 @@ export default function ClientChallengesScreen() {
                           pointerEvents="none"
                         >
                           <MagicRings
-                            color={isDark ? '#3B82F6' : '#60a5fa'}
-                            colorTwo={isDark ? '#1d4ed8' : '#3b82f6'}
+                            color={theme.colors.primary}
+                            colorTwo={theme.colors.primary}
                             backgroundColor={cardBg}
                             ringCount={5}
                             speed={0.6}
@@ -473,10 +469,10 @@ export default function ClientChallengesScreen() {
                         >
                           {isFailed ? (
                             <>
-                              <X size={16} color="#EF4444" />
+                              <X size={16} color={textSecondaryColor} />
                               <Text
                                 style={{
-                                  color: '#EF4444',
+                                  color: textSecondaryColor,
                                   fontSize: 10,
                                   fontWeight: '900',
                                   textTransform: 'uppercase',
@@ -488,10 +484,10 @@ export default function ClientChallengesScreen() {
                             </>
                           ) : isCompleted ? (
                             <>
-                              <CheckCircle size={16} color="#10B981" />
+                              <CheckCircle size={16} color={theme.colors.primary} />
                               <Text
                                 style={{
-                                  color: '#10B981',
+                                  color: theme.colors.primary,
                                   fontSize: 10,
                                   fontWeight: '900',
                                   textTransform: 'uppercase',

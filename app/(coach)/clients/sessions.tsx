@@ -183,16 +183,17 @@ export default function CoachClientSessionsScreen() {
 
       {pendingResolutions.length > 0 && (
         <TouchableOpacity
-          className="mx-3 mt-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex-row items-center justify-between"
+          style={{ backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}25` }}
+          className="mx-3 mt-3 border rounded-2xl p-4 flex-row items-center justify-between"
           onPress={() => setPendingModalVisible(true)}
         >
           <View className="flex-row items-center gap-3">
-            <View className="w-2 h-2 rounded-full bg-amber-500" />
-            <Text className="text-amber-500 font-bold text-xs uppercase tracking-widest">
+            <View style={{ backgroundColor: colors.primary }} className="w-2 h-2 rounded-full" />
+            <Text style={{ color: colors.primary }} className="font-bold text-xs uppercase tracking-widest">
               {pendingResolutions.length} Resolutions Pending
             </Text>
           </View>
-          <ChevronRight size={16} color="#F59E0B" />
+          <ChevronRight size={16} color={colors.primary} />
         </TouchableOpacity>
       )}
 
@@ -272,8 +273,11 @@ export default function CoachClientSessionsScreen() {
                               <View>
                                 {dayItem.is_active ? (
                                   dayItem.status === 'Rescheduled' ? (
-                                    <View className="bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                                      <Text className="text-amber-500 font-black text-[9px] uppercase tracking-wider">Rescheduled</Text>
+                                    <View 
+                                      className="px-2.5 py-1 rounded-full border"
+                                      style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
+                                    >
+                                      <Text style={{ color: colors.primary }} className="font-black text-[9px] uppercase tracking-wider">Rescheduled</Text>
                                     </View>
                                   ) : (
                                     <View 
@@ -445,9 +449,12 @@ export default function CoachClientSessionsScreen() {
                                     }
                                     if (isMissed) {
                                       return (
-                                        <View className="bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20 flex-row items-center gap-1">
-                                          <X size={10} color="#F59E0B" strokeWidth={3} />
-                                          <Text className="text-amber-500 font-black text-[9px] uppercase tracking-wider">Missed</Text>
+                                        <View 
+                                          className="px-2.5 py-1 rounded-full border flex-row items-center gap-1"
+                                          style={{ backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}25` }}
+                                        >
+                                          <X size={10} color={colors.primary} strokeWidth={3} />
+                                          <Text style={{ color: colors.primary }} className="font-black text-[9px] uppercase tracking-wider">Missed</Text>
                                         </View>
                                       );
                                     }

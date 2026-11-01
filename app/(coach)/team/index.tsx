@@ -143,12 +143,8 @@ export default function TeamManagementScreen() {
           }
         }}
         style={{
-          backgroundColor: item.status === 'pending' 
-            ? (isDarkMode ? 'rgba(245, 158, 11, 0.08)' : '#FFFBEB')
-            : colors.surface,
-          borderColor: item.status === 'pending'
-            ? (isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A')
-            : colors.border,
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
         }}
         className="p-5 rounded-[28px] border flex-row items-center gap-4 shadow-sm"
         activeOpacity={0.7}
@@ -165,15 +161,9 @@ export default function TeamManagementScreen() {
             <Text style={{ color: colors.text }} className="font-black text-base tracking-tight" numberOfLines={1}>
               {item.full_name}
             </Text>
-            {item.status === 'pending' ? (
-              <View className="bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20">
-                <Text className="text-amber-500 text-[9px] font-black uppercase tracking-widest">Pending</Text>
-              </View>
-            ) : (
-              <View className="bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
-                <Text className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Active</Text>
-              </View>
-            )}
+            <View style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }} className="px-2.5 py-1 rounded-md border">
+              <Text style={{ color: colors.primary }} className="text-[9px] font-black uppercase tracking-widest">{item.status === 'pending' ? 'Pending' : 'Active'}</Text>
+            </View>
           </View>
           
           <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mb-2.5" numberOfLines={1}>
@@ -320,8 +310,8 @@ export default function TeamManagementScreen() {
                 {brand?.name || 'Team Stats'}
               </Text>
             </View>
-            <View className="px-2.5 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-              <Text className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Active</Text>
+            <View style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }} className="px-2.5 py-1 rounded-full border">
+              <Text style={{ color: colors.primary }} className="text-[9px] font-black uppercase tracking-widest">Active</Text>
             </View>
           </View>
           
@@ -336,14 +326,14 @@ export default function TeamManagementScreen() {
             <StatItem 
               label="Clients" 
               value={totalClients.toString()} 
-              icon={<Zap size={14} color="#10B981" />}
+              icon={<Zap size={14} color={colors.primary} />}
               colors={colors}
             />
             <View style={{ backgroundColor: colors.border }} className="w-px h-10 mx-2 self-center" />
             <StatItem 
               label="Assigned" 
               value={subCoaches.reduce((sum, coach) => sum + coach.client_count, 0).toString()} 
-              icon={<Shield size={14} color="#F59E0B" />}
+              icon={<Shield size={14} color={colors.primary} />}
               isLast
               colors={colors}
             />

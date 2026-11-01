@@ -149,10 +149,11 @@ export default function ReassignClientsScreen() {
             <MotiView 
                 from={{ opacity: 0 }} 
                 animate={{ opacity: 1 }}
-                className="py-12 items-center justify-center bg-emerald-500/5 rounded-[32px] border border-emerald-500/20 border-dashed"
+                style={{ backgroundColor: `${primary}10`, borderColor: `${primary}30` }}
+                className="py-12 items-center justify-center rounded-[32px] border border-dashed"
             >
-              <Check size={32} color="#10B981" />
-              <Text className="text-emerald-500 font-bold mt-4 tracking-tight">All identities synchronized.</Text>
+              <Check size={32} color={primary} />
+              <Text style={{ color: primary }} className="font-bold mt-4 tracking-tight">All identities synchronized.</Text>
             </MotiView>
           ) : (
             clients.map((client, index) => {
@@ -166,11 +167,21 @@ export default function ReassignClientsScreen() {
                   className="mb-3"
                 >
                   <TouchableOpacity
-                    style={{ borderWidth: isSelected ? 2 : 1 }}
-                    className={`p-5 rounded-[24px] flex-row items-center gap-4 ${isSelected ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-slate-900/40'}`}
+                    style={{
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? primary : 'rgba(255,255,255,0.08)',
+                      backgroundColor: isSelected ? `${primary}15` : 'rgba(15, 23, 42, 0.4)',
+                    }}
+                    className="p-5 rounded-[24px] flex-row items-center gap-4"
                     onPress={() => toggleClient(client.client_id)}
                   >
-                    <View className={`w-6 h-6 rounded-lg border-2 items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-700 bg-slate-950'}`}>
+                    <View
+                      style={{
+                        backgroundColor: isSelected ? primary : '#020617',
+                        borderColor: isSelected ? primary : '#334155',
+                      }}
+                      className="w-6 h-6 rounded-lg border-2 items-center justify-center"
+                    >
                       {isSelected && <Check size={14} color="white" strokeWidth={3} />}
                     </View>
                     <View className="flex-1">
@@ -200,11 +211,21 @@ export default function ReassignClientsScreen() {
                   className="mb-3"
                 >
                   <TouchableOpacity
-                    style={{ borderWidth: isSelected ? 2 : 1 }}
-                    className={`p-5 rounded-[24px] flex-row items-center gap-4 ${isSelected ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/5 bg-slate-900/40'}`}
+                    style={{
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? primary : 'rgba(255,255,255,0.08)',
+                      backgroundColor: isSelected ? `${primary}15` : 'rgba(15, 23, 42, 0.4)',
+                    }}
+                    className="p-5 rounded-[24px] flex-row items-center gap-4"
                     onPress={() => setSelectedCoachId(c.coach_id)}
                   >
-                    <View className={`w-6 h-6 rounded-full border-2 items-center justify-center ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-700 bg-slate-950'}`}>
+                    <View
+                      style={{
+                        backgroundColor: isSelected ? primary : '#020617',
+                        borderColor: isSelected ? primary : '#334155',
+                      }}
+                      className="w-6 h-6 rounded-full border-2 items-center justify-center"
+                    >
                       {isSelected && <View className="w-2 h-2 rounded-full bg-white" />}
                     </View>
                     <View className="flex-1">

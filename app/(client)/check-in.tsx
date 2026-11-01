@@ -371,9 +371,9 @@ export default function CheckInScreen() {
             </View>
             <View className="flex-row items-center gap-2">
               {isWeightFromHealth && (
-                <View className="bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
-                  <Check size={12} color="#10B981" />
-                  <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-wider">
+                <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="border px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
+                  <Check size={12} color={theme.colors.primary} />
+                  <Text style={{ color: theme.colors.primary }} className="text-[10px] font-black uppercase tracking-wider">
                     From Health
                   </Text>
                 </View>
@@ -467,16 +467,16 @@ export default function CheckInScreen() {
                 }}
                 className="w-10 h-10 rounded-xl items-center justify-center border"
               >
-                <Timer size={20} color={theme.colors.secondary || '#10B981'} />
+                <Timer size={20} color={theme.colors.primary} />
               </View>
               <Text style={{ color: textColor }} className="font-bold text-lg">
                 Sleep Duration
               </Text>
             </View>
             {isSleepFromHealth ? (
-              <View className="bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
-                <Check size={12} color="#10B981" />
-                <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-wider">
+              <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="border px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
+                <Check size={12} color={theme.colors.primary} />
+                <Text style={{ color: theme.colors.primary }} className="text-[10px] font-black uppercase tracking-wider">
                   From Health
                 </Text>
               </View>

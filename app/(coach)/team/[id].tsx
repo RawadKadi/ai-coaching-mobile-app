@@ -286,15 +286,15 @@ export default function SubCoachDetailsScreen() {
             <Text className="text-slate-400 font-medium mb-6">{subCoach?.email}</Text>
             
             <View className="flex-row items-center gap-4">
-                <View className="bg-blue-600/10 px-4 py-2 rounded-full border border-blue-600/20 flex-row items-center gap-2">
+                <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="px-4 py-2 rounded-full border flex-row items-center gap-2">
                     <Calendar size={14} color={theme.colors.primary} />
-                    <Text className="text-blue-500 text-[10px] font-black uppercase tracking-widest">
+                    <Text style={{ color: theme.colors.primary }} className="text-[10px] font-black uppercase tracking-widest">
                         Joined {new Date(subCoach?.joined_at || '').toLocaleDateString()}
                     </Text>
                 </View>
-                <View className="bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20 flex-row items-center gap-2">
-                    <UserCheck size={14} color="#10B981" />
-                    <Text className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Active</Text>
+                <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="px-4 py-2 rounded-full border flex-row items-center gap-2">
+                    <UserCheck size={14} color={theme.colors.primary} />
+                    <Text style={{ color: theme.colors.primary }} className="text-[10px] font-black uppercase tracking-widest">Active</Text>
                 </View>
             </View>
         </MotiView>
@@ -307,7 +307,7 @@ export default function SubCoachDetailsScreen() {
                 transition={{ delay: 200 }}
                 className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5 items-center"
             >
-                <View className="w-10 h-10 rounded-2xl bg-blue-600/10 items-center justify-center border border-blue-600/20 mb-3">
+                <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="w-10 h-10 rounded-2xl items-center justify-center border mb-3">
                     <Users size={18} color={theme.colors.primary} />
                 </View>
                 <Text className="text-white text-2xl font-black tracking-tighter">{subCoach?.client_count}</Text>
@@ -319,8 +319,8 @@ export default function SubCoachDetailsScreen() {
                 transition={{ delay: 300 }}
                 className="flex-1 bg-slate-900/40 p-6 rounded-[32px] border border-white/5 items-center"
             >
-                <View className="w-10 h-10 rounded-2xl bg-emerald-500/10 items-center justify-center border border-emerald-500/20 mb-3">
-                    <TrendingUp size={18} color="#10B981" />
+                <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="w-10 h-10 rounded-2xl items-center justify-center border mb-3">
+                    <TrendingUp size={18} color={theme.colors.primary} />
                 </View>
                 <Text className="text-white text-2xl font-black tracking-tighter">98%</Text>
                 <Text className="text-slate-500 text-[8px] font-black uppercase tracking-widest mt-1">Productivity</Text>

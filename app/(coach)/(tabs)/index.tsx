@@ -1092,11 +1092,11 @@ export default function CoachDashboard() {
                       <View
                         className="w-12 h-12 rounded-2xl items-center justify-center border"
                         style={{
-                          backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                          borderColor: 'rgba(59, 130, 246, 0.25)',
+                          backgroundColor: `${colors.primary}18`,
+                          borderColor: `${colors.primary}35`,
                         }}
                       >
-                        <Users size={22} color="#3B82F6" />
+                        <Users size={22} color={colors.primary} />
                       </View>
                       <ArrowUpRight size={18} color={textSecondaryColor} />
                     </View>
@@ -1113,7 +1113,7 @@ export default function CoachDashboard() {
                       Total Clients
                     </Text>
                     <View className="flex-row items-center gap-1.5 mt-3">
-                      <View className="w-2 h-2 rounded-full bg-blue-500" />
+                      <View className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.primary }} />
                       <Text
                         style={{ color: textSecondaryColor }}
                         className="text-xs font-semibold"
@@ -1138,11 +1138,11 @@ export default function CoachDashboard() {
                       <View
                         className="w-12 h-12 rounded-2xl items-center justify-center border"
                         style={{
-                          backgroundColor: 'rgba(168, 85, 247, 0.12)',
-                          borderColor: 'rgba(168, 85, 247, 0.25)',
+                          backgroundColor: `${colors.primary}18`,
+                          borderColor: `${colors.primary}35`,
                         }}
                       >
-                        <Activity size={22} color="#A855F7" />
+                        <Activity size={22} color={colors.primary} />
                       </View>
                       <ArrowUpRight size={18} color={textSecondaryColor} />
                     </View>
@@ -1170,8 +1170,8 @@ export default function CoachDashboard() {
                     </View>
 
                     <View className="flex-row items-center gap-1.5 mt-2">
-                      <View className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <Text className="text-emerald-500 text-xs font-bold">
+                      <View className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.primary }} />
+                      <Text style={{ color: colors.primary }} className="text-xs font-bold">
                         {stats.compliantToday} logged today
                       </Text>
                     </View>
@@ -1199,11 +1199,11 @@ export default function CoachDashboard() {
                       <View
                         className="w-12 h-12 rounded-2xl items-center justify-center border"
                         style={{
-                          backgroundColor: 'rgba(245, 158, 11, 0.12)',
-                          borderColor: 'rgba(245, 158, 11, 0.25)',
+                          backgroundColor: `${colors.primary}18`,
+                          borderColor: `${colors.primary}35`,
                         }}
                       >
-                        <Zap size={22} color="#F59E0B" />
+                        <Zap size={22} color={colors.primary} />
                       </View>
                       <ArrowUpRight size={18} color={textSecondaryColor} />
                     </View>
@@ -1224,7 +1224,7 @@ export default function CoachDashboard() {
                         className="w-2 h-2 rounded-full"
                         style={{
                           backgroundColor:
-                            stats.todaysSessions > 0 ? '#F59E0B' : '#94A3B8',
+                            stats.todaysSessions > 0 ? colors.primary : '#94A3B8',
                         }}
                       />
                       <Text
@@ -1253,11 +1253,11 @@ export default function CoachDashboard() {
                       <View
                         className="w-12 h-12 rounded-2xl items-center justify-center border"
                         style={{
-                          backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                          borderColor: 'rgba(16, 185, 129, 0.25)',
+                          backgroundColor: `${colors.primary}18`,
+                          borderColor: `${colors.primary}35`,
                         }}
                       >
-                        <Trophy size={22} color="#10B981" />
+                        <Trophy size={22} color={colors.primary} />
                       </View>
                       <ArrowUpRight size={18} color={textSecondaryColor} />
                     </View>
@@ -1274,8 +1274,8 @@ export default function CoachDashboard() {
                       Challenges
                     </Text>
                     <View className="flex-row items-center gap-1.5 mt-3">
-                      <View className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <Text className="text-emerald-500 text-xs font-bold">
+                      <View className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.primary }} />
+                      <Text style={{ color: colors.primary }} className="text-xs font-bold">
                         Client goals
                       </Text>
                     </View>
@@ -1299,41 +1299,41 @@ export default function CoachDashboard() {
                       style={{ color: colors.primary }}
                       className="font-bold text-xs uppercase tracking-wider"
                     >
-                      View Roster
+                      View Team
                     </Text>
                   </TouchableOpacity>
                 </View>
 
                 <View className="flex-row flex-wrap gap-3">
                   <ActionCard
-                    icon={<Trophy size={22} color="#F59E0B" />}
+                    icon={<Trophy size={22} color={colors.primary} />}
                     title="Challenges"
                     desc="Client goals"
                     onPress={() => router.push('/(coach)/challenges')}
                     cardStyle={cardStyle}
                     textStyle={{ color: textColor }}
                     descColor={textSecondaryColor}
-                    iconBg="rgba(245, 158, 11, 0.12)"
+                    iconBg={`${colors.primary}18`}
                   />
                   <ActionCard
-                    icon={<Zap size={22} color="#A855F7" />}
+                    icon={<Zap size={22} color={colors.primary} />}
                     title="AI Scheduler"
                     desc="Plan sessions"
                     onPress={handleOpenAIScheduler}
                     cardStyle={cardStyle}
                     textStyle={{ color: textColor }}
                     descColor={textSecondaryColor}
-                    iconBg="rgba(168, 85, 247, 0.12)"
+                    iconBg={`${colors.primary}18`}
                   />
                   <ActionCard
-                    icon={<Users size={22} color="#3B82F6" />}
+                    icon={<Users size={22} color={colors.primary} />}
                     title="Team"
                     desc="Coaches & staff"
                     onPress={() => router.push('/(coach)/team')}
                     cardStyle={cardStyle}
                     textStyle={{ color: textColor }}
                     descColor={textSecondaryColor}
-                    iconBg="rgba(59, 130, 246, 0.12)"
+                    iconBg={`${colors.primary}18`}
                   />
                   <ActionCard
                     icon={<UserPlus size={22} color={colors.primary} />}
@@ -1343,7 +1343,7 @@ export default function CoachDashboard() {
                     cardStyle={cardStyle}
                     textStyle={{ color: textColor }}
                     descColor={textSecondaryColor}
-                    iconBg={colors.primary + '18'}
+                    iconBg={`${colors.primary}18`}
                   />
                 </View>
               </View>
@@ -2203,7 +2203,7 @@ const ClientsPerformanceCard = ({
             }}
           >
             <View className="flex-row items-center gap-1.5 mb-1.5">
-              <Moon size={14} color="#818CF8" />
+              <Moon size={14} color={colors.primary} />
               <Text
                 style={{ color: textSecondaryColor }}
                 className="text-[10px] font-black uppercase tracking-wider"
@@ -2228,7 +2228,7 @@ const ClientsPerformanceCard = ({
             }}
           >
             <View className="flex-row items-center gap-1.5 mb-1.5">
-              <Zap size={14} color="#F59E0B" />
+              <Zap size={14} color={colors.primary} />
               <Text
                 style={{ color: textSecondaryColor }}
                 className="text-[10px] font-black uppercase tracking-wider"
@@ -2253,7 +2253,7 @@ const ClientsPerformanceCard = ({
             }}
           >
             <View className="flex-row items-center gap-1.5 mb-1.5">
-              <CheckCircle2 size={14} color="#10B981" />
+              <CheckCircle2 size={14} color={colors.primary} />
               <Text
                 style={{ color: textSecondaryColor }}
                 className="text-[10px] font-black uppercase tracking-wider"
@@ -2500,8 +2500,8 @@ const StreakChampionsStrip = ({ champions }: { champions: any[] }) => {
         }}
       >
         <View className="flex-row items-center gap-2.5">
-          <View className="w-9 h-9 rounded-full bg-amber-500/15 items-center justify-center">
-            <Flame size={18} color="#F59E0B" />
+          <View style={{ backgroundColor: `${colors.primary}18` }} className="w-9 h-9 rounded-full items-center justify-center">
+            <Flame size={18} color={colors.primary} />
           </View>
           <View>
             <Text

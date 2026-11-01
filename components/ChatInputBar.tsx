@@ -642,11 +642,11 @@ export function ChatInputBar({
                         shouldPlay={false}
                       />
                     ) : isMeal ? (
-                      <View style={[styles.replyThumb, { backgroundColor: theme.colors.surfaceLight || '#1E293B', alignItems: 'center', justifyContent: 'center' }]}>
+                      <View style={[styles.replyThumb, { backgroundColor: theme.colors.surfaceLight || theme.colors.surface, alignItems: 'center', justifyContent: 'center' }]}>
                         <Utensils size={18} color={theme.colors.primary} />
                       </View>
                     ) : (
-                      <View style={[styles.replyThumb, { backgroundColor: '#1E293B' }]} />
+                      <View style={[styles.replyThumb, { backgroundColor: theme.colors.surface }]} />
                     )}
                     {isVideo && (
                       <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -840,7 +840,7 @@ export function ChatInputBar({
           <TouchableOpacity
             style={[
               styles.sendBtn,
-              { backgroundColor: editingMessage ? '#1E293B' : theme.colors.primary },
+              { backgroundColor: editingMessage ? theme.colors.surface : theme.colors.primary },
               isDisabled && { opacity: 0.5 },
             ]}
             onPress={handleSend}
