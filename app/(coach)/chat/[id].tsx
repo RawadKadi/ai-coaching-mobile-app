@@ -501,7 +501,7 @@ export default function CoachChatScreen() {
   useEffect(() => {
     if (!user || !id) return;
 
-    const channelId = `coach-chat-rt-${id}-${user.id}`;
+    const channelId = `coach-chat-rt-${id}-${user.id}-${Date.now()}`;
 
     const channel = supabase
       .channel(channelId)
@@ -566,7 +566,12 @@ export default function CoachChatScreen() {
       });
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        (supabase as any).realtime?._remove?.(channel);
+        channel.unsubscribe();
+      } catch (e) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [user?.id, id]); // ← Stable: no clientUserId dependency
 
@@ -575,8 +580,22 @@ export default function CoachChatScreen() {
   useEffect(() => {
     if (!user || !clientUserId) return;
     const key = [user.id, clientUserId].sort().join('-');
+    const topic = `chat-reactions-${key}`;
+    const realtimeTopic = `realtime:${topic}`;
+
+    // Clean up any stale or existing channel on this topic before subscribing
+    const existing = supabase.getChannels().find((c) => c.topic === realtimeTopic);
+    if (existing) {
+      try {
+        (supabase as any).realtime?._remove?.(existing);
+        existing.unsubscribe();
+      } catch (e) {
+        supabase.removeChannel(existing);
+      }
+    }
+
     const ch = supabase
-      .channel(`chat-reactions-${key}`)
+      .channel(topic)
       .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
         // Handle reactions broadcast from the other side
         setMessages((prev) =>
@@ -599,7 +618,12 @@ export default function CoachChatScreen() {
       .subscribe();
     reactionChannelRef.current = ch;
     return () => {
-      supabase.removeChannel(ch);
+      try {
+        (supabase as any).realtime?._remove?.(ch);
+        ch.unsubscribe();
+      } catch (e) {
+        supabase.removeChannel(ch);
+      }
     };
   }, [user?.id, clientUserId]); // Fixed dependency
 
@@ -632,9 +656,10 @@ export default function CoachChatScreen() {
 
     fetchTodaySession();
 
+    const sessionChannelId = `sessions-${clientUserId}-${Date.now()}`;
     // Subscribe to session changes
     const channel = supabase
-      .channel(`sessions-${clientUserId}`)
+      .channel(sessionChannelId)
       .on(
         'postgres_changes',
         {
@@ -650,7 +675,12 @@ export default function CoachChatScreen() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        (supabase as any).realtime?._remove?.(channel);
+        channel.unsubscribe();
+      } catch (e) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [clientUserId]);
 
@@ -1876,7 +1906,7 @@ export default function CoachChatScreen() {
               data={messages}
               extraData={messages}
               renderItem={renderMessage}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item, index) => (item?.id ? String(item.id) : `msg-${index}`)}
               inverted
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{

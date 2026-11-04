@@ -11,6 +11,8 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
@@ -23,9 +25,7 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
-  CheckCircle2,
   X,
-  AlertCircle,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrandColors, useTheme } from '@/contexts/BrandContext';
@@ -280,18 +280,13 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
     }
   };
 
-  const cardBg = isDark ? '#111827' : colors.surface;
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
-  const inputBg = isDark ? '#1E293B' : 'rgba(15, 23, 42, 0.04)';
-  const inputBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.12)';
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background || '#0B0F19' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         {/* Header */}
         <View
-          style={{ borderBottomColor: cardBorder, borderBottomWidth: 1 }}
+          style={{ borderBottomColor: colors.border, borderBottomWidth: 1 }}
           className="flex-row items-center justify-between px-6 py-4"
         >
           <TouchableOpacity
@@ -299,22 +294,22 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               safeBack(fallbackBackRoute);
             }}
-            style={{ backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }}
+            style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}
             className="w-10 h-10 rounded-full items-center justify-center shadow-sm"
             activeOpacity={0.7}
           >
-            <ChevronLeft size={20} color={colors.text || '#FFFFFF'} />
+            <ChevronLeft size={20} color={colors.text} />
           </TouchableOpacity>
 
           <View className="items-center">
             <Text
-              style={{ color: colors.text || '#FFFFFF' }}
+              style={{ color: colors.text }}
               className="font-black text-lg tracking-tight"
             >
               Account & Security
             </Text>
             <Text
-              style={{ color: colors.textSecondary || '#94A3B8' }}
+              style={{ color: colors.textSecondary }}
               className="text-[10px] font-bold uppercase tracking-widest mt-0.5"
             >
               Credentials & Login
@@ -325,111 +320,120 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
         </View>
 
         <ScrollView
-          className="flex-1 px-4 pt-6"
+          className="flex-1 px-3 pt-4"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
         >
           {/* SECTION A: EMAIL & CREDENTIALS */}
-          <View className="mb-8">
-            <Text
-              style={{ color: colors.textSecondary || '#64748B' }}
-              className="text-[11px] font-black uppercase tracking-[2px] px-2 mb-3"
-            >
-              Email & Password
-            </Text>
+          <Text
+            style={{ color: colors.textSecondary }}
+            className="text-[10px] font-black uppercase tracking-[3px] px-1 mt-6 mb-2"
+          >
+            Email & Password
+          </Text>
 
-            {/* Email Card */}
-            <MotiView
-              from={reduceMotion ? undefined : { opacity: 0, translateY: 10 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ delay: 50 }}
-              style={{ backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }}
-              className="p-4 rounded-3xl mb-4"
+          {/* Email Card */}
+          <MotiView
+            from={reduceMotion ? undefined : { opacity: 0, translateY: 8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ delay: 40 }}
+          >
+            <View
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+              className="flex-row items-center p-5 rounded-[32px] border mb-3"
             >
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center flex-1 mr-3">
-                  <View
-                    style={{
-                      backgroundColor: `${colors.primary}18`,
-                      borderColor: `${colors.primary}30`,
-                      borderWidth: 1,
-                    }}
-                    className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5"
-                  >
-                    <Mail size={22} color={colors.primary} />
-                  </View>
-                  <View className="flex-1">
-                    <Text
-                      style={{ color: colors.textSecondary || '#94A3B8' }}
-                      className="text-xs font-semibold uppercase tracking-wider"
-                    >
-                      Email Address
-                    </Text>
-                    <Text
-                      style={{ color: colors.text || '#FFFFFF' }}
-                      className="text-base font-bold mt-0.5"
-                      numberOfLines={1}
-                    >
-                      {user?.email || 'Not available'}
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setNewEmail(user?.email || '');
-                    setShowEmailModal(true);
-                  }}
-                  style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
-                  className="px-3.5 py-2 rounded-xl border"
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ color: colors.primary }} className="text-xs font-bold">
-                    Change
-                  </Text>
-                </TouchableOpacity>
+              <View
+                className="w-12 h-12 rounded-[18px] items-center justify-center mr-4 border"
+                style={{ backgroundColor: colors.background, borderColor: colors.border }}
+              >
+                <Mail size={20} color={colors.primary} />
               </View>
-            </MotiView>
 
-            {/* Password Card */}
-            <MotiView
-              from={reduceMotion ? undefined : { opacity: 0, translateY: 10 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ delay: 100 }}
-              style={{ backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }}
-              className="p-4 rounded-3xl"
+              <View className="flex-1 mr-3">
+                <Text
+                  style={{ color: colors.textSecondary }}
+                  className="text-[10px] font-medium uppercase tracking-wider"
+                >
+                  Email Address
+                </Text>
+                <Text
+                  style={{ color: colors.text }}
+                  className="font-bold text-base mt-0.5"
+                  numberOfLines={1}
+                >
+                  {user?.email || 'Not available'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setNewEmail(user?.email || '');
+                  setShowEmailModal(true);
+                }}
+                style={{
+                  backgroundColor: `${colors.primary}1a`,
+                  borderColor: `${colors.primary}33`,
+                }}
+                className="px-4 py-2 rounded-full border"
+                activeOpacity={0.7}
+              >
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
+                  Change
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </MotiView>
+
+          {/* Password Card */}
+          <MotiView
+            from={reduceMotion ? undefined : { opacity: 0, translateY: 8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ delay: 80 }}
+          >
+            <View
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+              className="p-5 rounded-[32px] border mb-3"
             >
               {isOAuthUser ? (
                 // 3rd-Party OAuth User
                 <View className="flex-row items-start">
                   <View
-                    style={{
-                      backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                      borderColor: 'rgba(59, 130, 246, 0.25)',
-                      borderWidth: 1,
-                    }}
-                    className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5"
+                    className="w-12 h-12 rounded-[18px] items-center justify-center mr-4 border"
+                    style={{ backgroundColor: colors.background, borderColor: colors.border }}
                   >
-                    <ShieldCheck size={22} color="#3B82F6" />
+                    <ShieldCheck size={20} color={colors.primary} />
                   </View>
                   <View className="flex-1">
                     <View className="flex-row items-center gap-2">
                       <Text
-                        style={{ color: colors.text || '#FFFFFF' }}
-                        className="text-base font-bold"
+                        style={{ color: colors.text }}
+                        className="font-bold text-base"
                       >
                         Password
                       </Text>
-                      <View className="bg-blue-500/15 border border-blue-500/30 px-2.5 py-0.5 rounded-full">
-                        <Text className="text-blue-400 text-[10px] font-black uppercase">
+                      <View
+                        className="px-2.5 py-0.5 rounded-full border"
+                        style={{
+                          backgroundColor: `${colors.primary}1a`,
+                          borderColor: `${colors.primary}33`,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontSize: 9,
+                            fontWeight: '900',
+                            textTransform: 'uppercase',
+                          }}
+                        >
                           Single Sign-On
                         </Text>
                       </View>
                     </View>
                     <Text
-                      style={{ color: colors.textSecondary || '#94A3B8' }}
-                      className="text-xs font-medium mt-1 leading-5"
+                      style={{ color: colors.textSecondary }}
+                      className="text-[10px] font-medium mt-1 leading-4"
                     >
                       Managed by {oauthProviderLabel} — Password updates are handled via your{' '}
                       {oauthProviderLabel} account.
@@ -441,25 +445,21 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
                 <View className="flex-row items-center justify-between">
                   <View className="flex-row items-center flex-1 mr-3">
                     <View
-                      style={{
-                        backgroundColor: `${colors.primary}18`,
-                        borderColor: `${colors.primary}30`,
-                        borderWidth: 1,
-                      }}
-                      className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5"
+                      className="w-12 h-12 rounded-[18px] items-center justify-center mr-4 border"
+                      style={{ backgroundColor: colors.background, borderColor: colors.border }}
                     >
-                      <Lock size={22} color={colors.primary} />
+                      <Lock size={20} color={colors.primary} />
                     </View>
                     <View className="flex-1">
                       <Text
-                        style={{ color: colors.textSecondary || '#94A3B8' }}
-                        className="text-xs font-semibold uppercase tracking-wider"
+                        style={{ color: colors.textSecondary }}
+                        className="text-[10px] font-medium uppercase tracking-wider"
                       >
                         Password
                       </Text>
                       <Text
-                        style={{ color: colors.text || '#FFFFFF' }}
-                        className="text-base font-bold mt-0.5 tracking-widest"
+                        style={{ color: colors.text }}
+                        className="font-bold text-base mt-0.5 tracking-widest"
                       >
                         ••••••••••••
                       </Text>
@@ -471,70 +471,73 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                       setShowPasswordModal(true);
                     }}
-                    style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
-                    className="px-3.5 py-2 rounded-xl border"
+                    style={{
+                      backgroundColor: `${colors.primary}1a`,
+                      borderColor: `${colors.primary}33`,
+                    }}
+                    className="px-4 py-2 rounded-full border"
                     activeOpacity={0.7}
                   >
-                    <Text style={{ color: colors.primary }} className="text-xs font-bold">
+                    <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
                       Change
                     </Text>
                   </TouchableOpacity>
                 </View>
               )}
-            </MotiView>
-          </View>
+            </View>
+          </MotiView>
 
           {/* SECTION B: CONNECTED ACCOUNTS */}
-          <View className="mb-8">
-            <Text
-              style={{ color: colors.textSecondary || '#64748B' }}
-              className="text-[11px] font-black uppercase tracking-[2px] px-2 mb-3"
-            >
-              Connected Accounts
-            </Text>
+          <Text
+            style={{ color: colors.textSecondary }}
+            className="text-[10px] font-black uppercase tracking-[3px] px-1 mt-6 mb-2"
+          >
+            Connected Accounts
+          </Text>
 
-            <MotiView
-              from={reduceMotion ? undefined : { opacity: 0, translateY: 10 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ delay: 150 }}
-              style={{ backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }}
-              className="p-4 rounded-3xl"
+          <MotiView
+            from={reduceMotion ? undefined : { opacity: 0, translateY: 8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ delay: 120 }}
+          >
+            <View
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+              className="p-5 rounded-[32px] border mb-3"
             >
               {/* Google Row */}
-              <View className="flex-row items-center justify-between py-2 border-b" style={{ borderBottomColor: cardBorder }}>
+              <View
+                className="flex-row items-center justify-between pb-4 border-b"
+                style={{ borderBottomColor: colors.border }}
+              >
                 <View className="flex-row items-center flex-1 mr-3">
                   <View
-                    style={{
-                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-                      borderColor: cardBorder,
-                      borderWidth: 1,
-                    }}
-                    className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5"
+                    className="w-12 h-12 rounded-[18px] items-center justify-center mr-4 border"
+                    style={{ backgroundColor: colors.background, borderColor: colors.border }}
                   >
-                    <GoogleIcon size={24} />
+                    <GoogleIcon size={22} />
                   </View>
                   <View className="flex-1">
                     <View className="flex-row items-center gap-2">
                       <Text
-                        style={{ color: colors.text || '#FFFFFF' }}
-                        className="text-base font-bold"
+                        style={{ color: colors.text }}
+                        className="font-bold text-base"
                       >
                         Google
                       </Text>
                       {isGoogleLinked && (
                         <View className="flex-row items-center bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full gap-1">
                           <View className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          <Text className="text-emerald-400 text-[10px] font-bold uppercase">
+                          <Text className="text-emerald-400 text-[9px] font-black uppercase">
                             Connected
                           </Text>
                         </View>
                       )}
                     </View>
                     <Text
-                      style={{ color: colors.textSecondary || '#94A3B8' }}
-                      className="text-xs font-medium mt-0.5"
+                      style={{ color: colors.textSecondary }}
+                      className="text-[10px] font-medium mt-0.5"
                     >
-                      {isGoogleLinked ? 'Sign in with your Google account' : 'Not linked to this account'}
+                      {isGoogleLinked ? 'Sign in with Google' : 'Not linked to this account'}
                     </Text>
                   </View>
                 </View>
@@ -543,7 +546,7 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
                   <TouchableOpacity
                     disabled={unlinkingProvider === 'google'}
                     onPress={() => handleUnlink('google')}
-                    className="px-3.5 py-2 rounded-xl bg-red-500/10 border border-red-500/20"
+                    className="px-4 py-2 rounded-full border border-red-500/25 bg-red-500/10"
                     activeOpacity={0.7}
                   >
                     {unlinkingProvider === 'google' ? (
@@ -555,11 +558,14 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
                 ) : (
                   <TouchableOpacity
                     onPress={() => handleConnect('google')}
-                    style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
-                    className="px-3.5 py-2 rounded-xl border"
+                    style={{
+                      backgroundColor: `${colors.primary}1a`,
+                      borderColor: `${colors.primary}33`,
+                    }}
+                    className="px-4 py-2 rounded-full border"
                     activeOpacity={0.7}
                   >
-                    <Text style={{ color: colors.primary }} className="text-xs font-bold">
+                    <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
                       Connect
                     </Text>
                   </TouchableOpacity>
@@ -567,40 +573,36 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
               </View>
 
               {/* Apple Row */}
-              <View className="flex-row items-center justify-between py-2 mt-2">
+              <View className="flex-row items-center justify-between pt-4">
                 <View className="flex-row items-center flex-1 mr-3">
                   <View
-                    style={{
-                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-                      borderColor: cardBorder,
-                      borderWidth: 1,
-                    }}
-                    className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5"
+                    className="w-12 h-12 rounded-[18px] items-center justify-center mr-4 border"
+                    style={{ backgroundColor: colors.background, borderColor: colors.border }}
                   >
-                    <AppleIcon size={22} color={colors.text || '#FFFFFF'} />
+                    <AppleIcon size={20} color={colors.text} />
                   </View>
                   <View className="flex-1">
                     <View className="flex-row items-center gap-2">
                       <Text
-                        style={{ color: colors.text || '#FFFFFF' }}
-                        className="text-base font-bold"
+                        style={{ color: colors.text }}
+                        className="font-bold text-base"
                       >
                         Apple
                       </Text>
                       {isAppleLinked && (
                         <View className="flex-row items-center bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full gap-1">
                           <View className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          <Text className="text-emerald-400 text-[10px] font-bold uppercase">
+                          <Text className="text-emerald-400 text-[9px] font-black uppercase">
                             Connected
                           </Text>
                         </View>
                       )}
                     </View>
                     <Text
-                      style={{ color: colors.textSecondary || '#94A3B8' }}
-                      className="text-xs font-medium mt-0.5"
+                      style={{ color: colors.textSecondary }}
+                      className="text-[10px] font-medium mt-0.5"
                     >
-                      {isAppleLinked ? 'Sign in with your Apple ID' : 'Not linked to this account'}
+                      {isAppleLinked ? 'Sign in with Apple ID' : 'Not linked to this account'}
                     </Text>
                   </View>
                 </View>
@@ -609,7 +611,7 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
                   <TouchableOpacity
                     disabled={unlinkingProvider === 'apple'}
                     onPress={() => handleUnlink('apple')}
-                    className="px-3.5 py-2 rounded-xl bg-red-500/10 border border-red-500/20"
+                    className="px-4 py-2 rounded-full border border-red-500/25 bg-red-500/10"
                     activeOpacity={0.7}
                   >
                     {unlinkingProvider === 'apple' ? (
@@ -621,18 +623,21 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
                 ) : (
                   <TouchableOpacity
                     onPress={() => handleConnect('apple')}
-                    style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }}
-                    className="px-3.5 py-2 rounded-xl border"
+                    style={{
+                      backgroundColor: `${colors.primary}1a`,
+                      borderColor: `${colors.primary}33`,
+                    }}
+                    className="px-4 py-2 rounded-full border"
                     activeOpacity={0.7}
                   >
-                    <Text style={{ color: colors.primary }} className="text-xs font-bold">
+                    <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
                       Connect
                     </Text>
                   </TouchableOpacity>
                 )}
               </View>
-            </MotiView>
-          </View>
+            </View>
+          </MotiView>
         </ScrollView>
       </View>
 
@@ -647,68 +652,76 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}
         >
-          <View
-            style={{ backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }}
-            className="rounded-3xl p-6 shadow-2xl"
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setShowEmailModal(false);
+            }}
+          />
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}
+            className="rounded-[32px] p-6 shadow-2xl"
           >
             <View className="flex-row items-center justify-between mb-4">
-              <Text style={{ color: colors.text || '#FFFFFF' }} className="text-lg font-black">
+              <Text style={{ color: colors.text }} className="text-xl font-black">
                 Change Email
               </Text>
               <TouchableOpacity
                 onPress={() => setShowEmailModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-800/60 items-center justify-center"
+                style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }}
+                className="w-9 h-9 rounded-full items-center justify-center"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={18} color="#94A3B8" />
+                <X size={18} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ color: colors.textSecondary || '#94A3B8' }} className="text-xs mb-4">
+            <Text style={{ color: colors.textSecondary }} className="text-xs mb-4">
               Enter your new email address. We will send a confirmation link to confirm it.
             </Text>
 
             <View
-              style={{ backgroundColor: inputBg, borderColor: inputBorder, borderWidth: 1 }}
-              className="flex-row items-center px-4 py-3 rounded-2xl mb-6"
+              style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }}
+              className="flex-row items-center px-4 h-14 rounded-2xl mb-6"
             >
-              <Mail size={18} color={colors.textSecondary || '#94A3B8'} />
+              <Mail size={18} color={colors.textSecondary} />
               <TextInput
                 value={newEmail}
                 onChangeText={setNewEmail}
                 placeholder="New email address"
-                placeholderTextColor={colors.textSecondary || '#64748B'}
+                placeholderTextColor={colors.textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                style={{ color: colors.text || '#FFFFFF', flex: 1, marginLeft: 12, fontSize: 15 }}
+                style={{ color: colors.text, flex: 1, marginLeft: 12, fontSize: 15 }}
               />
             </View>
 
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={() => setShowEmailModal(false)}
-                className="flex-1 py-3.5 rounded-2xl items-center bg-slate-800"
-                activeOpacity={0.7}
-              >
-                <Text style={{ color: colors.textSecondary || '#94A3B8' }} className="font-bold text-sm">
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                disabled={updatingEmail}
-                onPress={handleUpdateEmail}
-                style={{ backgroundColor: colors.primary }}
-                className="flex-1 py-3.5 rounded-2xl items-center justify-center"
-                activeOpacity={0.7}
-              >
-                {updatingEmail ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text className="text-white font-bold text-sm">Update Email</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+            <TouchableOpacity
+              disabled={updatingEmail}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                handleUpdateEmail();
+              }}
+              style={{
+                backgroundColor: colors.primary,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.35,
+                shadowRadius: 12,
+                elevation: 6,
+              }}
+              className="w-full h-14 rounded-2xl items-center justify-center"
+              activeOpacity={0.8}
+            >
+              {updatingEmail ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text className="text-white font-extrabold text-base tracking-wide">Update Email</Text>
+              )}
+            </TouchableOpacity>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -723,129 +736,155 @@ export default function AccountSecurityScreen({ fallbackBackRoute }: AccountSecu
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}
         >
-          <View
-            style={{ backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }}
-            className="rounded-3xl p-6 shadow-2xl"
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setShowPasswordModal(false);
+            }}
+          />
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}
+            className="rounded-[32px] p-6 shadow-2xl"
           >
-            <View className="flex-row items-center justify-between mb-4">
-              <Text style={{ color: colors.text || '#FFFFFF' }} className="text-lg font-black">
+            <View className="flex-row items-center justify-between mb-5">
+              <Text style={{ color: colors.text }} className="text-xl font-black">
                 Change Password
               </Text>
               <TouchableOpacity
                 onPress={() => setShowPasswordModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-800/60 items-center justify-center"
+                style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }}
+                className="w-9 h-9 rounded-full items-center justify-center"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={18} color="#94A3B8" />
+                <X size={18} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             {/* Current Password */}
-            <Text style={{ color: colors.textSecondary || '#94A3B8' }} className="text-xs font-bold mb-1.5 px-1">
+            <Text style={{ color: colors.textSecondary }} className="text-xs font-bold mb-2 px-1">
               Current Password
             </Text>
             <View
-              style={{ backgroundColor: inputBg, borderColor: inputBorder, borderWidth: 1 }}
-              className="flex-row items-center px-4 py-3 rounded-2xl mb-4"
+              style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }}
+              className="flex-row items-center px-4 h-14 rounded-2xl mb-1"
             >
-              <Lock size={18} color={colors.textSecondary || '#94A3B8'} />
+              <Lock size={18} color={colors.textSecondary} />
               <TextInput
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
                 placeholder="Enter current password"
-                placeholderTextColor={colors.textSecondary || '#64748B'}
+                placeholderTextColor={colors.textSecondary}
                 secureTextEntry={!showCurrentPassword}
                 autoCapitalize="none"
-                style={{ color: colors.text || '#FFFFFF', flex: 1, marginLeft: 12, fontSize: 14 }}
+                style={{ color: colors.text, flex: 1, marginLeft: 12, fontSize: 15 }}
               />
-              <TouchableOpacity onPress={() => setShowCurrentPassword((prev) => !prev)}>
+              <TouchableOpacity
+                onPress={() => setShowCurrentPassword((prev) => !prev)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 {showCurrentPassword ? (
-                  <EyeOff size={18} color={colors.textSecondary || '#94A3B8'} />
+                  <EyeOff size={18} color={colors.textSecondary} />
                 ) : (
-                  <Eye size={18} color={colors.textSecondary || '#94A3B8'} />
+                  <Eye size={18} color={colors.textSecondary} />
                 )}
               </TouchableOpacity>
             </View>
 
+            {/* Divider and Spacing */}
+            <View
+              style={{ height: 1, backgroundColor: colors.border }}
+              className="my-5"
+            />
+
             {/* New Password */}
-            <Text style={{ color: colors.textSecondary || '#94A3B8' }} className="text-xs font-bold mb-1.5 px-1">
+            <Text style={{ color: colors.textSecondary }} className="text-xs font-bold mb-2 px-1">
               New Password (minimum 6 characters)
             </Text>
             <View
-              style={{ backgroundColor: inputBg, borderColor: inputBorder, borderWidth: 1 }}
-              className="flex-row items-center px-4 py-3 rounded-2xl mb-4"
+              style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }}
+              className="flex-row items-center px-4 h-14 rounded-2xl mb-4"
             >
-              <Lock size={18} color={colors.textSecondary || '#94A3B8'} />
+              <Lock size={18} color={colors.textSecondary} />
               <TextInput
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Enter new password"
-                placeholderTextColor={colors.textSecondary || '#64748B'}
+                placeholderTextColor={colors.textSecondary}
                 secureTextEntry={!showNewPassword}
                 autoCapitalize="none"
-                style={{ color: colors.text || '#FFFFFF', flex: 1, marginLeft: 12, fontSize: 14 }}
+                style={{ color: colors.text, flex: 1, marginLeft: 12, fontSize: 15 }}
               />
-              <TouchableOpacity onPress={() => setShowNewPassword((prev) => !prev)}>
+              <TouchableOpacity
+                onPress={() => setShowNewPassword((prev) => !prev)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 {showNewPassword ? (
-                  <EyeOff size={18} color={colors.textSecondary || '#94A3B8'} />
+                  <EyeOff size={18} color={colors.textSecondary} />
                 ) : (
-                  <Eye size={18} color={colors.textSecondary || '#94A3B8'} />
+                  <Eye size={18} color={colors.textSecondary} />
                 )}
               </TouchableOpacity>
             </View>
 
             {/* Confirm Password */}
-            <Text style={{ color: colors.textSecondary || '#94A3B8' }} className="text-xs font-bold mb-1.5 px-1">
+            <Text style={{ color: colors.textSecondary }} className="text-xs font-bold mb-2 px-1">
               Confirm New Password
             </Text>
             <View
-              style={{ backgroundColor: inputBg, borderColor: inputBorder, borderWidth: 1 }}
-              className="flex-row items-center px-4 py-3 rounded-2xl mb-6"
+              style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }}
+              className="flex-row items-center px-4 h-14 rounded-2xl mb-6"
             >
-              <Lock size={18} color={colors.textSecondary || '#94A3B8'} />
+              <Lock size={18} color={colors.textSecondary} />
               <TextInput
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Re-enter new password"
-                placeholderTextColor={colors.textSecondary || '#64748B'}
+                placeholderTextColor={colors.textSecondary}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
-                style={{ color: colors.text || '#FFFFFF', flex: 1, marginLeft: 12, fontSize: 14 }}
+                style={{ color: colors.text, flex: 1, marginLeft: 12, fontSize: 15 }}
               />
-              <TouchableOpacity onPress={() => setShowConfirmPassword((prev) => !prev)}>
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword((prev) => !prev)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 {showConfirmPassword ? (
-                  <EyeOff size={18} color={colors.textSecondary || '#94A3B8'} />
+                  <EyeOff size={18} color={colors.textSecondary} />
                 ) : (
-                  <Eye size={18} color={colors.textSecondary || '#94A3B8'} />
+                  <Eye size={18} color={colors.textSecondary} />
                 )}
               </TouchableOpacity>
             </View>
 
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={() => setShowPasswordModal(false)}
-                className="flex-1 py-3.5 rounded-2xl items-center bg-slate-800"
-                activeOpacity={0.7}
-              >
-                <Text style={{ color: colors.textSecondary || '#94A3B8' }} className="font-bold text-sm">
-                  Cancel
+            {/* Save Password Button (Full Width, No Cancel Button) */}
+            <TouchableOpacity
+              disabled={updatingPassword}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                handleUpdatePassword();
+              }}
+              style={{
+                backgroundColor: colors.primary,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.35,
+                shadowRadius: 12,
+                elevation: 6,
+              }}
+              className="w-full h-14 rounded-2xl items-center justify-center"
+              activeOpacity={0.8}
+            >
+              {updatingPassword ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text className="text-white font-extrabold text-base tracking-wide">
+                  Save Password
                 </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                disabled={updatingPassword}
-                onPress={handleUpdatePassword}
-                style={{ backgroundColor: colors.primary }}
-                className="flex-1 py-3.5 rounded-2xl items-center justify-center"
-                activeOpacity={0.7}
-              >
-                {updatingPassword ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text className="text-white font-bold text-sm">Save Password</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+              )}
+            </TouchableOpacity>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
     </View>

@@ -14,6 +14,7 @@ import { NotificationProvider, useNotification } from '@/contexts/NotificationCo
 import { TabBarScrollProvider } from '@/contexts/TabBarScrollContext';
 import NotificationToast from '@/components/NotificationToast';
 import BrandSavedModal from '@/components/BrandSavedModal';
+import ClientBrandChangedModal from '@/components/ClientBrandChangedModal';
 import { loadNotificationSound, unloadNotificationSound } from '@/lib/notification-sound';
 import SessionMonitor from '@/components/SessionMonitor';
 import TeamInvitationMonitor from '@/components/TeamInvitationMonitor';
@@ -77,6 +78,7 @@ function RootLayoutNav() {
       <StatusBar style="auto" />
       <NotificationToastWrapper />
       <BrandSavedModal />
+      <ClientBrandChangedModal />
     </>
   );
 }

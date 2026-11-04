@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useColorScheme } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useColorScheme, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { supabase } from '@/lib/supabase';
@@ -169,6 +169,61 @@ interface BrandContextType {
   toggleDarkMode: () => void;
   showBrandSavedModal: boolean;
   setShowBrandSavedModal: (show: boolean) => void;
+  showClientBrandChangedModal: boolean;
+  setShowClientBrandChangedModal: (show: boolean) => void;
+  dismissClientBrandChangedModal: () => void;
+}
+
+// ============================================================================
+// HELPER: Detect if brand settings changed from a previous state
+// ============================================================================
+
+export function hasBrandSettingsChanged(
+  prev: Partial<Brand> | null | undefined,
+  next: Partial<Brand> | null | undefined
+): boolean {
+  if (!prev || !next) return false;
+
+  // If brand ID changed entirely (e.g. client assigned to new coach or brand)
+  if (prev.id && next.id && prev.id !== next.id) {
+    return true;
+  }
+
+  const compareKeys: (keyof Brand)[] = [
+    'name',
+    'logo_url',
+    'primary_color',
+    'secondary_color',
+    'accent_color',
+    'background_color',
+    'font_family',
+    'heading_font_weight',
+    'body_font_weight',
+    'font_scale',
+    'button_shape',
+    'button_style',
+    'button_shadow_enabled',
+    'spacing_scale',
+    'card_shadow',
+    'border_radius_scale',
+    'dark_mode_enabled',
+    'dark_primary_color',
+    'dark_secondary_color',
+    'dark_accent_color',
+    'dark_background_color',
+  ];
+
+  return compareKeys.some((key) => {
+    const prevVal: any = prev[key] ?? null;
+    const nextVal: any = next[key] ?? null;
+    if (typeof prevVal === 'string' && typeof nextVal === 'string') {
+      if (key.includes('color')) {
+        return prevVal.trim().toLowerCase() !== nextVal.trim().toLowerCase();
+      }
+      return prevVal.trim() !== nextVal.trim();
+    }
+    return prevVal !== nextVal;
+  });
 }
 
 const BrandContext = createContext<BrandContextType | undefined>(undefined);
@@ -312,6 +367,13 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   const [canManageBrand, setCanManageBrand] = useState(memoryCachedCanManage);
   const [userDarkModePreference, setUserDarkModePreference] = useState<boolean | null>(null);
   const [showBrandSavedModal, setShowBrandSavedModal] = useState(false);
+  const [showClientBrandChangedModal, setShowClientBrandChangedModal] = useState(false);
+  const brandRef = useRef<Brand | null>(brand);
+  const pendingAcknowledgedBrandRef = useRef<Brand | null>(null);
+
+  useEffect(() => {
+    brandRef.current = brand;
+  }, [brand]);
 
   const persistBrandToCache = useCallback(async (brandData: Brand, canManage?: boolean) => {
     memoryCachedBrand = brandData;
@@ -509,6 +571,26 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
       };
 
       await persistBrandToCache(mergedBrand, canManage);
+
+      // Check if brand settings changed from its previous state for clients
+      if (client && !coach) {
+        const ackKey = `@client_acknowledged_brand_${client.id}`;
+        try {
+          const prevAckStr = await AsyncStorage.getItem(ackKey);
+          if (!prevAckStr) {
+            // First time this client sees their brand: establish initial baseline
+            await AsyncStorage.setItem(ackKey, JSON.stringify(mergedBrand));
+          } else {
+            const prevBrand: Brand = JSON.parse(prevAckStr);
+            if (hasBrandSettingsChanged(prevBrand, mergedBrand)) {
+              pendingAcknowledgedBrandRef.current = mergedBrand;
+              setShowClientBrandChangedModal(true);
+            }
+          }
+        } catch (ackErr) {
+          console.error('[BrandContext] Error checking client acknowledged brand:', ackErr);
+        }
+      }
     } catch (error) {
       console.error('[BrandContext] Failed to load brand:', error);
     } finally {
@@ -590,6 +672,88 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // Dismiss client brand changed modal and acknowledge current brand
+  const dismissClientBrandChangedModal = useCallback(async () => {
+    setShowClientBrandChangedModal(false);
+    if (client?.id) {
+      const brandToAck = pendingAcknowledgedBrandRef.current || brandRef.current;
+      if (brandToAck) {
+        try {
+          await AsyncStorage.setItem(
+            `@client_acknowledged_brand_${client.id}`,
+            JSON.stringify(brandToAck)
+          );
+        } catch (err) {
+          console.error('[BrandContext] Failed to persist client acknowledged brand:', err);
+        }
+      }
+    }
+  }, [client?.id]);
+
+  // Reset modal when user logs out or switches to coach role
+  useEffect(() => {
+    if (!client || coach) {
+      setShowClientBrandChangedModal(false);
+    }
+  }, [client, coach]);
+
+  // Realtime subscription for clients to instantly detect coach brand updates
+  useEffect(() => {
+    if (!client || coach || !brand?.id) return;
+
+    const brandId = brand.id;
+    const channelName = `realtime-brand-client-${brandId}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'brands',
+          filter: `id=eq.${brandId}`,
+        },
+        async (payload) => {
+          const updatedBrand = payload.new as Brand;
+          if (!updatedBrand) return;
+
+          const currentBrand = brandRef.current;
+          if (hasBrandSettingsChanged(currentBrand, updatedBrand)) {
+            const mergedBrand: Brand = {
+              ...updatedBrand,
+              name: updatedBrand.name || currentBrand?.name || '',
+              logo_url: updatedBrand.logo_url ?? currentBrand?.logo_url ?? null,
+            };
+
+            await persistBrandToCache(mergedBrand, false);
+            pendingAcknowledgedBrandRef.current = mergedBrand;
+            setShowClientBrandChangedModal(true);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [client?.id, coach, brand?.id, persistBrandToCache]);
+
+  // Foreground refresh for clients to detect updates made while app was backgrounded
+  useEffect(() => {
+    if (!client || coach) return;
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        loadBrand();
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      sub.remove();
+    };
+  }, [client?.id, coach, loadBrand]);
+
   // Load brand when coach or client changes
   useEffect(() => {
     loadBrand();
@@ -610,6 +774,9 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
         toggleDarkMode,
         showBrandSavedModal,
         setShowBrandSavedModal,
+        showClientBrandChangedModal,
+        setShowClientBrandChangedModal,
+        dismissClientBrandChangedModal,
       }}
     >
       {children}

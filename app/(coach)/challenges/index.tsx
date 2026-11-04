@@ -24,7 +24,6 @@ import {
   Trash2, 
   Edit2 
 } from 'lucide-react-native';
-import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import type { MotherChallengeWithProgress } from '@/types/challenges-v3';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
@@ -33,7 +32,7 @@ export default function CoachChallengesDashboard() {
   const router = useRouter();
   const { user, coach } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'history'>('all');
+  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeChallenges, setActiveChallenges] = useState<MotherChallengeWithProgress[]>([]);
@@ -77,13 +76,14 @@ export default function CoachChallengesDashboard() {
         subsData = subs || [];
       }
 
+      const now = new Date();
+      now.setHours(0,0,0,0);
+
       const enhancedData = (data || []).map((challenge: any) => {
         const cSubs = subsData.filter(s => s.mother_challenge_id === challenge.id);
         const total_subs = cSubs.length || challenge.total_subs || 0;
         const completed_subs = cSubs.filter(s => s.completed).length || challenge.completed_subs || 0;
         
-        const now = new Date();
-        now.setHours(0,0,0,0);
         const missed_subs = cSubs.filter(s => !s.completed && new Date(s.assigned_date) < now).length;
         
         const startDate = new Date(challenge.start_date);
@@ -100,8 +100,12 @@ export default function CoachChallengesDashboard() {
         };
       });
 
-      const active = enhancedData.filter((c: any) => c.status === 'active');
-      const history = enhancedData.filter((c: any) => c.status !== 'active');
+      const active = enhancedData.filter(
+        (c: any) => c.status === 'active' && new Date(c.end_date).getTime() >= now.getTime()
+      );
+      const history = enhancedData.filter(
+        (c: any) => c.status !== 'active' || new Date(c.end_date).getTime() < now.getTime()
+      );
       setActiveChallenges(active);
       setHistoryChallenges(history);
     } catch (error) {
@@ -150,11 +154,9 @@ export default function CoachChallengesDashboard() {
     );
   }
 
-  const challenges = activeTab === 'all' 
-    ? [...activeChallenges, ...historyChallenges] 
-    : activeTab === 'active' 
-      ? activeChallenges 
-      : historyChallenges;
+  const challenges = activeTab === 'active' 
+    ? activeChallenges 
+    : historyChallenges;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -177,9 +179,6 @@ export default function CoachChallengesDashboard() {
       <View className="px-6 py-4 flex-row justify-between items-center mb-4">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1 mr-4">
           <View className="flex-row gap-6">
-            <TouchableOpacity onPress={() => setActiveTab('all')}>
-              <Text style={{ color: activeTab === 'all' ? colors.text : colors.textTertiary }} className="text-2xl font-black">All</Text>
-            </TouchableOpacity>
             <TouchableOpacity onPress={() => setActiveTab('active')}>
               <Text style={{ color: activeTab === 'active' ? colors.text : colors.textTertiary }} className="text-2xl font-black">Active</Text>
             </TouchableOpacity>
@@ -272,32 +271,13 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
     const isWarning = !isEnded && missedSubs > 0;
     
     return (
-        <Swipeable
-            renderRightActions={() => (
-                <View className="flex-row mb-6 pl-4 h-[280px]">
-                    <TouchableOpacity 
-                        onPress={() => router.push(`/(coach)/challenges/${challenge.id}`)}
-                        className="w-16 h-full bg-slate-800 rounded-3xl items-center justify-center border border-white/5 mr-2"
-                    >
-                        <Edit2 size={20} color="white" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        onPress={onDelete}
-                        className="w-16 h-full bg-red-500 rounded-3xl items-center justify-center shadow-lg shadow-red-500/20"
-                    >
-                        <Trash2 size={20} color="white" />
-                    </TouchableOpacity>
-                </View>
-            )}
-            enabled={isEditing}
+        <MotiView 
+            from={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            transition={{ delay: index * 100 }}
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="mx-3 border rounded-[40px] p-8 mb-6 overflow-hidden"
         >
-            <MotiView 
-                from={{ opacity: 0, scale: 0.95 }} 
-                animate={{ opacity: 1, scale: 1 }} 
-                transition={{ delay: index * 100 }}
-                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                className="mx-3 border rounded-[40px] p-8 mb-6 overflow-hidden"
-            >
                 <View style={{ backgroundColor: colors.primary + '10' }} className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-16 -mt-16" />
                 
                 <TouchableOpacity
@@ -407,7 +387,7 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                                     from={{ opacity: 0, translateY: 8, scale: 0.5 }}
                                     animate={{ opacity: 1, translateY: 0, scale: 1 }}
                                     exit={{ opacity: 0, translateY: 8, scale: 0.5 }}
-                                    transition={{ type: 'timing', duration: 180 }}
+                                    transition={{ type: 'timing', duration: 180 } as any}
                                     style={{
                                         position: 'absolute',
                                         bottom: 72,
@@ -492,6 +472,5 @@ const ChallengeCard = ({ challenge, index, isEditing, onDelete }: { challenge: a
                     ) : null}
                 </View>
             </MotiView>
-        </Swipeable>
     );
 };

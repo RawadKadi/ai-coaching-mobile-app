@@ -1,9 +1,43 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Alert, Platform, SafeAreaView } from 'react-native';
+import {
+  View,
+  Text,
+  Modal,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  ScrollView,
+  Alert,
+  Platform,
+  SafeAreaView,
+} from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
-import { X, Mic, Send, Calendar, Clock, Check, AlertTriangle, Pencil, Trash2, Save, Repeat, Sparkles, ChevronLeft, Info, Activity } from 'lucide-react-native';
+import {
+  X,
+  Mic,
+  Send,
+  Calendar,
+  Clock,
+  Check,
+  AlertTriangle,
+  Pencil,
+  Trash2,
+  Save,
+  Repeat,
+  Sparkles,
+  ChevronLeft,
+  Info,
+  Activity,
+} from 'lucide-react-native';
 import { useTheme, useBrandColors } from '@/contexts/BrandContext';
-import { parseScheduleRequest, ProposedSession, RateLimitError, extractSchedulingIntent, extractAgendaContext, AgendaContext } from '@/lib/ai-scheduling-service';
+import {
+  parseScheduleRequest,
+  ProposedSession,
+  RateLimitError,
+  extractSchedulingIntent,
+  extractAgendaContext,
+  AgendaContext,
+} from '@/lib/ai-scheduling-service';
 import { Session } from '@/types/database';
 import ConflictResolutionModal from './ConflictResolutionModal';
 import { ConflictInfo, Resolution } from '@/types/conflict';
@@ -13,101 +47,137 @@ import { generateGoogleMeetUrl, createSessionMeetLink } from '@/utils/session';
 import { useAuth } from '@/contexts/AuthContext';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useEffect, useMemo } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SchedulerModalProps {
-    visible: boolean;
-    onClose: () => void;
-    onConfirm: (sessions: ProposedSession[]) => Promise<void>;
-    clientContext: {
-        name: string;
-        timezone: string;
-        avatar_url?: string;
-    };
-    existingSessions: Session[];
-    targetClientId: string;
-    reschedulingMessageId?: string | null;
+  visible: boolean;
+  onClose: () => void;
+  onConfirm: (sessions: ProposedSession[]) => Promise<void>;
+  clientContext: {
+    name: string;
+    timezone: string;
+    avatar_url?: string;
+  };
+  existingSessions: Session[];
+  targetClientId: string;
+  reschedulingMessageId?: string | null;
+  embedded?: boolean;
+  onBack?: () => void;
 }
 
-export default function SchedulerModal({ visible, onClose, onConfirm, clientContext, existingSessions, targetClientId, reschedulingMessageId }: SchedulerModalProps) {
+export default function SchedulerModal({
+  visible,
+  onClose,
+  onConfirm,
+  clientContext,
+  existingSessions,
+  targetClientId,
+  reschedulingMessageId,
+  embedded = false,
+  onBack,
+}: SchedulerModalProps) {
   const theme = useTheme();
   const colors = theme.colors;
   const isDark = theme.isDarkMode;
-    const { coach, profile } = useAuth();
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [proposedSessions, setProposedSessions] = useState<ProposedSession[]>([]);
-    const [step, setStep] = useState<'input' | 'form' | 'review'>('input');
+  const insets = useSafeAreaInsets();
+  const { coach, profile } = useAuth();
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [proposedSessions, setProposedSessions] = useState<ProposedSession[]>(
+    [],
+  );
+  const [step, setStep] = useState<'input' | 'form' | 'review'>('input');
 
-    // Agenda state
-    const [agendaSessions, setAgendaSessions] = useState<any[]>([]);
-    const [agendaLoading, setAgendaLoading] = useState(false);
-    const [isAgendaThinking, setIsAgendaThinking] = useState(false);
-    const [agendaContext, setAgendaContext] = useState<AgendaContext>({ days: [], times: [] });
-    
-    // Form state for structured input
-    const [formTime, setFormTime] = useState('');
-    const [formDates, setFormDates] = useState<string[]>([]);
-    const [formRecurrence, setFormRecurrence] = useState<'once' | 'weekly' | null>(null);
-    const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  // Agenda state seeded synchronously with existingSessions for 0ms delay
+  const [agendaSessions, setAgendaSessions] = useState<any[]>(
+    () => existingSessions || [],
+  );
+  const [agendaLoading, setAgendaLoading] = useState(false);
+  const [isAgendaThinking, setIsAgendaThinking] = useState(false);
+  const [agendaContext, setAgendaContext] = useState<AgendaContext>({
+    days: [],
+    times: [],
+  });
 
-    const toggleDay = (day: string) => {
-        setFormDates(prev => 
-            prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-        );
-    };
+  // Form state for structured input
+  const [formTime, setFormTime] = useState('');
+  const [formDates, setFormDates] = useState<string[]>([]);
+  const [formRecurrence, setFormRecurrence] = useState<
+    'once' | 'weekly' | null
+  >(null);
+  const DAYS = [
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+  ];
 
-    // Conflict resolution state
-    const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
-    const [showConflictModal, setShowConflictModal] = useState(false);
-    
-    // Flags for what's actually missing from original prompt
-    const [originallyMissingDays, setOriginallyMissingDays] = useState(false);
-    const [originallyMissingTime, setOriginallyMissingTime] = useState(false);
-    
-    const resetForm = () => {
-        setStep('input');
-        setInput('');
-        setFormTime('');
-        setFormDates([]);
-        setFormRecurrence(null);
-        setProposedSessions([]);
-        setConflictInfo(null);
-        setShowConflictModal(false);
-        setOriginallyMissingDays(false);
-        setOriginallyMissingTime(false);
-    };
+  const toggleDay = (day: string) => {
+    setFormDates((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    );
+  };
 
-    // Fetch all coach sessions for the agenda
-    useEffect(() => {
-        if (visible && coach?.id) {
+  // Conflict resolution state
+  const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+
+  // Flags for what's actually missing from original prompt
+  const [originallyMissingDays, setOriginallyMissingDays] = useState(false);
+  const [originallyMissingTime, setOriginallyMissingTime] = useState(false);
+
+  const resetForm = () => {
+    setStep('input');
+    setInput('');
+    setFormTime('');
+    setFormDates([]);
+    setFormRecurrence(null);
+    setProposedSessions([]);
+    setConflictInfo(null);
+    setShowConflictModal(false);
+    setOriginallyMissingDays(false);
+    setOriginallyMissingTime(false);
+  };
+
+  // Fetch all coach sessions for the agenda
+  useEffect(() => {
+    if (visible && coach?.id) {
+      fetchAgenda();
+
+      // Realtime subscription
+      const channel = supabase
+        .channel('coach_agenda_sync')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'sessions',
+            filter: `coach_id=eq.${coach.id}`,
+          },
+          () => {
             fetchAgenda();
-            
-            // Realtime subscription
-            const channel = supabase
-                .channel('coach_agenda_sync')
-                .on('postgres_changes', { 
-                    event: '*', 
-                    schema: 'public', 
-                    table: 'sessions',
-                    filter: `coach_id=eq.${coach.id}`
-                }, () => {
-                    fetchAgenda();
-                })
-                .subscribe();
+          },
+        )
+        .subscribe();
 
-            return () => {
-                supabase.removeChannel(channel);
-            };
-        }
-    }, [visible, coach?.id]);
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [visible, coach?.id]);
 
-    const fetchAgenda = async () => {
-        if (!coach?.id) return;
-        setAgendaLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('sessions')
-                .select(`
+  const fetchAgenda = async () => {
+    if (!coach?.id) return;
+    setAgendaLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select(
+          `
                     *,
                     client:clients(
                         id,
@@ -116,1237 +186,1810 @@ export default function SchedulerModal({ visible, onClose, onConfirm, clientCont
                             avatar_url
                         )
                     )
-                `)
-                .eq('coach_id', coach.id)
-                .neq('status', 'cancelled')
-                .order('scheduled_at', { ascending: true });
+                `,
+        )
+        .eq('coach_id', coach.id)
+        .neq('status', 'cancelled')
+        .order('scheduled_at', { ascending: true });
 
-            if (error) throw error;
-            setAgendaSessions(data || []);
-        } catch (err) {
-            console.error('[SchedulerModal] Error fetching agenda:', err);
-        } finally {
-            setAgendaLoading(false);
-        }
-    };
+      if (error) throw error;
+      setAgendaSessions(data || []);
+    } catch (err) {
+      console.error('[SchedulerModal] Error fetching agenda:', err);
+    } finally {
+      setAgendaLoading(false);
+    }
+  };
 
-    // AI-driven agenda context debouncer
-    const lastProcessedInput = useRef('');
+  // AI-driven agenda context debouncer
+  const lastProcessedInput = useRef('');
 
-    useEffect(() => {
-        if (step !== 'input') return;
-        
-        const timeout = setTimeout(async () => {
-            const trimmed = input.trim();
-            if (trimmed.length > 8 && trimmed !== lastProcessedInput.current) {
-                lastProcessedInput.current = trimmed;
-                setIsAgendaThinking(true);
-                try {
-                    const context = await extractAgendaContext(trimmed);
-                    setAgendaContext(context);
-                } catch (e) {
-                    console.warn('Agenda filter skip (Rate Limit)', e);
-                } finally {
-                    setIsAgendaThinking(false);
-                }
-            } else if (trimmed.length <= 8) {
-                setAgendaContext({ days: [], times: [] });
-                setIsAgendaThinking(false);
-                lastProcessedInput.current = '';
-            }
-        }, 2000); // 2s debounce to protect API quota
-        return () => clearTimeout(timeout);
-    }, [input, step]);
+  useEffect(() => {
+    if (step !== 'input') return;
 
-    // Smart filtering logic for the agenda
-    const filteredAgenda = useMemo(() => {
-        if (!agendaSessions.length) return [];
-        const now = new Date();
-        const { days, times } = agendaContext;
-        
-        const isFiltering = days.length > 0 || times.length > 0;
-
-        return agendaSessions.filter(s => {
-            const d = new Date(s.scheduled_at);
-            const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-            const sessionClientId = s.client_id;
-            const isTargetClient = sessionClientId === targetClientId;
-
-            // 1. Always show target client sessions if we are filtering by day/time
-            if (isFiltering) {
-                const matchesDay = days.length > 0 ? days.includes(dayName) : true;
-                
-                // If specific times are mentioned, show target client sessions for those days
-                if (isTargetClient && matchesDay) return true;
-
-                // 2. Conflict Detection for other clients:
-                // Only show other clients if they are on the mentioned days AND within +/- 1 hour of mentioned times
-                if (!isTargetClient && matchesDay && times.length > 0) {
-                    const sessionHour = d.getHours();
-                    const sessionMin = d.getMinutes();
-                    const sessionTotalMin = sessionHour * 60 + sessionMin;
-
-                    return times.some(t => {
-                        const [h, m] = t.split(':').map(Number);
-                        const targetTotalMin = h * 60 + m;
-                        return Math.abs(sessionTotalMin - targetTotalMin) <= 60; // +/- 1 hour window
-                    });
-                }
-
-                return false;
-            }
-            
-            // Default: Show target client sessions for next 3 days OR next 3 days of all sessions if no context
-            const threeDaysFromNow = new Date();
-            threeDaysFromNow.setDate(now.getDate() + 3);
-            threeDaysFromNow.setHours(23, 59, 59, 999);
-
-            if (isTargetClient) return d >= now; // Show all upcoming for target client by default
-            return d >= now && d <= threeDaysFromNow;
-        });
-    }, [agendaSessions, agendaContext, clientContext]);
-
-    // Rough parser to detect conflicts while typing (before AI draft)
-    const draftStartTime = useMemo(() => {
-        if (!input.trim() || input.length < 5) return null;
-        const inputLower = input.toLowerCase();
-        
-        // Find date
-        let date = new Date();
-        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-        const dayMap: {[key: string]: number} = {sun:0, mon:1, tue:2, wed:3, thu:4, fri:5, sat:6, sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6};
-        
-        let foundDate = false;
-        if (inputLower.includes('today')) {
-            foundDate = true;
-        } else if (inputLower.includes('tomorrow')) {
-            date.setDate(date.getDate() + 1);
-            foundDate = true;
-        } else {
-            const foundDay = days.find(d => inputLower.includes(d));
-            if (foundDay) {
-                const targetDay = dayMap[foundDay];
-                const currentDay = date.getDay();
-                let diff = targetDay - currentDay;
-                if (diff < 0) diff += 7;
-                date.setDate(date.getDate() + diff);
-                foundDate = true;
-            }
-        }
-
-        if (!foundDate) return null;
-
-        // Find time: e.g. "at 10am", "2:30pm", "14:00"
-        const timeMatch = inputLower.match(/(\d+)(?::(\d+))?\s*(am|pm)/);
-        if (timeMatch) {
-            let hours = parseInt(timeMatch[1], 10);
-            const minutes = parseInt(timeMatch[2] || '0', 10);
-            const ampm = timeMatch[3];
-            if (ampm === 'pm' && hours < 12) hours += 12;
-            if (ampm === 'am' && hours === 12) hours = 0;
-            date.setHours(hours, minutes, 0, 0);
-            return date;
-        }
-        return null;
-    }, [input]);
-
-    const draftConflict = useMemo(() => {
-        if (!draftStartTime) return null;
-        const dEnd = new Date(draftStartTime.getTime() + 60 * 60000); // assume 60m
-        const sessionsToCheck = agendaSessions.length > 0 ? agendaSessions : existingSessions;
-
-        for (const existing of sessionsToCheck) {
-            if (existing.status === 'cancelled') continue;
-            const existingStart = new Date(existing.scheduled_at);
-            const existingEnd = new Date(existingStart.getTime() + (existing.duration_minutes || 60) * 60000);
-
-            // 1. Absolute Daily Singularity check (Same Client, Same Day)
-            if (existing.client_id === targetClientId && draftStartTime.toDateString() === existingStart.toDateString()) {
-                return {
-                    type: 'daily_limit',
-                    message: `Conflict Detected: ${clientContext.name} already has a session on ${draftStartTime.toLocaleDateString('en-US', { weekday: 'long' })} at ${existingStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
-                };
-            }
-
-            // 2. Coach overlap check
-            if (draftStartTime < existingEnd && dEnd > existingStart) {
-                return {
-                    type: 'time_conflict',
-                    message: `Conflict: You already have a session at this time with ${existing.client?.profiles?.full_name || 'another client'}.`
-                };
-            }
-        }
-        return null;
-    }, [draftStartTime, agendaSessions, existingSessions, targetClientId, clientContext]);
-
-    const handleAnalyze = async () => {
-        if (step === 'form') {
-            if (formDates.length === 0 || !formTime) {
-                Alert.alert('Details Needed', 'Please provide both days and a time.');
-                return;
-            }
-            const sessionIntents = formDates.map(date => ({ date, time: formTime }));
-            await finalizeWithAI(sessionIntents, formRecurrence || 'once');
-            return;
-        }
-
-        if (!input.trim()) return;
-        setLoading(true);
-        setProposedSessions([]);
-
+    const timeout = setTimeout(async () => {
+      const trimmed = input.trim();
+      if (trimmed.length > 8 && trimmed !== lastProcessedInput.current) {
+        lastProcessedInput.current = trimmed;
+        setIsAgendaThinking(true);
         try {
-            const intent = await extractSchedulingIntent(input);
-            const lowerInput = input.toLowerCase();
-            const hasRecurringKeyword = ["every", "weekly", "monthly", "each", "repeatedly"].some(k => lowerInput.includes(k));
-            const hasOneTimeKeyword = ["this", "once", "on", "today", "tomorrow"].some(k => lowerInput.includes(k));
-            const wasAiDetected = hasRecurringKeyword || hasOneTimeKeyword;
-
-            const newDates = intent.sessions.map(s => s.date).filter((d): d is string => d !== null);
-            const firstTime = intent.sessions.find(s => s.time !== null)?.time || '';
-            const newRecurrence = intent.recurrence;
-
-            if (firstTime) setFormTime(firstTime);
-            if (newDates.length > 0) setFormDates(newDates);
-            if (newRecurrence) setFormRecurrence(newRecurrence);
-
-            const isMissingDays = newDates.length === 0;
-            const isMissingTime = !firstTime;
-
-            setOriginallyMissingDays(isMissingDays);
-            setOriginallyMissingTime(isMissingTime);
-
-            // Skip the form step if we have both days and time. Default to 'once' if recurrence is unknown.
-            if (isMissingDays || isMissingTime) {
-                setStep('form');
-                return;
-            }
-
-            await finalizeWithAI(
-                intent.sessions.filter((s): s is { date: string, time: string | null } => s.date !== null),
-                newRecurrence || 'once',
-                wasAiDetected
-            );
-        } catch (error) {
-            console.error('Error in handleAnalyze:', error);
-            Alert.alert('Error', 'Failed to analyze request.');
+          const context = await extractAgendaContext(trimmed);
+          setAgendaContext(context);
+        } catch (e) {
+          console.warn('Agenda filter skip (Rate Limit)', e);
         } finally {
-            setLoading(false);
+          setIsAgendaThinking(false);
         }
-    };
+      } else if (trimmed.length <= 8) {
+        setAgendaContext({ days: [], times: [] });
+        setIsAgendaThinking(false);
+        lastProcessedInput.current = '';
+      }
+    }, 2000); // 2s debounce to protect API quota
+    return () => clearTimeout(timeout);
+  }, [input, step]);
 
-    // Builds a full UTC ISO string from a local date string + a human time string like "1:00 PM" or "13:00"
-    const buildISODateTime = (isoDate: string, timeStr: string): string | null => {
-        const timeMatch = timeStr.toLowerCase().match(/(\d+)(?::(\d+))?\s*(am|pm)?/);
-        if (!timeMatch) return null;
+  // Smart filtering logic for the agenda
+  const filteredAgenda = useMemo(() => {
+    if (!agendaSessions.length) return [];
+    const now = new Date();
+    const { days, times } = agendaContext;
 
-        let hours = parseInt(timeMatch[1], 10);
-        const minutes = parseInt(timeMatch[2] || '0', 10);
-        const ampm = timeMatch[3];
+    const isFiltering = days.length > 0 || times.length > 0;
 
-        if (ampm === 'pm' && hours < 12) hours += 12;
-        if (ampm === 'am' && hours === 12) hours = 0;
-        if (!ampm && hours < 7) hours += 12; // Treat bare "1" as 1pm if under 7
+    return agendaSessions.filter((s) => {
+      const d = new Date(s.scheduled_at);
+      const dayName = d
+        .toLocaleDateString('en-US', { weekday: 'long' })
+        .toLowerCase();
+      const sessionClientId = s.client_id;
+      const isTargetClient = sessionClientId === targetClientId;
 
-        // Build as local time to avoid timezone shift
-        const [year, month, day] = isoDate.split('-').map(Number);
-        const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
-        return date.toISOString();
-    };
+      // 1. Always show target client sessions if we are filtering by day/time
+      if (isFiltering) {
+        const matchesDay = days.length > 0 ? days.includes(dayName) : true;
 
-    const finalizeWithAI = async (sessionIntents: { date: string, time: string | null }[], recurrence: 'weekly' | 'once', aiDetected = false) => {
-        setLoading(true);
-        try {
-            const allSessions: ProposedSession[] = [];
+        // If specific times are mentioned, show target client sessions for those days
+        if (isTargetClient && matchesDay) return true;
 
-            for (const intent of sessionIntents) {
-                if (!intent.date || !intent.time) continue;
+        // 2. Conflict Detection for other clients:
+        // Only show other clients if they are on the mentioned days AND within +/- 1 hour of mentioned times
+        if (!isTargetClient && matchesDay && times.length > 0) {
+          const sessionHour = d.getHours();
+          const sessionMin = d.getMinutes();
+          const sessionTotalMin = sessionHour * 60 + sessionMin;
 
-                const isoDate = resolveDateKeywordToISO(intent.date, intent.time);
-                const scheduledAt = buildISODateTime(isoDate, intent.time);
-
-                if (!scheduledAt) {
-                    console.warn('[finalizeWithAI] Could not parse time for intent:', intent);
-                    continue;
-                }
-
-                allSessions.push({
-                    scheduled_at: scheduledAt,
-                    duration_minutes: 60,
-                    session_type: 'training',
-                    notes: `AI scheduled session for ${clientContext?.name || 'Athlete'}`,
-                    recurrence,
-                    day_of_week: new Date(isoDate).toLocaleDateString('en-US', { weekday: 'long' }),
-                    aiRecurrenceDetected: aiDetected,
-                });
-            }
-
-            if (allSessions.length > 0) {
-                setProposedSessions(allSessions as any);
-                setStep('review');
-            } else {
-                Alert.alert('No Sessions', 'Could not build sessions from the given info. Please try again.');
-            }
-        } catch (error) {
-            console.error('[finalizeWithAI] Error:', error);
-            Alert.alert('Error', 'Failed to build sessions. Please try again.');
-        } finally {
-            setLoading(false);
+          return times.some((t) => {
+            const [h, m] = t.split(':').map(Number);
+            const targetTotalMin = h * 60 + m;
+            return Math.abs(sessionTotalMin - targetTotalMin) <= 60; // +/- 1 hour window
+          });
         }
+
+        return false;
+      }
+
+      // Default: Show target client sessions for next 3 days OR next 3 days of all sessions if no context
+      const threeDaysFromNow = new Date();
+      threeDaysFromNow.setDate(now.getDate() + 3);
+      threeDaysFromNow.setHours(23, 59, 59, 999);
+
+      if (isTargetClient) return d >= now; // Show all upcoming for target client by default
+      return d >= now && d <= threeDaysFromNow;
+    });
+  }, [agendaSessions, agendaContext, clientContext]);
+
+  // Rough parser to detect conflicts while typing (before AI draft)
+  const draftStartTime = useMemo(() => {
+    if (!input.trim() || input.length < 5) return null;
+    const inputLower = input.toLowerCase();
+
+    // Find date
+    let date = new Date();
+    const days = [
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sun',
+      'mon',
+      'tue',
+      'wed',
+      'thu',
+      'fri',
+      'sat',
+    ];
+    const dayMap: { [key: string]: number } = {
+      sun: 0,
+      mon: 1,
+      tue: 2,
+      wed: 3,
+      thu: 4,
+      fri: 5,
+      sat: 6,
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
     };
 
-    const resolveDateKeywordToISO = (keyword: string, timeStr?: string | null): string => {
-        const now = new Date();
-        const dayMap: { [key: string]: number } = {
-            'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
-            'thursday': 4, 'friday': 5, 'saturday': 6
+    let foundDate = false;
+    if (inputLower.includes('today')) {
+      foundDate = true;
+    } else if (inputLower.includes('tomorrow')) {
+      date.setDate(date.getDate() + 1);
+      foundDate = true;
+    } else {
+      const foundDay = days.find((d) => inputLower.includes(d));
+      if (foundDay) {
+        const targetDay = dayMap[foundDay];
+        const currentDay = date.getDay();
+        let diff = targetDay - currentDay;
+        if (diff < 0) diff += 7;
+        date.setDate(date.getDate() + diff);
+        foundDate = true;
+      }
+    }
+
+    if (!foundDate) return null;
+
+    // Find time: e.g. "at 10am", "2:30pm", "14:00"
+    const timeMatch = inputLower.match(/(\d+)(?::(\d+))?\s*(am|pm)/);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2] || '0', 10);
+      const ampm = timeMatch[3];
+      if (ampm === 'pm' && hours < 12) hours += 12;
+      if (ampm === 'am' && hours === 12) hours = 0;
+      date.setHours(hours, minutes, 0, 0);
+      return date;
+    }
+    return null;
+  }, [input]);
+
+  const draftConflict = useMemo(() => {
+    if (!draftStartTime) return null;
+    const dEnd = new Date(draftStartTime.getTime() + 60 * 60000); // assume 60m
+    const sessionsToCheck =
+      agendaSessions.length > 0 ? agendaSessions : existingSessions;
+
+    for (const existing of sessionsToCheck) {
+      if (existing.status === 'cancelled') continue;
+      const existingStart = new Date(existing.scheduled_at);
+      const existingEnd = new Date(
+        existingStart.getTime() + (existing.duration_minutes || 60) * 60000,
+      );
+
+      // 1. Absolute Daily Singularity check (Same Client, Same Day)
+      if (
+        existing.client_id === targetClientId &&
+        draftStartTime.toDateString() === existingStart.toDateString()
+      ) {
+        return {
+          type: 'daily_limit',
+          message: `Conflict Detected: ${clientContext.name} already has a session on ${draftStartTime.toLocaleDateString('en-US', { weekday: 'long' })} at ${existingStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
         };
-        const toLocalISO = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      }
 
-        if (keyword === 'today') return toLocalISO(now);
-        if (keyword === 'tomorrow') {
-            const d = new Date(now);
-            d.setDate(now.getDate() + 1);
-            return toLocalISO(d);
+      // 2. Coach overlap check
+      if (draftStartTime < existingEnd && dEnd > existingStart) {
+        return {
+          type: 'time_conflict',
+          message: `Conflict: You already have a session at this time with ${existing.client?.profiles?.full_name || 'another client'}.`,
+        };
+      }
+    }
+    return null;
+  }, [
+    draftStartTime,
+    agendaSessions,
+    existingSessions,
+    targetClientId,
+    clientContext,
+  ]);
+
+  const handleAnalyze = async () => {
+    if (step === 'form') {
+      if (formDates.length === 0 || !formTime) {
+        Alert.alert('Details Needed', 'Please provide both days and a time.');
+        return;
+      }
+      const sessionIntents = formDates.map((date) => ({
+        date,
+        time: formTime,
+      }));
+      await finalizeWithAI(sessionIntents, formRecurrence || 'once');
+      return;
+    }
+
+    if (!input.trim()) return;
+    setLoading(true);
+    setProposedSessions([]);
+
+    try {
+      const intent = await extractSchedulingIntent(input);
+      const lowerInput = input.toLowerCase();
+      const hasRecurringKeyword = [
+        'every',
+        'weekly',
+        'monthly',
+        'each',
+        'repeatedly',
+      ].some((k) => lowerInput.includes(k));
+      const hasOneTimeKeyword = [
+        'this',
+        'once',
+        'on',
+        'today',
+        'tomorrow',
+      ].some((k) => lowerInput.includes(k));
+      const wasAiDetected = hasRecurringKeyword || hasOneTimeKeyword;
+
+      const newDates = intent.sessions
+        .map((s) => s.date)
+        .filter((d): d is string => d !== null);
+      const firstTime =
+        intent.sessions.find((s) => s.time !== null)?.time || '';
+      const newRecurrence = intent.recurrence;
+
+      if (firstTime) setFormTime(firstTime);
+      if (newDates.length > 0) setFormDates(newDates);
+      if (newRecurrence) setFormRecurrence(newRecurrence);
+
+      const isMissingDays = newDates.length === 0;
+      const isMissingTime = !firstTime;
+
+      setOriginallyMissingDays(isMissingDays);
+      setOriginallyMissingTime(isMissingTime);
+
+      // Skip the form step if we have both days and time. Default to 'once' if recurrence is unknown.
+      if (isMissingDays || isMissingTime) {
+        setStep('form');
+        return;
+      }
+
+      await finalizeWithAI(
+        intent.sessions.filter(
+          (s): s is { date: string; time: string | null } => s.date !== null,
+        ),
+        newRecurrence || 'once',
+        wasAiDetected,
+      );
+    } catch (error) {
+      console.error('Error in handleAnalyze:', error);
+      Alert.alert('Error', 'Failed to analyze request.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Builds a full UTC ISO string from a local date string + a human time string like "1:00 PM" or "13:00"
+  const buildISODateTime = (
+    isoDate: string,
+    timeStr: string,
+  ): string | null => {
+    const timeMatch = timeStr
+      .toLowerCase()
+      .match(/(\d+)(?::(\d+))?\s*(am|pm)?/);
+    if (!timeMatch) return null;
+
+    let hours = parseInt(timeMatch[1], 10);
+    const minutes = parseInt(timeMatch[2] || '0', 10);
+    const ampm = timeMatch[3];
+
+    if (ampm === 'pm' && hours < 12) hours += 12;
+    if (ampm === 'am' && hours === 12) hours = 0;
+    if (!ampm && hours < 7) hours += 12; // Treat bare "1" as 1pm if under 7
+
+    // Build as local time to avoid timezone shift
+    const [year, month, day] = isoDate.split('-').map(Number);
+    const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    return date.toISOString();
+  };
+
+  const finalizeWithAI = async (
+    sessionIntents: { date: string; time: string | null }[],
+    recurrence: 'weekly' | 'once',
+    aiDetected = false,
+  ) => {
+    setLoading(true);
+    try {
+      const allSessions: ProposedSession[] = [];
+
+      for (const intent of sessionIntents) {
+        if (!intent.date || !intent.time) continue;
+
+        const isoDate = resolveDateKeywordToISO(intent.date, intent.time);
+        const scheduledAt = buildISODateTime(isoDate, intent.time);
+
+        if (!scheduledAt) {
+          console.warn(
+            '[finalizeWithAI] Could not parse time for intent:',
+            intent,
+          );
+          continue;
         }
-        
-        if (keyword in dayMap) {
-            const targetDay = dayMap[keyword];
-            const currentDay = now.getDay();
-            let diff = targetDay - currentDay;
-            if (diff < 0) diff += 7;
-            
-            // If it's today, check if the time has already passed
-            if (diff === 0 && timeStr) {
-                // Parse time string like "10:30 PM" or "10pm" or "14:00"
-                let hours = 0;
-                let minutes = 0;
-                const timeMatch = timeStr.toLowerCase().match(/(\d+)(?::(\d+))?\s*(am|pm)?/);
-                
-                if (timeMatch) {
-                    hours = parseInt(timeMatch[1], 10);
-                    minutes = parseInt(timeMatch[2] || '0', 10);
-                    const ampm = timeMatch[3];
-                    
-                    if (ampm === 'pm' && hours < 12) hours += 12;
-                    if (ampm === 'am' && hours === 12) hours = 0;
-                    
-                    const r = new Date(now);
-                    r.setHours(hours, minutes, 0, 0);
-                    if (r < now) diff = 7;
-                }
-            }
-            
-            const d = new Date(now);
-            d.setDate(now.getDate() + diff);
-            return toLocalISO(d);
-        }
-        return keyword;
+
+        allSessions.push({
+          scheduled_at: scheduledAt,
+          duration_minutes: 60,
+          session_type: 'training',
+          notes: `AI scheduled session for ${clientContext?.name || 'Athlete'}`,
+          recurrence,
+          day_of_week: new Date(isoDate).toLocaleDateString('en-US', {
+            weekday: 'long',
+          }),
+          aiRecurrenceDetected: aiDetected,
+        });
+      }
+
+      if (allSessions.length > 0) {
+        setProposedSessions(allSessions as any);
+        setStep('review');
+      } else {
+        Alert.alert(
+          'No Sessions',
+          'Could not build sessions from the given info. Please try again.',
+        );
+      }
+    } catch (error) {
+      console.error('[finalizeWithAI] Error:', error);
+      Alert.alert('Error', 'Failed to build sessions. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resolveDateKeywordToISO = (
+    keyword: string,
+    timeStr?: string | null,
+  ): string => {
+    const now = new Date();
+    const dayMap: { [key: string]: number } = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
     };
+    const toLocalISO = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-    const checkConflict = (proposed: ProposedSession): ConflictInfo | null => {
-        const proposedStart = new Date(proposed.scheduled_at);
-        const duration = proposed.duration_minutes || 60;
-        
-        // Use the internally fetched agendaSessions for accurate conflict detection
-        const sessionsToCheck = agendaSessions.length > 0 ? agendaSessions : existingSessions;
+    if (keyword === 'today') return toLocalISO(now);
+    if (keyword === 'tomorrow') {
+      const d = new Date(now);
+      d.setDate(now.getDate() + 1);
+      return toLocalISO(d);
+    }
 
-        // If weekly, check the next 8 weeks
+    if (keyword in dayMap) {
+      const targetDay = dayMap[keyword];
+      const currentDay = now.getDay();
+      let diff = targetDay - currentDay;
+      if (diff < 0) diff += 7;
+
+      // If it's today, check if the time has already passed
+      if (diff === 0 && timeStr) {
+        // Parse time string like "10:30 PM" or "10pm" or "14:00"
+        let hours = 0;
+        let minutes = 0;
+        const timeMatch = timeStr
+          .toLowerCase()
+          .match(/(\d+)(?::(\d+))?\s*(am|pm)?/);
+
+        if (timeMatch) {
+          hours = parseInt(timeMatch[1], 10);
+          minutes = parseInt(timeMatch[2] || '0', 10);
+          const ampm = timeMatch[3];
+
+          if (ampm === 'pm' && hours < 12) hours += 12;
+          if (ampm === 'am' && hours === 12) hours = 0;
+
+          const r = new Date(now);
+          r.setHours(hours, minutes, 0, 0);
+          if (r < now) diff = 7;
+        }
+      }
+
+      const d = new Date(now);
+      d.setDate(now.getDate() + diff);
+      return toLocalISO(d);
+    }
+    return keyword;
+  };
+
+  const checkConflict = (proposed: ProposedSession): ConflictInfo | null => {
+    const proposedStart = new Date(proposed.scheduled_at);
+    const duration = proposed.duration_minutes || 60;
+
+    // Use the internally fetched agendaSessions for accurate conflict detection
+    const sessionsToCheck =
+      agendaSessions.length > 0 ? agendaSessions : existingSessions;
+
+    // If weekly, check the next 8 weeks
+    const occurrences = proposed.recurrence === 'weekly' ? 8 : 1;
+
+    for (let i = 0; i < occurrences; i++) {
+      const currentOccurrenceStart = new Date(
+        proposedStart.getTime() + i * 7 * 24 * 60 * 60 * 1000,
+      );
+      const currentOccurrenceEnd = new Date(
+        currentOccurrenceStart.getTime() + duration * 60000,
+      );
+
+      for (const existing of sessionsToCheck) {
+        if (existing.status === 'cancelled') continue;
+        const existingStart = new Date(existing.scheduled_at);
+        const existingEnd = new Date(
+          existingStart.getTime() + (existing.duration_minutes || 60) * 60000,
+        );
+
+        // --- 1. Daily Singularity Conflict (Same Client, Same Day) ---
+        const sameClient = existing.client_id === targetClientId;
+        const sameDay =
+          currentOccurrenceStart.toDateString() ===
+          existingStart.toDateString();
+
+        if (sameClient && sameDay) {
+          return {
+            type: 'daily_limit',
+            message: `Conflict Detected: ${clientContext.name} already has a session on ${currentOccurrenceStart.toLocaleDateString('en-US', { weekday: 'long' })} at ${existingStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
+            existingSession: {
+              id: existing.id,
+              client_id: existing.client_id,
+              client_name: clientContext.name,
+              scheduled_at: existing.scheduled_at,
+              duration_minutes: existing.duration_minutes,
+              session_type: existing.session_type,
+              recurrence: existing.recurrence_rule ? 'weekly' : 'once',
+            },
+            proposedSession: {
+              client_id: targetClientId,
+              client_name: clientContext.name,
+              scheduled_at: currentOccurrenceStart.toISOString(),
+              duration_minutes: duration,
+              session_type: proposed.session_type,
+              recurrence: proposed.recurrence as any,
+              day_of_week: proposed.day_of_week,
+            },
+            recommendations: [],
+          };
+        }
+
+        // --- 2. Time Overlap Conflict (General, Coach Time Overlap) ---
+        if (
+          currentOccurrenceStart < existingEnd &&
+          currentOccurrenceEnd > existingStart
+        ) {
+          return {
+            type: 'time_conflict',
+            message:
+              i === 0
+                ? `Conflict with ${existing.client?.profiles?.full_name || 'another session'}`
+                : `Conflict in week ${i + 1} with ${existing.client?.profiles?.full_name || 'another session'}`,
+            existingSession: {
+              id: existing.id,
+              client_id: existing.client_id,
+              client_name:
+                existing.client?.profiles?.full_name || 'Unknown Client',
+              scheduled_at: existing.scheduled_at,
+              duration_minutes: existing.duration_minutes,
+              session_type: existing.session_type,
+              recurrence: existing.recurrence_rule ? 'weekly' : 'once',
+            },
+            proposedSession: {
+              client_id: targetClientId,
+              client_name: clientContext.name,
+              scheduled_at: currentOccurrenceStart.toISOString(),
+              duration_minutes: duration,
+              session_type: proposed.session_type,
+              recurrence: proposed.recurrence as any,
+              day_of_week: proposed.day_of_week,
+            },
+            recommendations: [],
+          };
+        }
+      }
+    }
+    return null;
+  };
+
+  const handleConflictDetected = (
+    session: ProposedSession,
+    conflict: ConflictInfo,
+  ) => {
+    setConflictInfo(conflict);
+    setShowConflictModal(true);
+  };
+
+  const handleResolution = (resolution: Resolution) => {
+    if (!conflictInfo) return;
+    // In this AI flow, we just acknowledge the recommendation for now
+    setShowConflictModal(false);
+    setConflictInfo(null);
+  };
+
+  const handleFinalConfirm = async (bypassConfirmation = false) => {
+    if (!coach?.id) return;
+
+    // Check if there is any daily singularity conflict
+    const dailySingularityConflict = proposedSessions
+      .map((s) => checkConflict(s))
+      .find((c) => c && c.type === 'daily_limit');
+
+    if (dailySingularityConflict && !bypassConfirmation) {
+      const isExistingRecurrent =
+        dailySingularityConflict.existingSession.recurrence === 'weekly';
+      const sessionTypeLabel = isExistingRecurrent ? 'Recurrent' : 'One-Time';
+
+      Alert.alert(
+        'Replace Session?',
+        `This will replace the existing ${sessionTypeLabel} session. Proceed?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Proceed',
+            onPress: () => handleFinalConfirm(true), // Confirmed, bypass check
+          },
+        ],
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const sessionsToInsert = [];
+      const idsToDelete = [];
+      const idsToCancel = [];
+
+      // If we confirmed the replacement, execute the Replacement Protocol
+      if (dailySingularityConflict) {
+        const existing = dailySingularityConflict.existingSession;
+        const isExistingRecurrent = existing.recurrence === 'weekly';
+
+        if (isExistingRecurrent) {
+          // Recurrent: Exception Overlay -> cancel this specific date's session
+          idsToCancel.push(existing.id);
+        } else {
+          // One-Time: DELETE the old session
+          idsToDelete.push(existing.id);
+        }
+      }
+
+      const meetLink = await createSessionMeetLink(coach?.id);
+
+      for (const proposed of proposedSessions) {
+        const recurrenceRule =
+          proposed.recurrence === 'weekly'
+            ? `FREQ=WEEKLY;BYDAY=${proposed.day_of_week?.substring(0, 2).toUpperCase()}`
+            : null;
+
+        // Create multiple instances if recurring (next 8 weeks)
         const occurrences = proposed.recurrence === 'weekly' ? 8 : 1;
+        const startDate = new Date(proposed.scheduled_at);
 
         for (let i = 0; i < occurrences; i++) {
-            const currentOccurrenceStart = new Date(proposedStart.getTime() + i * 7 * 24 * 60 * 60 * 1000);
-            const currentOccurrenceEnd = new Date(currentOccurrenceStart.getTime() + duration * 60000);
-
-            for (const existing of sessionsToCheck) {
-                if (existing.status === 'cancelled') continue;
-                const existingStart = new Date(existing.scheduled_at);
-                const existingEnd = new Date(existingStart.getTime() + (existing.duration_minutes || 60) * 60000);
-
-                // --- 1. Daily Singularity Conflict (Same Client, Same Day) ---
-                const sameClient = existing.client_id === targetClientId;
-                const sameDay = currentOccurrenceStart.toDateString() === existingStart.toDateString();
-                
-                if (sameClient && sameDay) {
-                    return {
-                        type: 'daily_limit',
-                        message: `Conflict Detected: ${clientContext.name} already has a session on ${currentOccurrenceStart.toLocaleDateString('en-US', { weekday: 'long' })} at ${existingStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
-                        existingSession: {
-                            id: existing.id,
-                            client_id: existing.client_id,
-                            client_name: clientContext.name,
-                            scheduled_at: existing.scheduled_at,
-                            duration_minutes: existing.duration_minutes,
-                            session_type: existing.session_type,
-                            recurrence: existing.recurrence_rule ? 'weekly' : 'once'
-                        },
-                        proposedSession: {
-                            client_id: targetClientId,
-                            client_name: clientContext.name,
-                            scheduled_at: currentOccurrenceStart.toISOString(),
-                            duration_minutes: duration,
-                            session_type: proposed.session_type,
-                            recurrence: proposed.recurrence as any,
-                            day_of_week: proposed.day_of_week
-                        },
-                        recommendations: []
-                    };
-                }
-
-                // --- 2. Time Overlap Conflict (General, Coach Time Overlap) ---
-                if (currentOccurrenceStart < existingEnd && currentOccurrenceEnd > existingStart) {
-                    return {
-                        type: 'time_conflict',
-                        message: i === 0 
-                            ? `Conflict with ${existing.client?.profiles?.full_name || 'another session'}`
-                            : `Conflict in week ${i + 1} with ${existing.client?.profiles?.full_name || 'another session'}`,
-                        existingSession: {
-                            id: existing.id,
-                            client_id: existing.client_id,
-                            client_name: existing.client?.profiles?.full_name || 'Unknown Client',
-                            scheduled_at: existing.scheduled_at,
-                            duration_minutes: existing.duration_minutes,
-                            session_type: existing.session_type,
-                            recurrence: existing.recurrence_rule ? 'weekly' : 'once'
-                        },
-                        proposedSession: {
-                            client_id: targetClientId,
-                            client_name: clientContext.name,
-                            scheduled_at: currentOccurrenceStart.toISOString(),
-                            duration_minutes: duration,
-                            session_type: proposed.session_type,
-                            recurrence: proposed.recurrence as any,
-                            day_of_week: proposed.day_of_week
-                        },
-                        recommendations: []
-                    };
-                }
-            }
+          const scheduledAt = new Date(
+            startDate.getTime() + i * 7 * 24 * 60 * 60 * 1000,
+          );
+          sessionsToInsert.push({
+            coach_id: coach.id,
+            client_id: targetClientId,
+            scheduled_at: scheduledAt.toISOString(),
+            duration_minutes: proposed.duration_minutes || 60,
+            session_type: proposed.session_type || 'training',
+            status: 'scheduled',
+            is_locked: true,
+            ai_generated: true,
+            meet_link: meetLink || generateGoogleMeetUrl(),
+            notes:
+              proposed.notes ||
+              `AI Scheduled session for ${clientContext?.name || 'Athlete'}`,
+            recurrence_rule: i === 0 ? recurrenceRule : null, // Store RRULE on the first instance
+          });
         }
-        return null;
-    };
+      }
 
-    const handleConflictDetected = (session: ProposedSession, conflict: ConflictInfo) => {
-        setConflictInfo(conflict);
-        setShowConflictModal(true);
-    };
+      // Perform DELETEs for One-Time replacements
+      if (idsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('sessions')
+          .delete()
+          .in('id', idsToDelete);
+        if (deleteError) throw deleteError;
+      }
 
-    const handleResolution = (resolution: Resolution) => {
-        if (!conflictInfo) return;
-        // In this AI flow, we just acknowledge the recommendation for now
-        setShowConflictModal(false);
-        setConflictInfo(null);
-    };
+      // Perform UPDATE status to 'cancelled' for Recurrent exception overlays
+      if (idsToCancel.length > 0) {
+        const { error: cancelError } = await supabase
+          .from('sessions')
+          .update({ status: 'cancelled', notes: 'Exception Overlay Cancelled' })
+          .in('id', idsToCancel);
+        if (cancelError) throw cancelError;
+      }
 
-    const handleFinalConfirm = async (bypassConfirmation = false) => {
-        if (!coach?.id) return;
+      const { error } = await supabase
+        .from('sessions')
+        .insert(sessionsToInsert);
+      if (error) throw error;
 
-        // Check if there is any daily singularity conflict
-        const dailySingularityConflict = proposedSessions
-            .map(s => checkConflict(s))
-            .find(c => c && c.type === 'daily_limit');
+      // If we are rescheduling an existing invite, update the original message
+      if (reschedulingMessageId) {
+        const { data: originalMsg } = await supabase
+          .from('messages')
+          .select('content')
+          .eq('id', reschedulingMessageId)
+          .single();
 
-        if (dailySingularityConflict && !bypassConfirmation) {
-            const isExistingRecurrent = dailySingularityConflict.existingSession.recurrence === 'weekly';
-            const sessionTypeLabel = isExistingRecurrent ? 'Recurrent' : 'One-Time';
-
-            Alert.alert(
-                'Replace Session?',
-                `This will replace the existing ${sessionTypeLabel} session. Proceed?`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { 
-                        text: 'Proceed', 
-                        onPress: () => handleFinalConfirm(true) // Confirmed, bypass check
-                    }
-                ]
+        if (originalMsg) {
+          try {
+            const p = JSON.parse(originalMsg.content);
+            const updatedContent = JSON.stringify({
+              ...p,
+              status: 'rescheduled',
+            });
+            await supabase
+              .from('messages')
+              .update({ content: updatedContent })
+              .eq('id', reschedulingMessageId);
+          } catch (e) {
+            console.error(
+              '[SchedulerModal] Error updating original message:',
+              e,
             );
-            return;
+          }
         }
+      }
 
-        setLoading(true);
-        try {
-            const sessionsToInsert = [];
-            const idsToDelete = [];
-            const idsToCancel = [];
+      await onConfirm(proposedSessions);
+      resetForm();
+      onClose();
+    } catch (error: any) {
+      console.error('[SchedulerModal] Final Confirm Error:', error);
+      Alert.alert(
+        'Error',
+        'Failed to schedule sessions. ' + (error?.message || ''),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            // If we confirmed the replacement, execute the Replacement Protocol
-            if (dailySingularityConflict) {
-                const existing = dailySingularityConflict.existingSession;
-                const isExistingRecurrent = existing.recurrence === 'weekly';
-
-                if (isExistingRecurrent) {
-                    // Recurrent: Exception Overlay -> cancel this specific date's session
-                    idsToCancel.push(existing.id);
-                } else {
-                    // One-Time: DELETE the old session
-                    idsToDelete.push(existing.id);
-                }
+  const content = (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderBottomColor: colors.border,
+          borderBottomWidth: 1,
+          paddingTop: embedded ? Math.max(insets.top + 8, 16) : 24,
+        }}
+        className="px-6 pb-4 flex-row justify-between items-center"
+      >
+        <View className="flex-row items-center gap-3">
+          {step !== 'input' ? (
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  'Discard Changes?',
+                  'This will clear your current AI scheduling progress. Are you sure you want to go back?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Yes, discard',
+                      style: 'destructive',
+                      onPress: () => {
+                        setStep('input');
+                        setProposedSessions([]);
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <ChevronLeft size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : onBack ? (
+            <TouchableOpacity onPress={onBack}>
+              <ChevronLeft size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+          <View>
+            <Text style={{ color: colors.text }} className="text-xl font-bold">
+              AI Scheduler
+            </Text>
+            <Text style={{ color: colors.textSecondary }} className="text-xs">
+              Setup sessions with {clientContext?.name || 'Athlete'}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={() => {
+            const hasAnyProgress =
+              input.trim().length > 0 ||
+              proposedSessions.length > 0 ||
+              formDates.length > 0 ||
+              formTime.length > 0;
+            if (hasAnyProgress) {
+              Alert.alert(
+                'Discard Draft?',
+                'You will lose any progress made in this session. Are you sure you want to exit?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Exit',
+                    style: 'destructive',
+                    onPress: () => {
+                      resetForm();
+                      onClose();
+                    },
+                  },
+                ],
+              );
+            } else {
+              resetForm();
+              onClose();
             }
-            
-            const meetLink = await createSessionMeetLink(coach?.id);
+          }}
+          style={{
+            padding: 8,
+            backgroundColor: colors.background,
+            borderRadius: 9999,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <X size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
 
-            for (const proposed of proposedSessions) {
-                const recurrenceRule = proposed.recurrence === 'weekly' ? `FREQ=WEEKLY;BYDAY=${proposed.day_of_week?.substring(0, 2).toUpperCase()}` : null;
-                
-                // Create multiple instances if recurring (next 8 weeks)
-                const occurrences = proposed.recurrence === 'weekly' ? 8 : 1;
-                const startDate = new Date(proposed.scheduled_at);
-                
-                for (let i = 0; i < occurrences; i++) {
-                    const scheduledAt = new Date(startDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
-                    sessionsToInsert.push({
-                        coach_id: coach.id,
-                        client_id: targetClientId,
-                        scheduled_at: scheduledAt.toISOString(),
-                        duration_minutes: proposed.duration_minutes || 60,
-                        session_type: proposed.session_type || 'training',
-                        status: 'scheduled',
-                        is_locked: true,
-                        ai_generated: true,
-                        meet_link: meetLink || generateGoogleMeetUrl(),
-                        notes: proposed.notes || `AI Scheduled session for ${clientContext?.name || 'Athlete'}`,
-                        recurrence_rule: i === 0 ? recurrenceRule : null // Store RRULE on the first instance
-                    });
-                }
-            }
-
-            // Perform DELETEs for One-Time replacements
-            if (idsToDelete.length > 0) {
-                const { error: deleteError } = await supabase
-                    .from('sessions')
-                    .delete()
-                    .in('id', idsToDelete);
-                if (deleteError) throw deleteError;
-            }
-
-            // Perform UPDATE status to 'cancelled' for Recurrent exception overlays
-            if (idsToCancel.length > 0) {
-                const { error: cancelError } = await supabase
-                    .from('sessions')
-                    .update({ status: 'cancelled', notes: 'Exception Overlay Cancelled' })
-                    .in('id', idsToCancel);
-                if (cancelError) throw cancelError;
-            }
-
-            const { error } = await supabase.from('sessions').insert(sessionsToInsert);
-            if (error) throw error;
-
-            // If we are rescheduling an existing invite, update the original message
-            if (reschedulingMessageId) {
-                const { data: originalMsg } = await supabase
-                    .from('messages')
-                    .select('content')
-                    .eq('id', reschedulingMessageId)
-                    .single();
-                
-                if (originalMsg) {
-                    try {
-                        const p = JSON.parse(originalMsg.content);
-                        const updatedContent = JSON.stringify({
-                            ...p,
-                            status: 'rescheduled'
-                        });
-                        await supabase
-                            .from('messages')
-                            .update({ content: updatedContent })
-                            .eq('id', reschedulingMessageId);
-                    } catch (e) {
-                        console.error('[SchedulerModal] Error updating original message:', e);
-                    }
-                }
-            }
-
-            await onConfirm(proposedSessions);
-            resetForm();
-            onClose();
-        } catch (error: any) {
-            console.error('[SchedulerModal] Final Confirm Error:', error);
-            Alert.alert('Error', 'Failed to schedule sessions. ' + (error?.message || ''));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-            <View style={{ flex: 1, backgroundColor: colors.background }}>
-                <View 
-                    style={{ 
-                        backgroundColor: colors.surface, 
-                        borderBottomColor: colors.border, 
-                        borderBottomWidth: 1 
-                    }} 
-                    className="px-6 pt-6 pb-4 flex-row justify-between items-center"
-                >
-                    <View className="flex-row items-center gap-3">
-                        {step !== 'input' && (
-                           <TouchableOpacity onPress={() => {
-                               Alert.alert(
-                                   'Discard Changes?',
-                                   'This will clear your current AI scheduling progress. Are you sure you want to go back?',
-                                   [
-                                       { text: 'Cancel', style: 'cancel' },
-                                       { text: 'Yes, discard', style: 'destructive', onPress: () => { setStep('input'); setProposedSessions([]); } }
-                                   ]
-                               );
-                           }}>
-                               <ChevronLeft size={24} color={colors.textSecondary} />
-                           </TouchableOpacity>
-                        )}
-                        <View>
-                            <Text style={{ color: colors.text }} className="text-xl font-bold">AI Scheduler</Text>
-                            <Text style={{ color: colors.textSecondary }} className="text-xs">Setup sessions with {clientContext?.name || 'Athlete'}</Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity 
-                        onPress={() => {
-                            const hasAnyProgress = input.trim().length > 0 || proposedSessions.length > 0 || formDates.length > 0 || formTime.length > 0;
-                            if (hasAnyProgress) {
-                                Alert.alert(
-                                    "Discard Draft?",
-                                    "You will lose any progress made in this session. Are you sure you want to exit?",
-                                    [
-                                        { text: "Cancel", style: "cancel" },
-                                        { text: "Exit", style: "destructive", onPress: () => { resetForm(); onClose(); } }
-                                    ]
-                                );
-                            } else {
-                                resetForm();
-                                onClose();
-                            }
-                        }} 
-                        style={{ padding: 8, backgroundColor: colors.background, borderRadius: 9999, borderWidth: 1, borderColor: colors.border }}
-                    >
-                        <X size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
+      <AnimatePresence exitBeforeEnter>
+        {loading && step !== 'review' ? (
+          <MotiView
+            key="loading"
+            from={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.05 }}
+            transition={{ type: 'timing', duration: 300 }}
+            className="flex-1 justify-center items-center py-24 px-6"
+          >
+            <MotiView
+              from={{ opacity: 0.5, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1.1 }}
+              transition={{ type: 'timing', duration: 1000, loop: true }}
+              style={{
+                width: 96,
+                height: 96,
+                backgroundColor: colors.primary,
+                borderRadius: 32,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 32,
+                borderWidth: 2,
+                borderColor: 'rgba(255,255,255,0.25)',
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 20 },
+                shadowOpacity: 0.5,
+                shadowRadius: 30,
+                elevation: 15,
+              }}
+            >
+              <Sparkles
+                size={40}
+                color={colors.textOnPrimary || 'white'}
+                fill={colors.textOnPrimary || 'white'}
+              />
+            </MotiView>
+            <Text
+              style={{ color: colors.text }}
+              className="text-3xl font-black text-center tracking-tighter mb-4"
+            >
+              Validating Plan
+            </Text>
+            <Text
+              style={{ color: colors.textSecondary }}
+              className="text-center leading-6 text-sm font-medium px-8"
+            >
+              Checking calendar availability and analyzing schedule
+              constraints...
+            </Text>
+          </MotiView>
+        ) : step === 'input' ? (
+          <MotiView
+            key="input"
+            from={{ opacity: 0, translateX: -20 }}
+            animate={{ opacity: 1, translateX: 0 }}
+            exit={{ opacity: 0, translateX: 20 }}
+            transition={{ type: 'timing', duration: 300 }}
+            className="flex-1"
+          >
+            <ScrollView
+              className="flex-1 px-3 pt-6"
+              showsVerticalScrollIndicator={false}
+              style={{ overflow: 'visible' }}
+              contentContainerStyle={{ overflow: 'visible' }}
+            >
+              <View
+                style={{
+                  backgroundColor: `${colors.primary}15`,
+                  borderColor: `${colors.primary}30`,
+                  borderWidth: 1,
+                }}
+                className="p-8 rounded-[40px] items-center mb-8"
+              >
+                <View className="absolute top-0 right-0 p-4 opacity-10">
+                  <Sparkles size={120} color={colors.primary} />
                 </View>
 
-                <AnimatePresence exitBeforeEnter>
-                    {loading && step !== 'review' ? (
-                        <MotiView 
-                            key="loading"
-                            from={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 1.05 }}
-                            transition={{ type: 'timing', duration: 300 }}
-                            className="flex-1 justify-center items-center py-24 px-6"
-                        >
-                            <MotiView 
-                                from={{ opacity: 0.5, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1.1 }}
-                                transition={{ type: 'timing', duration: 1000, loop: true }}
-                                style={{
-                                    width: 96,
-                                    height: 96,
-                                    backgroundColor: colors.primary,
-                                    borderRadius: 32,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginBottom: 32,
-                                    borderWidth: 2,
-                                    borderColor: 'rgba(255,255,255,0.25)',
-                                    shadowColor: colors.primary,
-                                    shadowOffset: { width: 0, height: 20 },
-                                    shadowOpacity: 0.5,
-                                    shadowRadius: 30,
-                                    elevation: 15
-                                }}
-                            >
-                                <Sparkles size={40} color={colors.textOnPrimary || 'white'} fill={colors.textOnPrimary || 'white'} />
-                            </MotiView>
-                            <Text style={{ color: colors.text }} className="text-3xl font-black text-center tracking-tighter mb-4">Validating Plan</Text>
-                            <Text style={{ color: colors.textSecondary }} className="text-center leading-6 text-sm font-medium px-8">
-                                Checking calendar availability and analyzing schedule constraints...
-                            </Text>
-                        </MotiView>
-                    ) : step === 'input' ? (
-                        <MotiView 
-                          key="input"
-                          from={{ opacity: 0, translateX: -20 }}
-                          animate={{ opacity: 1, translateX: 0 }}
-                          exit={{ opacity: 0, translateX: 20 }}
-                          transition={{ type: 'timing', duration: 300 }}
-                          className="flex-1"
-                        >
-                        <ScrollView className="flex-1 px-3 pt-6" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
-                            <View 
-                                style={{ 
-                                    backgroundColor: `${colors.primary}15`, 
-                                    borderColor: `${colors.primary}30`, 
-                                    borderWidth: 1 
-                                }} 
-                                className="p-8 rounded-[40px] items-center mb-8"
-                            >
-                                <View className="absolute top-0 right-0 p-4 opacity-10">
-                                    <Sparkles size={120} color={colors.primary} />
-                                </View>
-                                
-                                <View className="mb-6">
-                                    <BrandedAvatar 
-                                        name={clientContext?.name || 'Athlete'} 
-                                        imageUrl={clientContext?.avatar_url} 
-                                        size={80} 
-                                    />
-                                    <View 
-                                        style={{ 
-                                            backgroundColor: colors.primary, 
-                                            borderColor: colors.surface 
-                                        }} 
-                                        className="absolute -bottom-2 -right-2 rounded-full p-2 border-[3px]"
-                                    >
-                                        <Sparkles size={16} color={colors.textOnPrimary || 'white'} fill={colors.textOnPrimary || 'white'} />
-                                    </View>
-                                </View>
+                <View className="mb-6">
+                  <BrandedAvatar
+                    name={clientContext?.name || 'Athlete'}
+                    imageUrl={clientContext?.avatar_url}
+                    size={80}
+                  />
+                  <View
+                    style={{
+                      backgroundColor: colors.primary,
+                      borderColor: colors.surface,
+                    }}
+                    className="absolute -bottom-2 -right-2 rounded-full p-2 border-[3px]"
+                  >
+                    <Sparkles
+                      size={16}
+                      color={colors.textOnPrimary || 'white'}
+                      fill={colors.textOnPrimary || 'white'}
+                    />
+                  </View>
+                </View>
 
-                                <Text style={{ color: colors.text }} className="text-2xl font-black text-center tracking-tighter">AI Scheduling</Text>
-                                <Text style={{ color: colors.textSecondary }} className="text-center mt-3 leading-5 px-4 text-sm font-medium">
-                                    Describe your plan for {(clientContext?.name || 'the athlete').split(' ')[0]}. Our AI handles times, dates, and conflict checks.
-                                </Text>
-                            </View>
-                            
-                            <View 
-                                style={{ 
-                                    backgroundColor: colors.surface, 
-                                    borderColor: colors.border, 
-                                    borderWidth: 1 
-                                }} 
-                                className="rounded-[40px] p-8 min-h-[220px] mb-20"
-                            >
-                                <TextInput
-                                    style={{ color: colors.text }}
-                                    className="text-lg leading-7 font-medium"
-                                    multiline
-                                    placeholder="e.g., 'Weekly sessions every Monday at 2pm'"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={input}
-                                    onChangeText={setInput}
-                                    textAlignVertical="top"
-                                />
-                                {draftConflict && (
-                                    <MotiView
-                                        from={{ opacity: 0, translateY: 10 }}
-                                        animate={{ opacity: 1, translateY: 0 }}
-                                        style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.25)', borderWidth: 1 }}
-                                        className="mt-4 p-4 rounded-2xl flex-row items-center gap-3"
-                                    >
-                                        <AlertTriangle size={18} color="#EF4444" />
-                                        <Text className="text-red-400 text-xs font-bold flex-1 leading-4">{draftConflict.message}</Text>
-                                    </MotiView>
-                                )}
-                                <View 
-                                    style={{ borderTopColor: colors.border }} 
-                                    className="flex-row justify-between items-center mt-8 pt-6 border-t"
-                                >
-                                    <TouchableOpacity 
-                                        style={{ 
-                                            width: 56, 
-                                            height: 56, 
-                                            borderRadius: 28, 
-                                            backgroundColor: colors.background, 
-                                            alignItems: 'center', 
-                                            justifyContent: 'center', 
-                                            borderWidth: 1, 
-                                            borderColor: colors.border 
-                                        }}
-                                    >
-                                        <Mic size={24} color={colors.primary} />
-                                    </TouchableOpacity>
-                                    
-                                    <TouchableOpacity 
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 12,
-                                            paddingVertical: 16,
-                                            paddingHorizontal: 32,
-                                            borderRadius: 24,
-                                            backgroundColor: input.trim() ? colors.primary : colors.background,
-                                            borderWidth: input.trim() ? 0 : 1,
-                                            borderColor: colors.border,
-                                            ...(input.trim() ? {
-                                                shadowColor: colors.primary,
-                                                shadowOffset: { width: 0, height: 10 },
-                                                shadowOpacity: 0.35,
-                                                shadowRadius: 20,
-                                                elevation: 10
-                                            } : {})
-                                        }}
-                                        onPress={handleAnalyze}
-                                        disabled={!input.trim() || loading}
-                                    >
-                                        {loading ? (
-                                            <ActivityIndicator color={colors.textOnPrimary || 'white'} />
-                                        ) : (
-                                            <>
-                                                <Sparkles size={20} color={input.trim() ? (colors.textOnPrimary || 'white') : colors.textTertiary} />
-                                                <Text 
-                                                    style={{ 
-                                                        color: input.trim() ? (colors.textOnPrimary || 'white') : colors.textTertiary 
-                                                    }} 
-                                                    className="font-black text-base uppercase tracking-widest"
-                                                >
-                                                    Draft Plan
-                                                </Text>
-                                            </>
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                            {/* Coach Agenda Section */}
-                            <View className="mb-12">
-                                <View className="flex-row items-center justify-between mb-4">
-                                    <View className="flex-row items-center gap-3">
-                                        <Text style={{ color: colors.text }} className="text-lg font-black tracking-tight">Your Agenda</Text>
-                                        {isAgendaThinking && (
-                                            <MotiView
-                                                from={{ opacity: 0, scale: 0.5, rotate: '0deg' }}
-                                                animate={{ opacity: 1, scale: 1, rotate: '360deg' }}
-                                                transition={{
-                                                    opacity: { type: 'timing', duration: 300 },
-                                                    scale: { type: 'spring', damping: 10 },
-                                                    rotate: { type: 'timing', duration: 2000, loop: true }
-                                                }}
-                                                style={{ backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}35`, borderWidth: 1 }}
-                                                className="w-6 h-6 rounded-full items-center justify-center"
-                                            >
-                                                <Sparkles size={12} color={colors.primary} fill={colors.primary} />
-                                            </MotiView>
-                                        )}
-                                    </View>
-                                    <View 
-                                        style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30`, borderWidth: 1 }} 
-                                        className="px-3 py-1 rounded-full"
-                                    >
-                                        <Text style={{ color: colors.primary }} className="text-[10px] font-black uppercase tracking-widest">
-                                            {isAgendaThinking ? "Thinking..." : (agendaContext.days.length > 0 || agendaContext.times.length > 0 ? "Filtered" : "Next 3 Days")}
-                                        </Text>
-                                    </View>
-                                </View>
+                <Text
+                  style={{ color: colors.text }}
+                  className="text-2xl font-black text-center tracking-tighter"
+                >
+                  AI Scheduling
+                </Text>
+                <Text
+                  style={{ color: colors.textSecondary }}
+                  className="text-center mt-3 leading-5 px-4 text-sm font-medium"
+                >
+                  Describe your plan for{' '}
+                  {(clientContext?.name || 'the athlete').split(' ')[0]}. Our AI
+                  handles times, dates, and conflict checks.
+                </Text>
+              </View>
 
-                                {agendaLoading && agendaSessions.length === 0 ? (
-                                    <ActivityIndicator size="small" color={colors.primary} className="py-4" />
-                                ) : filteredAgenda.length > 0 ? (
-                                    <View className="gap-3">
-                                        {filteredAgenda.map((session, idx) => {
-                                            const sessionDate = new Date(session.scheduled_at);
-                                            const isFar = sessionDate.getTime() - new Date().getTime() > 24 * 60 * 60 * 1000;
-                                            
-                                            // Simple conflict check for pulse
-                                            const sStart = new Date(session.scheduled_at);
-                                            const sEnd = new Date(sStart.getTime() + (session.duration_minutes || 60) * 60000);
-                                            
-                                            // 1. Check against finalized proposed sessions
-                                            let isConflicted = proposedSessions.some(p => {
-                                                const pStart = new Date(p.scheduled_at);
-                                                const pEnd = new Date(pStart.getTime() + (p.duration_minutes || 60) * 60000);
-                                                return pStart < sEnd && pEnd > sStart;
-                                            });
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                }}
+                className="rounded-[40px] p-8 min-h-[220px] mb-20"
+              >
+                <TextInput
+                  style={{ color: colors.text }}
+                  className="text-lg leading-7 font-medium"
+                  multiline
+                  placeholder="e.g., 'Weekly sessions every Monday at 2pm'"
+                  placeholderTextColor={colors.textTertiary}
+                  value={input}
+                  onChangeText={setInput}
+                  textAlignVertical="top"
+                />
+                {draftConflict && (
+                  <MotiView
+                    from={{ opacity: 0, translateY: 10 }}
+                    animate={{ opacity: 1, translateY: 0 }}
+                    style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      borderColor: 'rgba(239, 68, 68, 0.25)',
+                      borderWidth: 1,
+                    }}
+                    className="mt-4 p-4 rounded-2xl flex-row items-center gap-3"
+                  >
+                    <AlertTriangle size={18} color="#EF4444" />
+                    <Text className="text-red-400 text-xs font-bold flex-1 leading-4">
+                      {draftConflict.message}
+                    </Text>
+                  </MotiView>
+                )}
+                <View
+                  style={{ borderTopColor: colors.border }}
+                  className="flex-row justify-between items-center mt-8 pt-6 border-t"
+                >
+                  <TouchableOpacity
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 28,
+                      backgroundColor: colors.background,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
+                    <Mic size={24} color={colors.primary} />
+                  </TouchableOpacity>
 
-                                            // 2. Also check against current "draft" being typed
-                                            if (!isConflicted && draftStartTime) {
-                                                const dEnd = new Date(draftStartTime.getTime() + 60 * 60000); // assume 60m for draft check
-                                                if (draftStartTime < sEnd && dEnd > sStart) {
-                                                    isConflicted = true;
-                                                }
-                                            }
-
-                                            return (
-                                                <MotiView
-                                                    key={session.id}
-                                                    from={{ opacity: isFar ? 0.3 : 1, scale: 1, borderColor: colors.border, borderWidth: 1 }}
-                                                    animate={{ 
-                                                        opacity: isFar ? 0.3 : 1,
-                                                        borderColor: isConflicted ? '#EF4444' : colors.border,
-                                                        borderWidth: 1,
-                                                        scale: isConflicted ? [1, 1.02, 1] : 1,
-                                                        backgroundColor: isConflicted ? 'rgba(239, 68, 68, 0.08)' : colors.surface
-                                                    }}
-                                                    transition={isConflicted ? {
-                                                        type: 'timing',
-                                                        duration: 1000,
-                                                        loop: true
-                                                    } : { type: 'timing', duration: 300 }}
-                                                    className="p-4 rounded-2xl flex-row items-center justify-between"
-                                                >
-                                                    <View className="flex-row items-center gap-4 flex-1">
-                                                        <View 
-                                                            style={{ 
-                                                                backgroundColor: isConflicted ? 'rgba(239, 68, 68, 0.12)' : colors.background,
-                                                                borderWidth: 1,
-                                                                borderColor: isConflicted ? 'rgba(239, 68, 68, 0.25)' : colors.border
-                                                            }}
-                                                            className="w-10 h-10 rounded-xl items-center justify-center"
-                                                        >
-                                                            {isConflicted ? (
-                                                                <AlertTriangle size={18} color="#EF4444" />
-                                                            ) : (
-                                                                <Calendar size={18} color={colors.textSecondary} />
-                                                            )}
-                                                        </View>
-                                                        <View className="flex-1">
-                                                            <View className="flex-row items-center justify-between pr-2">
-                                                                <Text style={{ color: colors.text }} className="font-bold text-sm">
-                                                                    {session.client?.profiles?.full_name || 'Client'}
-                                                                </Text>
-                                                                {isConflicted && (
-                                                                    <View className="flex-row items-center gap-1">
-                                                                        <Activity size={10} color="#EF4444" />
-                                                                        <Text className="text-[10px] font-black text-red-500 uppercase tracking-widest">Conflict</Text>
-                                                                    </View>
-                                                                )}
-                                                            </View>
-                                                            <Text style={{ color: colors.textSecondary }} className="text-[11px] font-bold mt-0.5">
-                                                                {sessionDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} • {sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                            </Text>
-                                                        </View>
-                                                    </View>
-                                                </MotiView>
-                                            );
-                                        })}
-                                    </View>
-                                ) : (
-                                    <View 
-                                        style={{ 
-                                            backgroundColor: colors.surface, 
-                                            borderColor: colors.border, 
-                                            borderWidth: 1, 
-                                            borderStyle: 'dashed' 
-                                        }} 
-                                        className="py-12 items-center rounded-[32px] px-8"
-                                    >
-                                        <View 
-                                            style={{ backgroundColor: colors.background }} 
-                                            className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-                                        >
-                                            <Calendar size={32} color={colors.textTertiary} />
-                                        </View>
-                                        <Text style={{ color: colors.text }} className="text-base font-black tracking-tight text-center">Your schedule is clear</Text>
-                                        <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mt-2 text-center leading-5">
-                                            No sessions match your current request or target client. You're free to schedule!
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        </ScrollView>
-                        </MotiView>
-                    ) : step === 'form' ? (
-                        <MotiView 
-                            key="form"
-                            from={{ opacity: 0, translateX: -20 }}
-                            animate={{ opacity: 1, translateX: 0 }}
-                            exit={{ opacity: 0, translateX: 20 }}
-                            transition={{ type: 'timing', duration: 300 }}
-                            className="flex-1 px-3 pt-6"
-                        >
-                            <ScrollView showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
-                                <View className="mb-8 flex-row items-center gap-4">
-                                    <View 
-                                        style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.25)', borderWidth: 1 }} 
-                                        className="w-12 h-12 rounded-2xl items-center justify-center"
-                                    >
-                                        <Info size={24} color="#F59E0B" />
-                                    </View>
-                                    <View className="flex-1">
-                                        <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight leading-7">
-                                            {originallyMissingDays && originallyMissingTime ? "Days & Time Needed" : 
-                                             originallyMissingDays ? "You didn't mention the days" :
-                                             originallyMissingTime ? "You didn't mention the time" : "Details Needed"}
-                                        </Text>
-                                        <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mt-1">
-                                            Help the AI by clarifying these specific details below.
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                <View 
-                                    style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }} 
-                                    className="p-7 rounded-[32px]"
-                                >
-                                    {originallyMissingDays && (
-                                        <View className="mb-8">
-                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase tracking-widest mb-4">Days Needed</Text>
-                                            <View className="flex-row flex-wrap gap-2.5">
-                                                {DAYS.map(day => {
-                                                    const isSelected = formDates.includes(day);
-                                                    return (
-                                                        <TouchableOpacity
-                                                            key={day}
-                                                            onPress={() => toggleDay(day)}
-                                                            style={{
-                                                                paddingHorizontal: 16,
-                                                                paddingVertical: 10,
-                                                                borderRadius: 14,
-                                                                backgroundColor: isSelected ? colors.primary : colors.background,
-                                                                borderWidth: 1,
-                                                                borderColor: isSelected ? colors.primary : colors.border,
-                                                            }}
-                                                        >
-                                                            <Text style={{
-                                                                color: isSelected ? (colors.textOnPrimary || 'white') : colors.textSecondary,
-                                                                fontSize: 13,
-                                                                fontWeight: '800',
-                                                                textTransform: 'capitalize'
-                                                            }}>{day.substring(0, 3)}</Text>
-                                                        </TouchableOpacity>
-                                                    );
-                                                })}
-                                            </View>
-                                        </View>
-                                    )}
-
-                                    {originallyMissingTime && (
-                                        <View className="mb-8">
-                                            <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase tracking-widest mb-4">Time Needed</Text>
-                                            <TextInput
-                                                style={{ backgroundColor: colors.background, borderColor: colors.border, color: colors.text }}
-                                                className="p-5 rounded-2xl font-bold border"
-                                                placeholder="e.g., '10am' or '2:30pm'"
-                                                placeholderTextColor={colors.textTertiary}
-                                                value={formTime}
-                                                onChangeText={setFormTime}
-                                            />
-                                        </View>
-                                    )}
-
-                                    <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase tracking-widest mb-4">Frequency</Text>
-                                    <View className="flex-row gap-3">
-                                        <TouchableOpacity 
-                                            onPress={() => setFormRecurrence('once')}
-                                            style={{
-                                                backgroundColor: formRecurrence === 'once' ? colors.primary : colors.background,
-                                                borderColor: formRecurrence === 'once' ? colors.primary : colors.border
-                                            }}
-                                            className="flex-1 p-5 rounded-2xl border flex-row items-center justify-center gap-3"
-                                        >
-                                            <Calendar size={18} color={formRecurrence === 'once' ? (colors.textOnPrimary || 'white') : colors.textSecondary} />
-                                            <Text style={{ color: formRecurrence === 'once' ? (colors.textOnPrimary || 'white') : colors.textSecondary }} className="font-bold text-sm">One-time</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity 
-                                            onPress={() => setFormRecurrence('weekly')}
-                                            style={{
-                                                backgroundColor: formRecurrence === 'weekly' ? colors.primary : colors.background,
-                                                borderColor: formRecurrence === 'weekly' ? colors.primary : colors.border
-                                            }}
-                                            className="flex-1 p-5 rounded-2xl border flex-row items-center justify-center gap-3"
-                                        >
-                                            <Repeat size={18} color={formRecurrence === 'weekly' ? (colors.textOnPrimary || 'white') : colors.textSecondary} />
-                                            <Text style={{ color: formRecurrence === 'weekly' ? (colors.textOnPrimary || 'white') : colors.textSecondary }} className="font-bold text-sm">Weekly</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                <TouchableOpacity 
-                                    style={{ backgroundColor: colors.primary }}
-                                    className="mt-8 p-6 rounded-[28px] items-center flex-row justify-center gap-3 shadow-xl"
-                                    onPress={handleAnalyze}
-                                >
-                                    <Sparkles size={20} color={colors.textOnPrimary || 'white'} />
-                                    <Text style={{ color: colors.textOnPrimary || 'white' }} className="font-black text-base uppercase tracking-widest">Re-Draft Plan</Text>
-                                </TouchableOpacity>
-                            </ScrollView>
-                        </MotiView>
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      paddingVertical: 16,
+                      paddingHorizontal: 32,
+                      borderRadius: 24,
+                      backgroundColor: input.trim()
+                        ? colors.primary
+                        : colors.background,
+                      borderWidth: input.trim() ? 0 : 1,
+                      borderColor: colors.border,
+                      ...(input.trim()
+                        ? {
+                            shadowColor: colors.primary,
+                            shadowOffset: { width: 0, height: 10 },
+                            shadowOpacity: 0.35,
+                            shadowRadius: 20,
+                            elevation: 10,
+                          }
+                        : {}),
+                    }}
+                    onPress={handleAnalyze}
+                    disabled={!input.trim() || loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator
+                        color={colors.textOnPrimary || 'white'}
+                      />
                     ) : (
-                        <MotiView 
-                            key="review"
-                            from={{ opacity: 0, translateX: -20 }}
-                            animate={{ opacity: 1, translateX: 0 }}
-                            exit={{ opacity: 0, translateX: 20 }}
-                            transition={{ type: 'timing', duration: 300 }}
-                            className="flex-1 px-3 pt-6 pb-32"
-                            style={{ overflow: 'visible' }}
+                      <>
+                        <Sparkles
+                          size={20}
+                          color={
+                            input.trim()
+                              ? colors.textOnPrimary || 'white'
+                              : colors.textTertiary
+                          }
+                        />
+                        <Text
+                          style={{
+                            color: input.trim()
+                              ? colors.textOnPrimary || 'white'
+                              : colors.textTertiary,
+                          }}
+                          className="font-black text-base uppercase tracking-widest"
                         >
-                            <View className="mb-8 flex-row items-center gap-4">
-                                <View 
-                                    style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.25)', borderWidth: 1 }} 
-                                    className="w-12 h-12 rounded-2xl items-center justify-center"
-                                >
-                                    <Check size={24} color="#10B981" />
-                                </View>
-                                <View className="flex-1">
-                                    <Text style={{ color: colors.text }} className="text-xl font-black tracking-tight leading-7">Review Schedule</Text>
-                                    <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mt-1">
-                                        I've drafted {proposedSessions.length} session{proposedSessions.length !== 1 ? 's' : ''} based on your request.
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <ScrollView className="flex-1" showsVerticalScrollIndicator={false} style={{ overflow: 'visible' }} contentContainerStyle={{ overflow: 'visible' }}>
-                                {proposedSessions.some(s => checkConflict(s)?.type === 'daily_limit') && (
-                                    <View 
-                                        style={{ 
-                                            backgroundColor: `${colors.primary}12`, 
-                                            borderColor: `${colors.primary}25`, 
-                                            borderWidth: 1 
-                                        }} 
-                                        className="mb-6 p-5 rounded-[28px] flex-row gap-4 items-start"
-                                    >
-                                        <View 
-                                            style={{ backgroundColor: `${colors.primary}20`, borderColor: `${colors.primary}30`, borderWidth: 1 }} 
-                                            className="w-10 h-10 rounded-xl items-center justify-center"
-                                        >
-                                            <Sparkles size={20} color={colors.primary} fill={colors.primary} />
-                                        </View>
-                                        <View className="flex-1">
-                                            <Text style={{ color: colors.text }} className="text-sm font-black tracking-tight">AI Assistant Tip</Text>
-                                            <Text style={{ color: colors.textSecondary }} className="text-xs font-medium mt-1 leading-5">
-                                                {(() => {
-                                                    const conf = proposedSessions.map(s => checkConflict(s)).find(c => c && c.type === 'daily_limit');
-                                                    if (!conf) return '';
-                                                    const proposedTime = new Date(conf.proposedSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                                    const proposedDay = new Date(conf.proposedSession.scheduled_at).toLocaleDateString('en-US', { weekday: 'long' });
-                                                    const existingTime = new Date(conf.existingSession.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                                    return `I've drafted that for ${proposedDay} at ${proposedTime}, but I noticed ${clientContext.name.split(' ')[0]} already has a ${existingTime} sync. I'll swap them once you hit send.`;
-                                                })()}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                )}
-                                {proposedSessions.map((session, index) => {
-                                    const conflict = checkConflict(session);
-                                    const isNeuralGlow = session.aiRecurrenceDetected;
-
-                                    return (
-                                        <View key={index} className="relative mb-6" style={{ overflow: 'visible' }}>
-                                            {isNeuralGlow && (
-                                                <MotiView
-                                                    from={{ opacity: 0.1, scale: 0.98 }}
-                                                    animate={{ opacity: [0.1, 0.2, 0.1], scale: [0.98, 1, 0.98] }}
-                                                    transition={{ loop: true, duration: 2000 }}
-                                                    style={{
-                                                        position: 'absolute',
-                                                        top: -2,
-                                                        left: -2,
-                                                        right: -2,
-                                                        bottom: -2,
-                                                        borderRadius: 34,
-                                                        backgroundColor: colors.primary,
-                                                        zIndex: -1
-                                                    }}
-                                                />
-                                            )}
-                                            <View 
-                                                style={{ 
-                                                    backgroundColor: colors.surface, 
-                                                    borderColor: conflict ? 'rgba(239, 68, 68, 0.4)' : colors.border, 
-                                                    borderWidth: 1 
-                                                }} 
-                                                className="p-6 rounded-[32px]"
-                                            >
-                                                <View className="flex-row justify-between items-start mb-6">
-                                                    <View className="flex-row gap-4 flex-1">
-                                                        <View 
-                                                            style={{ 
-                                                                backgroundColor: conflict ? 'rgba(239, 68, 68, 0.12)' : `${colors.primary}15`,
-                                                                borderColor: conflict ? 'rgba(239, 68, 68, 0.25)' : `${colors.primary}30`,
-                                                                borderWidth: 1
-                                                            }} 
-                                                            className="w-12 h-12 rounded-2xl items-center justify-center"
-                                                        >
-                                                            {conflict ? (
-                                                                <AlertTriangle size={24} color="#EF4444" />
-                                                            ) : (
-                                                                <Clock size={24} color={colors.primary} />
-                                                            )}
-                                                        </View>
-                                                        <View className="flex-1">
-                                                            <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight capitalize">
-                                                                {session.session_type}
-                                                            </Text>
-                                                            <Text style={{ color: colors.textSecondary }} className="text-sm mt-0.5 font-medium capitalize">
-                                                                {session.day_of_week}, {' '}{new Date(session.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                            </Text>
-                                                        </View>
-                                                    </View>
-                                                    <TouchableOpacity 
-                                                        style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }} 
-                                                        className="w-8 h-8 rounded-full items-center justify-center"
-                                                        onPress={() => setProposedSessions(prev => prev.filter((_, i) => i !== index))}
-                                                    >
-                                                        <X size={16} color={colors.textSecondary} />
-                                                    </TouchableOpacity>
-                                                </View>
-
-                                                <View 
-                                                    style={{ backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }} 
-                                                    className="flex-row p-1.5 rounded-2xl"
-                                                >
-                                                    <TouchableOpacity 
-                                                        onPress={() => {
-                                                            const newSessions = [...proposedSessions];
-                                                            newSessions[index] = { ...session, recurrence: 'once', aiRecurrenceDetected: false };
-                                                            setProposedSessions(newSessions);
-                                                        }}
-                                                        style={{
-                                                            backgroundColor: session.recurrence === 'once' ? (isDark ? 'rgba(255, 255, 255, 0.1)' : colors.surface) : 'transparent'
-                                                        }}
-                                                        className="flex-1 py-3.5 rounded-xl items-center justify-center flex-row gap-2"
-                                                    >
-                                                        <Calendar size={14} color={session.recurrence === 'once' ? colors.text : colors.textSecondary} />
-                                                        <Text style={{ color: session.recurrence === 'once' ? colors.text : colors.textSecondary }} className="text-xs font-black uppercase tracking-widest">One-time</Text>
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity 
-                                                        onPress={() => {
-                                                            const newSessions = [...proposedSessions];
-                                                            newSessions[index] = { ...session, recurrence: 'weekly', aiRecurrenceDetected: false };
-                                                            setProposedSessions(newSessions);
-                                                        }}
-                                                        style={{
-                                                            backgroundColor: session.recurrence === 'weekly' ? (isDark ? 'rgba(255, 255, 255, 0.1)' : colors.surface) : 'transparent'
-                                                        }}
-                                                        className="flex-1 py-3.5 rounded-xl items-center justify-center flex-row gap-2"
-                                                    >
-                                                        <Repeat size={14} color={session.recurrence === 'weekly' ? colors.text : colors.textSecondary} />
-                                                        <Text style={{ color: session.recurrence === 'weekly' ? colors.text : colors.textSecondary }} className="text-xs font-black uppercase tracking-widest">Weekly</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-
-                                                {conflict && (
-                                                    <TouchableOpacity 
-                                                        style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.25)', borderWidth: 1 }}
-                                                        className="mt-4 p-4 rounded-2xl flex-row items-center gap-3"
-                                                        onPress={() => handleConflictDetected(session, conflict)}
-                                                    >
-                                                        <AlertTriangle size={16} color="#EF4444" />
-                                                        <Text className="text-red-400 text-xs font-bold flex-1 leading-4">Conflict: {conflict.message}</Text>
-                                                        <ChevronLeft size={16} color="#EF4444" style={{ transform: [{ rotate: '180deg' }] }} />
-                                                    </TouchableOpacity>
-                                                )}
-                                            </View>
-                                        </View>
-                                    );
-                                })}
-                            </ScrollView>
-
-                            <View 
-                                style={{ 
-                                    backgroundColor: colors.background, 
-                                    borderTopColor: colors.border, 
-                                    borderTopWidth: 1 
-                                }} 
-                                className="absolute bottom-0 left-0 right-0 p-6 pt-4"
-                            >
-                                <TouchableOpacity 
-                                    style={{ backgroundColor: colors.primary }}
-                                    className="p-5 rounded-2xl items-center flex-row justify-center gap-3 shadow-xl"
-                                    onPress={() => handleFinalConfirm()}
-                                >
-                                    <Send size={20} color={colors.textOnPrimary || 'white'} />
-                                    <Text style={{ color: colors.textOnPrimary || 'white' }} className="font-black text-base uppercase tracking-widest">
-                                        Send {proposedSessions.length} Session Invite{proposedSessions.length !== 1 ? 's' : ''}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </MotiView>
+                          Draft Plan
+                        </Text>
+                      </>
                     )}
-                </AnimatePresence>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {/* Coach Agenda Section */}
+              <View className="mb-12">
+                <View className="flex-row items-center justify-between mb-4">
+                  <View className="flex-row items-center gap-3">
+                    <Text
+                      style={{ color: colors.text }}
+                      className="text-lg font-black tracking-tight"
+                    >
+                      Your Agenda
+                    </Text>
+                    {isAgendaThinking && (
+                      <MotiView
+                        from={{ opacity: 0, scale: 0.5, rotate: '0deg' }}
+                        animate={{ opacity: 1, scale: 1, rotate: '360deg' }}
+                        transition={{
+                          opacity: { type: 'timing', duration: 300 },
+                          scale: { type: 'spring', damping: 10 },
+                          rotate: {
+                            type: 'timing',
+                            duration: 2000,
+                            loop: true,
+                          },
+                        }}
+                        style={{
+                          backgroundColor: `${colors.primary}20`,
+                          borderColor: `${colors.primary}35`,
+                          borderWidth: 1,
+                        }}
+                        className="w-6 h-6 rounded-full items-center justify-center"
+                      >
+                        <Sparkles
+                          size={12}
+                          color={colors.primary}
+                          fill={colors.primary}
+                        />
+                      </MotiView>
+                    )}
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: `${colors.primary}15`,
+                      borderColor: `${colors.primary}30`,
+                      borderWidth: 1,
+                    }}
+                    className="px-3 py-1 rounded-full"
+                  >
+                    <Text
+                      style={{ color: colors.primary }}
+                      className="text-[10px] font-black uppercase tracking-widest"
+                    >
+                      {isAgendaThinking
+                        ? 'Thinking...'
+                        : agendaContext.days.length > 0 ||
+                            agendaContext.times.length > 0
+                          ? 'Filtered'
+                          : 'Next 3 Days'}
+                    </Text>
+                  </View>
+                </View>
+
+                {agendaLoading && agendaSessions.length === 0 ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={colors.primary}
+                    className="py-4"
+                  />
+                ) : filteredAgenda.length > 0 ? (
+                  <View className="gap-3">
+                    {filteredAgenda.map((session, idx) => {
+                      const sessionDate = new Date(session.scheduled_at);
+                      const isFar =
+                        sessionDate.getTime() - new Date().getTime() >
+                        24 * 60 * 60 * 1000;
+
+                      // Simple conflict check for pulse
+                      const sStart = new Date(session.scheduled_at);
+                      const sEnd = new Date(
+                        sStart.getTime() +
+                          (session.duration_minutes || 60) * 60000,
+                      );
+
+                      // 1. Check against finalized proposed sessions
+                      let isConflicted = proposedSessions.some((p) => {
+                        const pStart = new Date(p.scheduled_at);
+                        const pEnd = new Date(
+                          pStart.getTime() + (p.duration_minutes || 60) * 60000,
+                        );
+                        return pStart < sEnd && pEnd > sStart;
+                      });
+
+                      // 2. Also check against current "draft" being typed
+                      if (!isConflicted && draftStartTime) {
+                        const dEnd = new Date(
+                          draftStartTime.getTime() + 60 * 60000,
+                        ); // assume 60m for draft check
+                        if (draftStartTime < sEnd && dEnd > sStart) {
+                          isConflicted = true;
+                        }
+                      }
+
+                      return (
+                        <MotiView
+                          key={session.id}
+                          from={{
+                            opacity: isFar ? 0.3 : 1,
+                            scale: 1,
+                            borderColor: colors.border,
+                            borderWidth: 1,
+                          }}
+                          animate={{
+                            opacity: isFar ? 0.3 : 1,
+                            borderColor: isConflicted
+                              ? '#EF4444'
+                              : colors.border,
+                            borderWidth: 1,
+                            scale: isConflicted ? [1, 1.02, 1] : 1,
+                            backgroundColor: isConflicted
+                              ? 'rgba(239, 68, 68, 0.08)'
+                              : colors.surface,
+                          }}
+                          transition={
+                            isConflicted
+                              ? {
+                                  type: 'timing',
+                                  duration: 1000,
+                                  loop: true,
+                                }
+                              : { type: 'timing', duration: 300 }
+                          }
+                          className="p-4 rounded-2xl flex-row items-center justify-between"
+                        >
+                          <View className="flex-row items-center gap-4 flex-1">
+                            <View
+                              style={{
+                                backgroundColor: isConflicted
+                                  ? 'rgba(239, 68, 68, 0.12)'
+                                  : colors.background,
+                                borderWidth: 1,
+                                borderColor: isConflicted
+                                  ? 'rgba(239, 68, 68, 0.25)'
+                                  : colors.border,
+                              }}
+                              className="w-10 h-10 rounded-xl items-center justify-center"
+                            >
+                              {isConflicted ? (
+                                <AlertTriangle size={18} color="#EF4444" />
+                              ) : (
+                                <Calendar
+                                  size={18}
+                                  color={colors.textSecondary}
+                                />
+                              )}
+                            </View>
+                            <View className="flex-1">
+                              <View className="flex-row items-center justify-between pr-2">
+                                <Text
+                                  style={{ color: colors.text }}
+                                  className="font-bold text-sm"
+                                >
+                                  {session.client?.profiles?.full_name ||
+                                    'Client'}
+                                </Text>
+                                {isConflicted && (
+                                  <View className="flex-row items-center gap-1">
+                                    <Activity size={10} color="#EF4444" />
+                                    <Text className="text-[10px] font-black text-red-500 uppercase tracking-widest">
+                                      Conflict
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text
+                                style={{ color: colors.textSecondary }}
+                                className="text-[11px] font-bold mt-0.5"
+                              >
+                                {sessionDate.toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}{' '}
+                                •{' '}
+                                {sessionDate.toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </Text>
+                            </View>
+                          </View>
+                        </MotiView>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      borderWidth: 1,
+                      borderStyle: 'dashed',
+                    }}
+                    className="py-12 items-center rounded-[32px] px-8"
+                  >
+                    <View
+                      style={{ backgroundColor: colors.background }}
+                      className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
+                    >
+                      <Calendar size={32} color={colors.textTertiary} />
+                    </View>
+                    <Text
+                      style={{ color: colors.text }}
+                      className="text-base font-black tracking-tight text-center"
+                    >
+                      Your schedule is clear
+                    </Text>
+                    <Text
+                      style={{ color: colors.textSecondary }}
+                      className="text-xs font-medium mt-2 text-center leading-5"
+                    >
+                      No sessions match your current request or target client.
+                      You're free to schedule!
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </MotiView>
+        ) : step === 'form' ? (
+          <MotiView
+            key="form"
+            from={{ opacity: 0, translateX: -20 }}
+            animate={{ opacity: 1, translateX: 0 }}
+            exit={{ opacity: 0, translateX: 20 }}
+            transition={{ type: 'timing', duration: 300 }}
+            className="flex-1 px-3 pt-6"
+          >
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ overflow: 'visible' }}
+              contentContainerStyle={{ overflow: 'visible' }}
+            >
+              <View className="mb-8 flex-row items-center gap-4">
+                <View
+                  style={{
+                    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                    borderColor: 'rgba(245, 158, 11, 0.25)',
+                    borderWidth: 1,
+                  }}
+                  className="w-12 h-12 rounded-2xl items-center justify-center"
+                >
+                  <Info size={24} color="#F59E0B" />
+                </View>
+                <View className="flex-1">
+                  <Text
+                    style={{ color: colors.text }}
+                    className="text-xl font-black tracking-tight leading-7"
+                  >
+                    {originallyMissingDays && originallyMissingTime
+                      ? 'Days & Time Needed'
+                      : originallyMissingDays
+                        ? "You didn't mention the days"
+                        : originallyMissingTime
+                          ? "You didn't mention the time"
+                          : 'Details Needed'}
+                  </Text>
+                  <Text
+                    style={{ color: colors.textSecondary }}
+                    className="text-xs font-medium mt-1"
+                  >
+                    Help the AI by clarifying these specific details below.
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                }}
+                className="p-7 rounded-[32px]"
+              >
+                {originallyMissingDays && (
+                  <View className="mb-8">
+                    <Text
+                      style={{ color: colors.textSecondary }}
+                      className="text-[10px] font-bold uppercase tracking-widest mb-4"
+                    >
+                      Days Needed
+                    </Text>
+                    <View className="flex-row flex-wrap gap-2.5">
+                      {DAYS.map((day) => {
+                        const isSelected = formDates.includes(day);
+                        return (
+                          <TouchableOpacity
+                            key={day}
+                            onPress={() => toggleDay(day)}
+                            style={{
+                              paddingHorizontal: 16,
+                              paddingVertical: 10,
+                              borderRadius: 14,
+                              backgroundColor: isSelected
+                                ? colors.primary
+                                : colors.background,
+                              borderWidth: 1,
+                              borderColor: isSelected
+                                ? colors.primary
+                                : colors.border,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: isSelected
+                                  ? colors.textOnPrimary || 'white'
+                                  : colors.textSecondary,
+                                fontSize: 13,
+                                fontWeight: '800',
+                                textTransform: 'capitalize',
+                              }}
+                            >
+                              {day.substring(0, 3)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {originallyMissingTime && (
+                  <View className="mb-8">
+                    <Text
+                      style={{ color: colors.textSecondary }}
+                      className="text-[10px] font-bold uppercase tracking-widest mb-4"
+                    >
+                      Time Needed
+                    </Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      }}
+                      className="p-5 rounded-2xl font-bold border"
+                      placeholder="e.g., '10am' or '2:30pm'"
+                      placeholderTextColor={colors.textTertiary}
+                      value={formTime}
+                      onChangeText={setFormTime}
+                    />
+                  </View>
+                )}
+
+                <Text
+                  style={{ color: colors.textSecondary }}
+                  className="text-[10px] font-bold uppercase tracking-widest mb-4"
+                >
+                  Frequency
+                </Text>
+                <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    onPress={() => setFormRecurrence('once')}
+                    style={{
+                      backgroundColor:
+                        formRecurrence === 'once'
+                          ? colors.primary
+                          : colors.background,
+                      borderColor:
+                        formRecurrence === 'once'
+                          ? colors.primary
+                          : colors.border,
+                    }}
+                    className="flex-1 p-5 rounded-2xl border flex-row items-center justify-center gap-3"
+                  >
+                    <Calendar
+                      size={18}
+                      color={
+                        formRecurrence === 'once'
+                          ? colors.textOnPrimary || 'white'
+                          : colors.textSecondary
+                      }
+                    />
+                    <Text
+                      style={{
+                        color:
+                          formRecurrence === 'once'
+                            ? colors.textOnPrimary || 'white'
+                            : colors.textSecondary,
+                      }}
+                      className="font-bold text-sm"
+                    >
+                      One-time
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setFormRecurrence('weekly')}
+                    style={{
+                      backgroundColor:
+                        formRecurrence === 'weekly'
+                          ? colors.primary
+                          : colors.background,
+                      borderColor:
+                        formRecurrence === 'weekly'
+                          ? colors.primary
+                          : colors.border,
+                    }}
+                    className="flex-1 p-5 rounded-2xl border flex-row items-center justify-center gap-3"
+                  >
+                    <Repeat
+                      size={18}
+                      color={
+                        formRecurrence === 'weekly'
+                          ? colors.textOnPrimary || 'white'
+                          : colors.textSecondary
+                      }
+                    />
+                    <Text
+                      style={{
+                        color:
+                          formRecurrence === 'weekly'
+                            ? colors.textOnPrimary || 'white'
+                            : colors.textSecondary,
+                      }}
+                      className="font-bold text-sm"
+                    >
+                      Weekly
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={{ backgroundColor: colors.primary }}
+                className="mt-8 p-6 rounded-[28px] items-center flex-row justify-center gap-3 shadow-xl"
+                onPress={handleAnalyze}
+              >
+                <Sparkles size={20} color={colors.textOnPrimary || 'white'} />
+                <Text
+                  style={{ color: colors.textOnPrimary || 'white' }}
+                  className="font-black text-base uppercase tracking-widest"
+                >
+                  Re-Draft Plan
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </MotiView>
+        ) : (
+          <MotiView
+            key="review"
+            from={{ opacity: 0, translateX: -20 }}
+            animate={{ opacity: 1, translateX: 0 }}
+            exit={{ opacity: 0, translateX: 20 }}
+            transition={{ type: 'timing', duration: 300 }}
+            className="flex-1 px-3 pt-6 pb-32"
+            style={{ overflow: 'visible' }}
+          >
+            <View className="mb-8 flex-row items-center gap-4">
+              <View
+                style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                  borderColor: 'rgba(16, 185, 129, 0.25)',
+                  borderWidth: 1,
+                }}
+                className="w-12 h-12 rounded-2xl items-center justify-center"
+              >
+                <Check size={24} color="#10B981" />
+              </View>
+              <View className="flex-1">
+                <Text
+                  style={{ color: colors.text }}
+                  className="text-xl font-black tracking-tight leading-7"
+                >
+                  Review Schedule
+                </Text>
+                <Text
+                  style={{ color: colors.textSecondary }}
+                  className="text-xs font-medium mt-1"
+                >
+                  I've drafted {proposedSessions.length} session
+                  {proposedSessions.length !== 1 ? 's' : ''} based on your
+                  request.
+                </Text>
+              </View>
             </View>
 
-            <ConflictResolutionModal 
-                visible={showConflictModal}
-                onCancel={() => setShowConflictModal(false)}
-                conflictInfo={conflictInfo}
-                onResolve={handleResolution}
-            />
-        </Modal>
-    );
+            <ScrollView
+              className="flex-1"
+              showsVerticalScrollIndicator={false}
+              style={{ overflow: 'visible' }}
+              contentContainerStyle={{ overflow: 'visible' }}
+            >
+              {proposedSessions.some(
+                (s) => checkConflict(s)?.type === 'daily_limit',
+              ) && (
+                <View
+                  style={{
+                    backgroundColor: `${colors.primary}12`,
+                    borderColor: `${colors.primary}25`,
+                    borderWidth: 1,
+                  }}
+                  className="mb-6 p-5 rounded-[28px] flex-row gap-4 items-start"
+                >
+                  <View
+                    style={{
+                      backgroundColor: `${colors.primary}20`,
+                      borderColor: `${colors.primary}30`,
+                      borderWidth: 1,
+                    }}
+                    className="w-10 h-10 rounded-xl items-center justify-center"
+                  >
+                    <Sparkles
+                      size={20}
+                      color={colors.primary}
+                      fill={colors.primary}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text
+                      style={{ color: colors.text }}
+                      className="text-sm font-black tracking-tight"
+                    >
+                      AI Assistant Tip
+                    </Text>
+                    <Text
+                      style={{ color: colors.textSecondary }}
+                      className="text-xs font-medium mt-1 leading-5"
+                    >
+                      {(() => {
+                        const conf = proposedSessions
+                          .map((s) => checkConflict(s))
+                          .find((c) => c && c.type === 'daily_limit');
+                        if (!conf) return '';
+                        const proposedTime = new Date(
+                          conf.proposedSession.scheduled_at,
+                        ).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        });
+                        const proposedDay = new Date(
+                          conf.proposedSession.scheduled_at,
+                        ).toLocaleDateString('en-US', { weekday: 'long' });
+                        const existingTime = new Date(
+                          conf.existingSession.scheduled_at,
+                        ).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        });
+                        return `I've drafted that for ${proposedDay} at ${proposedTime}, but I noticed ${clientContext.name.split(' ')[0]} already has a ${existingTime} sync. I'll swap them once you hit send.`;
+                      })()}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {proposedSessions.map((session, index) => {
+                const conflict = checkConflict(session);
+                const isNeuralGlow = session.aiRecurrenceDetected;
+
+                return (
+                  <View
+                    key={index}
+                    className="relative mb-6"
+                    style={{ overflow: 'visible' }}
+                  >
+                    {isNeuralGlow && (
+                      <MotiView
+                        from={{ opacity: 0.1, scale: 0.98 }}
+                        animate={{
+                          opacity: [0.1, 0.2, 0.1],
+                          scale: [0.98, 1, 0.98],
+                        }}
+                        transition={{ loop: true, duration: 2000 }}
+                        style={{
+                          position: 'absolute',
+                          top: -2,
+                          left: -2,
+                          right: -2,
+                          bottom: -2,
+                          borderRadius: 34,
+                          backgroundColor: colors.primary,
+                          zIndex: -1,
+                        }}
+                      />
+                    )}
+                    <View
+                      style={{
+                        backgroundColor: colors.surface,
+                        borderColor: conflict
+                          ? 'rgba(239, 68, 68, 0.4)'
+                          : colors.border,
+                        borderWidth: 1,
+                      }}
+                      className="p-6 rounded-[32px]"
+                    >
+                      <View className="flex-row justify-between items-start mb-6">
+                        <View className="flex-row gap-4 flex-1">
+                          <View
+                            style={{
+                              backgroundColor: conflict
+                                ? 'rgba(239, 68, 68, 0.12)'
+                                : `${colors.primary}15`,
+                              borderColor: conflict
+                                ? 'rgba(239, 68, 68, 0.25)'
+                                : `${colors.primary}30`,
+                              borderWidth: 1,
+                            }}
+                            className="w-12 h-12 rounded-2xl items-center justify-center"
+                          >
+                            {conflict ? (
+                              <AlertTriangle size={24} color="#EF4444" />
+                            ) : (
+                              <Clock size={24} color={colors.primary} />
+                            )}
+                          </View>
+                          <View className="flex-1">
+                            <Text
+                              style={{ color: colors.text }}
+                              className="font-black text-lg tracking-tight capitalize"
+                            >
+                              {session.session_type}
+                            </Text>
+                            <Text
+                              style={{ color: colors.textSecondary }}
+                              className="text-sm mt-0.5 font-medium capitalize"
+                            >
+                              {session.day_of_week},{' '}
+                              {new Date(
+                                session.scheduled_at,
+                              ).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
+                            borderWidth: 1,
+                          }}
+                          className="w-8 h-8 rounded-full items-center justify-center"
+                          onPress={() =>
+                            setProposedSessions((prev) =>
+                              prev.filter((_, i) => i !== index),
+                            )
+                          }
+                        >
+                          <X size={16} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View
+                        style={{
+                          backgroundColor: colors.background,
+                          borderColor: colors.border,
+                          borderWidth: 1,
+                        }}
+                        className="flex-row p-1.5 rounded-2xl"
+                      >
+                        <TouchableOpacity
+                          onPress={() => {
+                            const newSessions = [...proposedSessions];
+                            newSessions[index] = {
+                              ...session,
+                              recurrence: 'once',
+                              aiRecurrenceDetected: false,
+                            };
+                            setProposedSessions(newSessions);
+                          }}
+                          style={{
+                            backgroundColor:
+                              session.recurrence === 'once'
+                                ? isDark
+                                  ? 'rgba(255, 255, 255, 0.1)'
+                                  : colors.surface
+                                : 'transparent',
+                          }}
+                          className="flex-1 py-3.5 rounded-xl items-center justify-center flex-row gap-2"
+                        >
+                          <Calendar
+                            size={14}
+                            color={
+                              session.recurrence === 'once'
+                                ? colors.text
+                                : colors.textSecondary
+                            }
+                          />
+                          <Text
+                            style={{
+                              color:
+                                session.recurrence === 'once'
+                                  ? colors.text
+                                  : colors.textSecondary,
+                            }}
+                            className="text-xs font-black uppercase tracking-widest"
+                          >
+                            One-time
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const newSessions = [...proposedSessions];
+                            newSessions[index] = {
+                              ...session,
+                              recurrence: 'weekly',
+                              aiRecurrenceDetected: false,
+                            };
+                            setProposedSessions(newSessions);
+                          }}
+                          style={{
+                            backgroundColor:
+                              session.recurrence === 'weekly'
+                                ? isDark
+                                  ? 'rgba(255, 255, 255, 0.1)'
+                                  : colors.surface
+                                : 'transparent',
+                          }}
+                          className="flex-1 py-3.5 rounded-xl items-center justify-center flex-row gap-2"
+                        >
+                          <Repeat
+                            size={14}
+                            color={
+                              session.recurrence === 'weekly'
+                                ? colors.text
+                                : colors.textSecondary
+                            }
+                          />
+                          <Text
+                            style={{
+                              color:
+                                session.recurrence === 'weekly'
+                                  ? colors.text
+                                  : colors.textSecondary,
+                            }}
+                            className="text-xs font-black uppercase tracking-widest"
+                          >
+                            Weekly
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {conflict && (
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderColor: 'rgba(239, 68, 68, 0.25)',
+                            borderWidth: 1,
+                          }}
+                          className="mt-4 p-4 rounded-2xl flex-row items-center gap-3"
+                          onPress={() =>
+                            handleConflictDetected(session, conflict)
+                          }
+                        >
+                          <AlertTriangle size={16} color="#EF4444" />
+                          <Text className="text-red-400 text-xs font-bold flex-1 leading-4">
+                            Conflict: {conflict.message}
+                          </Text>
+                          <ChevronLeft
+                            size={16}
+                            color="#EF4444"
+                            style={{ transform: [{ rotate: '180deg' }] }}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <View
+              style={{
+                backgroundColor: colors.background,
+                borderTopColor: colors.border,
+                borderTopWidth: 1,
+              }}
+              className="absolute bottom-0 left-0 right-0 p-6 pt-4"
+            >
+              <TouchableOpacity
+                style={{ backgroundColor: colors.primary }}
+                className="p-5 rounded-2xl items-center flex-row justify-center gap-3 shadow-xl"
+                onPress={() => handleFinalConfirm()}
+              >
+                <Send size={20} color={colors.textOnPrimary || 'white'} />
+                <Text
+                  style={{ color: colors.textOnPrimary || 'white' }}
+                  className="font-black text-base uppercase tracking-widest"
+                >
+                  Send {proposedSessions.length} Session Invite
+                  {proposedSessions.length !== 1 ? 's' : ''}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </MotiView>
+        )}
+      </AnimatePresence>
+
+      <ConflictResolutionModal
+        visible={showConflictModal}
+        onCancel={() => setShowConflictModal(false)}
+        conflictInfo={conflictInfo}
+        onResolve={handleResolution}
+      />
+    </View>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+    >
+      {content}
+    </Modal>
+  );
 }

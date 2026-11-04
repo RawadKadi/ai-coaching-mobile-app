@@ -31,6 +31,8 @@ import {
 } from 'lucide-react-native';
 import { getFontFamily } from '@/hooks/useAppFonts';
 import { isDarkColor } from '@/lib/theme-utils';
+import GoogleIcon from '@/components/GoogleIcon';
+import { signUpCoachWithGoogle } from '@/lib/google-auth';
 
 export default function SignUpScreen() {
   const { brand, loadBrandById, refreshBrand } = useBrand();
@@ -44,8 +46,10 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<'client' | 'coach'>('client');
+  const [role, setRole] = useState<'client' | 'coach'>('coach');
+  const [switcherWidth, setSwitcherWidth] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [inviteCode, setInviteCode] = useState(inviteParam || '');
   const [validatingInvite, setValidatingInvite] = useState(false);
@@ -158,6 +162,24 @@ export default function SignUpScreen() {
       setError(err.message || 'Sign up failed.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleCoachSignUp = async () => {
+    setGoogleLoading(true);
+    setError('');
+    try {
+      const res = await signUpCoachWithGoogle();
+      if (res.success) {
+        await refreshBrand();
+        router.replace('/');
+      } else if (res.error && res.error !== 'Authentication was cancelled') {
+        setError(res.error);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google sign up failed');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -293,65 +315,52 @@ export default function SignUpScreen() {
               </AnimatePresence>
 
               <View>
-                {/* User Type Selection */}
+                {/* User Type Selection: Coach first, Client second with smooth liquid slider */}
                 {!inviteParam && (
                   <View
+                    onLayout={(e) => setSwitcherWidth(e.nativeEvent.layout.width)}
                     style={{
                       backgroundColor: surfaceBg,
                       borderColor: inputBorder,
                       borderWidth: 1,
+                      position: 'relative',
                     }}
-                    className="flex-row rounded-[28px] p-1.5 mb-8"
+                    className="flex-row rounded-[28px] p-1.5 mb-8 overflow-hidden"
                   >
-                    <Pressable
-                      onPress={() => {
-                        setRole('client');
-                        setInviteValid(false);
-                        setInviteCode('');
-                        setError('');
-                      }}
-                      className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
-                      style={
-                        role === 'client'
-                          ? {
-                              backgroundColor: colors.primary,
-                              shadowColor: colors.primary,
-                              shadowOffset: { width: 0, height: 4 },
-                              shadowOpacity: 0.25,
-                              shadowRadius: 8,
-                              elevation: 4,
-                            }
-                          : {}
-                      }
-                    >
-                      <Text
-                        style={{
-                          color: role === 'client' ? colors.textOnPrimary : colors.textSecondary,
-                          fontFamily: headingFont,
+                    {switcherWidth > 0 && (
+                      <MotiView
+                        animate={{
+                          translateX: role === 'coach' ? 0 : (switcherWidth - 12) / 2,
                         }}
-                        className="font-black text-sm uppercase tracking-widest"
-                      >
-                        Client
-                      </Text>
-                    </Pressable>
+                        transition={{
+                          type: 'spring',
+                          damping: 19,
+                          stiffness: 200,
+                          mass: 0.7,
+                        } as any}
+                        style={{
+                          position: 'absolute',
+                          top: 6,
+                          bottom: 6,
+                          left: 6,
+                          width: (switcherWidth - 12) / 2,
+                          backgroundColor: colors.primary,
+                          borderRadius: 22,
+                          shadowColor: colors.primary,
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.35,
+                          shadowRadius: 8,
+                          elevation: 4,
+                        }}
+                      />
+                    )}
+
                     <Pressable
                       onPress={() => {
                         setRole('coach');
                         setError('');
                       }}
-                      className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3"
-                      style={
-                        role === 'coach'
-                          ? {
-                              backgroundColor: colors.primary,
-                              shadowColor: colors.primary,
-                              shadowOffset: { width: 0, height: 4 },
-                              shadowOpacity: 0.25,
-                              shadowRadius: 8,
-                              elevation: 4,
-                            }
-                          : {}
-                      }
+                      className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 z-10"
                     >
                       <Text
                         style={{
@@ -361,6 +370,26 @@ export default function SignUpScreen() {
                         className="font-black text-sm uppercase tracking-widest"
                       >
                         Coach
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => {
+                        setRole('client');
+                        setInviteValid(false);
+                        setInviteCode('');
+                        setError('');
+                      }}
+                      className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 z-10"
+                    >
+                      <Text
+                        style={{
+                          color: role === 'client' ? colors.textOnPrimary : colors.textSecondary,
+                          fontFamily: headingFont,
+                        }}
+                        className="font-black text-sm uppercase tracking-widest"
+                      >
+                        Client
                       </Text>
                     </Pressable>
                   </View>
@@ -412,6 +441,52 @@ export default function SignUpScreen() {
                       exit={{ opacity: 0, height: 0, translateY: -20 }}
                       transition={{ type: 'timing', duration: 300 } as any}
                     >
+                      {/* Google Sign Up on TOP (Coaches ONLY) */}
+                      {role === 'coach' && (
+                        <View className="mb-6">
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            style={{
+                              backgroundColor: surfaceBg,
+                              borderColor: inputBorder,
+                              borderWidth: 1.5,
+                              borderRadius: 32,
+                            }}
+                            className="h-16 items-center justify-center flex-row gap-3 mb-6"
+                            onPress={handleGoogleCoachSignUp}
+                            disabled={loading || googleLoading}
+                          >
+                            {googleLoading ? (
+                              <ActivityIndicator color={colors.text} />
+                            ) : (
+                              <>
+                                <GoogleIcon size={22} />
+                                <Text
+                                  style={{
+                                    color: colors.text,
+                                    fontFamily: headingFont,
+                                  }}
+                                  className="font-black text-base tracking-wide"
+                                >
+                                  Sign up with Google
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+
+                          <View className="flex-row items-center mb-2">
+                            <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
+                            <Text
+                              style={{ color: colors.textSecondary, fontFamily: bodyFont }}
+                              className="px-4 text-xs font-bold uppercase tracking-wider"
+                            >
+                              or with email
+                            </Text>
+                            <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
+                          </View>
+                        </View>
+                      )}
+
                       <InputField
                         icon={<User size={20} color={colors.textSecondary} />}
                         placeholder="Full Name"
@@ -484,7 +559,7 @@ export default function SignUpScreen() {
                   }
                   className="mt-6 h-20 items-center justify-center flex-row gap-3"
                   onPress={handleSignUp}
-                  disabled={!canSubmit}
+                  disabled={!canSubmit || googleLoading}
                 >
                   {loading ? (
                     <ActivityIndicator color={colors.textOnPrimary} />

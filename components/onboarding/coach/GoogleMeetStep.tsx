@@ -55,6 +55,11 @@ export default function GoogleMeetStep({ onStatusChange }: GoogleMeetStepProps) 
         await refreshProfile();
         setConnected(true);
         onStatusChange?.(true);
+      } else if (res.errorType === 'scope_missing') {
+        Alert.alert(
+          'Permissions Needed',
+          'Meeting permissions were not allowed. Please tap Connect again and make sure to check "Select all" on Google\'s screen.'
+        );
       } else if (res.error && res.errorType !== 'cancelled') {
         Alert.alert('Google Meet', res.error);
       }

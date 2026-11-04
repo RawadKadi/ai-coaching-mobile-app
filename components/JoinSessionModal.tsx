@@ -37,7 +37,7 @@ export default function JoinSessionModal({
 
   const handleJoin = () => {
     onClose();
-    joinSession(meetingUrl);
+    joinSession(meetingUrl, session.id);
   };
 
   return (

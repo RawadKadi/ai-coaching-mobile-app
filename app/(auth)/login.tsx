@@ -20,6 +20,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MotiView, AnimatePresence } from 'moti';
 import { getFontFamily } from '@/hooks/useAppFonts';
 import { isDarkColor } from '@/lib/theme-utils';
+import GoogleIcon from '@/components/GoogleIcon';
+import { signInWithGoogle } from '@/lib/google-auth';
 
 const PENDING_INVITE_KEY = '@pending_invite_token';
 
@@ -35,6 +37,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
   const isDark = isDarkColor(colors.background);
@@ -66,6 +69,30 @@ export default function LoginScreen() {
     } catch (err: any) {
       setError(err.message || 'Sign in failed. Please check your details.');
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setError('');
+
+    try {
+      const res = await signInWithGoogle();
+      if (res.success) {
+        await refreshBrand();
+        const pendingInvite = await AsyncStorage.getItem(PENDING_INVITE_KEY);
+        if (pendingInvite) {
+          router.replace({ pathname: '/join-team', params: { invite: pendingInvite } });
+        } else {
+          router.replace('/');
+        }
+      } else if (res.error && res.error !== 'Authentication was cancelled') {
+        setError(res.error);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google sign in failed');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -193,6 +220,49 @@ export default function LoginScreen() {
                 ) : null}
               </AnimatePresence>
 
+              {/* Google Sign In Button */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)',
+                  borderColor: inputBorder,
+                  borderWidth: 1.5,
+                  borderRadius: 32,
+                }}
+                className="h-16 items-center justify-center flex-row gap-3 mb-6"
+                onPress={handleGoogleSignIn}
+                disabled={loading || googleLoading}
+              >
+                {googleLoading ? (
+                  <ActivityIndicator color={colors.text} />
+                ) : (
+                  <>
+                    <GoogleIcon size={22} />
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontFamily: headingFont,
+                      }}
+                      className="font-black text-base tracking-wide"
+                    >
+                      Continue with Google
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Divider */}
+              <View className="flex-row items-center mb-6">
+                <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
+                <Text
+                  style={{ color: colors.textSecondary, fontFamily: bodyFont }}
+                  className="px-4 text-xs font-bold uppercase tracking-wider"
+                >
+                  or with email
+                </Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
+              </View>
+
               {/* Form Fields */}
               <View>
                 <View className="mb-5">
@@ -285,7 +355,7 @@ export default function LoginScreen() {
                   }}
                   className="h-20 items-center justify-center flex-row gap-3"
                   onPress={handleLogin}
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                 >
                   {loading ? (
                     <ActivityIndicator color={colors.textOnPrimary} />

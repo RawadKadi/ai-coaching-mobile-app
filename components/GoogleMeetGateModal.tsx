@@ -7,12 +7,23 @@ import {
   ActivityIndicator,
   StyleSheet,
   Pressable,
+  Image,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Video, X, CheckCircle2, AlertTriangle, AlertCircle, Mail } from 'lucide-react-native';
-import { useBrandColors } from '@/contexts/BrandContext';
+import {
+  Video,
+  X,
+  CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
+  Mail,
+  Check,
+} from 'lucide-react-native';
+import { useBrandColors, useTheme } from '@/contexts/BrandContext';
 import { googleMeetService } from '@/lib/google-meet-service';
 import GoogleIcon from '@/components/GoogleIcon';
+
+const SELECT_ALL_IMG = require('@/assets/images/google/select-all.png');
 
 interface GoogleMeetGateModalProps {
   visible: boolean;
@@ -22,7 +33,13 @@ interface GoogleMeetGateModalProps {
   onConnected: () => void;
 }
 
-type ViewMode = 'connect' | 'loading' | 'success' | 'email_mismatch' | 'error';
+type ViewMode =
+  | 'connect'
+  | 'loading'
+  | 'success'
+  | 'email_mismatch'
+  | 'scope_missing'
+  | 'error';
 
 export default function GoogleMeetGateModal({
   visible,
@@ -32,6 +49,7 @@ export default function GoogleMeetGateModal({
   onConnected,
 }: GoogleMeetGateModalProps) {
   const colors = useBrandColors();
+  const { isDarkMode } = useTheme();
   const cardBg = colors.surface || '#121212';
   const cardBorder = colors.border || 'rgba(255, 255, 255, 0.08)';
   const textColor = colors.text || '#FFFFFF';
@@ -65,10 +83,19 @@ export default function GoogleMeetGateModal({
     try {
       const res = await googleMeetService.connect(coachId, expectedEmail);
       if (res.success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        ).catch(() => {});
         setViewMode('success');
+      } else if (res.errorType === 'scope_missing') {
+        Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Warning,
+        ).catch(() => {});
+        setViewMode('scope_missing');
       } else if (res.errorType === 'email_mismatch') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
+          () => {},
+        );
         setMismatchData({
           expectedEmail: res.expectedEmail || expectedEmail || '',
           connectedEmail: res.connectedEmail || '',
@@ -77,12 +104,16 @@ export default function GoogleMeetGateModal({
       } else if (res.errorType === 'cancelled') {
         setViewMode('connect');
       } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
+          () => {},
+        );
         setErrorMessage(res.error || 'Could not connect Google Meet');
         setViewMode('error');
       }
     } catch (e: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
+        () => {},
+      );
       setErrorMessage(e.message || 'Could not connect Google Meet');
       setViewMode('error');
     }
@@ -121,28 +152,36 @@ export default function GoogleMeetGateModal({
           {/* VIEW: CONNECT (DEFAULT) */}
           {viewMode === 'connect' && (
             <>
-              <View style={[styles.iconCircle, { backgroundColor: colors.primary + '20' }]}>
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: colors.primary + '20' },
+                ]}
+              >
                 <Video size={36} color={colors.primary} />
               </View>
 
-              <Text style={[styles.title, { color: textColor }]}>Connect Google Meet</Text>
-              <Text style={[styles.subtitle, { color: textSecondary }]}>
-                Connect your account so clients get automatic meeting links for every session.
+              <Text style={[styles.title, { color: textColor }]}>
+                Connect Google Meet
               </Text>
 
-              {expectedEmail && (
-                <View
-                  style={[
-                    styles.hintBadge,
-                    { backgroundColor: colors.primary + '10', borderColor: colors.primary + '25' },
-                  ]}
-                >
-                  <Mail size={14} color={colors.primary} />
-                  <Text style={[styles.hintText, { color: colors.primary }]}>
-                    Sign-in: {expectedEmail}
-                  </Text>
-                </View>
-              )}
+              {/* Visual Guide Label */}
+              <Text style={[styles.guideLabel, { color: textSecondary }]}>
+                On Google, make sure to check{' '}
+                <Text style={{ color: textColor, fontWeight: '700' }}>
+                  "Select all"
+                </Text>
+                :
+              </Text>
+
+              {/* Visual Preview Image */}
+              <View style={styles.imageWrapper}>
+                <Image
+                  source={SELECT_ALL_IMG}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
+              </View>
 
               <TouchableOpacity
                 style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
@@ -151,14 +190,18 @@ export default function GoogleMeetGateModal({
               >
                 <View style={styles.btnRow}>
                   <GoogleIcon size={24} />
-                  <Text style={[styles.primaryBtnText, { color: textOnPrimary }]}>
+                  <Text
+                    style={[styles.primaryBtnText, { color: textOnPrimary }]}
+                  >
                     Connect Google Meet
                   </Text>
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                <Text style={[styles.cancelBtnText, { color: textSecondary }]}>Maybe Later</Text>
+                <Text style={[styles.cancelBtnText, { color: textSecondary }]}>
+                  Maybe Later
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -166,10 +209,17 @@ export default function GoogleMeetGateModal({
           {/* VIEW: LOADING */}
           {viewMode === 'loading' && (
             <View style={styles.stateContainer}>
-              <View style={[styles.iconCircle, { backgroundColor: colors.primary + '15' }]}>
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: colors.primary + '15' },
+                ]}
+              >
                 <ActivityIndicator size="large" color={colors.primary} />
               </View>
-              <Text style={[styles.title, { color: textColor }]}>Connecting Google...</Text>
+              <Text style={[styles.title, { color: textColor }]}>
+                Connecting Google...
+              </Text>
               <Text style={[styles.subtitle, { color: textSecondary }]}>
                 Please finish signing in via your browser.
               </Text>
@@ -179,13 +229,18 @@ export default function GoogleMeetGateModal({
           {/* VIEW: SUCCESS */}
           {viewMode === 'success' && (
             <>
-              <View style={[styles.iconCircle, { backgroundColor: '#10B98120' }]}>
+              <View
+                style={[styles.iconCircle, { backgroundColor: '#10B98120' }]}
+              >
                 <CheckCircle2 size={40} color="#10B981" />
               </View>
 
-              <Text style={[styles.title, { color: textColor }]}>Successfully Connected</Text>
+              <Text style={[styles.title, { color: textColor }]}>
+                Successfully Connected
+              </Text>
               <Text style={[styles.subtitle, { color: textSecondary }]}>
-                Your Google Meet account is now connected! You can now schedule sessions with automatic meeting links.
+                Your Google Meet account is now connected! You can now schedule
+                sessions with automatic meeting links.
               </Text>
 
               <TouchableOpacity
@@ -193,7 +248,65 @@ export default function GoogleMeetGateModal({
                 onPress={handleSuccessDone}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.primaryBtnText, { color: '#FFFFFF' }]}>Continue</Text>
+                <Text style={[styles.primaryBtnText, { color: '#FFFFFF' }]}>
+                  Continue
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* VIEW: SCOPE MISSING (PERMISSION CHECKBOXES UNCHECKED) */}
+          {viewMode === 'scope_missing' && (
+            <>
+              <View
+                style={[styles.iconCircle, { backgroundColor: '#F59E0B20' }]}
+              >
+                <AlertTriangle size={36} color="#F59E0B" />
+              </View>
+
+              <Text style={[styles.title, { color: textColor }]}>
+                Permissions Needed
+              </Text>
+              <Text style={[styles.subtitle, { color: textSecondary }]}>
+                Google connected, but meeting permissions were turned off. The
+                app needs these to create your session links.
+              </Text>
+
+              {/* Visual Guide Label */}
+              <Text style={[styles.guideLabel, { color: '#F59E0B' }]}>
+                Please check{' '}
+                <Text style={{ fontWeight: '800' }}>"Select all"</Text> on
+                Google's screen:
+              </Text>
+
+              {/* Visual Preview Image */}
+              <View style={styles.imageWrapper}>
+                <Image
+                  source={SELECT_ALL_IMG}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+                onPress={handleConnect}
+                activeOpacity={0.8}
+              >
+                <View style={styles.btnRow}>
+                  <GoogleIcon size={24} />
+                  <Text
+                    style={[styles.primaryBtnText, { color: textOnPrimary }]}
+                  >
+                    Try Again
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                <Text style={[styles.cancelBtnText, { color: textSecondary }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -201,16 +314,23 @@ export default function GoogleMeetGateModal({
           {/* VIEW: EMAIL MISMATCH */}
           {viewMode === 'email_mismatch' && (
             <>
-              <View style={[styles.iconCircle, { backgroundColor: '#EF444420' }]}>
+              <View
+                style={[styles.iconCircle, { backgroundColor: '#EF444420' }]}
+              >
                 <AlertTriangle size={36} color="#EF4444" />
               </View>
 
-              <Text style={[styles.title, { color: textColor }]}>Email Mismatch</Text>
+              <Text style={[styles.title, { color: textColor }]}>
+                Email Mismatch
+              </Text>
 
               <View
                 style={[
                   styles.mismatchCard,
-                  { backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.25)' },
+                  {
+                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                    borderColor: 'rgba(239, 68, 68, 0.25)',
+                  },
                 ]}
               >
                 <Text style={[styles.mismatchBody, { color: textColor }]}>
@@ -225,7 +345,8 @@ export default function GoogleMeetGateModal({
                   ).
                 </Text>
                 <Text style={styles.mismatchNotice}>
-                  Make sure to connect your google email that matches this sign in email or else it won't work.
+                  Make sure to connect your google email that matches this sign
+                  in email or else it won't work.
                 </Text>
               </View>
 
@@ -236,12 +357,18 @@ export default function GoogleMeetGateModal({
               >
                 <View style={styles.btnRow}>
                   <GoogleIcon size={24} />
-                  <Text style={[styles.primaryBtnText, { color: textOnPrimary }]}>Try Again</Text>
+                  <Text
+                    style={[styles.primaryBtnText, { color: textOnPrimary }]}
+                  >
+                    Try Again
+                  </Text>
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                <Text style={[styles.cancelBtnText, { color: textSecondary }]}>Cancel</Text>
+                <Text style={[styles.cancelBtnText, { color: textSecondary }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -249,13 +376,18 @@ export default function GoogleMeetGateModal({
           {/* VIEW: GENERAL ERROR */}
           {viewMode === 'error' && (
             <>
-              <View style={[styles.iconCircle, { backgroundColor: '#EF444420' }]}>
+              <View
+                style={[styles.iconCircle, { backgroundColor: '#EF444420' }]}
+              >
                 <AlertCircle size={36} color="#EF4444" />
               </View>
 
-              <Text style={[styles.title, { color: textColor }]}>Connection Failed</Text>
+              <Text style={[styles.title, { color: textColor }]}>
+                Connection Failed
+              </Text>
               <Text style={[styles.subtitle, { color: textSecondary }]}>
-                {errorMessage || 'Something went wrong while connecting your account.'}
+                {errorMessage ||
+                  'Something went wrong while connecting your account.'}
               </Text>
 
               <TouchableOpacity
@@ -263,11 +395,15 @@ export default function GoogleMeetGateModal({
                 onPress={() => setViewMode('connect')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.primaryBtnText, { color: textOnPrimary }]}>Try Again</Text>
+                <Text style={[styles.primaryBtnText, { color: textOnPrimary }]}>
+                  Try Again
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                <Text style={[styles.cancelBtnText, { color: textSecondary }]}>Close</Text>
+                <Text style={[styles.cancelBtnText, { color: textSecondary }]}>
+                  Close
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -302,41 +438,58 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 4,
+    marginBottom: 14,
   },
   title: {
     fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#94A3B8',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 18,
+    marginBottom: 14,
   },
   hintBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: 999,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   hintText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
+  },
+  guideLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  imageWrapper: {
+    width: '92%',
+    maxWidth: 290,
+    aspectRatio: 3896 / 2011,
+    alignSelf: 'center',
+    marginBottom: 0,
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
   },
   stateContainer: {
     alignItems: 'center',
@@ -366,7 +519,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   primaryBtnText: {
     color: '#FFFFFF',
@@ -380,7 +533,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cancelBtn: {
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   cancelBtnText: {
     color: '#64748B',

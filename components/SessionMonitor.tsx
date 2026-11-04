@@ -1,5 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, SafeAreaView, Platform, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  SafeAreaView,
+  Platform,
+  TouchableOpacity,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -18,10 +26,12 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
   const router = useRouter();
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState<'join' | 'cancelled' | 'postponed'>('join');
+  const [toastType, setToastType] = useState<
+    'join' | 'cancelled' | 'postponed'
+  >('join');
   const [currentSession, setCurrentSession] = useState<any>(null);
   const [joinModalVisible, setJoinModalVisible] = useState(false);
-  
+
   // Track previous state to avoid duplicate toasts
   const previousSessionIds = useRef<Set<string>>(new Set());
   const toastTypeRef = useRef<'join' | 'cancelled' | 'postponed'>('join');
@@ -44,12 +54,18 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     const checkSessions = async () => {
       try {
         const now = new Date();
-        const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000).toISOString();
-        const oneMinuteFromNow = new Date(now.getTime() + 1 * 60 * 1000).toISOString();
+        const twoMinutesAgo = new Date(
+          now.getTime() - 2 * 60 * 1000,
+        ).toISOString();
+        const oneMinuteFromNow = new Date(
+          now.getTime() + 1 * 60 * 1000,
+        ).toISOString();
 
         let query = supabase
           .from('sessions')
-          .select('*, clients(profiles(full_name)), coaches(profiles(full_name))')
+          .select(
+            '*, clients(profiles(full_name)), coaches(profiles(full_name))',
+          )
           .eq('status', 'scheduled')
           .lte('scheduled_at', oneMinuteFromNow)
           .gte('scheduled_at', twoMinutesAgo);
@@ -62,7 +78,7 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
             .select('id')
             .eq('user_id', user.id)
             .single();
-          
+
           if (clientData) {
             query = query.eq('client_id', clientData.id);
           } else {
@@ -81,18 +97,24 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
 
             // Skip if we are already showing a cancelled/postponed toast for this session
             // USE REFS TO CHECK CURRENT STATE
-            if (currentSessionRef.current?.id === session.id && (toastTypeRef.current === 'cancelled' || toastTypeRef.current === 'postponed')) {
-              console.log('[SessionMonitor] Skipping join toast because session is already cancelled/postponed (Ref Check)');
+            if (
+              currentSessionRef.current?.id === session.id &&
+              (toastTypeRef.current === 'cancelled' ||
+                toastTypeRef.current === 'postponed')
+            ) {
+              console.log(
+                '[SessionMonitor] Skipping join toast because session is already cancelled/postponed (Ref Check)',
+              );
               continue;
             }
 
             if (coach && !session.invite_sent) {
               await sendInvite(session);
             }
-            
+
             const sessionTime = new Date(session.scheduled_at).getTime();
             const timeDiff = Math.abs(now.getTime() - sessionTime);
-            
+
             // CRITICAL: Re-fetch the specific session to ensure we have the absolute latest status
             const { data: freshSession, error: freshError } = await supabase
               .from('sessions')
@@ -101,24 +123,32 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
               .single();
 
             if (freshError || !freshSession) {
-               console.log('[SessionMonitor] Failed to verify session status, skipping toast to be safe.');
-               continue;
+              console.log(
+                '[SessionMonitor] Failed to verify session status, skipping toast to be safe.',
+              );
+              continue;
             }
 
             if (freshSession.status === 'cancelled') {
-               console.log('[SessionMonitor] Detected cancelled session in poller, switching to cancel toast');
-               handleSessionUpdate({ ...session, ...freshSession });
-               continue;
+              console.log(
+                '[SessionMonitor] Detected cancelled session in poller, switching to cancel toast',
+              );
+              handleSessionUpdate({ ...session, ...freshSession });
+              continue;
             }
 
             if (freshSession.status !== 'scheduled') continue;
 
             if (timeDiff < 45000) {
-               const otherName = coach 
-                 ? (session.clients?.profiles?.full_name || 'Client')
-                 : (session.coaches?.profiles?.full_name || 'Coach');
-               
-               showToast(`Session with ${otherName} starts now!`, session, 'join');
+              const otherName = coach
+                ? session.clients?.profiles?.full_name || 'Client'
+                : session.coaches?.profiles?.full_name || 'Coach';
+
+              showToast(
+                `Session with ${otherName} starts now!`,
+                session,
+                'join',
+              );
             }
           }
         }
@@ -146,29 +176,39 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
           table: 'sessions',
         },
         async (payload) => {
-          console.log('[SessionMonitor] Realtime UPDATE received:', payload.new);
+          console.log(
+            '[SessionMonitor] Realtime UPDATE received:',
+            payload.new,
+          );
           const updatedSession = payload.new as any;
-          
+
           let isRelevant = false;
           if (coach && updatedSession.coach_id === coach.id) isRelevant = true;
           if (!coach) {
-             // Use Ref to check current session ID
-             if (currentSessionRef.current && currentSessionRef.current.id === updatedSession.id) isRelevant = true;
+            // Use Ref to check current session ID
+            if (
+              currentSessionRef.current &&
+              currentSessionRef.current.id === updatedSession.id
+            )
+              isRelevant = true;
           }
 
           if (!isRelevant && !currentSessionRef.current) return;
 
           // If we have an active toast for this session, update it
-          if (currentSessionRef.current && currentSessionRef.current.id === updatedSession.id) {
-             handleSessionUpdate(updatedSession);
+          if (
+            currentSessionRef.current &&
+            currentSessionRef.current.id === updatedSession.id
+          ) {
+            handleSessionUpdate(updatedSession);
           } else if (isRelevant) {
-             const now = new Date();
-             const sessionTime = new Date(updatedSession.scheduled_at).getTime();
-             if (Math.abs(now.getTime() - sessionTime) < 5 * 60 * 1000) {
-                handleSessionUpdate(updatedSession);
-             }
+            const now = new Date();
+            const sessionTime = new Date(updatedSession.scheduled_at).getTime();
+            if (Math.abs(now.getTime() - sessionTime) < 5 * 60 * 1000) {
+              handleSessionUpdate(updatedSession);
+            }
           }
-        }
+        },
       )
       .subscribe();
 
@@ -187,7 +227,9 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
       try {
         const { data: session, error } = await supabase
           .from('sessions')
-          .select('*, clients(profiles(full_name)), coaches(profiles(full_name))')
+          .select(
+            '*, clients(profiles(full_name)), coaches(profiles(full_name))',
+          )
           .eq('id', activeSession.id)
           .single();
 
@@ -195,11 +237,14 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
 
         // If status changed to cancelled, update UI immediately
         if (session.status === 'cancelled') {
-           // Only update if we aren't already showing it as cancelled/postponed
-           if (toastTypeRef.current === 'join') {
-              console.log('[SessionMonitor] Active session cancelled/postponed (Fast Poll):', session);
-              handleSessionUpdate(session);
-           }
+          // Only update if we aren't already showing it as cancelled/postponed
+          if (toastTypeRef.current === 'join') {
+            console.log(
+              '[SessionMonitor] Active session cancelled/postponed (Fast Poll):',
+              session,
+            );
+            handleSessionUpdate(session);
+          }
         }
       } catch (e: any) {
         if (e?.message?.includes('Network request failed')) {
@@ -221,25 +266,41 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
       .select('*, clients(profiles(full_name)), coaches(profiles(full_name))')
       .eq('id', session.id)
       .single();
-      
+
     if (!fullSession) return;
 
     if (session.status === 'cancelled') {
-      console.log('[SessionMonitor] Handling cancellation. Reason:', session.cancellation_reason);
+      console.log(
+        '[SessionMonitor] Handling cancellation. Reason:',
+        session.cancellation_reason,
+      );
       if (session.cancellation_reason) {
         // Postponed
         if (coach) {
           // Coach View: Client postponed
-          const clientName = fullSession.clients?.profiles?.full_name || 'Client';
-          showToast(`${clientName} ${session.cancellation_reason}`, fullSession, 'postponed');
+          const clientName =
+            fullSession.clients?.profiles?.full_name || 'Client';
+          showToast(
+            `${clientName} ${session.cancellation_reason}`,
+            fullSession,
+            'postponed',
+          );
         } else {
           // Client View: You postponed
-          showToast(`You postponed this session. Your coach will be notified.`, fullSession, 'postponed');
+          showToast(
+            `You postponed this session. Your coach will be notified.`,
+            fullSession,
+            'postponed',
+          );
         }
       } else {
         // Cancelled - Always by Coach
         const coachName = fullSession.coaches?.profiles?.full_name || 'Coach';
-        showToast(`Session cancelled by ${coachName}`, fullSession, 'cancelled');
+        showToast(
+          `Session cancelled by ${coachName}`,
+          fullSession,
+          'cancelled',
+        );
       }
     }
   };
@@ -257,7 +318,7 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
         link: externalUrl || appCallLink,
         sessionId: session.id,
         meetingProvider,
-        externalMeetingUrl: externalUrl
+        externalMeetingUrl: externalUrl,
       });
 
       // Get recipient ID (Client's User ID)
@@ -266,7 +327,7 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
         .select('user_id')
         .eq('id', session.client_id)
         .single();
-      
+
       if (!clientData) return;
 
       await supabase.from('messages').insert({
@@ -274,7 +335,7 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
         recipient_id: clientData.user_id,
         content: messageContent,
         message_type: 'call_invite',
-        read: false
+        read: false,
       });
 
       // Store the URL in the session for later reference
@@ -287,11 +348,22 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     }
   };
 
-  const showToast = (message: string, session: any, type: 'join' | 'cancelled' | 'postponed') => {
+  const showToast = (
+    message: string,
+    session: any,
+    type: 'join' | 'cancelled' | 'postponed',
+  ) => {
     // SAFEGUARD: Don't overwrite a cancelled/postponed toast with a 'join' toast for the same session
     // Use REFS for check
-    if (type === 'join' && currentSessionRef.current?.id === session.id && (toastTypeRef.current === 'cancelled' || toastTypeRef.current === 'postponed')) {
-      console.log('[SessionMonitor] Blocking join toast because session is already cancelled/postponed');
+    if (
+      type === 'join' &&
+      currentSessionRef.current?.id === session.id &&
+      (toastTypeRef.current === 'cancelled' ||
+        toastTypeRef.current === 'postponed')
+    ) {
+      console.log(
+        '[SessionMonitor] Blocking join toast because session is already cancelled/postponed',
+      );
       return;
     }
 
@@ -300,13 +372,13 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     setCurrentSession(session);
     setToastType(type);
     setToastVisible(true);
-    
+
     // Only animate if not already visible
     if (!isToastVisibleRef.current) {
-        Animated.spring(slideAnim, {
+      Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
-        }).start();
+      }).start();
     }
   };
 
@@ -325,30 +397,50 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
     if (!currentSession) return;
 
     if (toastType === 'join') {
-      const url = currentSession.external_meeting_url || currentSession.meet_link || currentSession.meeting_url;
-      joinSession(url, currentSession.id);
+      const url =
+        currentSession.external_meeting_url ||
+        currentSession.meet_link ||
+        currentSession.meeting_url;
+      joinSession(url, currentSession.id, coach?.id);
     } else if (toastType === 'postponed' && coach) {
       // Check Up Logic
       const reason = currentSession.cancellation_reason?.toLowerCase() || '';
-      let suggestedMessage = "Hey, is everything alright? Any reason why you postponed?";
-      
-      if (reason.includes('sick') || reason.includes('ill') || reason.includes('health') || reason.includes('feeling')) {
-        suggestedMessage = "Oh hope you're doing well... Get well soon! Let me know when you're feeling better.";
-      } else if (reason.includes('work') || reason.includes('busy') || reason.includes('meeting')) {
-        suggestedMessage = "No worries, work comes first! Let's reschedule when you're free.";
-      } else if (reason.includes('family') || reason.includes('emergency') || reason.includes('personal')) {
-        suggestedMessage = "Oh hope you're doing good, see you tomorrow! Take your time.";
+      let suggestedMessage =
+        'Hey, is everything alright? Any reason why you postponed?';
+
+      if (
+        reason.includes('sick') ||
+        reason.includes('ill') ||
+        reason.includes('health') ||
+        reason.includes('feeling')
+      ) {
+        suggestedMessage =
+          "Oh hope you're doing well... Get well soon! Let me know when you're feeling better.";
+      } else if (
+        reason.includes('work') ||
+        reason.includes('busy') ||
+        reason.includes('meeting')
+      ) {
+        suggestedMessage =
+          "No worries, work comes first! Let's reschedule when you're free.";
+      } else if (
+        reason.includes('family') ||
+        reason.includes('emergency') ||
+        reason.includes('personal')
+      ) {
+        suggestedMessage =
+          "Oh hope you're doing good, see you tomorrow! Take your time.";
       } else if (reason.includes('other')) {
-         suggestedMessage = "Is everything okay? Any reason why you postponed?";
+        suggestedMessage = 'Is everything okay? Any reason why you postponed?';
       }
 
       // Navigate to chat with suggested message
       router.push({
         pathname: `/(coach)/chat/${currentSession.client_id}` as any,
-        params: { suggestedMessage }
+        params: { suggestedMessage },
       });
     }
-    
+
     hideToast();
   };
 
@@ -363,25 +455,46 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
 
   const getToastStyle = () => {
     switch (toastType) {
-      case 'cancelled': return { backgroundColor: toastBg, borderColor: 'rgba(239, 68, 68, 0.3)', borderWidth: 1 };
-      case 'postponed': return { backgroundColor: toastBg, borderColor: 'rgba(234, 179, 8, 0.3)', borderWidth: 1 };
-      default: return { backgroundColor: toastBg, borderColor: `${joinColor}55`, borderWidth: 1 };
+      case 'cancelled':
+        return {
+          backgroundColor: toastBg,
+          borderColor: 'rgba(239, 68, 68, 0.3)',
+          borderWidth: 1,
+        };
+      case 'postponed':
+        return {
+          backgroundColor: toastBg,
+          borderColor: 'rgba(234, 179, 8, 0.3)',
+          borderWidth: 1,
+        };
+      default:
+        return {
+          backgroundColor: toastBg,
+          borderColor: `${joinColor}55`,
+          borderWidth: 1,
+        };
     }
   };
 
   const getIconColor = () => {
     switch (toastType) {
-      case 'cancelled': return '#EF4444';
-      case 'postponed': return '#EAB308';
-      default: return joinColor;
+      case 'cancelled':
+        return '#EF4444';
+      case 'postponed':
+        return '#EAB308';
+      default:
+        return joinColor;
     }
   };
 
   const getIconBgColor = () => {
     switch (toastType) {
-      case 'cancelled': return 'rgba(239, 68, 68, 0.1)';
-      case 'postponed': return 'rgba(234, 179, 8, 0.1)';
-      default: return `${joinColor}22`;
+      case 'cancelled':
+        return 'rgba(239, 68, 68, 0.1)';
+      case 'postponed':
+        return 'rgba(234, 179, 8, 0.1)';
+      default:
+        return `${joinColor}22`;
     }
   };
 
@@ -392,32 +505,72 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
   };
 
   return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999 }} pointerEvents="box-none">
+    <View
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999 }}
+      pointerEvents="box-none"
+    >
       <SafeAreaView style={styles.container} pointerEvents="box-none">
-        <Animated.View style={[styles.toast, getToastStyle(), { transform: [{ translateY: slideAnim }] }]}>
-          <TouchableOpacity style={styles.content} onPress={handleAction} disabled={!getButtonText()}>
-            <View style={[styles.iconContainer, { backgroundColor: getIconBgColor() }]}>
-              {toastType === 'join' && <Video size={20} color={getIconColor()} />}
-              {toastType === 'cancelled' && <X size={20} color={getIconColor()} />}
-              {toastType === 'postponed' && <Clock size={20} color={getIconColor()} />}
+        <Animated.View
+          style={[
+            styles.toast,
+            getToastStyle(),
+            { transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.content}
+            onPress={handleAction}
+            disabled={!getButtonText()}
+          >
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: getIconBgColor() },
+              ]}
+            >
+              {toastType === 'join' && (
+                <Video size={20} color={getIconColor()} />
+              )}
+              {toastType === 'cancelled' && (
+                <X size={20} color={getIconColor()} />
+              )}
+              {toastType === 'postponed' && (
+                <Clock size={20} color={getIconColor()} />
+              )}
             </View>
             <View style={styles.textContainer}>
               <Text style={[styles.title, { color: toastText }]}>
-                {toastType === 'join' ? 'Session Starting' : (toastType === 'postponed' ? 'Session Postponed' : 'Session Cancelled')}
+                {toastType === 'join'
+                  ? 'Session Starting'
+                  : toastType === 'postponed'
+                    ? 'Session Postponed'
+                    : 'Session Cancelled'}
               </Text>
               <Text style={[styles.message, { color: toastTextMuted }]}>
                 {toastMessage}
               </Text>
             </View>
             {getButtonText() && (
-              <View style={[styles.button, { backgroundColor: getIconColor() }]}>
-                <Text style={[styles.buttonText, toastType === 'join' && { color: getContrastColor(joinColor) }]}>
+              <View
+                style={[styles.button, { backgroundColor: getIconColor() }]}
+              >
+                <Text
+                  style={[
+                    styles.buttonText,
+                    toastType === 'join' && {
+                      color: getContrastColor(joinColor),
+                    },
+                  ]}
+                >
                   {getButtonText()}
                 </Text>
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.closeButton, { borderLeftColor: toastBorder }]} onPress={hideToast}>
+          <TouchableOpacity
+            style={[styles.closeButton, { borderLeftColor: toastBorder }]}
+            onPress={hideToast}
+          >
             <X size={18} color={toastTextMuted} />
           </TouchableOpacity>
         </Animated.View>
@@ -433,9 +586,7 @@ export default function SessionMonitor({ children }: SessionMonitorProps) {
           session={currentSession}
           isCoach={!!coach}
           participantName={
-            coach
-              ? (coach as any)?.profiles?.full_name || 'Coach'
-              : 'Client'
+            coach ? (coach as any)?.profiles?.full_name || 'Coach' : 'Client'
           }
         />
       )}

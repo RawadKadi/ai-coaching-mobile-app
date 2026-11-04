@@ -102,7 +102,7 @@ export default function PersonalInformationScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         
         {/* Header */}
@@ -124,7 +124,7 @@ export default function PersonalInformationScreen() {
         </View>
 
         <ScrollView 
-          className="flex-1 px-6 pt-6"
+          className="flex-1 px-3 pt-6"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 100 }}
         >

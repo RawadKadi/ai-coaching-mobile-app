@@ -29,7 +29,9 @@ import Reanimated, {
   withTiming,
   Easing,
   runOnJS,
+  useReducedMotion,
 } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import { MotiView } from 'moti';
 import BlurText from '@/components/ui/BlurText';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -225,6 +227,73 @@ export default function ActivityScreen() {
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
   const cardBorder =
     colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+
+  const reduceMotion = useReducedMotion();
+
+  const brandBgHex = isDark
+    ? (brand?.dark_background_color || colors.background || '#0F172A')
+    : (brand?.background_color || colors.background || '#FFFFFF');
+  const bgRgb = hexToRGB(brandBgHex);
+  const topBarBg = `rgba(${bgRgb.r}, ${bgRgb.g}, ${bgRgb.b}, ${isDark ? 0.72 : 0.82})`;
+
+  const borderHex = colors.border || (isDark ? '#334155' : '#E2E8F0');
+  const borderRgb = hexToRGB(borderHex);
+  const topBarBorder = `rgba(${borderRgb.r}, ${borderRgb.g}, ${borderRgb.b}, ${isDark ? 0.35 : 0.55})`;
+
+  const topBarHeight = insets.top + 68;
+  const headerAnim = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
+  const isHeaderHidden = useRef(false);
+
+  const handlePlanScroll = (event: any) => {
+    handleScroll(event);
+
+    if (reduceMotion) return;
+
+    const currentScrollY = event.nativeEvent.contentOffset.y;
+
+    if (currentScrollY <= 15) {
+      if (isHeaderHidden.current) {
+        isHeaderHidden.current = false;
+        Animated.spring(headerAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 8,
+          tension: 50,
+        }).start();
+      }
+      lastScrollY.current = currentScrollY;
+      return;
+    }
+
+    const diff = currentScrollY - lastScrollY.current;
+
+    if (Math.abs(diff) > 8) {
+      if (diff > 0 && currentScrollY > 60) {
+        // Scrolling DOWN -> Hide bar
+        if (!isHeaderHidden.current) {
+          isHeaderHidden.current = true;
+          Animated.timing(headerAnim, {
+            toValue: -topBarHeight,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        }
+      } else if (diff < 0) {
+        // Scrolling UP -> Show bar
+        if (isHeaderHidden.current) {
+          isHeaderHidden.current = false;
+          Animated.spring(headerAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 8,
+            tension: 50,
+          }).start();
+        }
+      }
+      lastScrollY.current = currentScrollY;
+    }
+  };
 
   const hasLoadedInitialData = useRef(!!cachedActivityData);
   const [loading, setLoading] = useState(!cachedActivityData);
@@ -1612,17 +1681,46 @@ export default function ActivityScreen() {
         barStyle={isDark ? 'light-content' : 'dark-content'}
       />
 
-      <View style={{ flex: 1, paddingTop: insets.top }}>
-        {/* Header Section */}
+      {/* Fixed Blur Top Bar */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          transform: [{ translateY: headerAnim }],
+        }}
+      >
         <View
-          style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 }}
+          style={{
+            borderBottomWidth: 1,
+            borderColor: topBarBorder,
+            overflow: 'hidden',
+          }}
         >
+          <BlurView
+            intensity={Platform.OS === 'ios' ? 70 : 100}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: topBarBg,
+              },
+            ]}
+          />
+
           <View
             style={{
+              paddingTop: insets.top + 8,
+              paddingBottom: 12,
+              paddingHorizontal: 24,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: 8,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -1659,7 +1757,7 @@ export default function ActivityScreen() {
 
               <View>
                 <Text
-                  style={{ color: textColor, fontSize: 28, fontWeight: '900', letterSpacing: -0.5 }}
+                  style={{ color: textColor, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 }}
                 >
                   Plan
                 </Text>
@@ -1690,22 +1788,27 @@ export default function ActivityScreen() {
             />
           </View>
         </View>
+      </Animated.View>
 
-        <ScrollView
-          ref={scrollViewRef}
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 140 }}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={theme.colors.primary}
-            />
-          }
-        >
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingTop: insets.top + 76,
+          paddingBottom: 140,
+        }}
+        onScroll={handlePlanScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+            progressViewOffset={insets.top + 70}
+          />
+        }
+      >
           <View className="px-3">
             {/* 1. HERO CARD: Daily Tasks (Apple Style) */}
             <DailyTasksHeroCard
@@ -1903,7 +2006,6 @@ export default function ActivityScreen() {
           </View>
         </View>
       </ScrollView>
-      </View>
 
       {/* Streak Gained — Congratulations popup when finishing daily tasks */}
       <FeedbackModal

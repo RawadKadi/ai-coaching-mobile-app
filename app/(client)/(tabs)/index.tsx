@@ -1,5 +1,5 @@
 import { useBrand, useBrandColors } from '@/contexts/BrandContext';
-import { isDarkColor } from '@/lib/theme-utils';
+import { isDarkColor, hexToRGB } from '@/lib/theme-utils';
 import React, {
   useState,
   useEffect,
@@ -18,7 +18,11 @@ import {
   Animated as RNAnimated,
   Easing,
   AccessibilityInfo,
+  Platform,
+  StyleSheet,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { useReducedMotion } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -89,8 +93,64 @@ export default function ClientDashboard() {
   const { handleScroll } = useTabBarScroll();
   const { streak, isCold } = useStreak();
   const { greeting, emoji, refreshGreeting } = useGreeting();
+  const reduceMotion = useReducedMotion();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const topBarHeight = insets.top + 68;
+  const headerAnim = useRef(new RNAnimated.Value(0)).current;
+  const lastScrollY = useRef(0);
+  const isHeaderHidden = useRef(false);
+
+  const handleDashboardScroll = (event: any) => {
+    handleScroll(event);
+
+    if (reduceMotion) return;
+
+    const currentScrollY = event.nativeEvent.contentOffset.y;
+
+    if (currentScrollY <= 15) {
+      if (isHeaderHidden.current) {
+        isHeaderHidden.current = false;
+        RNAnimated.spring(headerAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 8,
+          tension: 50,
+        }).start();
+      }
+      lastScrollY.current = currentScrollY;
+      return;
+    }
+
+    const diff = currentScrollY - lastScrollY.current;
+
+    if (Math.abs(diff) > 8) {
+      if (diff > 0 && currentScrollY > 60) {
+        // Scrolling DOWN -> Hide bar
+        if (!isHeaderHidden.current) {
+          isHeaderHidden.current = true;
+          RNAnimated.timing(headerAnim, {
+            toValue: -topBarHeight,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        }
+      } else if (diff < 0) {
+        // Scrolling UP -> Show bar
+        if (isHeaderHidden.current) {
+          isHeaderHidden.current = false;
+          RNAnimated.spring(headerAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 8,
+            tension: 50,
+          }).start();
+        }
+      }
+      lastScrollY.current = currentScrollY;
+    }
+  };
 
   // Core Data States
   const [todayCheckIn, setTodayCheckIn] = useState<CheckIn | null>(null);
@@ -127,6 +187,16 @@ export default function ClientDashboard() {
     0, 0, 0, 0, 0, 0, 0,
   ]);
 
+  // Upcoming Session
+  const [upcomingSession, setUpcomingSession] = useState<any>(null);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
+
+  // Tick nowMs every 30s so the Join button re-evaluates without a full reload
+  useEffect(() => {
+    const ticker = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(ticker);
+  }, []);
+
   const nowTimeStr = useMemo(() => {
     return new Date().toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -151,16 +221,6 @@ export default function ClientDashboard() {
       mealsCount: todayMeals.length,
     });
   }, [habits, todayHabitLogs, todayCheckIn, todayMeals]);
-
-  // Upcoming Session
-  const [upcomingSession, setUpcomingSession] = useState<any>(null);
-  const [nowMs, setNowMs] = useState<number>(Date.now());
-
-  // Tick nowMs every 30s so the Join button re-evaluates without a full reload
-  useEffect(() => {
-    const ticker = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => clearInterval(ticker);
-  }, []);
 
   const isGeneratingAnalysisRef = useRef(false);
 
@@ -618,6 +678,16 @@ export default function ClientDashboard() {
   const cardBorder =
     colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
+  const brandBgHex = isDark
+    ? (brand?.dark_background_color || colors.background || '#0F172A')
+    : (brand?.background_color || colors.background || '#FFFFFF');
+  const bgRgb = hexToRGB(brandBgHex);
+  const topBarBg = `rgba(${bgRgb.r}, ${bgRgb.g}, ${bgRgb.b}, ${isDark ? 0.72 : 0.82})`;
+
+  const borderHex = colors.border || (isDark ? '#334155' : '#E2E8F0');
+  const borderRgb = hexToRGB(borderHex);
+  const topBarBorder = `rgba(${borderRgb.r}, ${borderRgb.g}, ${borderRgb.b}, ${isDark ? 0.35 : 0.55})`;
+
   const completedHabitsCount = todayHabitLogs.filter(
     (log) => log.completed,
   ).length;
@@ -630,13 +700,136 @@ export default function ClientDashboard() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        translucent
       />
+
+      {/* Fixed Blur Top Bar */}
+      <RNAnimated.View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          transform: [{ translateY: headerAnim }],
+        }}
+      >
+        <View
+          style={{
+            borderBottomWidth: 1,
+            borderColor: topBarBorder,
+            overflow: 'hidden',
+          }}
+        >
+          <BlurView
+            intensity={Platform.OS === 'ios' ? 70 : 100}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: topBarBg,
+              },
+            ]}
+          />
+
+          <View
+            style={{
+              paddingTop: insets.top + 8,
+              paddingBottom: 12,
+              paddingHorizontal: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View className="flex-row items-center gap-3.5 flex-1 mr-3">
+              {brand?.logo_url ? (
+                <Image
+                  source={{ uri: brand.logo_url }}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: cardBorder,
+                  }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: colors.primary + '25',
+                    borderColor: colors.primary + '40',
+                  }}
+                  className="border items-center justify-center shadow-lg"
+                >
+                  <Text
+                    style={{ color: colors.primary }}
+                    className="text-xl font-black"
+                  >
+                    {brand?.name ? brand.name.charAt(0).toUpperCase() : 'C'}
+                  </Text>
+                </View>
+              )}
+              <Text
+                style={{ color: textColor }}
+                className="text-xl font-black tracking-tight"
+                numberOfLines={1}
+              >
+                {brand?.name || ''}
+              </Text>
+            </View>
+
+            <View className="flex-row items-center gap-2.5">
+              <StreakBadge
+                streak={streak}
+                isCold={isCold}
+                isDark={isDark}
+                onPress={() => {
+                  router.push({
+                    pathname: '/(client)/(tabs)/activity',
+                    params: { highlightDailyTasks: 'true' },
+                  });
+                }}
+              />
+
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  router.push({
+                    pathname: '/(client)/(tabs)/profile',
+                    params: { scrollToTop: Date.now().toString() },
+                  });
+                }}
+                style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+                className="p-1 rounded-full border shadow-2xl relative"
+                activeOpacity={0.7}
+              >
+                <BrandedAvatar
+                  size={44}
+                  name={profile?.full_name || 'U'}
+                  imageUrl={profile?.avatar_url}
+                />
+                <View
+                  style={{ backgroundColor: colors.primary, borderColor: cardBg }}
+                  className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </RNAnimated.View>
+
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingTop: insets.top + 20,
+          paddingTop: insets.top + 76,
           paddingBottom: 140,
         }}
         refreshControl={
@@ -644,96 +837,12 @@ export default function ClientDashboard() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={colors.primary}
-            progressViewOffset={insets.top + 10}
+            progressViewOffset={insets.top + 70}
           />
         }
-        onScroll={handleScroll}
+        onScroll={handleDashboardScroll}
         scrollEventThrottle={16}
       >
-        {/* Top Brand Bar */}
-        <MotiView
-          from={{ opacity: 0, translateY: -8 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          className="px-6 pb-4 flex-row items-center justify-between"
-        >
-          <View className="flex-row items-center gap-3.5 flex-1 mr-3">
-            {brand?.logo_url ? (
-              <Image
-                source={{ uri: brand.logo_url }}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: cardBorder,
-                }}
-                contentFit="cover"
-              />
-            ) : (
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 14,
-                  backgroundColor: colors.primary + '25',
-                  borderColor: colors.primary + '40',
-                }}
-                className="border items-center justify-center shadow-lg"
-              >
-                <Text
-                  style={{ color: colors.primary }}
-                  className="text-xl font-black"
-                >
-                  {brand?.name ? brand.name.charAt(0).toUpperCase() : 'C'}
-                </Text>
-              </View>
-            )}
-            <Text
-              style={{ color: textColor }}
-              className="text-xl font-black tracking-tight"
-              numberOfLines={1}
-            >
-              {brand?.name || ''}
-            </Text>
-          </View>
-
-          <View className="flex-row items-center gap-2.5">
-            <StreakBadge
-              streak={streak}
-              isCold={isCold}
-              isDark={isDark}
-              onPress={() => {
-                router.push({
-                  pathname: '/(client)/(tabs)/activity',
-                  params: { highlightDailyTasks: 'true' },
-                });
-              }}
-            />
-
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                router.push({
-                  pathname: '/(client)/(tabs)/profile',
-                  params: { scrollToTop: Date.now().toString() },
-                });
-              }}
-              style={{ backgroundColor: cardBg, borderColor: cardBorder }}
-              className="p-1 rounded-full border shadow-2xl relative"
-              activeOpacity={0.7}
-            >
-              <BrandedAvatar
-                size={44}
-                name={profile?.full_name || 'U'}
-                imageUrl={profile?.avatar_url}
-              />
-              <View
-                style={{ backgroundColor: colors.primary, borderColor: cardBg }}
-                className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2"
-              />
-            </TouchableOpacity>
-          </View>
-        </MotiView>
 
         {/* Client Greeting */}
         <MotiView

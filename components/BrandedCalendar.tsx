@@ -1,11 +1,13 @@
-import { useBrandColors } from '@/contexts/BrandContext';
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { useTheme } from '@/contexts/BrandContext';
+import { hexToRGB, scaleBorderRadius } from '@/lib/theme-utils';
 
 interface BrandedCalendarProps {
   selectedDate: Date | null;
   onSelect: (date: Date) => void;
+  style?: ViewStyle;
 }
 
 const MONTH_NAMES = [
@@ -13,13 +15,32 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, onSelect }) => {
-  const colors = useBrandColors();
-  const styles = getStyles(colors);
+export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, onSelect, style }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const isDark = theme.isDarkMode;
   const today = new Date();
 
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [viewYear, setViewYear] = useState(() => (selectedDate && !isNaN(selectedDate.getTime()) ? selectedDate.getFullYear() : today.getFullYear()));
+  const [viewMonth, setViewMonth] = useState(() => (selectedDate && !isNaN(selectedDate.getTime()) ? selectedDate.getMonth() : today.getMonth()));
+
+  useEffect(() => {
+    if (selectedDate && !isNaN(selectedDate.getTime())) {
+      setViewYear(selectedDate.getFullYear());
+      setViewMonth(selectedDate.getMonth());
+    }
+  }, [selectedDate]);
+
+  const primaryRgb = useMemo(() => {
+    try {
+      if (colors?.primary && typeof colors.primary === 'string' && colors.primary.startsWith('#')) {
+        return hexToRGB(colors.primary);
+      }
+    } catch {}
+    return { r: 124, g: 58, b: 237 };
+  }, [colors?.primary]);
+
+  const styles = useMemo(() => getStyles(theme, primaryRgb), [theme, primaryRgb]);
 
   const handlePrevMonth = () => {
     if (viewMonth === 0) {
@@ -86,7 +107,7 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
   const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -96,10 +117,10 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
 
         <View style={styles.navButtons}>
           <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn} activeOpacity={0.7}>
-            <ChevronLeft size={18} color="#94A3B8" />
+            <ChevronLeft size={18} color={colors.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleNextMonth} style={styles.navBtn} activeOpacity={0.7}>
-            <ChevronRight size={18} color="#94A3B8" />
+            <ChevronRight size={18} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -111,7 +132,7 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
         ))}
       </View>
 
-      {/* Days grid — plain View, zero gesture conflict */}
+      {/* Days grid */}
       <View style={styles.grid}>
         {cells}
       </View>
@@ -119,100 +140,116 @@ export const BrandedCalendar: React.FC<BrandedCalendarProps> = ({ selectedDate, 
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
-  container: {
-    backgroundColor: '#020617',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 32,
-    padding: 24,
-    overflow: 'hidden',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 32,
-  },
-  monthTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
-  yearLabel: {
-    color: '#475569',
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginTop: 4,
-  },
-  navButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  navBtn: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  weekRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  weekLabel: {
-    flex: 1,
-    textAlign: 'center',
-    color: '#475569',
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  cell: {
-    width: '14.28%',
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 4,
-  },
-  dayInner: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  daySelected: {
-    backgroundColor: '#2563EB',
-    borderColor: colors.primary,
-  },
-  dayToday: {
-    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-    borderColor: 'rgba(59, 130, 246, 0.3)',
-  },
-  dayText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  dayTextSelected: {
-    color: '#FFFFFF',
-  },
-  dayTextToday: {
-    color: '#60A5FA',
-  },
-});
+const getStyles = (theme: any, primaryRgb: { r: number; g: number; b: number }) => {
+  const colors = theme.colors;
+  const isDark = theme.isDarkMode;
+  const borderRadiusScale = theme.spacing?.borderRadiusScale || 1;
+  const r = primaryRgb?.r ?? 124;
+  const g = primaryRgb?.g ?? 58;
+  const b = primaryRgb?.b ?? 237;
+
+  return StyleSheet.create({
+    container: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: scaleBorderRadius(32, borderRadiusScale),
+      padding: 24,
+      overflow: 'hidden',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 32,
+    },
+    monthTitle: {
+      color: colors.text,
+      fontSize: 20,
+      fontWeight: '900',
+      letterSpacing: -0.5,
+    },
+    yearLabel: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 2,
+      marginTop: 4,
+    },
+    navButtons: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    navBtn: {
+      width: 40,
+      height: 40,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : (colors.inputBackground || colors.surfaceAlt || '#F8FAFC'),
+      borderRadius: scaleBorderRadius(12, borderRadiusScale),
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    weekRow: {
+      flexDirection: 'row',
+      marginBottom: 16,
+    },
+    weekLabel: {
+      flex: 1,
+      textAlign: 'center',
+      color: colors.textTertiary || colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 1.5,
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+    cell: {
+      width: '14.28%',
+      aspectRatio: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 4,
+    },
+    dayInner: {
+      width: '100%',
+      height: '100%',
+      borderRadius: scaleBorderRadius(12, borderRadiusScale),
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : (colors.inputBackground || '#F1F5F9'),
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : colors.border,
+    },
+    daySelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.35,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    dayToday: {
+      backgroundColor: `rgba(${r}, ${g}, ${b}, 0.12)`,
+      borderColor: `rgba(${r}, ${g}, ${b}, 0.4)`,
+    },
+    dayText: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    dayTextSelected: {
+      color: colors.textOnPrimary || '#FFFFFF',
+      fontWeight: '900',
+    },
+    dayTextToday: {
+      color: colors.primary,
+      fontWeight: '900',
+    },
+  });
+};

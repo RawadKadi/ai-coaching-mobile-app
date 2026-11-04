@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.coaching.app",
+      "bundleIdentifier": "com.rawad.coachingapp",
       "infoPlist": {
         "NSHealthShareUsageDescription": "Allow $(PRODUCT_NAME) to read your steps to sync them with your coach.",
         "NSHealthUpdateUsageDescription": "Allow $(PRODUCT_NAME) to sync your steps with your coach.",

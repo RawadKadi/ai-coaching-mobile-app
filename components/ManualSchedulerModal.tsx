@@ -14,6 +14,36 @@ import { DatePickerOverlay } from '@/components/DatePickerOverlay';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import SchedulerModal from '@/components/SchedulerModal';
+
+const cachedClients: { [coachId: string]: Client[] } = {};
+const cachedAvailability: { [coachId: string]: any[] } = {};
+
+export const prefetchSchedulerData = async (coachId: string) => {
+    if (!coachId) return;
+    try {
+        if (!cachedClients[coachId] || cachedClients[coachId].length === 0) {
+            const { data } = await supabase.rpc('get_my_clients');
+            if (data) {
+                cachedClients[coachId] = data.map((item: any) => ({
+                    id: item.client_id,
+                    profiles: {
+                        full_name: item.client_name,
+                        avatar_url: item.client_avatar,
+                        subtype: item.client_experience || 'Client'
+                    }
+                }));
+            }
+        }
+        if (!cachedAvailability[coachId]) {
+            const blocked = await availabilityService.getBlockedDates(coachId);
+            cachedAvailability[coachId] = blocked;
+        }
+    } catch (e) {
+        // silent prefetch error
+    }
+};
 
 const formatDateToISO = (date: any): string => {
   if (!date) return '';
@@ -280,11 +310,12 @@ export default function ManualSchedulerModal({
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const scrollRef = useRef<ScrollView>(null);
-    const [loading, setLoading] = useState(false);
+    const [schedulerMode, setSchedulerMode] = useState<'manual' | 'ai'>('manual');
+    const [clients, setClients] = useState<Client[]>(() => (coachId && cachedClients[coachId]) ? cachedClients[coachId] : []);
+    const [loading, setLoading] = useState(() => !Boolean(coachId && cachedClients[coachId]?.length));
     const [step, setStep] = useState<StepType>('client');
     
     // Form State
-    const [clients, setClients] = useState<Client[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
     const [recurrence, setRecurrence] = useState<RecurrenceType>('once');
@@ -295,7 +326,9 @@ export default function ManualSchedulerModal({
     const [sessionType, setSessionType] = useState<'training' | 'nutrition' | 'check_in' | 'consultation' | 'other'>('training');
     const [notes, setNotes] = useState('');
     const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
-    const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
+    const [blockedDates, setBlockedDates] = useState<Set<string>>(() => {
+        return (coachId && cachedAvailability[coachId]) ? new Set(cachedAvailability[coachId].map((b: any) => b.date)) : new Set();
+    });
     const [showDatePicker, setShowDatePicker] = useState(false);
 
     const steps: StepType[] = ['client', 'days', 'time', 'details', 'confirm'];
@@ -339,6 +372,8 @@ export default function ManualSchedulerModal({
             } else {
                 setStep('client');
             }
+        } else {
+            setSchedulerMode('manual');
         }
     }, [visible]);
 
@@ -352,7 +387,9 @@ export default function ManualSchedulerModal({
 
     const loadClients = async () => {
         try {
-            setLoading(true);
+            if (!cachedClients[coachId] || cachedClients[coachId].length === 0) {
+                setLoading(true);
+            }
             // Use the secure RPC 'get_my_clients' to ensure data displays correctly
             const { data, error } = await supabase.rpc('get_my_clients');
             if (error) throw error;
@@ -366,6 +403,7 @@ export default function ManualSchedulerModal({
                 }
             })) || [];
             
+            cachedClients[coachId] = processed;
             setClients(processed);
         } catch (e) { 
             console.error('[ManualScheduler] Load clients error:', e); 
@@ -376,8 +414,12 @@ export default function ManualSchedulerModal({
 
     const loadAvailabilityData = async () => {
         try {
+            if (cachedAvailability[coachId]) {
+                setBlockedDates(new Set(cachedAvailability[coachId].map((b: any) => b.date)));
+            }
             const blocked = await availabilityService.getBlockedDates(coachId);
-            setBlockedDates(new Set(blocked.map(b => b.date)));
+            cachedAvailability[coachId] = blocked;
+            setBlockedDates(new Set(blocked.map((b: any) => b.date)));
         } catch (e) { console.error(e); }
     };
 
@@ -547,6 +589,37 @@ export default function ManualSchedulerModal({
             )}
         </View>
     );
+
+    if (schedulerMode === 'ai' && selectedClient) {
+        return (
+            <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+                <View style={{ flex: 1, backgroundColor: colors.background }}>
+                    <StatusBar barStyle={theme.isDarkMode ? "light-content" : "dark-content"} />
+                    <SchedulerModal
+                        embedded={true}
+                        visible={true}
+                        onClose={() => {
+                            setSchedulerMode('manual');
+                            onClose();
+                        }}
+                        onBack={() => setSchedulerMode('manual')}
+                        onConfirm={async (proposed) => {
+                            setSchedulerMode('manual');
+                            onClose();
+                            await onConfirm(proposed);
+                        }}
+                        clientContext={{
+                            name: selectedClient.profiles.full_name,
+                            avatar_url: selectedClient.profiles.avatar_url || undefined,
+                            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        }}
+                        targetClientId={selectedClient.id}
+                        existingSessions={existingSessions}
+                    />
+                </View>
+            </Modal>
+        );
+    }
 
     return (
         <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
@@ -1065,7 +1138,7 @@ export default function ManualSchedulerModal({
                     </ScrollView>
                     
                     {/* Fixed Circular AI Scheduler Button - Appears after selection */}
-                    {onSwitchToAI && selectedClient && step === 'client' && (
+                    {selectedClient && step === 'client' && (
                         <MotiView
                             from={{ opacity: 0, scale: 0.5, translateY: 20 }}
                             animate={{ opacity: 1, scale: 1, translateY: 0 }}
@@ -1075,7 +1148,10 @@ export default function ManualSchedulerModal({
                             <Pressable 
                                 onPressIn={() => handlePressIn(aiBtnScale)}
                                 onPressOut={() => handlePressOut(aiBtnScale)}
-                                onPress={() => onSwitchToAI(selectedClient)}
+                                onPress={() => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                                    setSchedulerMode('ai');
+                                }}
                             >
                                 {({ pressed }) => (
                                     <Animated.View

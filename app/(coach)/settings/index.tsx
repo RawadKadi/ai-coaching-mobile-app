@@ -28,6 +28,98 @@ import { safeBack } from '@/lib/navigation-utils';
 import { googleMeetService } from '@/lib/google-meet-service';
 import { isDarkColor } from '@/lib/theme-utils';
 
+interface SettingsMenuItemProps {
+  icon: React.ReactNode;
+  label: string;
+  sub?: string;
+  badge?: string;
+  badgeColor?: string;
+  onPress?: () => void;
+  colors: any;
+  reduceMotion?: boolean;
+  delay?: number;
+}
+
+const SettingsMenuItem = ({
+  icon,
+  label,
+  sub,
+  badge,
+  badgeColor,
+  onPress,
+  colors,
+  reduceMotion,
+  delay = 0,
+}: SettingsMenuItemProps) => (
+  <MotiView
+    from={reduceMotion ? undefined : { opacity: 0, translateY: 8 }}
+    animate={{ opacity: 1, translateY: 0 }}
+    transition={{ delay }}
+  >
+    <TouchableOpacity
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        onPress?.();
+      }}
+      activeOpacity={0.7}
+      className="flex-row items-center p-5 rounded-[32px] border mb-3"
+      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+    >
+      <View
+        className="w-12 h-12 rounded-[18px] items-center justify-center mr-4 border"
+        style={{ backgroundColor: colors.background, borderColor: colors.border }}
+      >
+        {icon}
+      </View>
+      <View className="flex-1">
+        <Text className="font-bold text-base" style={{ color: colors.text }}>
+          {label}
+        </Text>
+        {sub && (
+          <Text
+            className="text-[10px] font-medium mt-0.5"
+            style={{ color: colors.textSecondary }}
+          >
+            {descFormatter(sub)}
+          </Text>
+        )}
+      </View>
+      {badge && (
+        <View
+          className="px-3 py-1 rounded-full mr-3 border"
+          style={{
+            backgroundColor: `${badgeColor || colors.primary}1a`,
+            borderColor: `${badgeColor || colors.primary}33`,
+          }}
+        >
+          <Text
+            style={{
+              color: badgeColor || colors.primary,
+              fontSize: 9,
+              fontWeight: '900',
+              textTransform: 'uppercase',
+            }}
+          >
+            {badge}
+          </Text>
+        </View>
+      )}
+      <ChevronRight size={18} color={colors.textSecondary} />
+    </TouchableOpacity>
+  </MotiView>
+);
+
+const descFormatter = (text: string) => text;
+
+const SectionLabel = ({ label, color }: { label: string; color?: string }) => (
+  <Text
+    className="text-[10px] font-black uppercase tracking-[3px] px-1 mt-6 mb-2"
+    style={{ color: color || '#64748B' }}
+  >
+    {label}
+  </Text>
+);
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -103,16 +195,13 @@ export default function SettingsScreen() {
     }
   };
 
-  const cardBg = isDark ? '#111827' : colors.surface;
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background || '#0B0F19' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         {/* Header */}
         <View
-          style={{ borderBottomColor: cardBorder, borderBottomWidth: 1 }}
+          style={{ borderBottomColor: colors.border, borderBottomWidth: 1 }}
           className="flex-row items-center justify-between px-6 py-4"
         >
           <TouchableOpacity
@@ -120,22 +209,22 @@ export default function SettingsScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               safeBack('/(coach)/(tabs)/profile');
             }}
-            style={{ backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }}
+            style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}
             className="w-10 h-10 rounded-full items-center justify-center shadow-sm"
             activeOpacity={0.7}
           >
-            <ChevronLeft size={20} color={colors.text || '#FFFFFF'} />
+            <ChevronLeft size={20} color={colors.text} />
           </TouchableOpacity>
 
           <View className="items-center">
             <Text
-              style={{ color: colors.text || '#FFFFFF' }}
+              style={{ color: colors.text }}
               className="font-black text-lg tracking-tight"
             >
               Settings
             </Text>
             <Text
-              style={{ color: colors.textSecondary || '#94A3B8' }}
+              style={{ color: colors.textSecondary }}
               className="text-[10px] font-bold uppercase tracking-widest mt-0.5"
             >
               Preferences
@@ -146,186 +235,85 @@ export default function SettingsScreen() {
         </View>
 
         <ScrollView
-          className="flex-1 px-4 pt-6"
+          className="flex-1 px-3 pt-4"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
         >
-          {/* SECTION: ACCOUNT & SECURITY */}
-          <SectionLabel label="Account" color={colors.textSecondary || '#64748B'} isFirst />
-          <SettingsItem
-            icon={<ShieldCheck size={22} color={colors.primary} />}
-            iconBg={`${colors.primary}18`}
+          {/* SECTION: ACCOUNT */}
+          <SectionLabel label="Account" color={colors.textSecondary} />
+          <SettingsMenuItem
+            icon={<ShieldCheck size={20} color={colors.primary} />}
             label="Account & Security"
-            desc="Email, password, connected accounts"
+            sub="Email, password, connected accounts"
             onPress={() => router.push('/(coach)/settings/security')}
             colors={colors}
-            cardBg={cardBg}
-            cardBorder={cardBorder}
             reduceMotion={reduceMotion}
+            delay={40}
           />
 
           {/* SECTION: AVAILABILITY & SCHEDULING */}
-          <SectionLabel label="Availability & Scheduling" color={colors.textSecondary || '#64748B'} />
-          <SettingsItem
-            icon={<Clock size={22} color="#7FA7FF" />}
-            iconBg="#7FA7FF20"
+          <SectionLabel label="Availability & Scheduling" color={colors.textSecondary} />
+          <SettingsMenuItem
+            icon={<Clock size={20} color={colors.primary} />}
             label="Select working hours"
-            desc="Set your weekly work hours"
+            sub="Set your weekly work hours"
             onPress={() => router.push('/(coach)/settings/availability')}
             colors={colors}
-            cardBg={cardBg}
-            cardBorder={cardBorder}
             reduceMotion={reduceMotion}
+            delay={80}
           />
 
-          <SettingsItem
+          <SettingsMenuItem
             icon={
               connectingMeet ? (
-                <ActivityIndicator size="small" color="#34D399" />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Video size={22} color={isMeetConnected ? '#34D399' : '#94A3B8'} />
+                <Video size={20} color={isMeetConnected ? '#10B981' : colors.primary} />
               )
             }
-            iconBg={isMeetConnected ? '#34D39920' : '#94A3B820'}
             label="Google Meet"
-            desc={
+            sub={
               isMeetConnected
                 ? 'Auto-generates meeting links'
                 : 'Connect to enable video sessions'
             }
             badge={isMeetConnected ? 'Connected' : 'Disconnected'}
-            badgeColor={isMeetConnected ? '#34D399' : '#64748B'}
+            badgeColor={isMeetConnected ? '#10B981' : colors.textSecondary}
             onPress={handleMeetPress}
             colors={colors}
-            cardBg={cardBg}
-            cardBorder={cardBorder}
             reduceMotion={reduceMotion}
+            delay={120}
           />
 
           {/* SECTION: BRANDING */}
           {(coach?.brand_id || coach?.can_manage_brand) && (
             <>
-              <SectionLabel label="Branding" color={colors.textSecondary || '#64748B'} />
-              <SettingsItem
-                icon={<Palette size={22} color="#F59E0B" />}
-                iconBg="#F59E0B20"
+              <SectionLabel label="Branding" color={colors.textSecondary} />
+              <SettingsMenuItem
+                icon={<Palette size={20} color="#F59E0B" />}
                 label="Brand Customization"
-                desc={canManageBrand ? 'Customize colors & logo' : 'View brand settings'}
+                sub={canManageBrand ? 'Customize colors & logo' : 'View brand settings'}
                 onPress={() => router.push('/(coach)/settings/branding')}
                 colors={colors}
-                cardBg={cardBg}
-                cardBorder={cardBorder}
                 reduceMotion={reduceMotion}
+                delay={160}
               />
             </>
           )}
 
           {/* SECTION: AI ASSISTANT */}
-          <SectionLabel label="AI Assistant" color={colors.textSecondary || '#64748B'} />
-          <SettingsItem
-            icon={<BrainCircuit size={22} color="#8B5CF6" />}
-            iconBg="#8B5CF620"
+          <SectionLabel label="AI Assistant" color={colors.textSecondary} />
+          <SettingsMenuItem
+            icon={<BrainCircuit size={20} color="#8B5CF6" />}
             label="AI Settings"
-            desc="Customize your AI coach"
+            sub="Customize your AI coach"
             onPress={() => router.push('/(coach)/(tabs)/ai-brain')}
             colors={colors}
-            cardBg={cardBg}
-            cardBorder={cardBorder}
             reduceMotion={reduceMotion}
+            delay={200}
           />
         </ScrollView>
       </View>
     </View>
   );
 }
-
-const SectionLabel = ({
-  label,
-  color,
-  isFirst,
-}: {
-  label: string;
-  color?: string;
-  isFirst?: boolean;
-}) => (
-  <Text
-    className={`text-[11px] font-black uppercase tracking-[2px] px-2 mb-3 ${
-      isFirst ? '' : 'mt-6'
-    }`}
-    style={{ color: color || '#64748B' }}
-  >
-    {label}
-  </Text>
-);
-
-const SettingsItem = ({
-  icon,
-  iconBg,
-  label,
-  desc,
-  badge,
-  badgeColor,
-  onPress,
-  colors,
-  cardBg,
-  cardBorder,
-  reduceMotion,
-}: any) => (
-  <MotiView
-    from={reduceMotion ? undefined : { opacity: 0, translateY: 10 }}
-    animate={{ opacity: 1, translateY: 0 }}
-    className="mb-3"
-  >
-    <TouchableOpacity
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        onPress();
-      }}
-      style={{ backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }}
-      className="flex-row items-center p-4 rounded-3xl"
-      activeOpacity={0.7}
-    >
-      <View
-        style={{ backgroundColor: iconBg, borderColor: cardBorder, borderWidth: 1 }}
-        className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5"
-      >
-        {icon}
-      </View>
-      <View className="flex-1 mr-2">
-        <Text style={{ color: colors.text || '#FFFFFF' }} className="font-bold text-base">
-          {label}
-        </Text>
-        {desc && (
-          <Text
-            style={{ color: colors.textSecondary || '#94A3B8' }}
-            className="text-xs font-medium mt-0.5"
-          >
-            {desc}
-          </Text>
-        )}
-      </View>
-      {badge && (
-        <View
-          style={{
-            backgroundColor: (badgeColor || '#64748B') + '20',
-            borderColor: (badgeColor || '#64748B') + '40',
-            borderWidth: 1,
-          }}
-          className="px-2.5 py-1 rounded-full mr-2"
-        >
-          <Text
-            style={{
-              color: badgeColor || '#64748B',
-              fontSize: 10,
-              fontWeight: '800',
-              textTransform: 'uppercase',
-            }}
-          >
-            {badge}
-          </Text>
-        </View>
-      )}
-      <ChevronRight size={18} color={colors.textSecondary || '#64748B'} />
-    </TouchableOpacity>
-  </MotiView>
-);

@@ -158,7 +158,7 @@ export default function ClientMessagesScreen() {
   useEffect(() => {
     if (!user) return;
 
-    const channelId = `client-chat-realtime-${user.id}`;
+    const channelId = `client-chat-realtime-${user.id}-${Date.now()}`;
     console.log('[ClientChat] Initializing channel:', channelId);
 
     const channel = supabase.channel(channelId)
@@ -195,7 +195,12 @@ export default function ClientMessagesScreen() {
 
     return () => {
       console.log('[ClientChat] Removing channel:', channelId);
-      supabase.removeChannel(channel);
+      try {
+        (supabase as any).realtime?._remove?.(channel);
+        channel.unsubscribe();
+      } catch (e) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [user?.id, coachUserId]);
 
@@ -203,8 +208,21 @@ export default function ClientMessagesScreen() {
   useEffect(() => {
     if (!user || !coachUserId) return;
     const key = [user.id, coachUserId].sort().join('-');
+    const topic = `chat-reactions-${key}`;
+    const realtimeTopic = `realtime:${topic}`;
+
+    const existing = supabase.getChannels().find((c) => c.topic === realtimeTopic);
+    if (existing) {
+      try {
+        (supabase as any).realtime?._remove?.(existing);
+        existing.unsubscribe();
+      } catch (e) {
+        supabase.removeChannel(existing);
+      }
+    }
+
     const ch = supabase
-      .channel(`chat-reactions-${key}`)
+      .channel(topic)
       .on('broadcast', { event: 'reaction_update' }, ({ payload }) => {
         setMessages(prev =>
           prev.map(m => m.id === payload.messageId ? { ...m, content: payload.content } : m)
@@ -220,7 +238,14 @@ export default function ClientMessagesScreen() {
       })
       .subscribe();
     reactionChannelRef.current = ch;
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      try {
+        (supabase as any).realtime?._remove?.(ch);
+        ch.unsubscribe();
+      } catch (e) {
+        supabase.removeChannel(ch);
+      }
+    };
   }, [user?.id, coachUserId]);
 
   const processIncoming = (nm: Message) => {
@@ -767,7 +792,7 @@ function SwipeReplyAction({ progress, color }: { progress: any; color: string })
         <View style={{ flex: 1, position: 'relative' }}>
           {loading ? <ChatMessageSkeleton /> : (
                <FlatList
-                  ref={flatListRef} data={messages} renderItem={renderMessage} keyExtractor={item => item.id}
+                  ref={flatListRef} data={messages} renderItem={renderMessage} keyExtractor={(item, index) => (item?.id ? String(item.id) : `msg-${index}`)}
                   inverted showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
                   initialNumToRender={15} maxToRenderPerBatch={10} windowSize={10} removeClippedSubviews={Platform.OS !== 'web'}
                   onScrollToIndexFailed={(info) => { flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }); }}

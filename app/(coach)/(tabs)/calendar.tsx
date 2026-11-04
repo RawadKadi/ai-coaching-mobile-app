@@ -8,7 +8,7 @@ import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, 
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
 import { DatePickerOverlay } from '@/components/DatePickerOverlay';
-import ManualSchedulerModal from '@/components/ManualSchedulerModal';
+import ManualSchedulerModal, { prefetchSchedulerData } from '@/components/ManualSchedulerModal';
 import { ProposedSession } from '@/lib/ai-scheduling-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -101,13 +101,29 @@ const AnimatedSessionCard = React.memo(({ session, onPress, onLongPress }: Anima
                     <View className={`w-[2px] h-12 rounded-full mr-6 ${isPostponed ? 'bg-yellow-500/20' : isCancelled ? 'bg-red-500/20' : 'bg-blue-600/30'}`} />
 
                     {/* Middle: Info */}
-                    <View className="flex-1">
-                        <Text style={{ color: colors.text }} className="font-black text-lg tracking-tight leading-tight mb-1">
+                    <View className="flex-1 justify-center mr-2">
+                        <Text 
+                            style={{ color: isCancelled ? colors.textSecondary : colors.text }} 
+                            className="font-black text-lg tracking-tight leading-tight mb-1"
+                            numberOfLines={1}
+                        >
                             {session.session_type === 'video' ? 'Performance Video Call' : 'Strategic Coaching'}
                         </Text>
-                        <Text style={{ color: colors.textSecondary }} className="font-bold text-xs">
-                            {session.client?.profiles?.full_name} • 60 min
-                        </Text>
+                        <View className="flex-row items-center gap-2 flex-wrap">
+                            <Text style={{ color: colors.textSecondary }} className="font-bold text-xs shrink" numberOfLines={1}>
+                                {session.client?.profiles?.full_name} • 60 min
+                            </Text>
+                            {isCancelled && (
+                                <View className="bg-red-500/15 px-2.5 py-0.5 rounded-full border border-red-500/30 shrink-0">
+                                    <Text className="text-red-400 text-[10px] font-bold uppercase tracking-wider">Cancelled</Text>
+                                </View>
+                            )}
+                            {isPostponed && (
+                                <View className="bg-yellow-500/15 px-2.5 py-0.5 rounded-full border border-yellow-500/30 shrink-0">
+                                    <Text className="text-yellow-400 text-[10px] font-bold uppercase tracking-wider">Postponed</Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
 
                     {/* Right: Avatar & Icon */}
@@ -115,17 +131,9 @@ const AnimatedSessionCard = React.memo(({ session, onPress, onLongPress }: Anima
                         <BrandedAvatar 
                             name={session.client?.profiles?.full_name} 
                             imageUrl={session.client?.profiles?.avatar_url} 
-                            size={32} 
+                            size={34} 
                         />
-                        {isPostponed ? (
-                            <View className="w-8 h-8 rounded-full bg-yellow-500/10 items-center justify-center">
-                                <Clock size={14} color="#EAB308" />
-                            </View>
-                        ) : isCancelled ? (
-                            <View className="w-8 h-8 rounded-full bg-red-500/10 items-center justify-center">
-                                <X size={14} color="#EF4444" />
-                            </View>
-                        ) : (
+                        {!isCancelled && !isPostponed && (
                             <View className="w-8 h-8 rounded-full bg-cyan-400/20 items-center justify-center">
                                 <Video size={14} color="#22D3EE" />
                             </View>
@@ -170,29 +178,45 @@ export default function CalendarScreen() {
   const [currentlyOpenSessionId, setCurrentlyOpenSessionId] = useState<string | null>(null);
 
   const closeAllSwipes = useCallback(() => {
-    if (currentlyOpenSessionId) {
-      swipeableRefs.current[currentlyOpenSessionId]?.close();
-      setCurrentlyOpenSessionId(null);
-    }
-  }, [currentlyOpenSessionId]);
+    Object.values(swipeableRefs.current).forEach(ref => {
+      try {
+        ref?.close();
+      } catch (err) {
+        // ignore
+      }
+    });
+    setCurrentlyOpenSessionId(null);
+  }, []);
 
   // Cancellation and Postponement Handlers
   const handleLongPressSession = (session: any) => {
+    closeAllSwipes();
     setSelectedSessionForMenu(session);
   };
 
   const handlePostponeDirect = (session: any) => {
+    closeAllSwipes();
     setSessionToEdit(session);
     setShowPostponeModal(true);
   };
 
   const handleCancelSessionConfirm = (session: any) => {
+    closeAllSwipes();
     Alert.alert(
       'Cancel Call',
       'Do you want to cancel this call?',
       [
-        { text: 'No', style: 'cancel' },
-        { text: 'Yes', onPress: () => performCancelSession(session) }
+        { 
+          text: 'No', 
+          style: 'cancel',
+          onPress: () => {
+            closeAllSwipes();
+          }
+        },
+        { 
+          text: 'Yes', 
+          onPress: () => performCancelSession(session) 
+        }
       ],
       { cancelable: true }
     );
@@ -200,6 +224,7 @@ export default function CalendarScreen() {
 
   const performCancelSession = async (session: any) => {
     try {
+      closeAllSwipes();
       setLoading(true);
       // 1. Update session status to cancelled
       const { error } = await supabase
@@ -388,7 +413,10 @@ export default function CalendarScreen() {
   }, [coach?.id]));
 
   useFocusEffect(useCallback(() => {
-    if (coach?.id) loadSessions();
+    if (coach?.id) {
+      loadSessions();
+      prefetchSchedulerData(coach.id);
+    }
     if (params?.resetToToday === 'true') {
       const today = new Date();
       setSelectedDate(today);
@@ -573,11 +601,31 @@ export default function CalendarScreen() {
                       currentDaySessions.map((session) => {
                           const isPostponed = session.status === 'postponed' || (session.status === 'cancelled' && session.cancellation_reason?.toLowerCase().includes('postpone'));
                           const isCancelled = session.status === 'cancelled' && !isPostponed;
+
+                          // Cancelled or postponed sessions are static (not swipable and show no action buttons)
+                          if (isCancelled || isPostponed) {
+                              return (
+                                  <View key={session.id} className="mb-4">
+                                      <AnimatedSessionCard 
+                                          session={session}
+                                          onPress={() => {
+                                              closeAllSwipes();
+                                              router.push({ pathname: '/(coach)/chat/[id]', params: { id: session.client_id } });
+                                          }}
+                                          onLongPress={() => {
+                                              closeAllSwipes();
+                                              handleLongPressSession(session);
+                                          }}
+                                      />
+                                  </View>
+                              );
+                          }
+
+                          // Active/normal sessions can be swiped left to reveal postpone and cancel actions
                           return (
                               <View key={session.id} className="mb-4">
                                   <Swipeable
                                        ref={ref => { if (ref) swipeableRefs.current[session.id] = ref; }}
-                                       enabled={!isCancelled && !isPostponed}
                                        onSwipeableWillOpen={() => {
                                            if (currentlyOpenSessionId && currentlyOpenSessionId !== session.id) {
                                                swipeableRefs.current[currentlyOpenSessionId]?.close();
@@ -671,8 +719,9 @@ export default function CalendarScreen() {
                   visible={showManualScheduler} 
                   onClose={() => { setShowManualScheduler(false); setSelectedClient(null); }} 
                   onConfirm={async () => loadSessions()} 
-                  existingSessions={sessions} coachId={coach.id} initialClient={initialClientData}
-                  onSwitchToAI={(c) => { setSelectedClient({ id: c.id, name: c.profiles.full_name, avatar_url: c.profiles.avatar_url, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }); setShowManualScheduler(false); setShowAIScheduler(true); }}
+                  existingSessions={sessions} 
+                  coachId={coach.id} 
+                  initialClient={initialClientData}
               />
           )}
           {selectedClient && (

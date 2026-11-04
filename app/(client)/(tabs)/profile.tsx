@@ -378,7 +378,7 @@ export default function ProfileScreen() {
           <MotiView
             from={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="items-center pt-10 pb-10 px-6"
+            className="items-center pt-10 pb-10 px-3"
           >
             <View className="relative">
               <View
@@ -453,7 +453,7 @@ export default function ProfileScreen() {
           </MotiView>
 
           {/* Menu Sections */}
-          <View className="px-6 space-y-4">
+          <View className="px-3 space-y-4">
             <SectionLabel label="Account" color={colors.primary} />
             <ProfileMenuItem
               icon={<User size={20} color={colors.primary} />}

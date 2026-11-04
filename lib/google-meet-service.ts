@@ -18,7 +18,7 @@ const GOOGLE_CLIENT_SECRET =
   '';
 
 const REDIRECT_URI = 'https://ieqccstmunvlmxsohhsa.supabase.co/auth/v1/callback';
-const MEET_SCOPE = 'openid email profile https://www.googleapis.com/auth/meetings.space.created';
+const MEET_SCOPE = 'openid email profile https://www.googleapis.com/auth/meetings.space.created https://www.googleapis.com/auth/meetings.space.readonly';
 
 const STORAGE_KEY_PREFIX = '@coach_google_meet_connected_';
 const STORAGE_ACCESS_TOKEN_PREFIX = '@coach_google_access_token_';
@@ -31,7 +31,7 @@ const memoryCache: Record<string, boolean> = {};
 export interface ConnectResult {
   success: boolean;
   error?: string;
-  errorType?: 'email_mismatch' | 'cancelled' | 'general';
+  errorType?: 'email_mismatch' | 'scope_missing' | 'cancelled' | 'general';
   expectedEmail?: string;
   connectedEmail?: string;
 }
@@ -110,6 +110,7 @@ class GoogleMeetService {
       // 1. Create isolated auth client to completely prevent overwriting the main session
       const isolatedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
+          flowType: 'pkce',
           persistSession: false,
           autoRefreshToken: false,
           detectSessionInUrl: false,
@@ -179,24 +180,31 @@ class GoogleMeetService {
         }
       }
 
-      // 3. Verify connected email from Google
-      let connectedEmail: string | null = null;
-      if (providerToken) {
-        try {
-          const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${providerToken}` },
-          });
-          if (userinfoRes.ok) {
-            const userinfo = await userinfoRes.json();
-            connectedEmail = userinfo.email || null;
-            console.log('[GoogleMeet] Google account email verified:', connectedEmail);
-          }
-        } catch (uiErr) {
-          console.warn('[GoogleMeet] userinfo fetch error:', uiErr);
-        }
+      // 3. Ensure we received a valid providerToken
+      if (!providerToken) {
+        console.error('[GoogleMeet] No provider_token received from Google OAuth flow');
+        return {
+          success: false,
+          error: 'Could not obtain Google Meet permissions. Please try again.',
+        };
       }
 
-      // 4. Validate email match with coach's personal account
+      // 4. Verify connected email from Google
+      let connectedEmail: string | null = null;
+      try {
+        const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${providerToken}` },
+        });
+        if (userinfoRes.ok) {
+          const userinfo = await userinfoRes.json();
+          connectedEmail = userinfo.email || null;
+          console.log('[GoogleMeet] Google account email verified:', connectedEmail);
+        }
+      } catch (uiErr) {
+        console.warn('[GoogleMeet] userinfo fetch error:', uiErr);
+      }
+
+      // 5. Validate email match with coach's personal account
       if (expectedEmail && connectedEmail) {
         const cleanExpected = expectedEmail.trim().toLowerCase();
         const cleanConnected = connectedEmail.trim().toLowerCase();
@@ -212,12 +220,56 @@ class GoogleMeetService {
         }
       }
 
+      // 6. Verify Google Meet API space creation works before completing connection
+      try {
+        const testSpaceRes = await fetch('https://meet.googleapis.com/v2/spaces', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${providerToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        });
+
+        if (!testSpaceRes.ok) {
+          const testSpaceData = await testSpaceRes.json().catch(() => ({}));
+          console.warn('[GoogleMeet] Space verification failed:', testSpaceData);
+          const errDetail = testSpaceData.error?.message?.toLowerCase() || '';
+          if (
+            testSpaceRes.status === 403 &&
+            (errDetail.includes('insufficient') || errDetail.includes('scope') || errDetail.includes('permission'))
+          ) {
+            return {
+              success: false,
+              errorType: 'scope_missing',
+              error: 'Meeting permissions were not granted. Please make sure to check "Select all" on Google\'s screen.',
+            };
+          }
+          return {
+            success: false,
+            error: testSpaceData.error?.message || 'Could not verify meeting permissions with Google.',
+          };
+        } else {
+          const spaceData = await testSpaceRes.json().catch(() => ({}));
+          console.log('[GoogleMeet] Pre-verified meeting space created successfully:', spaceData.meetingUri);
+        }
+      } catch (testErr: any) {
+        console.warn('[GoogleMeet] Space verification network error:', testErr);
+      }
+
+      // 7. Clear any stale cached tokens before saving new ones
+      await AsyncStorage.multiRemove([
+        STORAGE_ACCESS_TOKEN_PREFIX + coachId,
+        STORAGE_REFRESH_TOKEN_PREFIX + coachId,
+        STORAGE_EXPIRY_PREFIX + coachId,
+      ]);
+
       const expiryDate = new Date(Date.now() + 3600 * 1000).toISOString();
 
-      // 5. Persist to local cache for 0ms access
+      // 8. Persist fresh verified credentials
       await AsyncStorage.multiSet([
         [STORAGE_KEY_PREFIX + coachId, 'true'],
-        ...(providerToken ? [[STORAGE_ACCESS_TOKEN_PREFIX + coachId, providerToken] as [string, string]] : []),
+        [STORAGE_ACCESS_TOKEN_PREFIX + coachId, providerToken],
         ...(providerRefreshToken ? [[STORAGE_REFRESH_TOKEN_PREFIX + coachId, providerRefreshToken] as [string, string]] : []),
         [STORAGE_EXPIRY_PREFIX + coachId, expiryDate],
       ]);
@@ -228,7 +280,7 @@ class GoogleMeetService {
           .from('coaches')
           .update({
             google_meet_connected: true,
-            ...(providerToken ? { google_access_token: providerToken } : {}),
+            google_access_token: providerToken,
             ...(providerRefreshToken ? { google_refresh_token: providerRefreshToken } : {}),
             google_token_expiry: expiryDate,
           })
@@ -388,6 +440,14 @@ class GoogleMeetService {
 
       if (!response.ok) {
         console.error('[GoogleMeet] Create space failed:', spaceData);
+        if (
+          response.status === 403 &&
+          spaceData.error?.message?.toLowerCase().includes('insufficient authentication scopes')
+        ) {
+          console.warn('[GoogleMeet] Insufficient scope on cached token. Clearing stale token...');
+          await this.disconnect(coachId);
+          throw new Error('Google Meet permissions were not granted. Please reconnect Google Meet in your Profile and allow meeting permissions.');
+        }
         throw new Error(spaceData.error?.message || 'Failed to create Google Meet space');
       }
 

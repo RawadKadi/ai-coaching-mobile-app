@@ -68,7 +68,7 @@ export default function CoachPersonalInformationScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         
         {/* Header */}
