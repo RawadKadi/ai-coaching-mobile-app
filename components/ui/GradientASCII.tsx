@@ -7,7 +7,6 @@ import Svg, {
   Stop,
   Rect,
   Path,
-  G,
   Circle,
 } from 'react-native-svg';
 import Animated, {
@@ -31,7 +30,7 @@ export interface GradientASCIIProps {
   colors?: string[];
   /**
    * Shape of the light effect.
-   * 'horizon': Arched luminous horizon curve (default)
+   * 'horizon': Arched luminous horizon curve on top (default)
    * 'pinch': Squeezed band of light across the center
    * 'rise': Atmospheric light glowing upward from the bottom
    * 'eclipse': Outer radiant corona ring
@@ -85,9 +84,12 @@ function lighten(hex: string, amount: number): string {
   return `rgb(${nr}, ${ng}, ${nb})`;
 }
 
-function hexToRgba(hex: string, alpha: number): string {
+function darken(hex: string, amount: number): string {
   const [r, g, b] = hexToRgb(hex);
-  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
+  const nr = Math.max(0, Math.round(r * (1 - amount)));
+  const ng = Math.max(0, Math.round(g * (1 - amount)));
+  const nb = Math.max(0, Math.round(b * (1 - amount)));
+  return `rgb(${nr}, ${ng}, ${nb})`;
 }
 
 export function GradientASCII({
@@ -97,7 +99,7 @@ export function GradientASCII({
   scale = 1,
   flow = 0.5,
   speed = 1,
-  glow = 0.35,
+  glow = 0.45,
   style,
 }: GradientASCIIProps) {
   const brandColors = useBrandColors();
@@ -111,6 +113,7 @@ export function GradientASCII({
         glow: customColors[1],
         mid: customColors[2] || customColors[1],
         highlight: customColors[customColors.length - 1],
+        vivid: customColors[customColors.length - 1],
       };
     }
 
@@ -121,11 +124,29 @@ export function GradientASCII({
     return {
       base: brandColors.background || '#090b10',
       glow: primary,
-      mid: primaryPressed,
-      highlight: lighten(primary, 0.55),
+      mid: lighten(primary, 0.45),
+      highlight: lighten(primary, 0.85),
+      vivid: primary,
+      shadow: darken(primary, 0.55),
       accent: accent,
     };
   }, [customColors, brandColors]);
+
+  // Screen and Bleed Calculations
+  // Oversizing by 30% guarantees that when scaling, rotating, or drifting,
+  // NO edges or blank spaces ever appear on any phone screen.
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  const w = screenWidth || 390;
+  const h = screenHeight || 844;
+
+  const bleedX = Math.round(w * 0.3);
+  const bleedY = Math.round(h * 0.3);
+  const totalW = w + bleedX * 2;
+  const totalH = h + bleedY * 2;
+
+  // Horizon Arch Coordinates (colored gradient on top, arching across middle)
+  const archYEdge = bleedY + h * 0.44;
+  const archYCenter = bleedY + h * 0.52;
 
   // Animation values
   const driftX = useSharedValue(0);
@@ -147,8 +168,8 @@ export function GradientASCII({
     // Organic swaying drift
     driftX.value = withRepeat(
       withSequence(
-        withTiming(18 * flow, { duration: duration * 0.9, easing: Easing.inOut(Easing.sin) }),
-        withTiming(-18 * flow, { duration: duration * 1.1, easing: Easing.inOut(Easing.sin) })
+        withTiming(16 * flow, { duration: duration * 0.9, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-16 * flow, { duration: duration * 1.1, easing: Easing.inOut(Easing.sin) })
       ),
       -1,
       true
@@ -156,8 +177,8 @@ export function GradientASCII({
 
     driftY.value = withRepeat(
       withSequence(
-        withTiming(-14 * flow, { duration: duration * 1.2, easing: Easing.inOut(Easing.sin) }),
-        withTiming(14 * flow, { duration: duration * 0.8, easing: Easing.inOut(Easing.sin) })
+        withTiming(-12 * flow, { duration: duration * 1.2, easing: Easing.inOut(Easing.sin) }),
+        withTiming(12 * flow, { duration: duration * 0.8, easing: Easing.inOut(Easing.sin) })
       ),
       -1,
       true
@@ -166,8 +187,8 @@ export function GradientASCII({
     // Subtle breathing scale
     waveScale.value = withRepeat(
       withSequence(
-        withTiming(1 + 0.06 * flow, { duration: duration * 1.3, easing: Easing.inOut(Easing.quad) }),
-        withTiming(1 - 0.04 * flow, { duration: duration * 1.1, easing: Easing.inOut(Easing.quad) })
+        withTiming(1 + 0.05 * flow, { duration: duration * 1.3, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1 - 0.03 * flow, { duration: duration * 1.1, easing: Easing.inOut(Easing.quad) })
       ),
       -1,
       true
@@ -176,7 +197,7 @@ export function GradientASCII({
     // Gentle luminous glow pulse
     glowPulse.value = withRepeat(
       withSequence(
-        withTiming(glow * 1.25, { duration: duration * 0.7, easing: Easing.inOut(Easing.sin) }),
+        withTiming(glow * 1.2, { duration: duration * 0.7, easing: Easing.inOut(Easing.sin) }),
         withTiming(glow * 0.85, { duration: duration * 0.9, easing: Easing.inOut(Easing.sin) })
       ),
       -1,
@@ -198,87 +219,132 @@ export function GradientASCII({
   const secondaryAnimatedStyle = useAnimatedStyle(() => {
     return {
       transform: [
-        { translateX: -driftX.value * 0.6 },
+        { translateX: -driftX.value * 0.5 },
         { translateY: -driftY.value * 0.5 },
         { scale: (2 - waveScale.value) * scale },
       ],
-      opacity: glowPulse.value * 0.75,
+      opacity: glowPulse.value * 0.8,
     };
   });
-
-  // Calculate width/height proportions
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-  const w = screenWidth || 400;
-  const h = screenHeight || 800;
 
   return (
     <View
       style={[StyleSheet.absoluteFill, styles.container, style]}
       pointerEvents="none"
     >
-      {/* BASE BACKGROUND FADE */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} />
-
       {/* SHAPE RENDERING */}
       {shape === 'horizon' && (
         <>
-          {/* Deep Ambient Sun & Atmosphere */}
-          <Animated.View style={[StyleSheet.absoluteFill, animatedLayerStyle]}>
-            <Svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`}>
+          {/* Main Atmospheric & Gradient Layer (Bleed oversized) */}
+          <Animated.View
+            style={[
+              {
+                position: 'absolute',
+                left: -bleedX,
+                top: -bleedY,
+                width: totalW,
+                height: totalH,
+              },
+              animatedLayerStyle,
+            ]}
+          >
+            <Svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`}>
               <Defs>
+                {/* Luminous Sun Bloom centered in upper half */}
                 <RadialGradient
                   id="horizonSun"
                   cx="50%"
-                  cy="52%"
-                  rx="65%"
+                  cy={`${((bleedY + h * 0.18) / totalH) * 100}%`}
+                  rx="60%"
                   ry="45%"
-                  fx="50%"
-                  fy="50%"
                 >
-                  <Stop offset="0%" stopColor={palette.glow} stopOpacity="0.45" />
-                  <Stop offset="35%" stopColor={palette.mid} stopOpacity="0.25" />
-                  <Stop offset="70%" stopColor={palette.glow} stopOpacity="0.08" />
+                  <Stop offset="0%" stopColor={palette.highlight} stopOpacity="0.85" />
+                  <Stop offset="25%" stopColor={palette.vivid} stopOpacity="0.65" />
+                  <Stop offset="55%" stopColor={palette.glow} stopOpacity="0.3" />
                   <Stop offset="100%" stopColor={palette.base} stopOpacity="0" />
                 </RadialGradient>
 
-                <LinearGradient id="horizonGlowBar" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <Stop offset="0%" stopColor={palette.highlight} stopOpacity="0.9" />
-                  <Stop offset="25%" stopColor={palette.glow} stopOpacity="0.7" />
-                  <Stop offset="65%" stopColor={palette.mid} stopOpacity="0.25" />
+                {/* Sky Wash from Top down to Horizon Arch */}
+                <LinearGradient id="horizonSky" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <Stop offset="0%" stopColor={palette.vivid} stopOpacity="0.45" />
+                  <Stop offset="30%" stopColor={palette.vivid} stopOpacity="0.75" />
+                  <Stop offset="65%" stopColor={palette.mid} stopOpacity="0.85" />
+                  <Stop offset="92%" stopColor={palette.highlight} stopOpacity="0.95" />
+                  <Stop offset="100%" stopColor={palette.vivid} stopOpacity="0.7" />
+                </LinearGradient>
+
+                {/* Soft Diffusion Falloff Below Horizon */}
+                <LinearGradient id="horizonFalloff" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <Stop offset="0%" stopColor={palette.vivid} stopOpacity="0.4" />
+                  <Stop offset="40%" stopColor={palette.glow} stopOpacity="0.18" />
+                  <Stop offset="80%" stopColor={palette.base} stopOpacity="0.05" />
                   <Stop offset="100%" stopColor={palette.base} stopOpacity="0" />
+                </LinearGradient>
+
+                {/* White-Hot Horizon Rim Line */}
+                <LinearGradient id="horizonRim" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <Stop offset="0%" stopColor={palette.vivid} stopOpacity="0" />
+                  <Stop offset="15%" stopColor={palette.vivid} stopOpacity="0.6" />
+                  <Stop offset="40%" stopColor={palette.highlight} stopOpacity="0.9" />
+                  <Stop offset="50%" stopColor="#ffffff" stopOpacity="0.98" />
+                  <Stop offset="60%" stopColor={palette.highlight} stopOpacity="0.9" />
+                  <Stop offset="85%" stopColor={palette.vivid} stopOpacity="0.6" />
+                  <Stop offset="100%" stopColor={palette.vivid} stopOpacity="0" />
                 </LinearGradient>
               </Defs>
 
-              {/* Atmospheric central radiance */}
-              <Rect x="0" y="0" width={w} height={h} fill="url(#horizonSun)" />
+              {/* 1. Atmospheric Sun Bloom across upper screen */}
+              <Rect x="0" y="0" width={totalW} height={totalH} fill="url(#horizonSun)" />
 
-              {/* Luminous Arched Horizon Curve */}
+              {/* 2. Top Colored Sky Fill (covers from very top down to the curved arch) */}
               <Path
-                d={`M -40,${h * 0.52} Q ${w * 0.5},${h * 0.44} ${w + 40},${h * 0.52} L ${w + 40},${h} L -40,${h} Z`}
-                fill="url(#horizonGlowBar)"
+                d={`M 0,0 L ${totalW},0 L ${totalW},${archYEdge} Q ${totalW * 0.5},${archYCenter} 0,${archYEdge} Z`}
+                fill="url(#horizonSky)"
+              />
+
+              {/* 3. Soft Diffusion bleeding down below the arch */}
+              <Path
+                d={`M 0,${archYEdge} Q ${totalW * 0.5},${archYCenter} ${totalW},${archYEdge} L ${totalW},${bleedY + h * 0.72} L 0,${bleedY + h * 0.72} Z`}
+                fill="url(#horizonFalloff)"
+              />
+
+              {/* 4. Glowing Horizon Crest Rim */}
+              <Path
+                d={`M 0,${archYEdge} Q ${totalW * 0.5},${archYCenter} ${totalW},${archYEdge}`}
+                fill="none"
+                stroke="url(#horizonRim)"
+                strokeWidth={mixSoftness(3, 7, softness)}
               />
             </Svg>
           </Animated.View>
 
-          {/* Secondary Organic Wavering Edge for depth */}
-          <Animated.View style={[StyleSheet.absoluteFill, secondaryAnimatedStyle]}>
-            <Svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`}>
+          {/* Secondary Organic Wavering Rim for depth */}
+          <Animated.View
+            style={[
+              {
+                position: 'absolute',
+                left: -bleedX,
+                top: -bleedY,
+                width: totalW,
+                height: totalH,
+              },
+              secondaryAnimatedStyle,
+            ]}
+          >
+            <Svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`}>
               <Defs>
-                <LinearGradient id="horizonWave" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <Stop offset="0%" stopColor={palette.glow} stopOpacity="0" />
-                  <Stop offset="30%" stopColor={palette.highlight} stopOpacity="0.5" />
-                  <Stop offset="50%" stopColor="#ffffff" stopOpacity="0.75" />
-                  <Stop offset="70%" stopColor={palette.highlight} stopOpacity="0.5" />
-                  <Stop offset="100%" stopColor={palette.glow} stopOpacity="0" />
+                <LinearGradient id="secondaryWave" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <Stop offset="10%" stopColor={palette.highlight} stopOpacity="0" />
+                  <Stop offset="45%" stopColor="#ffffff" stopOpacity="0.7" />
+                  <Stop offset="55%" stopColor="#ffffff" stopOpacity="0.7" />
+                  <Stop offset="90%" stopColor={palette.highlight} stopOpacity="0" />
                 </LinearGradient>
               </Defs>
-
-              {/* Fine glowing crest line of the horizon */}
               <Path
-                d={`M 0,${h * 0.52} Q ${w * 0.5},${h * 0.44} ${w},${h * 0.52}`}
+                d={`M 0,${archYEdge - 3} Q ${totalW * 0.5},${archYCenter - 5} ${totalW},${archYEdge - 3}`}
                 fill="none"
-                stroke="url(#horizonWave)"
-                strokeWidth={mixSoftness(2, 6, softness)}
+                stroke="url(#secondaryWave)"
+                strokeWidth={2}
               />
             </Svg>
           </Animated.View>
@@ -286,31 +352,36 @@ export function GradientASCII({
       )}
 
       {shape === 'pinch' && (
-        <Animated.View style={[StyleSheet.absoluteFill, animatedLayerStyle]}>
-          <Svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`}>
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              left: -bleedX,
+              top: -bleedY,
+              width: totalW,
+              height: totalH,
+            },
+            animatedLayerStyle,
+          ]}
+        >
+          <Svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`}>
             <Defs>
               <RadialGradient
                 id="pinchCenter"
                 cx="50%"
                 cy="50%"
-                rx="50%"
-                ry="20%"
-                fx="50%"
-                fy="50%"
+                rx="55%"
+                ry="22%"
               >
-                <Stop offset="0%" stopColor={palette.highlight} stopOpacity="0.85" />
-                <Stop offset="40%" stopColor={palette.glow} stopOpacity="0.5" />
+                <Stop offset="0%" stopColor={palette.highlight} stopOpacity="0.9" />
+                <Stop offset="40%" stopColor={palette.vivid} stopOpacity="0.6" />
                 <Stop offset="100%" stopColor={palette.base} stopOpacity="0" />
               </RadialGradient>
-              <LinearGradient id="pinchSideLeft" x1="0%" y1="0%" x2="100%" y2="0%">
-                <Stop offset="0%" stopColor={palette.glow} stopOpacity="0.7" />
-                <Stop offset="100%" stopColor={palette.glow} stopOpacity="0.2" />
-              </LinearGradient>
             </Defs>
 
-            {/* Pinched waist band */}
+            {/* Pinched waist band across center */}
             <Path
-              d={`M 0,${h * 0.38} Q ${w * 0.5},${h * 0.48} ${w},${h * 0.38} L ${w},${h * 0.62} Q ${w * 0.5},${h * 0.52} 0,${h * 0.62} Z`}
+              d={`M 0,${bleedY + h * 0.32} Q ${totalW * 0.5},${bleedY + h * 0.44} ${totalW},${bleedY + h * 0.32} L ${totalW},${bleedY + h * 0.68} Q ${totalW * 0.5},${bleedY + h * 0.56} 0,${bleedY + h * 0.68} Z`}
               fill="url(#pinchCenter)"
             />
           </Svg>
@@ -318,49 +389,72 @@ export function GradientASCII({
       )}
 
       {shape === 'rise' && (
-        <Animated.View style={[StyleSheet.absoluteFill, animatedLayerStyle]}>
-          <Svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`}>
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              left: -bleedX,
+              top: -bleedY,
+              width: totalW,
+              height: totalH,
+            },
+            animatedLayerStyle,
+          ]}
+        >
+          <Svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`}>
             <Defs>
               <RadialGradient
                 id="riseAtmosphere"
                 cx="50%"
-                cy="95%"
-                rx="80%"
+                cy="10%"
+                rx="75%"
                 ry="55%"
-                fx="50%"
-                fy="100%"
               >
-                <Stop offset="0%" stopColor={palette.highlight} stopOpacity="0.8" />
-                <Stop offset="30%" stopColor={palette.glow} stopOpacity="0.55" />
-                <Stop offset="65%" stopColor={palette.mid} stopOpacity="0.25" />
+                <Stop offset="0%" stopColor={palette.highlight} stopOpacity="0.85" />
+                <Stop offset="30%" stopColor={palette.vivid} stopOpacity="0.65" />
+                <Stop offset="65%" stopColor={palette.glow} stopOpacity="0.3" />
                 <Stop offset="100%" stopColor={palette.base} stopOpacity="0" />
               </RadialGradient>
             </Defs>
-            <Rect x="0" y="0" width={w} height={h} fill="url(#riseAtmosphere)" />
+            <Rect x="0" y="0" width={totalW} height={totalH} fill="url(#riseAtmosphere)" />
           </Svg>
         </Animated.View>
       )}
 
       {shape === 'eclipse' && (
-        <Animated.View style={[StyleSheet.absoluteFill, animatedLayerStyle]}>
-          <Svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`}>
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              left: -bleedX,
+              top: -bleedY,
+              width: totalW,
+              height: totalH,
+            },
+            animatedLayerStyle,
+          ]}
+        >
+          <Svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`}>
             <Defs>
               <RadialGradient
                 id="eclipseHalo"
                 cx="50%"
-                cy="46%"
-                rx="48%"
-                ry="48%"
-                fx="50%"
-                fy="46%"
+                cy={`${((bleedY + h * 0.35) / totalH) * 100}%`}
+                rx="45%"
+                ry="45%"
               >
-                <Stop offset="60%" stopColor={palette.glow} stopOpacity="0.05" />
-                <Stop offset="78%" stopColor={palette.highlight} stopOpacity="0.75" />
-                <Stop offset="88%" stopColor={palette.glow} stopOpacity="0.4" />
+                <Stop offset="55%" stopColor={palette.vivid} stopOpacity="0.05" />
+                <Stop offset="75%" stopColor={palette.highlight} stopOpacity="0.8" />
+                <Stop offset="88%" stopColor={palette.vivid} stopOpacity="0.45" />
                 <Stop offset="100%" stopColor={palette.base} stopOpacity="0" />
               </RadialGradient>
             </Defs>
-            <Circle cx={w * 0.5} cy={h * 0.46} r={w * 0.46} fill="url(#eclipseHalo)" />
+            <Circle
+              cx={totalW * 0.5}
+              cy={bleedY + h * 0.35}
+              r={w * 0.48}
+              fill="url(#eclipseHalo)"
+            />
           </Svg>
         </Animated.View>
       )}
