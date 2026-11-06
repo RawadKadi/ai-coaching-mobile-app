@@ -13,7 +13,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Mail, ChevronLeft, ArrowRight, X, AlertCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,11 +31,18 @@ export default function LoginScreen() {
   const colors = useBrandColors();
   const theme = useTheme();
   const router = useRouter();
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(emailParam || '');
   const [focusedField, setFocusedField] = useState<'email' | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+  }, [emailParam]);
 
   const isDark = isDarkColor(colors.background);
   const fontName = theme.typography.fontFamily || 'System';

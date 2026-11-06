@@ -138,7 +138,15 @@ export default function SignUpClientScreen() {
         router.replace('/');
       }
     } catch (err: any) {
-      setError(err.message || 'Sign up failed.');
+      const msg = err.message || '';
+      if (
+        msg.toLowerCase().includes('already registered') ||
+        msg.toLowerCase().includes('already exists')
+      ) {
+        setError('already_registered');
+      } else {
+        setError(msg || 'Sign up failed.');
+      }
     } finally {
       setLoading(false);
     }
@@ -266,15 +274,42 @@ export default function SignUpClientScreen() {
                       backgroundColor: colors.error + '15',
                       borderColor: colors.error + '35',
                     }}
-                    className="border rounded-2xl p-4 mb-6 flex-row items-center gap-3"
+                    className="border rounded-2xl p-4 mb-6 flex-row items-start gap-3"
                   >
-                    <AlertCircle size={18} color={colors.error} />
-                    <Text
-                      style={{ color: colors.error, fontFamily: bodyFont }}
-                      className="text-xs font-bold flex-1"
-                    >
-                      {error}
-                    </Text>
+                    <AlertCircle size={18} color={colors.error} style={{ marginTop: 2 }} />
+                    {error === 'already_registered' ? (
+                      <View className="flex-1">
+                        <Text
+                          style={{ color: colors.text, fontFamily: bodyFont, lineHeight: 20 }}
+                          className="text-xs font-semibold"
+                        >
+                          You have already created an account with this email.{' '}
+                          <Text
+                            onPress={() =>
+                              router.push({
+                                pathname: '/(auth)/login',
+                                params: { email: email.trim().toLowerCase() },
+                              })
+                            }
+                            style={{
+                              color: colors.primary,
+                              fontFamily: headingFont,
+                              textDecorationLine: 'underline',
+                            }}
+                            className="font-black"
+                          >
+                            Log in
+                          </Text>
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text
+                        style={{ color: colors.error, fontFamily: bodyFont }}
+                        className="text-xs font-bold flex-1"
+                      >
+                        {error}
+                      </Text>
+                    )}
                   </MotiView>
                 ) : null}
               </AnimatePresence>
