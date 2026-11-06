@@ -55,6 +55,7 @@ import { supabase } from '@/lib/supabase';
 import { CheckIn, Habit, HabitLog, Meal } from '@/types/database';
 import { formatCompactNumber } from '@/lib/format-utils';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
+import LightRays from '@/components/ui/LightRays';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   requestHealthPermissions,
@@ -700,6 +701,23 @@ export default function ClientDashboard() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
+      />
+
+      {/* Brand-adaptive Light Rays Background */}
+      <LightRays
+        raysOrigin="top-center"
+        raysColor={colors.primary}
+        raysSpeed={0.8}
+        lightSpread={0.6}
+        rayLength={2.8}
+        glow={0.5}
+        haze={0.2}
+        atmosphere={0.7}
+        intensity={isDark ? 0.8 : 0.55}
+        lightMode={!isDark}
+        pulsating={false}
+        followMouse={true}
+        mouseInfluence={0.08}
       />
 
       {/* Fixed Blur Top Bar */}
