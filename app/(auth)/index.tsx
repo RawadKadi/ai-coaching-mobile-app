@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { MotiView } from 'moti';
 import { getFontFamily } from '@/hooks/useAppFonts';
 import { isDarkColor } from '@/lib/theme-utils';
+import GradientASCII from '@/components/GradientASCII';
 
 export default function WelcomeScreen() {
   const { brand } = useBrand();
@@ -27,6 +28,7 @@ export default function WelcomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <GradientASCII shape="horizon" glow={0.35} flow={0.6} speed={0.8} />
       <SafeAreaView style={{ flex: 1 }}>
         <View className="flex-1 px-8 justify-between pt-16 pb-12">
           {/* Centered Brand / Hero Area */}

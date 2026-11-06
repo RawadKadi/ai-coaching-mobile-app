@@ -13,6 +13,7 @@ import { MotiView } from 'moti';
 import { ChevronLeft, Award, User } from 'lucide-react-native';
 import { getFontFamily } from '@/hooks/useAppFonts';
 import { isDarkColor } from '@/lib/theme-utils';
+import GradientASCII from '@/components/GradientASCII';
 
 export default function SignUpRoleSelectionScreen() {
   const { brand } = useBrand();
@@ -45,6 +46,7 @@ export default function SignUpRoleSelectionScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <GradientASCII shape="horizon" glow={0.35} flow={0.6} speed={0.8} />
       <SafeAreaView style={{ flex: 1 }}>
         <View className="flex-1 px-8 pt-6 pb-10 justify-between">
           {/* Top Row: Back Button + Brand Identity */}

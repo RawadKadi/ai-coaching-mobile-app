@@ -19,6 +19,7 @@ import { User, Mail, Lock, ChevronLeft, ArrowRight, AlertCircle } from 'lucide-r
 import { MotiView, AnimatePresence } from 'moti';
 import { getFontFamily } from '@/hooks/useAppFonts';
 import { isDarkColor } from '@/lib/theme-utils';
+import GradientASCII from '@/components/GradientASCII';
 
 export default function SignUpEmailScreen() {
   const { brand, refreshBrand } = useBrand();
@@ -75,6 +76,7 @@ export default function SignUpEmailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <GradientASCII shape="horizon" glow={0.35} flow={0.6} speed={0.8} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
