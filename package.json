@@ -26,6 +26,7 @@
     "@expo-google-fonts/roboto": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
     "@google/generative-ai": "^0.24.1",
+    "@lottiefiles/dotlottie-react": "^0.21.1",
     "@lucide/lab": "^0.1.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.2.1",

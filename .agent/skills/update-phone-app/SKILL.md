@@ -19,5 +19,5 @@ Publish the latest JavaScript changes directly to the user's phone over-the-air 
   ```
 - To push to GitHub and update phone app together:
   ```bash
-  npm run push:now
+  git push:now
   ```
