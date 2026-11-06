@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   KeyRound,
   CheckCircle2,
+  ArrowRight,
 } from 'lucide-react-native';
 import { getFontFamily } from '@/hooks/useAppFonts';
 import { isDarkColor } from '@/lib/theme-utils';
@@ -47,6 +48,7 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<'client' | 'coach'>('coach');
+  const [showEmailForm, setShowEmailForm] = useState(false);
   const [switcherWidth, setSwitcherWidth] = useState(0);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -183,7 +185,8 @@ export default function SignUpScreen() {
     }
   };
 
-  const showRegistrationFields = role === 'coach' || (role === 'client' && inviteValid);
+  const showRegistrationFields =
+    (role === 'coach' && showEmailForm) || (role === 'client' && inviteValid);
   const canSubmit = showRegistrationFields && !loading && !validatingInvite;
 
   return (
@@ -203,7 +206,13 @@ export default function SignUpScreen() {
               {/* Top Row: Back Button + Brand Identity */}
               <View className="flex-row items-center justify-between mb-8">
                 <TouchableOpacity
-                  onPress={() => router.back()}
+                  onPress={() => {
+                    if (role === 'coach' && showEmailForm) {
+                      setShowEmailForm(false);
+                    } else {
+                      router.back();
+                    }
+                  }}
                   style={{
                     backgroundColor: surfaceBg,
                     borderColor: inputBorder,
@@ -358,6 +367,7 @@ export default function SignUpScreen() {
                     <Pressable
                       onPress={() => {
                         setRole('coach');
+                        setShowEmailForm(false);
                         setError('');
                       }}
                       className="flex-1 py-4 rounded-[22px] items-center flex-row justify-center gap-3 z-10"
@@ -433,58 +443,106 @@ export default function SignUpScreen() {
                   </MotiView>
                 )}
 
+                {/* Coach Options (Google + Sign up with Email) */}
+                {role === 'coach' && !showEmailForm && (
+                  <MotiView
+                    from={{ opacity: 0, translateY: 10 }}
+                    animate={{ opacity: 1, translateY: 0 }}
+                    transition={{ type: 'timing', duration: 250 } as any}
+                  >
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={{
+                        backgroundColor: surfaceBg,
+                        borderColor: inputBorder,
+                        borderWidth: 1.5,
+                        borderRadius: 32,
+                      }}
+                      className="h-16 items-center justify-center flex-row gap-3 mb-6"
+                      onPress={handleGoogleCoachSignUp}
+                      disabled={loading || googleLoading}
+                    >
+                      {googleLoading ? (
+                        <ActivityIndicator color={colors.text} />
+                      ) : (
+                        <>
+                          <GoogleIcon size={22} />
+                          <Text
+                            style={{
+                              color: colors.text,
+                              fontFamily: headingFont,
+                            }}
+                            className="font-black text-base tracking-wide"
+                          >
+                            Sign up with Google
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    <View className="flex-row items-center mb-6">
+                      <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
+                      <Text
+                        style={{ color: colors.textSecondary, fontFamily: bodyFont }}
+                        className="px-4 text-xs font-bold uppercase tracking-wider"
+                      >
+                        or
+                      </Text>
+                      <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
+                    </View>
+
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={{
+                        backgroundColor: surfaceBg,
+                        borderColor: inputBorder,
+                        borderWidth: 1.5,
+                        borderRadius: 32,
+                      }}
+                      className="h-16 items-center justify-center flex-row gap-3"
+                      onPress={() => {
+                        setError('');
+                        setShowEmailForm(true);
+                      }}
+                      disabled={loading || googleLoading}
+                    >
+                      <Mail size={22} color={colors.text} />
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontFamily: headingFont,
+                        }}
+                        className="font-black text-base tracking-wide"
+                      >
+                        Sign up with Email
+                      </Text>
+                    </TouchableOpacity>
+                  </MotiView>
+                )}
+
+                {/* Registration Form (Expanded for Coach or Verified Client) */}
                 <AnimatePresence>
                   {showRegistrationFields && (
                     <MotiView
-                      from={{ opacity: 0, height: 0, translateY: -20 }}
+                      from={{ opacity: 0, height: 0, translateY: -15 }}
                       animate={{ opacity: 1, height: 'auto', translateY: 0 }}
-                      exit={{ opacity: 0, height: 0, translateY: -20 }}
+                      exit={{ opacity: 0, height: 0, translateY: -15 }}
                       transition={{ type: 'timing', duration: 300 } as any}
                     >
-                      {/* Google Sign Up on TOP (Coaches ONLY) */}
                       {role === 'coach' && (
-                        <View className="mb-6">
-                          <TouchableOpacity
-                            activeOpacity={0.85}
-                            style={{
-                              backgroundColor: surfaceBg,
-                              borderColor: inputBorder,
-                              borderWidth: 1.5,
-                              borderRadius: 32,
-                            }}
-                            className="h-16 items-center justify-center flex-row gap-3 mb-6"
-                            onPress={handleGoogleCoachSignUp}
-                            disabled={loading || googleLoading}
+                        <TouchableOpacity
+                          onPress={() => setShowEmailForm(false)}
+                          className="flex-row items-center gap-2 mb-5"
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <ChevronLeft size={16} color={colors.textSecondary} />
+                          <Text
+                            style={{ color: colors.textSecondary, fontFamily: bodyFont }}
+                            className="text-xs font-bold uppercase tracking-wider"
                           >
-                            {googleLoading ? (
-                              <ActivityIndicator color={colors.text} />
-                            ) : (
-                              <>
-                                <GoogleIcon size={22} />
-                                <Text
-                                  style={{
-                                    color: colors.text,
-                                    fontFamily: headingFont,
-                                  }}
-                                  className="font-black text-base tracking-wide"
-                                >
-                                  Sign up with Google
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-
-                          <View className="flex-row items-center mb-2">
-                            <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
-                            <Text
-                              style={{ color: colors.textSecondary, fontFamily: bodyFont }}
-                              className="px-4 text-xs font-bold uppercase tracking-wider"
-                            >
-                              or with email
-                            </Text>
-                            <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
-                          </View>
-                        </View>
+                            Other options
+                          </Text>
+                        </TouchableOpacity>
                       )}
 
                       <InputField
@@ -530,15 +588,11 @@ export default function SignUpScreen() {
                         inputBorder={inputBorder}
                         bodyFont={bodyFont}
                       />
-                    </MotiView>
-                  )}
-                </AnimatePresence>
 
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={
-                    canSubmit
-                      ? {
+                      {/* Create Account Button (Matching Continue Button Style) */}
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={{
                           backgroundColor: colors.primary,
                           borderBottomWidth: 4,
                           borderBottomColor: colors.primaryPressed,
@@ -548,39 +602,57 @@ export default function SignUpScreen() {
                           shadowRadius: 16,
                           elevation: 8,
                           borderRadius: 32,
-                        }
-                      : {
-                          backgroundColor: surfaceBg,
-                          borderWidth: 1,
-                          borderColor: inputBorder,
-                          borderRadius: 32,
-                          opacity: 0.5,
-                        }
-                  }
-                  className="mt-6 h-20 items-center justify-center flex-row gap-3"
-                  onPress={handleSignUp}
-                  disabled={!canSubmit || googleLoading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.textOnPrimary} />
-                  ) : (
-                    <>
+                        }}
+                        className="mt-3 h-16 items-center justify-center flex-row gap-3"
+                        onPress={handleSignUp}
+                        disabled={!canSubmit || googleLoading}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color={colors.textOnPrimary} />
+                        ) : (
+                          <>
+                            <Text
+                              style={{
+                                color: colors.textOnPrimary,
+                                fontFamily: headingFont,
+                              }}
+                              className="font-black text-lg tracking-wide uppercase"
+                            >
+                              Create Account
+                            </Text>
+                            <ArrowRight size={20} color={colors.textOnPrimary} />
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </MotiView>
+                  )}
+                </AnimatePresence>
+
+                {/* Bottom: Sign In Link */}
+                <View className="pt-10 items-center">
+                  <TouchableOpacity
+                    onPress={() => router.push({ pathname: '/(auth)/login' })}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontFamily: bodyFont,
+                      }}
+                      className="font-bold text-xs uppercase tracking-widest"
+                    >
+                      Already have an account?{' '}
                       <Text
                         style={{
-                          color: canSubmit ? colors.textOnPrimary : colors.textSecondary,
+                          color: colors.primary,
                           fontFamily: headingFont,
                         }}
-                        className="font-black text-xl text-center tracking-wide"
                       >
-                        CREATE ACCOUNT
+                        Sign In
                       </Text>
-                      <UserPlus
-                        size={20}
-                        color={canSubmit ? colors.textOnPrimary : colors.textSecondary}
-                      />
-                    </>
-                  )}
-                </TouchableOpacity>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </ScrollView>
