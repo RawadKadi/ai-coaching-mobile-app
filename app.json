@@ -80,7 +80,8 @@
     },
     "runtimeVersion": "1.0.0",
     "updates": {
-      "url": "https://u.expo.dev/1cd041e9-3df6-4780-bea3-ee1afa234c3e"
+      "url": "https://u.expo.dev/1cd041e9-3df6-4780-bea3-ee1afa234c3e",
+      "fallbackToCacheTimeout": 3000
     }
   }
 }

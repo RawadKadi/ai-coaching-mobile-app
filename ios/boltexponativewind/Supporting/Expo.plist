@@ -7,7 +7,12 @@
     <key>EXUpdatesEnabled</key>
     <true/>
     <key>EXUpdatesLaunchWaitMs</key>
-    <integer>0</integer>
+    <integer>3000</integer>
+    <key>EXUpdatesRequestHeaders</key>
+    <dict>
+      <key>expo-channel-name</key>
+      <string>main</string>
+    </dict>
     <key>EXUpdatesURL</key>
     <string>https://u.expo.dev/1cd041e9-3df6-4780-bea3-ee1afa234c3e</string>
     <key>EXUpdatesEnableBsdiffPatchSupport</key>
