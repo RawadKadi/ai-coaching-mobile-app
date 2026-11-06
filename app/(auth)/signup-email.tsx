@@ -378,3 +378,4 @@ const InputField = ({
     </View>
   );
 };
+
