@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "push:now": "git push origin main && npx eas-cli update --auto",
     "postinstall": "node scripts/patch-rn-text.js"
   },
   "dependencies": {
@@ -56,6 +57,7 @@
     "expo-status-bar": "~58.0.4",
     "expo-symbols": "~58.0.4",
     "expo-system-ui": "~58.0.6",
+    "expo-updates": "~58.0.21",
     "expo-video": "~58.0.12",
     "expo-video-thumbnails": "~58.0.2",
     "expo-web-browser": "~58.0.6",

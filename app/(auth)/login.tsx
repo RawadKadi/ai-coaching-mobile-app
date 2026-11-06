@@ -1,5 +1,5 @@
 import { useBrand, useBrandColors, useTheme } from '@/contexts/BrandContext';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Image } from 'expo-image';
 import {
   View,
@@ -15,7 +15,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Eye, EyeOff, Mail, Lock, LogIn } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, LogIn, ChevronLeft, ArrowRight, X, Pencil } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MotiView, AnimatePresence } from 'moti';
 import { getFontFamily } from '@/hooks/useAppFonts';
@@ -32,6 +32,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
 
+  const [step, setStep] = useState<'email' | 'password'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -39,6 +40,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const passwordInputRef = useRef<any>(null);
 
   const isDark = isDarkColor(colors.background);
   const fontName = theme.typography.fontFamily || 'System';
@@ -50,9 +53,28 @@ export default function LoginScreen() {
   const brandTitle = brand?.name?.trim() || 'Welcome';
   const brandInitial = brandTitle.charAt(0).toUpperCase();
 
+  const handleContinueWithEmail = () => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please enter your email.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setError('Please enter a valid email.');
+      return;
+    }
+
+    setError('');
+    setStep('password');
+    setTimeout(() => {
+      passwordInputRef.current?.focus();
+    }, 150);
+  };
+
   const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please enter your email and password.');
+    if (!password) {
+      setError('Please enter your password.');
       return;
     }
 
@@ -60,14 +82,14 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      await signIn(email, password);
+      await signIn(email.trim().toLowerCase(), password);
       await refreshBrand();
       const pendingInvite = await AsyncStorage.getItem(PENDING_INVITE_KEY);
       if (pendingInvite) {
         router.replace({ pathname: '/join-team', params: { invite: pendingInvite } });
       }
     } catch (err: any) {
-      setError(err.message || 'Sign in failed. Please check your details.');
+      setError(err.message || 'Sign in failed. Check your details.');
       setLoading(false);
     }
   };
@@ -109,19 +131,40 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <View className="flex-1 px-8 pt-20 pb-12">
+            <View className="flex-1 px-8 pt-12 pb-12">
+              {/* Top Navigation Bar on Step 2 */}
+              {step === 'password' && (
+                <View className="flex-row items-center mb-6">
+                  <TouchableOpacity
+                    onPress={() => {
+                      setError('');
+                      setStep('email');
+                    }}
+                    style={{
+                      backgroundColor: inputBg,
+                      borderColor: inputBorder,
+                      borderWidth: 1,
+                    }}
+                    className="w-12 h-12 rounded-2xl items-center justify-center"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <ChevronLeft size={22} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Brand Header */}
               <MotiView
                 from={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="items-center mb-14"
+                className="items-center mb-10"
               >
                 {brand?.logo_url ? (
                   <View
                     style={{
-                      width: 88,
-                      height: 88,
-                      borderRadius: 28,
+                      width: 80,
+                      height: 80,
+                      borderRadius: 26,
                       backgroundColor: colors.surface,
                       borderWidth: 1.5,
                       borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
@@ -131,7 +174,7 @@ export default function LoginScreen() {
                       shadowRadius: 20,
                       elevation: 10,
                       overflow: 'hidden',
-                      marginBottom: 24,
+                      marginBottom: 20,
                     }}
                     className="items-center justify-center"
                   >
@@ -145,9 +188,9 @@ export default function LoginScreen() {
                 ) : (
                   <View
                     style={{
-                      width: 88,
-                      height: 88,
-                      borderRadius: 28,
+                      width: 80,
+                      height: 80,
+                      borderRadius: 26,
                       backgroundColor: colors.primary + '20',
                       borderWidth: 1.5,
                       borderColor: colors.primary + '40',
@@ -156,14 +199,14 @@ export default function LoginScreen() {
                       shadowOpacity: 0.25,
                       shadowRadius: 20,
                       elevation: 10,
-                      marginBottom: 24,
+                      marginBottom: 20,
                     }}
                     className="items-center justify-center"
                   >
                     <Text
                       style={{
                         color: colors.primary,
-                        fontSize: 36,
+                        fontSize: 34,
                         fontWeight: '900',
                         fontFamily: headingFont,
                       }}
@@ -178,7 +221,7 @@ export default function LoginScreen() {
                     color: colors.text,
                     fontFamily: headingFont,
                   }}
-                  className="text-4xl font-black text-center tracking-tight"
+                  className="text-3xl font-black text-center tracking-tight"
                 >
                   {brandTitle}
                 </Text>
@@ -187,9 +230,9 @@ export default function LoginScreen() {
                     color: colors.textSecondary,
                     fontFamily: bodyFont,
                   }}
-                  className="text-xs font-bold uppercase tracking-[4px] mt-2.5"
+                  className="text-xs font-bold uppercase tracking-[4px] mt-2"
                 >
-                  Sign in to continue
+                  {step === 'email' ? 'Sign in to continue' : 'Enter your password'}
                 </Text>
               </MotiView>
 
@@ -204,7 +247,7 @@ export default function LoginScreen() {
                       backgroundColor: colors.error + '15',
                       borderColor: colors.error + '35',
                     }}
-                    className="border rounded-2xl p-4 mb-8 flex-row items-center gap-3"
+                    className="border rounded-2xl p-4 mb-6 flex-row items-center gap-3"
                   >
                     <View
                       style={{ backgroundColor: colors.error }}
@@ -220,185 +263,289 @@ export default function LoginScreen() {
                 ) : null}
               </AnimatePresence>
 
-              {/* Google Sign In Button */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)',
-                  borderColor: inputBorder,
-                  borderWidth: 1.5,
-                  borderRadius: 32,
-                }}
-                className="h-16 items-center justify-center flex-row gap-3 mb-6"
-                onPress={handleGoogleSignIn}
-                disabled={loading || googleLoading}
-              >
-                {googleLoading ? (
-                  <ActivityIndicator color={colors.text} />
-                ) : (
-                  <>
-                    <GoogleIcon size={22} />
+              {/* Option 1 Flow */}
+              {step === 'email' ? (
+                <MotiView
+                  key="step-email"
+                  from={{ opacity: 0, translateY: 10 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 250 } as any}
+                >
+                  {/* Google Sign In on TOP */}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={{
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)',
+                      borderColor: inputBorder,
+                      borderWidth: 1.5,
+                      borderRadius: 32,
+                    }}
+                    className="h-16 items-center justify-center flex-row gap-3 mb-6"
+                    onPress={handleGoogleSignIn}
+                    disabled={loading || googleLoading}
+                  >
+                    {googleLoading ? (
+                      <ActivityIndicator color={colors.text} />
+                    ) : (
+                      <>
+                        <GoogleIcon size={22} />
+                        <Text
+                          style={{
+                            color: colors.text,
+                            fontFamily: headingFont,
+                          }}
+                          className="font-black text-base tracking-wide"
+                        >
+                          Continue with Google
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Divider */}
+                  <View className="flex-row items-center mb-6">
+                    <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
+                    <Text
+                      style={{ color: colors.textSecondary, fontFamily: bodyFont }}
+                      className="px-4 text-xs font-bold uppercase tracking-wider"
+                    >
+                      or with email
+                    </Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
+                  </View>
+
+                  {/* Email Input */}
+                  <View className="mb-6">
+                    <View
+                      style={{
+                        backgroundColor: inputBg,
+                        borderWidth: 1.5,
+                        borderColor: focusedField === 'email' ? colors.primary : inputBorder,
+                        borderRadius: 28,
+                      }}
+                      className="px-6 py-2 flex-row items-center gap-4"
+                    >
+                      <Mail
+                        size={20}
+                        color={focusedField === 'email' ? colors.primary : colors.textSecondary}
+                      />
+                      <TextInput
+                        style={{
+                          color: colors.text,
+                          fontFamily: bodyFont,
+                        }}
+                        className="flex-1 text-xl h-14"
+                        placeholder="Email"
+                        placeholderTextColor={colors.textTertiary}
+                        value={email}
+                        onChangeText={(t) => {
+                          setEmail(t);
+                          if (error) setError('');
+                        }}
+                        onFocus={() => setFocusedField('email')}
+                        onBlur={() => setFocusedField(null)}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="email-address"
+                        returnKeyType="next"
+                        onSubmitEditing={handleContinueWithEmail}
+                        selectionColor={colors.primary}
+                      />
+                      {email.length > 0 && (
+                        <TouchableOpacity
+                          onPress={() => setEmail('')}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <X size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Continue Button */}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={{
+                      backgroundColor: colors.primary,
+                      borderBottomWidth: 4,
+                      borderBottomColor: colors.primaryPressed,
+                      shadowColor: colors.primary,
+                      shadowOffset: { width: 0, height: 10 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 16,
+                      elevation: 8,
+                      borderRadius: 32,
+                    }}
+                    className="h-16 items-center justify-center flex-row gap-3"
+                    onPress={handleContinueWithEmail}
+                    disabled={loading || googleLoading}
+                  >
                     <Text
                       style={{
-                        color: colors.text,
+                        color: colors.textOnPrimary,
                         fontFamily: headingFont,
                       }}
-                      className="font-black text-base tracking-wide"
+                      className="font-black text-lg tracking-wide uppercase"
                     >
-                      Continue with Google
+                      Continue
                     </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              {/* Divider */}
-              <View className="flex-row items-center mb-6">
-                <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
-                <Text
-                  style={{ color: colors.textSecondary, fontFamily: bodyFont }}
-                  className="px-4 text-xs font-bold uppercase tracking-wider"
+                    <ArrowRight size={20} color={colors.textOnPrimary} />
+                  </TouchableOpacity>
+                </MotiView>
+              ) : (
+                <MotiView
+                  key="step-password"
+                  from={{ opacity: 0, translateX: 16 }}
+                  animate={{ opacity: 1, translateX: 0 }}
+                  transition={{ type: 'timing', duration: 250 } as any}
                 >
-                  or with email
-                </Text>
-                <View style={{ flex: 1, height: 1, backgroundColor: inputBorder }} />
-              </View>
-
-              {/* Form Fields */}
-              <View>
-                <View className="mb-5">
-                  <View
-                    style={{
-                      backgroundColor: inputBg,
-                      borderWidth: 1.5,
-                      borderColor: focusedField === 'email' ? colors.primary : inputBorder,
-                      borderRadius: 28,
-                    }}
-                    className="px-6 py-2 flex-row items-center gap-4"
-                  >
-                    <Mail
-                      size={20}
-                      color={focusedField === 'email' ? colors.primary : colors.textSecondary}
-                    />
-                    <TextInput
-                      style={{
-                        color: colors.text,
-                        fontFamily: bodyFont,
-                      }}
-                      className="flex-1 text-xl h-14"
-                      placeholder="Email"
-                      placeholderTextColor={colors.textTertiary}
-                      value={email}
-                      onChangeText={setEmail}
-                      onFocus={() => setFocusedField('email')}
-                      onBlur={() => setFocusedField(null)}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      selectionColor={colors.primary}
-                    />
-                  </View>
-                </View>
-
-                <View className="mb-8">
-                  <View
-                    style={{
-                      backgroundColor: inputBg,
-                      borderWidth: 1.5,
-                      borderColor: focusedField === 'password' ? colors.primary : inputBorder,
-                      borderRadius: 28,
-                    }}
-                    className="px-6 py-2 flex-row items-center gap-4"
-                  >
-                    <Lock
-                      size={20}
-                      color={focusedField === 'password' ? colors.primary : colors.textSecondary}
-                    />
-                    <TextInput
-                      style={{
-                        color: colors.text,
-                        fontFamily: bodyFont,
-                      }}
-                      className="flex-1 text-xl h-14"
-                      placeholder="Password"
-                      placeholderTextColor={colors.textTertiary}
-                      value={password}
-                      onChangeText={setPassword}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
-                      secureTextEntry={!showPassword}
-                      selectionColor={colors.primary}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setShowPassword(!showPassword)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      {showPassword ? (
-                        <EyeOff size={20} color={colors.textSecondary} />
-                      ) : (
-                        <Eye size={20} color={colors.textSecondary} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={{
-                    backgroundColor: colors.primary,
-                    borderBottomWidth: 4,
-                    borderBottomColor: colors.primaryPressed,
-                    shadowColor: colors.primary,
-                    shadowOffset: { width: 0, height: 10 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 16,
-                    elevation: 8,
-                    borderRadius: 32,
-                  }}
-                  className="h-20 items-center justify-center flex-row gap-3"
-                  onPress={handleLogin}
-                  disabled={loading || googleLoading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.textOnPrimary} />
-                  ) : (
-                    <>
-                      <Text
-                        style={{
-                          color: colors.textOnPrimary,
-                          fontFamily: headingFont,
-                        }}
-                        className="font-black text-xl tracking-wide"
-                      >
-                        SIGN IN
-                      </Text>
-                      <LogIn size={20} color={colors.textOnPrimary} />
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <View className="pt-10 items-center">
+                  {/* Selected Email Pill (Clickable to change) */}
                   <TouchableOpacity
-                    onPress={() => router.push({ pathname: '/(auth)/signup' })}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setError('');
+                      setStep('email');
+                    }}
+                    style={{
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)',
+                      borderColor: inputBorder,
+                      borderWidth: 1,
+                      borderRadius: 20,
+                    }}
+                    className="p-3.5 mb-6 flex-row items-center justify-between"
                   >
+                    <View className="flex-row items-center gap-3 flex-1 mr-3">
+                      <Mail size={18} color={colors.primary} />
+                      <Text
+                        style={{ color: colors.text, fontFamily: bodyFont }}
+                        className="text-sm font-semibold flex-1"
+                        numberOfLines={1}
+                      >
+                        {email}
+                      </Text>
+                    </View>
+                    <View className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10">
+                      <Pencil size={12} color={colors.primary} />
+                      <Text
+                        style={{ color: colors.primary, fontFamily: headingFont }}
+                        className="text-xs font-bold"
+                      >
+                        Edit
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Password Input */}
+                  <View className="mb-6">
+                    <View
+                      style={{
+                        backgroundColor: inputBg,
+                        borderWidth: 1.5,
+                        borderColor: focusedField === 'password' ? colors.primary : inputBorder,
+                        borderRadius: 28,
+                      }}
+                      className="px-6 py-2 flex-row items-center gap-4"
+                    >
+                      <Lock
+                        size={20}
+                        color={focusedField === 'password' ? colors.primary : colors.textSecondary}
+                      />
+                      <TextInput
+                        ref={passwordInputRef}
+                        style={{
+                          color: colors.text,
+                          fontFamily: bodyFont,
+                        }}
+                        className="flex-1 text-xl h-14"
+                        placeholder="Password"
+                        placeholderTextColor={colors.textTertiary}
+                        value={password}
+                        onChangeText={(t) => {
+                          setPassword(t);
+                          if (error) setError('');
+                        }}
+                        onFocus={() => setFocusedField('password')}
+                        onBlur={() => setFocusedField(null)}
+                        secureTextEntry={!showPassword}
+                        returnKeyType="done"
+                        onSubmitEditing={handleLogin}
+                        selectionColor={colors.primary}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={20} color={colors.textSecondary} />
+                        ) : (
+                          <Eye size={20} color={colors.textSecondary} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Sign In Button */}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={{
+                      backgroundColor: colors.primary,
+                      borderBottomWidth: 4,
+                      borderBottomColor: colors.primaryPressed,
+                      shadowColor: colors.primary,
+                      shadowOffset: { width: 0, height: 10 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 16,
+                      elevation: 8,
+                      borderRadius: 32,
+                    }}
+                    className="h-16 items-center justify-center flex-row gap-3"
+                    onPress={handleLogin}
+                    disabled={loading || googleLoading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={colors.textOnPrimary} />
+                    ) : (
+                      <>
+                        <Text
+                          style={{
+                            color: colors.textOnPrimary,
+                            fontFamily: headingFont,
+                          }}
+                          className="font-black text-lg tracking-wide uppercase"
+                        >
+                          Sign In
+                        </Text>
+                        <LogIn size={20} color={colors.textOnPrimary} />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </MotiView>
+              )}
+
+              {/* Bottom: Create Account Option */}
+              <View className="pt-8 items-center">
+                <TouchableOpacity
+                  onPress={() => router.push({ pathname: '/(auth)/signup' })}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: bodyFont,
+                    }}
+                    className="font-bold text-xs uppercase tracking-widest"
+                  >
+                    New user?{' '}
                     <Text
                       style={{
-                        color: colors.textSecondary,
-                        fontFamily: bodyFont,
+                        color: colors.primary,
+                        fontFamily: headingFont,
                       }}
-                      className="font-bold text-xs uppercase tracking-widest"
                     >
-                      New user?{' '}
-                      <Text
-                        style={{
-                          color: colors.primary,
-                          fontFamily: headingFont,
-                        }}
-                      >
-                        Create Account
-                      </Text>
+                      Create Account
                     </Text>
-                  </TouchableOpacity>
-                </View>
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           </ScrollView>
@@ -407,3 +554,4 @@ export default function LoginScreen() {
     </View>
   );
 }
+
