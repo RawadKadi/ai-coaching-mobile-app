@@ -28,15 +28,15 @@ export default function WelcomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <GradientASCII shape="horizon" glow={0.35} flow={0.6} speed={0.8} />
+      <GradientASCII shape="horizon" glow={0.45} flow={0.6} speed={0.8} />
       <SafeAreaView style={{ flex: 1 }}>
         <View className="flex-1 px-8 justify-between pt-16 pb-12">
           {/* Centered Brand / Hero Area */}
           <View className="flex-1 justify-center items-center">
             <MotiView
-              from={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: 'timing', duration: 400 } as any}
+              from={{ opacity: 0, scale: 0.9, translateY: 20 }}
+              animate={{ opacity: 1, scale: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 50 } as any}
               className="items-center"
             >
               {brand?.logo_url ? (
@@ -101,7 +101,7 @@ export default function WelcomeScreen() {
                   color: colors.text,
                   fontFamily: headingFont,
                 }}
-                className="text-4xl font-black text-center tracking-tight leading-tight px-4"
+                className="text-4xl font-black text-center tracking-tight"
               >
                 {brandTitle}
               </Text>
@@ -118,67 +118,73 @@ export default function WelcomeScreen() {
             </MotiView>
           </View>
 
-          {/* Bottom Action Buttons (Spotify Style) */}
-          <MotiView
-            from={{ opacity: 0, translateY: 20 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 400, delay: 150 } as any}
-            className="w-full gap-4"
-          >
+          {/* Bottom Action Buttons (Spotify Style, Staggered Slide-Up) */}
+          <View className="w-full gap-4">
             {/* Primary: Sign up for free */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={{
-                backgroundColor: colors.primary,
-                borderBottomWidth: 4,
-                borderBottomColor: colors.primaryPressed,
-                shadowColor: colors.primary,
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.3,
-                shadowRadius: 16,
-                elevation: 8,
-                borderRadius: 32,
-              }}
-              className="h-16 items-center justify-center"
-              onPress={() => router.push('/(auth)/signup')}
+            <MotiView
+              from={{ opacity: 0, translateY: 24 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 150 } as any}
             >
-              <Text
+              <TouchableOpacity
+                activeOpacity={0.85}
                 style={{
-                  color: colors.textOnPrimary,
-                  fontFamily: headingFont,
+                  backgroundColor: colors.primary,
+                  borderBottomWidth: 4,
+                  borderBottomColor: colors.primaryPressed,
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 16,
+                  elevation: 8,
+                  borderRadius: 32,
                 }}
-                className="font-black text-lg tracking-wide uppercase"
+                className="h-16 items-center justify-center"
+                onPress={() => router.push('/(auth)/signup')}
               >
-                Sign up for free
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={{
+                    color: colors.textOnPrimary,
+                    fontFamily: headingFont,
+                  }}
+                  className="font-black text-lg tracking-wide uppercase"
+                >
+                  Sign up for free
+                </Text>
+              </TouchableOpacity>
+            </MotiView>
 
             {/* Secondary: Log in */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={{
-                backgroundColor: surfaceBg,
-                borderColor: inputBorder,
-                borderWidth: 1.5,
-                borderRadius: 32,
-              }}
-              className="h-16 items-center justify-center"
-              onPress={() => router.push('/(auth)/login')}
+            <MotiView
+              from={{ opacity: 0, translateY: 24 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 220 } as any}
             >
-              <Text
+              <TouchableOpacity
+                activeOpacity={0.85}
                 style={{
-                  color: colors.text,
-                  fontFamily: headingFont,
+                  backgroundColor: surfaceBg,
+                  borderColor: inputBorder,
+                  borderWidth: 1.5,
+                  borderRadius: 32,
                 }}
-                className="font-black text-lg tracking-wide uppercase"
+                className="h-16 items-center justify-center"
+                onPress={() => router.push('/(auth)/login')}
               >
-                Log in
-              </Text>
-            </TouchableOpacity>
-          </MotiView>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontFamily: headingFont,
+                  }}
+                  className="font-black text-lg tracking-wide uppercase"
+                >
+                  Log in
+                </Text>
+              </TouchableOpacity>
+            </MotiView>
+          </View>
         </View>
       </SafeAreaView>
     </View>
   );
 }
-

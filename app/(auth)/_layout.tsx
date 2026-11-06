@@ -22,9 +22,12 @@ export default function AuthLayout() {
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="login-password" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="signup-coach" />
+      <Stack.Screen name="signup-name" />
       <Stack.Screen name="signup-email" />
+      <Stack.Screen name="signup-password" />
       <Stack.Screen name="signup-client" />
     </Stack>
   );

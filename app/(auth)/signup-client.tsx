@@ -26,6 +26,8 @@ import {
   CheckCircle2,
   ArrowRight,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
 import { getFontFamily } from '@/hooks/useAppFonts';
 import { isDarkColor } from '@/lib/theme-utils';
@@ -36,12 +38,13 @@ export default function SignUpClientScreen() {
   const colors = useBrandColors();
   const theme = useTheme();
   const router = useRouter();
-  const { signUp } = useAuth();
   const { invite: inviteParam } = useLocalSearchParams<{ invite?: string }>();
+  const { signUp } = useAuth();
 
   const [inviteCode, setInviteCode] = useState(inviteParam || '');
   const [validatingInvite, setValidatingInvite] = useState(false);
   const [inviteValid, setInviteValid] = useState(false);
+  const [targetCoachBrandId, setTargetCoachBrandId] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -49,8 +52,6 @@ export default function SignUpClientScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const inviteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isDark = isDarkColor(colors.background);
   const fontName = theme.typography.fontFamily || 'System';
@@ -63,49 +64,48 @@ export default function SignUpClientScreen() {
   const brandTitle = brand?.name?.trim() || '';
   const brandInitial = (brandTitle || 'C').charAt(0).toUpperCase();
 
+  // Validate invite code automatically when typed or provided via param
   useEffect(() => {
     if (inviteParam) {
-      validateInvite(inviteParam);
+      verifyInvite(inviteParam);
     }
   }, [inviteParam]);
 
-  const validateInvite = async (code: string) => {
-    if (!code) return;
+  const verifyInvite = async (code: string) => {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) {
+      setInviteValid(false);
+      return;
+    }
     setValidatingInvite(true);
     setError('');
     try {
-      const result: any = await validateInviteCode(code);
-      if (result?.valid) {
+      const res = await validateInviteCode(trimmed);
+      if (res.valid) {
         setInviteValid(true);
-        const targetBrandId = result.brandId || result.brand_id || '';
-        const targetCoachId = result.coachId || result.coach_id || '';
-        if (targetBrandId || targetCoachId) {
-          await loadBrandById(targetBrandId, targetCoachId);
+        if (res.brandId) {
+          setTargetCoachBrandId(res.brandId);
+          loadBrandById(res.brandId);
         }
       } else {
         setInviteValid(false);
-        setError('Invalid invite code. Please check with your coach.');
+        setError('Invalid invite code. Ask your coach for the right code.');
       }
-    } catch (err) {
-      console.error('Invite validation failed:', err);
+    } catch (err: any) {
       setInviteValid(false);
-      setError('Failed to check invite code.');
+      setError(err.message || 'Error checking invite code.');
     } finally {
       setValidatingInvite(false);
     }
   };
 
-  const handleInviteChange = (text: string) => {
-    setInviteCode(text);
-    setInviteValid(false);
+  const handleInviteChange = (code: string) => {
+    setInviteCode(code);
     setError('');
-
-    if (inviteTimeoutRef.current) clearTimeout(inviteTimeoutRef.current);
-
-    if (text.length >= 6) {
-      inviteTimeoutRef.current = setTimeout(() => {
-        validateInvite(text);
-      }, 500);
+    if (code.trim().length >= 6) {
+      verifyInvite(code);
+    } else {
+      setInviteValid(false);
     }
   };
 
@@ -113,6 +113,10 @@ export default function SignUpClientScreen() {
     const cleanEmail = email.trim().toLowerCase();
     if (!fullName || !cleanEmail || !password || !confirmPassword) {
       setError('Please fill in all fields.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
     if (password !== confirmPassword) {
@@ -145,120 +149,119 @@ export default function SignUpClientScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <GradientASCII shape="horizon" glow={0.35} flow={0.6} speed={0.8} />
+      <GradientASCII shape="horizon" glow={0.45} flow={0.6} speed={0.8} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between' }}
+            contentContainerStyle={{ flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <View className="flex-1 px-8 pt-6 pb-10 justify-between">
+            <View className="flex-1 px-8 pt-6 pb-10">
               {/* Top Navigation Row */}
-              <View>
-                <View className="flex-row items-center justify-between mb-8">
-                  <TouchableOpacity
-                    onPress={() => router.back()}
-                    style={{
-                      backgroundColor: surfaceBg,
-                      borderColor: inputBorder,
-                      borderWidth: 1,
-                    }}
-                    className="w-12 h-12 rounded-2xl items-center justify-center"
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <ChevronLeft size={22} color={colors.text} />
-                  </TouchableOpacity>
-
-                  <View className="flex-row items-center gap-3">
-                    {brandTitle ? (
-                      <Text
-                        style={{ color: colors.text, fontFamily: headingFont }}
-                        className="text-base font-black tracking-tight"
-                        numberOfLines={1}
-                      >
-                        {brandTitle}
-                      </Text>
-                    ) : null}
-                    {brand?.logo_url ? (
-                      <View
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 14,
-                          backgroundColor: colors.surface,
-                          borderWidth: 1,
-                          borderColor: inputBorder,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <Image
-                          source={{ uri: brand.logo_url }}
-                          style={{ width: '100%', height: '100%' }}
-                          contentFit="cover"
-                          cachePolicy="memory-disk"
-                        />
-                      </View>
-                    ) : (
-                      <View
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 14,
-                          backgroundColor: colors.primary + '20',
-                          borderWidth: 1,
-                          borderColor: colors.primary + '40',
-                        }}
-                        className="items-center justify-center"
-                      >
-                        <Text
-                          style={{
-                            color: colors.primary,
-                            fontFamily: headingFont,
-                          }}
-                          className="text-lg font-black"
-                        >
-                          {brandInitial}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                {/* Header Title */}
-                <MotiView
-                  from={{ opacity: 0, translateY: 10 }}
-                  animate={{ opacity: 1, translateY: 0 }}
-                  className="mb-8"
+              <View className="flex-row items-center justify-between mb-8">
+                <TouchableOpacity
+                  onPress={() => router.back()}
+                  style={{
+                    backgroundColor: surfaceBg,
+                    borderColor: inputBorder,
+                    borderWidth: 1,
+                  }}
+                  className="w-12 h-12 rounded-2xl items-center justify-center"
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text
-                    style={{ color: colors.text, fontFamily: headingFont }}
-                    className="text-4xl font-black tracking-tight uppercase"
-                  >
-                    Client{' '}
-                    <Text style={{ color: colors.primary, fontFamily: headingFont }}>
-                      Sign Up
+                  <ChevronLeft size={22} color={colors.text} />
+                </TouchableOpacity>
+
+                <View className="flex-row items-center gap-3">
+                  {brandTitle ? (
+                    <Text
+                      style={{ color: colors.text, fontFamily: headingFont }}
+                      className="text-base font-black tracking-tight"
+                      numberOfLines={1}
+                    >
+                      {brandTitle}
                     </Text>
-                  </Text>
-                  <Text
-                    style={{ color: colors.textSecondary, fontFamily: bodyFont }}
-                    className="text-xs font-bold uppercase tracking-[4px] mt-2"
-                  >
-                    Enter your invite code to begin
-                  </Text>
-                </MotiView>
+                  ) : null}
+                  {brand?.logo_url ? (
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        backgroundColor: colors.surface,
+                        borderWidth: 1,
+                        borderColor: inputBorder,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Image
+                        source={{ uri: brand.logo_url }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                      />
+                    </View>
+                  ) : (
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        backgroundColor: colors.primary + '20',
+                        borderWidth: 1,
+                        borderColor: colors.primary + '40',
+                      }}
+                      className="items-center justify-center"
+                    >
+                      <Text
+                        style={{
+                          color: colors.primary,
+                          fontFamily: headingFont,
+                        }}
+                        className="text-lg font-black"
+                      >
+                        {brandInitial}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
+
+              {/* Header Title with multi-colored text */}
+              <MotiView
+                from={{ opacity: 0, translateY: 24 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 400, delay: 50 } as any}
+                className="mb-8"
+              >
+                <Text
+                  style={{ color: colors.text, fontFamily: headingFont }}
+                  className="text-4xl font-black tracking-tight uppercase"
+                >
+                  CLIENT{' '}
+                  <Text style={{ color: colors.primary, fontFamily: headingFont }}>
+                    SIGN UP
+                  </Text>
+                </Text>
+                <Text
+                  style={{ color: colors.textSecondary, fontFamily: bodyFont }}
+                  className="text-xs font-bold uppercase tracking-[4px] mt-2"
+                >
+                  {inviteValid ? 'Invite verified! Complete your details' : 'Enter your invite code to begin'}
+                </Text>
+              </MotiView>
 
               {/* Error Alert */}
               <AnimatePresence>
                 {error ? (
                   <MotiView
-                    from={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0 }}
+                    from={{ opacity: 0, translateY: -10 }}
+                    animate={{ opacity: 1, translateY: 0 }}
+                    exit={{ opacity: 0, translateY: -10 }}
                     style={{
                       backgroundColor: colors.error + '15',
                       borderColor: colors.error + '35',
@@ -276,10 +279,15 @@ export default function SignUpClientScreen() {
                 ) : null}
               </AnimatePresence>
 
-              {/* Form / Interactive Area */}
+              {/* UPPER INTERACTIVE CONTENT (UP NOT BELOW) */}
               <View className="w-full">
-                {/* Invite Code Input */}
-                <View className="mb-5">
+                {/* 1. Invite Code Input (Located UP) */}
+                <MotiView
+                  from={{ opacity: 0, translateY: 24 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 400, delay: 100 } as any}
+                  className="mb-5"
+                >
                   <View
                     style={{
                       backgroundColor: inputBg,
@@ -312,116 +320,155 @@ export default function SignUpClientScreen() {
                       <ActivityIndicator size="small" color={colors.primary} />
                     )}
                   </View>
-                </View>
+                </MotiView>
 
                 {/* If invite is verified, show registration inputs */}
                 {inviteValid && (
-                  <MotiView
-                    from={{ opacity: 0, translateY: 10 }}
-                    animate={{ opacity: 1, translateY: 0 }}
-                    transition={{ type: 'timing', duration: 250 } as any}
-                  >
-                    <InputField
-                      icon={<User size={20} color={colors.textSecondary} />}
-                      placeholder="Full Name"
-                      value={fullName}
-                      onChange={setFullName}
-                      colors={colors}
-                      inputBg={inputBg}
-                      inputBorder={inputBorder}
-                      bodyFont={bodyFont}
-                    />
-                    <InputField
-                      icon={<Mail size={20} color={colors.textSecondary} />}
-                      placeholder="Email Address"
-                      value={email}
-                      onChange={setEmail}
-                      keyboardType="email-address"
-                      colors={colors}
-                      inputBg={inputBg}
-                      inputBorder={inputBorder}
-                      bodyFont={bodyFont}
-                    />
-                    <InputField
-                      icon={<Lock size={20} color={colors.textSecondary} />}
-                      placeholder="Password"
-                      value={password}
-                      onChange={setPassword}
-                      secure
-                      colors={colors}
-                      inputBg={inputBg}
-                      inputBorder={inputBorder}
-                      bodyFont={bodyFont}
-                    />
-                    <InputField
-                      icon={<Lock size={20} color={colors.textSecondary} />}
-                      placeholder="Confirm Password"
-                      value={confirmPassword}
-                      onChange={setConfirmPassword}
-                      secure
-                      colors={colors}
-                      inputBg={inputBg}
-                      inputBorder={inputBorder}
-                      bodyFont={bodyFont}
-                    />
+                  <View>
+                    <MotiView
+                      from={{ opacity: 0, translateY: 24 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      transition={{ type: 'timing', duration: 400, delay: 160 } as any}
+                      className="mb-4"
+                    >
+                      <InputField
+                        icon={<User size={20} color={colors.textSecondary} />}
+                        placeholder="Full Name"
+                        value={fullName}
+                        onChange={setFullName}
+                        colors={colors}
+                        inputBg={inputBg}
+                        inputBorder={inputBorder}
+                        bodyFont={bodyFont}
+                      />
+                    </MotiView>
+
+                    <MotiView
+                      from={{ opacity: 0, translateY: 24 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      transition={{ type: 'timing', duration: 400, delay: 200 } as any}
+                      className="mb-4"
+                    >
+                      <InputField
+                        icon={<Mail size={20} color={colors.textSecondary} />}
+                        placeholder="Email Address"
+                        value={email}
+                        onChange={setEmail}
+                        keyboardType="email-address"
+                        colors={colors}
+                        inputBg={inputBg}
+                        inputBorder={inputBorder}
+                        bodyFont={bodyFont}
+                      />
+                    </MotiView>
+
+                    <MotiView
+                      from={{ opacity: 0, translateY: 24 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      transition={{ type: 'timing', duration: 400, delay: 240 } as any}
+                      className="mb-4"
+                    >
+                      <InputField
+                        icon={<Lock size={20} color={colors.textSecondary} />}
+                        placeholder="Password"
+                        value={password}
+                        onChange={setPassword}
+                        secure
+                        colors={colors}
+                        inputBg={inputBg}
+                        inputBorder={inputBorder}
+                        bodyFont={bodyFont}
+                      />
+                    </MotiView>
+
+                    <MotiView
+                      from={{ opacity: 0, translateY: 24 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      transition={{ type: 'timing', duration: 400, delay: 280 } as any}
+                      className="mb-6"
+                    >
+                      <InputField
+                        icon={<Lock size={20} color={colors.textSecondary} />}
+                        placeholder="Confirm Password"
+                        value={confirmPassword}
+                        onChange={setConfirmPassword}
+                        secure
+                        colors={colors}
+                        inputBg={inputBg}
+                        inputBorder={inputBorder}
+                        bodyFont={bodyFont}
+                      />
+                    </MotiView>
 
                     {/* Create Account Button */}
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={
-                        canSubmit
-                          ? {
-                              backgroundColor: colors.primary,
-                              borderBottomWidth: 4,
-                              borderBottomColor: colors.primaryPressed,
-                              shadowColor: colors.primary,
-                              shadowOffset: { width: 0, height: 10 },
-                              shadowOpacity: 0.3,
-                              shadowRadius: 16,
-                              elevation: 8,
-                              borderRadius: 32,
-                            }
-                          : {
-                              backgroundColor: surfaceBg,
-                              borderWidth: 1.5,
-                              borderColor: inputBorder,
-                              borderRadius: 32,
-                              opacity: 0.6,
-                            }
-                      }
-                      className="mt-3 h-16 items-center justify-center flex-row gap-3"
-                      onPress={handleClientSignUp}
-                      disabled={!canSubmit}
+                    <MotiView
+                      from={{ opacity: 0, translateY: 24 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      transition={{ type: 'timing', duration: 400, delay: 320 } as any}
+                      className="mb-6"
                     >
-                      {loading ? (
-                        <ActivityIndicator color={colors.textOnPrimary} />
-                      ) : (
-                        <>
-                          <Text
-                            style={{
-                              color: canSubmit
-                                ? colors.textOnPrimary
-                                : colors.textSecondary,
-                              fontFamily: headingFont,
-                            }}
-                            className="font-black text-lg tracking-wide uppercase"
-                          >
-                            Create Account
-                          </Text>
-                          <ArrowRight
-                            size={20}
-                            color={
-                              canSubmit ? colors.textOnPrimary : colors.textSecondary
-                            }
-                          />
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </MotiView>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={
+                          canSubmit
+                            ? {
+                                backgroundColor: colors.primary,
+                                borderBottomWidth: 4,
+                                borderBottomColor: colors.primaryPressed,
+                                shadowColor: colors.primary,
+                                shadowOffset: { width: 0, height: 10 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 16,
+                                elevation: 8,
+                                borderRadius: 32,
+                              }
+                            : {
+                                backgroundColor: surfaceBg,
+                                borderWidth: 1.5,
+                                borderColor: inputBorder,
+                                borderRadius: 32,
+                                opacity: 0.6,
+                              }
+                        }
+                        className="h-16 items-center justify-center flex-row gap-3"
+                        onPress={handleClientSignUp}
+                        disabled={!canSubmit}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color={colors.textOnPrimary} />
+                        ) : (
+                          <>
+                            <Text
+                              style={{
+                                color: canSubmit
+                                  ? colors.textOnPrimary
+                                  : colors.textSecondary,
+                                fontFamily: headingFont,
+                              }}
+                              className="font-black text-lg tracking-wide uppercase"
+                            >
+                              Create Account
+                            </Text>
+                            <ArrowRight
+                              size={20}
+                              color={
+                                canSubmit ? colors.textOnPrimary : colors.textSecondary
+                              }
+                            />
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </MotiView>
+                  </View>
                 )}
 
-                {/* Bottom: Log in Link */}
-                <View className="pt-8 items-center">
+                {/* Log in Link */}
+                <MotiView
+                  from={{ opacity: 0, translateY: 20 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 400, delay: 180 } as any}
+                  className="pt-6 items-center"
+                >
                   <TouchableOpacity
                     onPress={() => router.push('/(auth)/login')}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -444,7 +491,7 @@ export default function SignUpClientScreen() {
                       </Text>
                     </Text>
                   </TouchableOpacity>
-                </View>
+                </MotiView>
               </View>
             </View>
           </ScrollView>
@@ -454,50 +501,61 @@ export default function SignUpClientScreen() {
   );
 }
 
-const InputField = ({
+function InputField({
   icon,
   placeholder,
   value,
   onChange,
   secure,
-  keyboardType,
+  keyboardType = 'default',
   colors,
   inputBg,
   inputBorder,
   bodyFont,
-}: any) => {
+}: any) {
+  const [show, setShow] = useState(false);
   const [focused, setFocused] = useState(false);
+
   return (
-    <View className="mb-4">
-      <View
+    <View
+      style={{
+        backgroundColor: inputBg,
+        borderWidth: 1.5,
+        borderColor: focused ? colors.primary : inputBorder,
+        borderRadius: 28,
+      }}
+      className="px-6 py-2 flex-row items-center gap-4"
+    >
+      {icon}
+      <TextInput
         style={{
-          backgroundColor: inputBg,
-          borderWidth: 1.5,
-          borderColor: focused ? colors.primary : inputBorder,
-          borderRadius: 28,
+          color: colors.text,
+          fontFamily: bodyFont,
         }}
-        className="px-6 py-2 flex-row items-center gap-4"
-      >
-        {icon}
-        <TextInput
-          style={{
-            color: colors.text,
-            fontFamily: bodyFont,
-          }}
-          className="flex-1 text-xl h-14"
-          placeholder={placeholder}
-          placeholderTextColor={colors.textTertiary}
-          value={value}
-          onChangeText={onChange}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          secureTextEntry={secure}
-          keyboardType={keyboardType}
-          selectionColor={colors.primary}
-          autoCapitalize="none"
-        />
-      </View>
+        className="flex-1 text-xl h-14"
+        placeholder={placeholder}
+        placeholderTextColor={colors.textTertiary}
+        value={value}
+        onChangeText={onChange}
+        secureTextEntry={secure && !show}
+        keyboardType={keyboardType}
+        autoCapitalize="none"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        selectionColor={colors.primary}
+      />
+      {secure && (
+        <TouchableOpacity
+          onPress={() => setShow(!show)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          {show ? (
+            <EyeOff size={20} color={colors.textSecondary} />
+          ) : (
+            <Eye size={20} color={colors.textSecondary} />
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
-};
-
+}

@@ -46,7 +46,7 @@ export default function SignUpRoleSelectionScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <GradientASCII shape="horizon" glow={0.35} flow={0.6} speed={0.8} />
+      <GradientASCII shape="horizon" glow={0.45} flow={0.6} speed={0.8} />
       <SafeAreaView style={{ flex: 1 }}>
         <View className="flex-1 px-8 pt-6 pb-10 justify-between">
           {/* Top Row: Back Button + Brand Identity */}
@@ -120,19 +120,20 @@ export default function SignUpRoleSelectionScreen() {
               </View>
             </View>
 
-            {/* Title Header */}
+            {/* Title Header with multi-colored text */}
             <MotiView
-              from={{ opacity: 0, translateY: 10 }}
+              from={{ opacity: 0, translateY: 24 }}
               animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 50 } as any}
               className="mb-4"
             >
               <Text
                 style={{ color: colors.text, fontFamily: headingFont }}
                 className="text-4xl font-black tracking-tight uppercase"
               >
-                Create{' '}
+                CREATE{' '}
                 <Text style={{ color: colors.primary, fontFamily: headingFont }}>
-                  Account
+                  ACCOUNT
                 </Text>
               </Text>
               <Text
@@ -145,98 +146,118 @@ export default function SignUpRoleSelectionScreen() {
           </View>
 
           {/* Centered Area: Question + Two Squared Buttons */}
-          <MotiView
-            from={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'timing', duration: 350 } as any}
-            className="my-auto py-6"
-          >
-            <Text
-              style={{ color: colors.text, fontFamily: headingFont }}
-              className="text-2xl font-black text-center mb-6 tracking-tight"
+          <View className="my-auto py-6">
+            <MotiView
+              from={{ opacity: 0, translateY: 24 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 100 } as any}
             >
-              Are you a coach or a client?
-            </Text>
+              <Text
+                style={{ color: colors.text, fontFamily: headingFont }}
+                className="text-2xl font-black text-center mb-6 tracking-tight"
+              >
+                Are you a coach or a client?
+              </Text>
+            </MotiView>
 
             <View className="flex-row gap-4">
               {/* Coach Squared Card Button */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => router.push('/(auth)/signup-coach')}
-                style={{
-                  backgroundColor: surfaceBg,
-                  borderColor: inputBorder,
-                  borderWidth: 1.5,
-                  borderRadius: 28,
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 12,
-                  elevation: 4,
-                }}
-                className="flex-1 aspect-square p-5 items-center justify-center"
+              <MotiView
+                from={{ opacity: 0, translateY: 24 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 400, delay: 160 } as any}
+                className="flex-1"
               >
-                <View
-                  style={{ backgroundColor: colors.primary + '18' }}
-                  className="w-16 h-16 rounded-2xl items-center justify-center mb-3"
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => router.push('/(auth)/signup-coach')}
+                  style={{
+                    backgroundColor: surfaceBg,
+                    borderColor: inputBorder,
+                    borderWidth: 1.5,
+                    borderRadius: 28,
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 12,
+                    elevation: 4,
+                  }}
+                  className="w-full aspect-square p-5 items-center justify-center"
                 >
-                  <Award size={32} color={colors.primary} />
-                </View>
-                <Text
-                  style={{ color: colors.text, fontFamily: headingFont }}
-                  className="text-xl font-black tracking-tight text-center"
-                >
-                  Coach
-                </Text>
-                <Text
-                  style={{ color: colors.textSecondary, fontFamily: bodyFont }}
-                  className="text-xs font-semibold text-center mt-1"
-                >
-                  Lead & train
-                </Text>
-              </TouchableOpacity>
+                  <View
+                    style={{ backgroundColor: colors.primary + '18' }}
+                    className="w-16 h-16 rounded-2xl items-center justify-center mb-3"
+                  >
+                    <Award size={32} color={colors.primary} />
+                  </View>
+                  <Text
+                    style={{ color: colors.text, fontFamily: headingFont }}
+                    className="text-xl font-black tracking-tight text-center"
+                  >
+                    Coach
+                  </Text>
+                  <Text
+                    style={{ color: colors.textSecondary, fontFamily: bodyFont }}
+                    className="text-xs font-semibold text-center mt-1"
+                  >
+                    Lead & train
+                  </Text>
+                </TouchableOpacity>
+              </MotiView>
 
               {/* Client Squared Card Button */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => router.push('/(auth)/signup-client')}
-                style={{
-                  backgroundColor: surfaceBg,
-                  borderColor: inputBorder,
-                  borderWidth: 1.5,
-                  borderRadius: 28,
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 12,
-                  elevation: 4,
-                }}
-                className="flex-1 aspect-square p-5 items-center justify-center"
+              <MotiView
+                from={{ opacity: 0, translateY: 24 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 400, delay: 220 } as any}
+                className="flex-1"
               >
-                <View
-                  style={{ backgroundColor: colors.primary + '18' }}
-                  className="w-16 h-16 rounded-2xl items-center justify-center mb-3"
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => router.push('/(auth)/signup-client')}
+                  style={{
+                    backgroundColor: surfaceBg,
+                    borderColor: inputBorder,
+                    borderWidth: 1.5,
+                    borderRadius: 28,
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 12,
+                    elevation: 4,
+                  }}
+                  className="w-full aspect-square p-5 items-center justify-center"
                 >
-                  <User size={32} color={colors.primary} />
-                </View>
-                <Text
-                  style={{ color: colors.text, fontFamily: headingFont }}
-                  className="text-xl font-black tracking-tight text-center"
-                >
-                  Client
-                </Text>
-                <Text
-                  style={{ color: colors.textSecondary, fontFamily: bodyFont }}
-                  className="text-xs font-semibold text-center mt-1"
-                >
-                  Join my coach
-                </Text>
-              </TouchableOpacity>
+                  <View
+                    style={{ backgroundColor: colors.primary + '18' }}
+                    className="w-16 h-16 rounded-2xl items-center justify-center mb-3"
+                  >
+                    <User size={32} color={colors.primary} />
+                  </View>
+                  <Text
+                    style={{ color: colors.text, fontFamily: headingFont }}
+                    className="text-xl font-black tracking-tight text-center"
+                  >
+                    Client
+                  </Text>
+                  <Text
+                    style={{ color: colors.textSecondary, fontFamily: bodyFont }}
+                    className="text-xs font-semibold text-center mt-1"
+                  >
+                    Join my coach
+                  </Text>
+                </TouchableOpacity>
+              </MotiView>
             </View>
-          </MotiView>
+          </View>
 
           {/* Bottom: Log in Link */}
-          <View className="items-center">
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400, delay: 280 } as any}
+            className="items-center"
+          >
             <TouchableOpacity
               onPress={() => router.push('/(auth)/login')}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -259,7 +280,7 @@ export default function SignUpRoleSelectionScreen() {
                 </Text>
               </Text>
             </TouchableOpacity>
-          </View>
+          </MotiView>
         </View>
       </SafeAreaView>
     </View>

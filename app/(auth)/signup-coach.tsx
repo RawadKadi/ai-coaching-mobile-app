@@ -61,7 +61,7 @@ export default function SignUpCoachScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <GradientASCII shape="horizon" glow={0.35} flow={0.6} speed={0.8} />
+      <GradientASCII shape="horizon" glow={0.45} flow={0.6} speed={0.8} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -144,26 +144,27 @@ export default function SignUpCoachScreen() {
                   </View>
                 </View>
 
-                {/* Header Title */}
+                {/* Header Title with multi-colored text */}
                 <MotiView
-                  from={{ opacity: 0, translateY: 10 }}
+                  from={{ opacity: 0, translateY: 24 }}
                   animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 400, delay: 50 } as any}
                   className="mb-8"
                 >
                   <Text
                     style={{ color: colors.text, fontFamily: headingFont }}
                     className="text-4xl font-black tracking-tight uppercase"
                   >
-                    Coach{' '}
+                    CREATE{' '}
                     <Text style={{ color: colors.primary, fontFamily: headingFont }}>
-                      Sign Up
+                      ACCOUNT
                     </Text>
                   </Text>
                   <Text
                     style={{ color: colors.textSecondary, fontFamily: bodyFont }}
                     className="text-xs font-bold uppercase tracking-[4px] mt-2"
                   >
-                    Create your coach account
+                    Join to get started
                   </Text>
                 </MotiView>
               </View>
@@ -192,68 +193,85 @@ export default function SignUpCoachScreen() {
                 ) : null}
               </AnimatePresence>
 
-              {/* Bottom Interactive Area */}
+              {/* Bottom Interactive Area (Buttons stay below as requested) */}
               <View className="w-full">
                 <View className="gap-4">
                   {/* Sign up with Google */}
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={{
-                      backgroundColor: surfaceBg,
-                      borderColor: inputBorder,
-                      borderWidth: 1.5,
-                      borderRadius: 32,
-                    }}
-                    className="h-16 items-center justify-center flex-row gap-3"
-                    onPress={handleGoogleCoachSignUp}
-                    disabled={googleLoading}
+                  <MotiView
+                    from={{ opacity: 0, translateY: 24 }}
+                    animate={{ opacity: 1, translateY: 0 }}
+                    transition={{ type: 'timing', duration: 400, delay: 100 } as any}
                   >
-                    {googleLoading ? (
-                      <ActivityIndicator color={colors.text} />
-                    ) : (
-                      <>
-                        <GoogleIcon size={22} />
-                        <Text
-                          style={{
-                            color: colors.text,
-                            fontFamily: headingFont,
-                          }}
-                          className="font-black text-base tracking-wide"
-                        >
-                          Sign up with Google
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  {/* Sign up with Email */}
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={{
-                      backgroundColor: surfaceBg,
-                      borderColor: inputBorder,
-                      borderWidth: 1.5,
-                      borderRadius: 32,
-                    }}
-                    className="h-16 items-center justify-center flex-row gap-3"
-                    onPress={() => router.push('/(auth)/signup-email')}
-                    disabled={googleLoading}
-                  >
-                    <Mail size={22} color={colors.text} />
-                    <Text
+                    <TouchableOpacity
+                      activeOpacity={0.85}
                       style={{
-                        color: colors.text,
-                        fontFamily: headingFont,
+                        backgroundColor: surfaceBg,
+                        borderColor: inputBorder,
+                        borderWidth: 1.5,
+                        borderRadius: 32,
                       }}
-                      className="font-black text-base tracking-wide"
+                      className="h-16 items-center justify-center flex-row gap-3"
+                      onPress={handleGoogleCoachSignUp}
+                      disabled={googleLoading}
                     >
-                      Sign up with Email
-                    </Text>
-                  </TouchableOpacity>
+                      {googleLoading ? (
+                        <ActivityIndicator color={colors.text} />
+                      ) : (
+                        <>
+                          <GoogleIcon size={22} />
+                          <Text
+                            style={{
+                              color: colors.text,
+                              fontFamily: headingFont,
+                            }}
+                            className="font-black text-base tracking-wide"
+                          >
+                            Sign up with Google
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </MotiView>
+
+                  {/* Sign up with Email -> Routes to signup-name */}
+                  <MotiView
+                    from={{ opacity: 0, translateY: 24 }}
+                    animate={{ opacity: 1, translateY: 0 }}
+                    transition={{ type: 'timing', duration: 400, delay: 180 } as any}
+                  >
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={{
+                        backgroundColor: surfaceBg,
+                        borderColor: inputBorder,
+                        borderWidth: 1.5,
+                        borderRadius: 32,
+                      }}
+                      className="h-16 items-center justify-center flex-row gap-3"
+                      onPress={() => router.push('/(auth)/signup-name')}
+                      disabled={googleLoading}
+                    >
+                      <Mail size={22} color={colors.text} />
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontFamily: headingFont,
+                        }}
+                        className="font-black text-base tracking-wide"
+                      >
+                        Sign up with Email
+                      </Text>
+                    </TouchableOpacity>
+                  </MotiView>
                 </View>
 
                 {/* Bottom: Log in Link */}
-                <View className="pt-8 items-center">
+                <MotiView
+                  from={{ opacity: 0, translateY: 20 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 400, delay: 240 } as any}
+                  className="pt-8 items-center"
+                >
                   <TouchableOpacity
                     onPress={() => router.push('/(auth)/login')}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -276,7 +294,7 @@ export default function SignUpCoachScreen() {
                       </Text>
                     </Text>
                   </TouchableOpacity>
-                </View>
+                </MotiView>
               </View>
             </View>
           </ScrollView>
@@ -285,4 +303,3 @@ export default function SignUpCoachScreen() {
     </View>
   );
 }
-
