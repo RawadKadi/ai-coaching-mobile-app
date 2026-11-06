@@ -38,8 +38,8 @@ function AuthGuard() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session && !inAuthGroup) {
-      // Session is gone — send user to login
-      router.replace('/(auth)/login');
+      // Session is gone — send user to auth welcome screen
+      router.replace('/(auth)');
     }
   }, [session, loading, segments]);
 

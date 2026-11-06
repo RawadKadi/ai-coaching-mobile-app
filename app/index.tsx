@@ -14,7 +14,7 @@ export default function Index() {
   useEffect(() => {
     if (!loading && isCacheHydrated) {
       if (!session) {
-        router.replace('/(auth)/login');
+        router.replace('/(auth)');
       } else if (profile) {
         if (brandLoading) return;
         switch (profile.role) {
@@ -32,7 +32,7 @@ export default function Index() {
         // Session exists but no profile - wait then redirect
         console.warn('[Index] Session exists but no profile loaded');
         const timeout = setTimeout(() => {
-          router.replace('/(auth)/login');
+          router.replace('/(auth)');
         }, 2000);
         return () => clearTimeout(timeout);
       }

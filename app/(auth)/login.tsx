@@ -127,37 +127,39 @@ export default function LoginScreen() {
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={{ flexGrow: 1 }}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between' }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <View className="flex-1 px-8 pt-12 pb-12">
-              {/* Top Navigation Bar on Step 2 */}
-              {step === 'password' && (
-                <View className="flex-row items-center mb-6">
-                  <TouchableOpacity
-                    onPress={() => {
+            <View className="flex-1 px-8 pt-6 pb-10 justify-between">
+              {/* Top Navigation Row */}
+              <View className="flex-row items-center justify-between mb-4">
+                <TouchableOpacity
+                  onPress={() => {
+                    if (step === 'password') {
                       setError('');
                       setStep('email');
-                    }}
-                    style={{
-                      backgroundColor: inputBg,
-                      borderColor: inputBorder,
-                      borderWidth: 1,
-                    }}
-                    className="w-12 h-12 rounded-2xl items-center justify-center"
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <ChevronLeft size={22} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
-              )}
+                    } else {
+                      router.back();
+                    }
+                  }}
+                  style={{
+                    backgroundColor: inputBg,
+                    borderColor: inputBorder,
+                    borderWidth: 1,
+                  }}
+                  className="w-12 h-12 rounded-2xl items-center justify-center"
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <ChevronLeft size={22} color={colors.text} />
+                </TouchableOpacity>
+              </View>
 
-              {/* Brand Header */}
+              {/* Brand Header (Centered Upper Area) */}
               <MotiView
                 from={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="items-center mb-10"
+                className="items-center my-auto py-8"
               >
                 {brand?.logo_url ? (
                   <View
@@ -236,32 +238,34 @@ export default function LoginScreen() {
                 </Text>
               </MotiView>
 
-              {/* Error Alert */}
-              <AnimatePresence>
-                {error ? (
-                  <MotiView
-                    from={{ opacity: 0, translateY: -10 }}
-                    animate={{ opacity: 1, translateY: 0 }}
-                    exit={{ opacity: 0, translateY: -10 }}
-                    style={{
-                      backgroundColor: colors.error + '15',
-                      borderColor: colors.error + '35',
-                    }}
-                    className="border rounded-2xl p-4 mb-6 flex-row items-center gap-3"
-                  >
-                    <View
-                      style={{ backgroundColor: colors.error }}
-                      className="w-2 h-2 rounded-full"
-                    />
-                    <Text
-                      style={{ color: colors.error, fontFamily: bodyFont }}
-                      className="text-xs font-bold flex-1"
+              {/* Bottom Interactive Area */}
+              <View className="w-full">
+                {/* Error Alert */}
+                <AnimatePresence>
+                  {error ? (
+                    <MotiView
+                      from={{ opacity: 0, translateY: -10 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      exit={{ opacity: 0, translateY: -10 }}
+                      style={{
+                        backgroundColor: colors.error + '15',
+                        borderColor: colors.error + '35',
+                      }}
+                      className="border rounded-2xl p-4 mb-6 flex-row items-center gap-3"
                     >
-                      {error}
-                    </Text>
-                  </MotiView>
-                ) : null}
-              </AnimatePresence>
+                      <View
+                        style={{ backgroundColor: colors.error }}
+                        className="w-2 h-2 rounded-full"
+                      />
+                      <Text
+                        style={{ color: colors.error, fontFamily: bodyFont }}
+                        className="text-xs font-bold flex-1"
+                      >
+                        {error}
+                      </Text>
+                    </MotiView>
+                  ) : null}
+                </AnimatePresence>
 
               {/* Option 1 Flow */}
               {step === 'email' ? (
@@ -548,7 +552,8 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </ScrollView>
+          </View>
+        </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
     </View>
