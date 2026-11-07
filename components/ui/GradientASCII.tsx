@@ -57,6 +57,11 @@ export interface GradientASCIIProps {
    */
   glow?: number;
   /**
+   * Inverts the background vertically (horizon glow on bottom instead of top).
+   * Used when buttons and form inputs are positioned at the top.
+   */
+  inverted?: boolean;
+  /**
    * Optional custom style override.
    */
   style?: ViewStyle;
@@ -97,9 +102,10 @@ export function GradientASCII({
   shape = 'horizon',
   softness = 0.5,
   scale = 1,
-  flow = 0.5,
-  speed = 1,
+  flow = 0.6,
+  speed = 1.3,
   glow = 0.45,
+  inverted = false,
   style,
 }: GradientASCIIProps) {
   const brandColors = useBrandColors();
@@ -163,13 +169,14 @@ export function GradientASCII({
       return;
     }
 
-    const duration = Math.max(3000, 7000 / speed);
+    // Increased pace: lively undulating tempo for smooth fluid waves
+    const duration = Math.max(1500, 3200 / speed);
 
     // Organic swaying drift
     driftX.value = withRepeat(
       withSequence(
-        withTiming(16 * flow, { duration: duration * 0.9, easing: Easing.inOut(Easing.sin) }),
-        withTiming(-16 * flow, { duration: duration * 1.1, easing: Easing.inOut(Easing.sin) })
+        withTiming(18 * flow, { duration: duration * 0.85, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-18 * flow, { duration: duration * 1.15, easing: Easing.inOut(Easing.sin) })
       ),
       -1,
       true
@@ -177,8 +184,8 @@ export function GradientASCII({
 
     driftY.value = withRepeat(
       withSequence(
-        withTiming(-12 * flow, { duration: duration * 1.2, easing: Easing.inOut(Easing.sin) }),
-        withTiming(12 * flow, { duration: duration * 0.8, easing: Easing.inOut(Easing.sin) })
+        withTiming(-14 * flow, { duration: duration * 1.1, easing: Easing.inOut(Easing.sin) }),
+        withTiming(14 * flow, { duration: duration * 0.9, easing: Easing.inOut(Easing.sin) })
       ),
       -1,
       true
@@ -187,8 +194,8 @@ export function GradientASCII({
     // Subtle breathing scale
     waveScale.value = withRepeat(
       withSequence(
-        withTiming(1 + 0.05 * flow, { duration: duration * 1.3, easing: Easing.inOut(Easing.quad) }),
-        withTiming(1 - 0.03 * flow, { duration: duration * 1.1, easing: Easing.inOut(Easing.quad) })
+        withTiming(1 + 0.06 * flow, { duration: duration * 1.2, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1 - 0.04 * flow, { duration: duration * 1.0, easing: Easing.inOut(Easing.quad) })
       ),
       -1,
       true
@@ -197,8 +204,8 @@ export function GradientASCII({
     // Gentle luminous glow pulse
     glowPulse.value = withRepeat(
       withSequence(
-        withTiming(glow * 1.2, { duration: duration * 0.7, easing: Easing.inOut(Easing.sin) }),
-        withTiming(glow * 0.85, { duration: duration * 0.9, easing: Easing.inOut(Easing.sin) })
+        withTiming(glow * 1.25, { duration: duration * 0.75, easing: Easing.inOut(Easing.sin) }),
+        withTiming(glow * 0.85, { duration: duration * 0.85, easing: Easing.inOut(Easing.sin) })
       ),
       -1,
       true
@@ -219,8 +226,8 @@ export function GradientASCII({
   const secondaryAnimatedStyle = useAnimatedStyle(() => {
     return {
       transform: [
-        { translateX: -driftX.value * 0.5 },
-        { translateY: -driftY.value * 0.5 },
+        { translateX: -driftX.value * 0.65 },
+        { translateY: -driftY.value * 0.65 },
         { scale: (2 - waveScale.value) * scale },
       ],
       opacity: glowPulse.value * 0.8,
@@ -232,7 +239,13 @@ export function GradientASCII({
       style={[StyleSheet.absoluteFill, styles.container, style]}
       pointerEvents="none"
     >
-      {/* SHAPE RENDERING */}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          inverted ? styles.inverted : undefined,
+        ]}
+      >
+        {/* SHAPE RENDERING */}
       {shape === 'horizon' && (
         <>
           {/* Main Atmospheric & Gradient Layer (Bleed oversized) */}
@@ -458,6 +471,7 @@ export function GradientASCII({
           </Svg>
         </Animated.View>
       )}
+      </View>
     </View>
   );
 }
@@ -470,6 +484,9 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     zIndex: 0,
+  },
+  inverted: {
+    transform: [{ scaleY: -1 }],
   },
 });
 

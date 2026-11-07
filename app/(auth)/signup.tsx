@@ -46,7 +46,7 @@ export default function SignUpRoleSelectionScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <GradientASCII shape="horizon" glow={0.45} flow={0.6} speed={0.8} />
+      <GradientASCII shape="horizon" glow={0.5} flow={0.65} speed={1.3} />
       <SafeAreaView style={{ flex: 1 }}>
         <View className="flex-1 px-8 pt-6 pb-10 justify-between">
           {/* Top Row: Back Button + Brand Identity */}
