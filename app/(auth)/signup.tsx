@@ -145,8 +145,8 @@ export default function SignUpRoleSelectionScreen() {
             </MotiView>
           </View>
 
-          {/* Centered Area: Question + Two Squared Buttons */}
-          <View className="my-auto py-6">
+          {/* Bottom Area: Question + Two Squared Buttons + Log in Link */}
+          <View className="w-full">
             <MotiView
               from={{ opacity: 0, translateY: 24 }}
               animate={{ opacity: 1, translateY: 0 }}
@@ -160,7 +160,7 @@ export default function SignUpRoleSelectionScreen() {
               </Text>
             </MotiView>
 
-            <View className="flex-row gap-4">
+            <View className="flex-row gap-4 mb-6">
               {/* Coach Squared Card Button */}
               <MotiView
                 from={{ opacity: 0, translateY: 24 }}
@@ -249,38 +249,38 @@ export default function SignUpRoleSelectionScreen() {
                 </TouchableOpacity>
               </MotiView>
             </View>
-          </View>
 
-          {/* Bottom: Log in Link */}
-          <MotiView
-            from={{ opacity: 0, translateY: 20 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 400, delay: 280 } as any}
-            className="items-center"
-          >
-            <TouchableOpacity
-              onPress={() => router.push('/(auth)/login')}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            {/* Bottom: Log in Link */}
+            <MotiView
+              from={{ opacity: 0, translateY: 20 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 280 } as any}
+              className="items-center mt-2"
             >
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: bodyFont,
-                }}
-                className="font-bold text-xs uppercase tracking-widest"
+              <TouchableOpacity
+                onPress={() => router.push('/(auth)/login')}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                Already have an account?{' '}
                 <Text
                   style={{
-                    color: colors.primary,
-                    fontFamily: headingFont,
+                    color: colors.textSecondary,
+                    fontFamily: bodyFont,
                   }}
+                  className="font-bold text-xs uppercase tracking-widest"
                 >
-                  Log in
+                  Already have an account?{' '}
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontFamily: headingFont,
+                    }}
+                  >
+                    Log in
+                  </Text>
                 </Text>
-              </Text>
-            </TouchableOpacity>
-          </MotiView>
+              </TouchableOpacity>
+            </MotiView>
+          </View>
         </View>
       </SafeAreaView>
     </View>
