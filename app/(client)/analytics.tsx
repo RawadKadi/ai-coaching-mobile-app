@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MotiView } from 'moti';
 import {
   ChevronLeft,
   ChevronRight,
@@ -19,6 +20,7 @@ import {
   Dumbbell,
   Clock,
   Utensils,
+  MessageSquare,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,6 +33,7 @@ import {
   getTodaySteps,
   getLastNightSleep,
   getLatestWeight,
+  getTodayActiveEnergy,
 } from '@/lib/health-service';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
@@ -112,8 +115,8 @@ export default function AnalyticsScreen() {
   const [checkIns, setCheckIns] = useState<CheckInEntry[]>([]);
   const [meals, setMeals] = useState<MealEntry[]>([]);
   const [targetCalories, setTargetCalories] = useState<number>(2000);
-  const [todayWorkouts, setTodayWorkouts] = useState<number>(0);
-  const [todayActiveMinutes, setTodayActiveMinutes] = useState<number>(0);
+  const [todayActiveBurn, setTodayActiveBurn] = useState<number | null>(null);
+  const [messageFabPressed, setMessageFabPressed] = useState(false);
 
   const targetClientId = (params.clientId as string) || client?.id;
 
@@ -143,8 +146,8 @@ export default function AnalyticsScreen() {
         liveSteps,
         liveSleep,
         liveWeight,
+        liveActiveEnergy,
         localStepsStr,
-        workoutsRes,
         mealsRes,
         mealPlanRes,
       ] = await Promise.all([
@@ -163,12 +166,8 @@ export default function AnalyticsScreen() {
         isCoachView ? Promise.resolve(null) : getTodaySteps(),
         isCoachView ? Promise.resolve(null) : getLastNightSleep(),
         isCoachView ? Promise.resolve(null) : getLatestWeight(),
+        isCoachView ? Promise.resolve(null) : getTodayActiveEnergy(),
         isCoachView ? Promise.resolve(null) : AsyncStorage.getItem(`@steps_${todayStr}`),
-        supabase
-          .from('workouts')
-          .select('id, duration_minutes')
-          .in('client_id', clientIds)
-          .eq('workout_date', todayStr),
         supabase
           .from('meals')
           .select('id, meal_date, meal_name, calories, protein_g, carbs_g, fat_g, photo_url')
@@ -183,10 +182,9 @@ export default function AnalyticsScreen() {
           .maybeSingle(),
       ]);
 
-      const wData = workoutsRes.data || [];
-      setTodayWorkouts(wData.length);
-      const totalMins = wData.reduce((sum, w: any) => sum + (w.duration_minutes || 0), 0);
-      setTodayActiveMinutes(totalMins);
+      if (liveActiveEnergy !== null) {
+        setTodayActiveBurn(liveActiveEnergy);
+      }
 
       if (mealsRes.data) {
         setMeals(mealsRes.data as MealEntry[]);
@@ -245,6 +243,16 @@ export default function AnalyticsScreen() {
   };
 
   const todayStr = useMemo(() => getLocalDateString(new Date()), []);
+
+  const todayMeals = useMemo(() => {
+    return meals.filter((m) => m.meal_date === todayStr);
+  }, [meals, todayStr]);
+
+  const todayCaloriesEaten = useMemo(() => {
+    return todayMeals.reduce((sum, m) => sum + (m.calories || 0), 0);
+  }, [todayMeals]);
+
+  const hasMealsLogged = todayMeals.length > 0;
 
   const latestStepsVal = useMemo(() => {
     const todayLog = dailyLogs.find((l) => l.date === todayStr);
@@ -508,6 +516,7 @@ export default function AnalyticsScreen() {
       >
         {/* Today's Summary Grid */}
         <View style={styles.statsGrid}>
+          {/* Active Burn */}
           <View
             style={[
               styles.statBox,
@@ -517,17 +526,18 @@ export default function AnalyticsScreen() {
               },
             ]}
           >
-            <View style={[styles.statIconWrap, { backgroundColor: `${colors.primary}16` }]}>
-              <Dumbbell size={18} color={colors.primary} />
+            <View style={[styles.statIconWrap, { backgroundColor: `${colors.accent || '#F97316'}16` }]}>
+              <Flame size={18} color={colors.accent || '#F97316'} />
             </View>
             <Text style={[styles.statBoxValue, { color: textColor }]}>
-              {todayWorkouts > 0 ? `${todayWorkouts} Done` : '0 Done'}
+              {todayActiveBurn && todayActiveBurn > 0 ? `${todayActiveBurn.toLocaleString()} kcal` : '0 kcal'}
             </Text>
             <Text style={[styles.statBoxLabel, { color: textSecondary }]}>
-              Workouts
+              Active Burn
             </Text>
           </View>
 
+          {/* Calories Eaten */}
           <View
             style={[
               styles.statBox,
@@ -538,13 +548,20 @@ export default function AnalyticsScreen() {
             ]}
           >
             <View style={[styles.statIconWrap, { backgroundColor: `${colors.primary}16` }]}>
-              <Clock size={18} color={colors.primary} />
+              <Utensils size={18} color={colors.primary} />
             </View>
-            <Text style={[styles.statBoxValue, { color: textColor }]}>
-              {todayActiveMinutes > 0 ? `${todayActiveMinutes} min` : '0 min'}
+            <Text
+              style={[
+                styles.statBoxValue,
+                { color: textColor },
+                !hasMealsLogged && { fontSize: 13, fontWeight: '700' },
+              ]}
+              numberOfLines={1}
+            >
+              {hasMealsLogged ? `${Math.round(todayCaloriesEaten).toLocaleString()} kcal` : 'Not logged yet'}
             </Text>
             <Text style={[styles.statBoxLabel, { color: textSecondary }]}>
-              Active Time
+              Food Eaten
             </Text>
           </View>
         </View>
@@ -769,6 +786,51 @@ export default function AnalyticsScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Floating Message Button for Coach */}
+      {isCoachView && Boolean(params.clientId) && (
+        <MotiView
+          animate={{ scale: messageFabPressed ? 0.82 : 1 }}
+          transition={{ type: 'spring', damping: 14, stiffness: 320 } as any}
+          style={{
+            position: 'absolute',
+            bottom: insets.bottom + 24,
+            right: 20,
+            zIndex: 90,
+          }}
+        >
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Message Client"
+            activeOpacity={0.88}
+            onPressIn={() => setMessageFabPressed(true)}
+            onPressOut={() => setMessageFabPressed(false)}
+            onPress={() =>
+              router.push({
+                pathname: '/(coach)/chat/[id]',
+                params: { id: params.clientId as string },
+              })
+            }
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: colors.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: colors.primary,
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.45,
+              shadowRadius: 12,
+              elevation: 8,
+              borderWidth: 1.5,
+              borderColor: 'rgba(255, 255, 255, 0.25)',
+            }}
+          >
+            <MessageSquare size={24} color={colors.textOnPrimary || '#FFFFFF'} />
+          </TouchableOpacity>
+        </MotiView>
+      )}
     </View>
   );
 }

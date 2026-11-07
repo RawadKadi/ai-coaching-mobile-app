@@ -14,7 +14,8 @@ import {
   Dimensions,
   TouchableOpacity,
 } from 'react-native';
-import { MotiView } from 'moti';
+import * as Haptics from 'expo-haptics';
+import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import {
@@ -42,6 +43,9 @@ const PAGE_WIDTH =
 const PAGE_INDICES = Array.from({ length: 101 }, (_, i) => i - 50);
 const INITIAL_PAGE_INDEX = 50;
 
+// Remembers sessions in memory so the calendar opens instantly when revisited.
+const cachedClientSessions: Record<string, any[]> = {};
+
 export default function ClientScheduleTimeline() {
   const colors = useBrandColors();
   const theme = useTheme();
@@ -56,11 +60,12 @@ export default function ClientScheduleTimeline() {
   const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
   const cardHoverBg = colors.surfaceHover || (isDark ? '#1E293B' : '#F1F5F9');
 
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<any[]>(client?.id ? cachedClientSessions[client.id] || [] : []);
+  const [loading, setLoading] = useState(!(client?.id && cachedClientSessions[client.id]));
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewingMonth, setViewingMonth] = useState(new Date());
+  const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
@@ -93,6 +98,22 @@ export default function ClientScheduleTimeline() {
     flatListRef.current?.scrollToIndex({ index: arrayIndex, animated: true });
   };
 
+  const handleGoToToday = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const today = new Date();
+    setSelectedDate(today);
+    setViewingMonth(today);
+    setCurrentPageIndex(0);
+    try {
+      flatListRef.current?.scrollToIndex({
+        index: INITIAL_PAGE_INDEX,
+        animated: true,
+      });
+    } catch (e) {
+      // Safe catch
+    }
+  }, []);
+
   const getDaysForPage = (pageIndex: number) =>
     Array.from({ length: 14 }, (_, i) => {
       const d = new Date();
@@ -106,6 +127,23 @@ export default function ClientScheduleTimeline() {
 
   useFocusEffect(
     useCallback(() => {
+      // Reset calendar to today's date and today's 2-week view on every visit
+      const today = new Date();
+      setSelectedDate(today);
+      setViewingMonth(today);
+      setCurrentPageIndex(0);
+
+      setTimeout(() => {
+        try {
+          flatListRef.current?.scrollToIndex({
+            index: INITIAL_PAGE_INDEX,
+            animated: false,
+          });
+        } catch (e) {
+          // Safe catch
+        }
+      }, 50);
+
       if (client) loadSessions();
     }, [client])
   );
@@ -113,13 +151,16 @@ export default function ClientScheduleTimeline() {
   const loadSessions = async () => {
     if (!client) return;
     try {
-      setLoading(true);
+      if (!cachedClientSessions[client.id]) {
+        setLoading(true);
+      }
       const { data, error } = await supabase
         .from('sessions')
         .select('*, coaches(profiles(full_name, avatar_url))')
         .eq('client_id', client.id)
         .order('scheduled_at', { ascending: true });
       if (error) throw error;
+      cachedClientSessions[client.id] = data || [];
       setSessions(data || []);
     } catch (e) {
       console.error('ClientScheduleTimeline load error:', e);
@@ -161,8 +202,9 @@ export default function ClientScheduleTimeline() {
   // ─── Viewable items handler (updates month header) ──────────────────────────
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
+    if (viewableItems && viewableItems.length > 0 && viewableItems[0]?.item !== undefined) {
       const pageIndex = viewableItems[0].item;
+      setCurrentPageIndex(pageIndex);
       const pageDays = getDaysForPage(pageIndex);
       setViewingMonth(pageDays[0]);
     }
@@ -240,52 +282,114 @@ export default function ClientScheduleTimeline() {
           </View>
         </View>
 
-        {/* ── Calendar Box ─────────────────────────────────────────────────── */}
+        {/* ── Calendar Box Container ────────────────────────────────────────── */}
         <View style={{
-          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : cardBg,
-          borderRadius: 36,
-          padding: 24,
           marginHorizontal: 24,
           marginBottom: 16,
-          borderWidth: 1,
-          borderColor: cardBorder,
-          ...(isDark ? {} : {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.05,
-            shadowRadius: 12,
-            elevation: 2,
-          }),
+          position: 'relative',
+          zIndex: 30,
         }}>
-          {/* Day-of-week headers */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
-            {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, i) => (
-              <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ color: textSecondaryColor, fontSize: 9, fontWeight: '900' }}>{d}</Text>
-              </View>
-            ))}
+          <View style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : cardBg,
+            borderRadius: 36,
+            padding: 24,
+            borderWidth: 1,
+            borderColor: cardBorder,
+            ...(isDark ? {} : {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.05,
+              shadowRadius: 12,
+              elevation: 2,
+            }),
+          }}>
+            {/* Day-of-week headers */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+              {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, i) => (
+                <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ color: textSecondaryColor, fontSize: 9, fontWeight: '900' }}>{d}</Text>
+                </View>
+              ))}
+            </View>
+
+            <FlatList
+              ref={flatListRef}
+              horizontal
+              pagingEnabled
+              snapToInterval={PAGE_WIDTH}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              showsHorizontalScrollIndicator={false}
+              data={PAGE_INDICES}
+              keyExtractor={(item) => item.toString()}
+              initialScrollIndex={INITIAL_PAGE_INDEX}
+              getItemLayout={(_, index) => ({
+                length: PAGE_WIDTH,
+                offset: PAGE_WIDTH * index,
+                index,
+              })}
+              onViewableItemsChanged={onViewableItemsChanged}
+              viewabilityConfig={viewabilityConfig}
+              onScrollToIndexFailed={(info) => {
+                setTimeout(() => {
+                  flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                }, 100);
+              }}
+              renderItem={renderCalendarPage}
+            />
           </View>
 
-          <FlatList
-            ref={flatListRef}
-            horizontal
-            pagingEnabled
-            snapToInterval={PAGE_WIDTH}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            data={PAGE_INDICES}
-            keyExtractor={(item) => item.toString()}
-            initialScrollIndex={INITIAL_PAGE_INDEX}
-            getItemLayout={(_, index) => ({
-              length: PAGE_WIDTH,
-              offset: PAGE_WIDTH * index,
-              index,
-            })}
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
-            renderItem={renderCalendarPage}
-          />
+          {/* Go to Today Button (overrides bottom edge in bottom right corner) */}
+          <AnimatePresence>
+            {currentPageIndex !== 0 && (
+              <MotiView
+                from={{ opacity: 0, scale: 0.85, translateY: 6 }}
+                animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                exit={{ opacity: 0, scale: 0.85, translateY: 6 }}
+                transition={{ type: 'timing', duration: 180 } as any}
+                style={{
+                  position: 'absolute',
+                  bottom: -14,
+                  right: 20,
+                  zIndex: 50,
+                }}
+              >
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleGoToToday}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.primary,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                    gap: 5,
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 6,
+                    elevation: 6,
+                    borderWidth: 1.5,
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                  }}
+                >
+                  <CalendarDays size={12} color={colors.textOnPrimary || '#FFFFFF'} />
+                  <Text
+                    style={{
+                      color: colors.textOnPrimary || '#FFFFFF',
+                      fontSize: 11,
+                      fontWeight: '900',
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Today
+                  </Text>
+                </TouchableOpacity>
+              </MotiView>
+            )}
+          </AnimatePresence>
         </View>
 
         {/* ── Session List ─────────────────────────────────────────────────── */}

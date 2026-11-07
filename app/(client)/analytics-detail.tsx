@@ -756,20 +756,121 @@ export default function AnalyticsDetailScreen() {
   }, [activeMetric, targetCalories]);
 
   const heroValue = useMemo(() => {
-    if (selectedIndex !== null) {
-      return chartPoints[selectedIndex]?.value || 0;
-    }
     const lastActive = [...chartPoints].reverse().find((p) => p.value > 0);
     if (lastActive) return lastActive.value;
     return chartPoints[chartPoints.length - 1]?.value || 0;
-  }, [selectedIndex, chartPoints]);
+  }, [chartPoints]);
 
   const heroDateLabel = useMemo(() => {
-    if (selectedIndex !== null) {
-      return chartPoints[selectedIndex]?.label || 'Selected';
-    }
     return 'Latest';
-  }, [selectedIndex, chartPoints]);
+  }, []);
+
+  // Category label for floating tooltip
+  const tooltipCategory = useMemo(() => {
+    switch (activeMetric) {
+      case 'steps':
+        return 'TOTAL';
+      case 'sleep':
+        return 'TOTAL';
+      case 'nutrition':
+        return 'TOTAL';
+      case 'weight':
+        return 'WEIGHT';
+      case 'energy':
+        return 'ENERGY';
+      default:
+        return 'TOTAL';
+    }
+  }, [activeMetric]);
+
+  // Selected point data
+  const selectedPoint = selectedIndex !== null ? chartPoints[selectedIndex] : null;
+
+  // Formatted value & unit for tooltip
+  const tooltipStat = useMemo(() => {
+    if (!selectedPoint) return { valueStr: '', unitStr: '' };
+    const val = selectedPoint.value;
+    switch (activeMetric) {
+      case 'steps':
+        return {
+          valueStr: Math.round(val).toLocaleString(),
+          unitStr: 'steps',
+        };
+      case 'sleep':
+        return {
+          valueStr: val > 0 ? val.toFixed(1) : '0',
+          unitStr: 'hrs',
+        };
+      case 'nutrition':
+        return {
+          valueStr: Math.round(val).toLocaleString(),
+          unitStr: 'kcal',
+        };
+      case 'weight':
+        return {
+          valueStr: val > 0 ? val.toFixed(1) : '--',
+          unitStr: val > 0 ? 'kg' : '',
+        };
+      case 'energy':
+        return {
+          valueStr: val > 0 ? val.toFixed(1) : '0',
+          unitStr: '/ 10',
+        };
+      default:
+        return { valueStr: `${val}`, unitStr: '' };
+    }
+  }, [selectedPoint, activeMetric]);
+
+  // Formatted date string for tooltip
+  const tooltipDateStr = useMemo(() => {
+    if (!selectedPoint) return '';
+    const dateStr = selectedPoint.date;
+    if (!dateStr) return selectedPoint.label;
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      const monthName = d.toLocaleDateString('en-US', { month: 'short' });
+
+      if (timeRange === 'Day' && selectedPoint.label) {
+        return `${monthName} ${day}, ${year} · ${selectedPoint.label}`;
+      }
+      if (timeRange === '6M') {
+        return `Week of ${monthName} ${day}, ${year}`;
+      }
+      return `${monthName} ${day}, ${year}`;
+    }
+    return dateStr;
+  }, [selectedPoint, timeRange]);
+
+  // Calculate selected bar X coordinate to horizontally align the tooltip
+  const selectedBarCenterX = useMemo(() => {
+    if (selectedIndex === null || chartPoints.length === 0) return 0;
+    const isBar = activeMetric === 'steps' || activeMetric === 'sleep' || activeMetric === 'nutrition';
+    if (isBar) {
+      const paddingLeft = 14;
+      const paddingRight = 36;
+      const usableW = Math.max(100, chartInnerWidth - paddingLeft - paddingRight);
+      const slotW = usableW / chartPoints.length;
+      return paddingLeft + selectedIndex * slotW + slotW / 2;
+    } else {
+      const paddingLeft = 16;
+      const paddingRight = 36;
+      const usableW = Math.max(100, chartInnerWidth - paddingLeft - paddingRight);
+      const slotW = usableW / Math.max(chartPoints.length - 1, 1);
+      return paddingLeft + selectedIndex * slotW;
+    }
+  }, [selectedIndex, chartPoints.length, chartInnerWidth, activeMetric]);
+
+  const tooltipWidth = 164;
+  const tooltipLeft = useMemo(() => {
+    return Math.max(
+      0,
+      Math.min(chartInnerWidth - tooltipWidth, selectedBarCenterX - tooltipWidth / 2)
+    );
+  }, [selectedBarCenterX, chartInnerWidth]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -889,31 +990,80 @@ export default function AnalyticsDetailScreen() {
             </View>
           ) : (
             <View>
-              {/* Chart Value Display */}
-              <View style={styles.valueRow}>
-                <View>
-                  <Text style={[styles.valueLabel, { color: textSecondary }]}>
-                    {heroDateLabel}
-                  </Text>
-                  <Text style={[styles.valueNumber, { color: textColor }]}>
-                    {formatValue(heroValue, activeMetric)}
-                  </Text>
+              {/* Header Container: Value Display or Floating Tooltip */}
+              <View style={styles.chartHeaderContainer}>
+                {/* Default Stat (fades out when a bar is selected) */}
+                <View
+                  style={[
+                    styles.valueRow,
+                    {
+                      opacity: selectedIndex !== null ? 0 : 1,
+                      pointerEvents: selectedIndex !== null ? 'none' : 'auto',
+                    },
+                  ]}
+                >
+                  <View>
+                    <Text style={[styles.valueLabel, { color: textSecondary }]}>
+                      {heroDateLabel}
+                    </Text>
+                    <Text style={[styles.valueNumber, { color: textColor }]}>
+                      {formatValue(heroValue, activeMetric)}
+                    </Text>
+                  </View>
+
+                  {benchmarkValue > 0 && (
+                    <View
+                      style={[
+                        styles.goalBadge,
+                        {
+                          backgroundColor: `${colors.primary}16`,
+                          borderColor: `${colors.primary}33`,
+                        },
+                      ]}
+                    >
+                      <View style={[styles.goalDot, { backgroundColor: colors.primary }]} />
+                      <Text style={[styles.goalText, { color: colors.primary }]}>
+                        Goal: {formatValue(benchmarkValue, activeMetric)}
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
-                {benchmarkValue > 0 && (
+                {/* Floating iPhone-style Tooltip Card (shows when a bar/point is selected) */}
+                {selectedIndex !== null && selectedPoint && (
                   <View
                     style={[
-                      styles.goalBadge,
+                      styles.tooltipCard,
                       {
-                        backgroundColor: `${colors.primary}16`,
-                        borderColor: `${colors.primary}33`,
+                        left: tooltipLeft,
+                        width: tooltipWidth,
+                        backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.08)',
                       },
                     ]}
                   >
-                    <View style={[styles.goalDot, { backgroundColor: colors.primary }]} />
-                    <Text style={[styles.goalText, { color: colors.primary }]}>
-                      Goal: {formatValue(benchmarkValue, activeMetric)}
-                    </Text>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => setSelectedIndex(null)}
+                      style={styles.tooltipInner}
+                    >
+                      <Text style={[styles.tooltipCategory, { color: isDark ? '#98989F' : '#8E8E93' }]}>
+                        {tooltipCategory}
+                      </Text>
+                      <View style={styles.tooltipValueRow}>
+                        <Text style={[styles.tooltipValueText, { color: textColor }]}>
+                          {tooltipStat.valueStr}
+                        </Text>
+                        {tooltipStat.unitStr ? (
+                          <Text style={[styles.tooltipUnitText, { color: textSecondary }]}>
+                            {tooltipStat.unitStr}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text style={[styles.tooltipDateText, { color: textSecondary }]} numberOfLines={1}>
+                        {tooltipDateStr}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -927,7 +1077,7 @@ export default function AnalyticsDetailScreen() {
                   benchmark={benchmarkValue}
                   primaryColor={colors.primary}
                   selectedIndex={selectedIndex}
-                  onSelectIndex={setSelectedIndex}
+                  onSelectIndex={(idx) => setSelectedIndex((prev) => (prev === idx ? null : idx))}
                   isDark={isDark}
                 />
               ) : (
@@ -938,7 +1088,7 @@ export default function AnalyticsDetailScreen() {
                   benchmark={benchmarkValue}
                   primaryColor={colors.primary}
                   selectedIndex={selectedIndex}
-                  onSelectIndex={setSelectedIndex}
+                  onSelectIndex={(idx) => setSelectedIndex((prev) => (prev === idx ? null : idx))}
                   showSecondary={activeMetric === 'energy'}
                   isDark={isDark}
                 />
@@ -1381,19 +1531,41 @@ function BarChartVisual({
   onSelectIndex: (idx: number) => void;
   isDark: boolean;
 }) {
-  const paddingX = 14;
+  const paddingLeft = 14;
+  const paddingRight = 36;
   const paddingBottom = 32;
-  const paddingTop = 12;
-  const usableWidth = Math.max(100, width - paddingX * 2);
+  const paddingTop = 14;
+  const usableWidth = Math.max(100, width - paddingLeft - paddingRight);
   const graphH = height - paddingBottom;
-  const slotWidth = usableWidth / points.length;
-  const barWidth = Math.max(6, Math.min(26, slotWidth * 0.52));
+  const slotWidth = points.length > 0 ? usableWidth / points.length : usableWidth;
+  const barWidth = Math.max(5, Math.min(26, slotWidth * 0.52));
 
   const highestValue = Math.max(...points.map((p) => p.value), 0);
-  const maxVal = Math.max(highestValue, benchmark || 1, 1) * 1.08;
+  const maxVal = Math.max(highestValue, benchmark || 1, 1);
+  const displayMaxVal = maxVal * 1.15;
 
-  const benchmarkY = benchmark > 0 ? graphH - (benchmark / maxVal) * (graphH - paddingTop) : null;
+  const benchmarkY = benchmark > 0 ? graphH - (benchmark / displayMaxVal) * (graphH - paddingTop) : null;
   const emptyBarColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+
+  // Selected bar geometry
+  const selectedBar = selectedIndex !== null && points[selectedIndex] ? points[selectedIndex] : null;
+  const selectedBarX = selectedIndex !== null ? paddingLeft + selectedIndex * slotWidth + (slotWidth - barWidth) / 2 : 0;
+  const selectedBarCenterX = selectedBarX + barWidth / 2;
+  const selectedBarH = selectedBar
+    ? selectedBar.value === 0
+      ? 2
+      : Math.max(8, (selectedBar.value / displayMaxVal) * (graphH - paddingTop))
+    : 0;
+  const selectedBarTopY = graphH - selectedBarH;
+
+  // Grid steps (0, 33%, 66%, 100%)
+  const gridSteps = useMemo(() => {
+    const top = Math.ceil(maxVal);
+    if (top <= 0) return [0];
+    const s1 = Math.round(top * 0.33);
+    const s2 = Math.round(top * 0.66);
+    return [0, s1, s2, top];
+  }, [maxVal]);
 
   return (
     <View style={{ width, height, overflow: 'hidden' }}>
@@ -1401,32 +1573,72 @@ function BarChartVisual({
         <Defs>
           <LinearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0%" stopColor={primaryColor} stopOpacity="0.9" />
-            <Stop offset="100%" stopColor={primaryColor} stopOpacity="0.32" />
+            <Stop offset="100%" stopColor={primaryColor} stopOpacity="0.4" />
           </LinearGradient>
           <LinearGradient id="barGradientActive" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0%" stopColor={primaryColor} stopOpacity="1" />
-            <Stop offset="100%" stopColor={primaryColor} stopOpacity="0.75" />
+            <Stop offset="100%" stopColor={primaryColor} stopOpacity="0.85" />
           </LinearGradient>
         </Defs>
 
-        {/* Clean Baseline Rule */}
-        <Line
-          x1={paddingX}
-          y1={graphH}
-          x2={width - paddingX}
-          y2={graphH}
-          stroke={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}
-          strokeWidth="1"
-        />
+        {/* Subtle Horizontal Grid Lines & Y-axis labels */}
+        {gridSteps.map((stepVal, idx) => {
+          const y = graphH - (stepVal / displayMaxVal) * (graphH - paddingTop);
+          const isBaseline = idx === 0;
+          return (
+            <React.Fragment key={`grid-${idx}`}>
+              <Line
+                x1={paddingLeft}
+                y1={y}
+                x2={width - paddingRight}
+                y2={y}
+                stroke={
+                  isBaseline
+                    ? (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)')
+                    : (isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)')
+                }
+                strokeWidth={isBaseline ? 1 : 0.8}
+              />
+              <SvgText
+                x={width - paddingRight + 6}
+                y={y + 3.5}
+                fontSize="9"
+                fontWeight="600"
+                fill={isDark ? 'rgba(148, 163, 184, 0.65)' : 'rgba(100, 116, 139, 0.65)'}
+                textAnchor="start"
+              >
+                {stepVal >= 1000 ? `${(stepVal / 1000).toFixed(stepVal % 1000 === 0 ? 0 : 1)}k` : stepVal}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
+
+        {/* Subtle Vertical Dashed Divider Lines between bars */}
+        {points.map((_, i) => {
+          if (i === 0) return null;
+          const dividerX = paddingLeft + i * slotWidth;
+          return (
+            <Line
+              key={`vdiv-${i}`}
+              x1={dividerX}
+              y1={paddingTop}
+              x2={dividerX}
+              y2={graphH}
+              stroke={isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)'}
+              strokeDasharray="2 3"
+              strokeWidth="1"
+            />
+          );
+        })}
 
         {/* Benchmark Dashed Line */}
         {benchmarkY !== null && (
           <Line
-            x1={paddingX}
+            x1={paddingLeft}
             y1={benchmarkY}
-            x2={width - paddingX}
+            x2={width - paddingRight}
             y2={benchmarkY}
-            stroke={`${primaryColor}66`}
+            stroke={`${primaryColor}88`}
             strokeDasharray="4 4"
             strokeWidth="1.5"
           />
@@ -1436,8 +1648,8 @@ function BarChartVisual({
         {points.map((p, i) => {
           const isSelected = selectedIndex === i;
           const isZero = p.value === 0;
-          const barH = isZero ? 2 : Math.max(8, (p.value / maxVal) * (graphH - paddingTop));
-          const x = paddingX + i * slotWidth + (slotWidth - barWidth) / 2;
+          const barH = isZero ? 2 : Math.max(8, (p.value / displayMaxVal) * (graphH - paddingTop));
+          const x = paddingLeft + i * slotWidth + (slotWidth - barWidth) / 2;
           const y = graphH - barH;
 
           const fillColor = isSelected
@@ -1445,6 +1657,9 @@ function BarChartVisual({
             : isZero
             ? emptyBarColor
             : 'url(#barGradient)';
+
+          // Dim other bars when one is selected
+          const barOpacity = selectedIndex !== null ? (isSelected ? 1 : 0.4) : 1;
 
           const shouldShowLabel =
             points.length <= 10 ||
@@ -1460,14 +1675,19 @@ function BarChartVisual({
                 height={barH}
                 rx={Math.min(barWidth / 2, 8)}
                 fill={fillColor}
+                opacity={barOpacity}
               />
               {shouldShowLabel && (
                 <SvgText
                   x={x + barWidth / 2}
                   y={height - 10}
                   fontSize="10"
-                  fontWeight="700"
-                  fill="rgba(148, 163, 184, 0.8)"
+                  fontWeight={isSelected ? '800' : '700'}
+                  fill={
+                    isSelected
+                      ? (isDark ? '#FFFFFF' : '#0F172A')
+                      : 'rgba(148, 163, 184, 0.8)'
+                  }
                   textAnchor="middle"
                 >
                   {p.label}
@@ -1476,10 +1696,56 @@ function BarChartVisual({
             </React.Fragment>
           );
         })}
+
+        {/* Selected Bar Indicator Overlay: Vertical line to tooltip + Horizontal line on bar + Guideline */}
+        {selectedIndex !== null && selectedBar && (
+          <React.Fragment>
+            {/* Subtle horizontal guideline across the chart at selected bar value */}
+            <Line
+              x1={paddingLeft}
+              y1={selectedBarTopY}
+              x2={width - paddingRight}
+              y2={selectedBarTopY}
+              stroke={isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.15)'}
+              strokeDasharray="3 3"
+              strokeWidth="1"
+            />
+
+            {/* Vertical stem line connecting from top edge of chart (flush with tooltip) to top of bar */}
+            <Line
+              x1={selectedBarCenterX}
+              y1={0}
+              x2={selectedBarCenterX}
+              y2={selectedBarTopY}
+              stroke={isDark ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 0, 0, 0.4)'}
+              strokeWidth="1.5"
+            />
+
+            {/* Horizontal line capping the top of the selected bar */}
+            <Line
+              x1={selectedBarX}
+              y1={selectedBarTopY}
+              x2={selectedBarX + barWidth}
+              y2={selectedBarTopY}
+              stroke="#FFFFFF"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+          </React.Fragment>
+        )}
       </Svg>
 
       {/* Invisible Touch Layer for interactive tapping */}
-      <View style={[styles.touchOverlay, { left: paddingX, right: paddingX, height: graphH }]}>
+      <View
+        style={[
+          styles.touchOverlay,
+          {
+            left: paddingLeft,
+            width: usableWidth,
+            height: graphH,
+          },
+        ]}
+      >
         {points.map((_, i) => (
           <TouchableOpacity
             key={`touch-${i}`}
@@ -1516,10 +1782,11 @@ function LineChartVisual({
   showSecondary?: boolean;
   isDark: boolean;
 }) {
-  const paddingX = 16;
+  const paddingLeft = 16;
+  const paddingRight = 36;
   const paddingBottom = 32;
   const paddingTop = 16;
-  const usableWidth = Math.max(100, width - paddingX * 2);
+  const usableWidth = Math.max(100, width - paddingLeft - paddingRight);
   const graphH = height - paddingBottom;
   const slotWidth = usableWidth / Math.max(points.length - 1, 1);
 
@@ -1540,7 +1807,7 @@ function LineChartVisual({
   const range = Math.max(maxVal - minVal, 1);
 
   const coords = processedPoints.map((p, i) => {
-    const x = paddingX + i * slotWidth;
+    const x = paddingLeft + i * slotWidth;
     const y = p.value > 0 ? graphH - ((p.value - minVal) / range) * (graphH - paddingTop) : graphH - 4;
     return { x, y, value: p.value };
   });
@@ -1557,6 +1824,13 @@ function LineChartVisual({
 
   const areaD = `${pathD} L ${coords[coords.length - 1].x} ${graphH} L ${coords[0].x} ${graphH} Z`;
 
+  // Grid steps (0, 50%, 100%)
+  const gridSteps = useMemo(() => {
+    return [minVal, minVal + range * 0.5, maxVal];
+  }, [minVal, maxVal, range]);
+
+  const selectedPt = selectedIndex !== null && coords[selectedIndex] ? coords[selectedIndex] : null;
+
   return (
     <View style={{ width, height, overflow: 'hidden' }}>
       <Svg width={width} height={height}>
@@ -1567,22 +1841,44 @@ function LineChartVisual({
           </LinearGradient>
         </Defs>
 
-        {/* Clean Baseline Rule */}
-        <Line
-          x1={paddingX}
-          y1={graphH}
-          x2={width - paddingX}
-          y2={graphH}
-          stroke={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}
-          strokeWidth="1"
-        />
+        {/* Subtle Horizontal Grid Lines & Y-axis labels */}
+        {gridSteps.map((stepVal, idx) => {
+          const y = graphH - ((stepVal - minVal) / range) * (graphH - paddingTop);
+          const isBaseline = idx === 0;
+          return (
+            <React.Fragment key={`grid-${idx}`}>
+              <Line
+                x1={paddingLeft}
+                y1={y}
+                x2={width - paddingRight}
+                y2={y}
+                stroke={
+                  isBaseline
+                    ? (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)')
+                    : (isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)')
+                }
+                strokeWidth={isBaseline ? 1 : 0.8}
+              />
+              <SvgText
+                x={width - paddingRight + 6}
+                y={y + 3.5}
+                fontSize="9"
+                fontWeight="600"
+                fill={isDark ? 'rgba(148, 163, 184, 0.65)' : 'rgba(100, 116, 139, 0.65)'}
+                textAnchor="start"
+              >
+                {stepVal.toFixed(stepVal % 1 === 0 ? 0 : 1)}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
 
         {/* Benchmark Dashed Line */}
         {benchmark > 0 && (
           <Line
-            x1={paddingX}
+            x1={paddingLeft}
             y1={graphH - ((benchmark - minVal) / range) * (graphH - paddingTop)}
-            x2={width - paddingX}
+            x2={width - paddingRight}
             y2={graphH - ((benchmark - minVal) / range) * (graphH - paddingTop)}
             stroke={`${primaryColor}66`}
             strokeDasharray="4 4"
@@ -1625,8 +1921,12 @@ function LineChartVisual({
                   x={pt.x}
                   y={height - 10}
                   fontSize="10"
-                  fontWeight="700"
-                  fill="rgba(148, 163, 184, 0.8)"
+                  fontWeight={isSelected ? '800' : '700'}
+                  fill={
+                    isSelected
+                      ? (isDark ? '#FFFFFF' : '#0F172A')
+                      : 'rgba(148, 163, 184, 0.8)'
+                  }
                   textAnchor="middle"
                 >
                   {processedPoints[i].label}
@@ -1635,10 +1935,42 @@ function LineChartVisual({
             </React.Fragment>
           );
         })}
+
+        {/* Selected Point Indicator: Vertical Line to tooltip & Horizontal Guideline */}
+        {selectedIndex !== null && selectedPt && (
+          <React.Fragment>
+            <Line
+              x1={paddingLeft}
+              y1={selectedPt.y}
+              x2={width - paddingRight}
+              y2={selectedPt.y}
+              stroke={isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.15)'}
+              strokeDasharray="3 3"
+              strokeWidth="1"
+            />
+            <Line
+              x1={selectedPt.x}
+              y1={0}
+              x2={selectedPt.x}
+              y2={selectedPt.y}
+              stroke={isDark ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 0, 0, 0.4)'}
+              strokeWidth="1.5"
+            />
+          </React.Fragment>
+        )}
       </Svg>
 
       {/* Invisible Touch Layer */}
-      <View style={[styles.touchOverlay, { left: paddingX, right: paddingX, height: graphH }]}>
+      <View
+        style={[
+          styles.touchOverlay,
+          {
+            left: paddingLeft,
+            width: usableWidth,
+            height: graphH,
+          },
+        ]}
+      >
         {processedPoints.map((_, i) => (
           <TouchableOpacity
             key={`touch-${i}`}
@@ -1740,6 +2072,54 @@ const styles = StyleSheet.create({
     height: 220,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  chartHeaderContainer: {
+    minHeight: 76,
+    marginBottom: 8,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  tooltipCard: {
+    position: 'absolute',
+    bottom: 0,
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 10,
+  },
+  tooltipInner: {
+    justifyContent: 'center',
+  },
+  tooltipCategory: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  tooltipValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  tooltipValueText: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  tooltipUnitText: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  tooltipDateText: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
   },
   valueRow: {
     flexDirection: 'row',

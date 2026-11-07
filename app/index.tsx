@@ -3,6 +3,8 @@ import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { ClientDashboardSkeleton } from '@/components/ClientDashboardSkeleton';
+import { CoachDashboardSkeleton } from '@/components/CoachDashboardSkeleton';
 
 export default function Index() {
   const colors = useBrandColors();
@@ -38,6 +40,14 @@ export default function Index() {
       }
     }
   }, [loading, brandLoading, isCacheHydrated, session, profile]);
+
+  if (profile?.role === 'coach') {
+    return <CoachDashboardSkeleton />;
+  }
+
+  if (profile?.role === 'client') {
+    return <ClientDashboardSkeleton />;
+  }
 
   return (
     <View style={styles.container}>

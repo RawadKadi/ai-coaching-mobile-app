@@ -13,6 +13,7 @@ import {
   SafeAreaView,
   RefreshControl,
   LayoutAnimation,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -635,16 +636,6 @@ export default function ClientDetailsScreen() {
                             </Text>
                         </View>
                     </View>
-                    {activeSubView === 'daily_tasks' ? (
-                      <TouchableOpacity 
-                        onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)} 
-                        className="h-10 px-3.5 rounded-2xl flex-row items-center gap-1.5"
-                        style={{ backgroundColor: colors.primary }}
-                      >
-                        <Plus size={16} color={colors.textOnPrimary || 'white'} />
-                        <Text className="font-bold text-xs" style={{ color: colors.textOnPrimary || 'white' }}>Add</Text>
-                      </TouchableOpacity>
-                    ) : null}
                   </>
                 )}
             </View>
@@ -1210,17 +1201,8 @@ export default function ClientDetailsScreen() {
                   </View>
                 ) : activeSubView === 'daily_tasks' ? (
                   <View className="px-3 pt-3">
-                    <View className="flex-row items-center justify-between mb-4 px-1">
+                    <View className="mb-4 px-1">
                         <Text className="text-2xl font-black tracking-tight" style={{ color: textColor }}>Daily Tasks</Text>
-                        {habits.length > 0 && (
-                            <TouchableOpacity 
-                              onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
-                              className="px-3.5 py-1.5 rounded-full border"
-                              style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}35` }}
-                            >
-                                <Text className="text-xs font-black uppercase tracking-wider" style={{ color: colors.primary }}>Edit</Text>
-                            </TouchableOpacity>
-                        )}
                     </View>
                     {habits.length === 0 ? (
                         <View 
@@ -1236,7 +1218,7 @@ export default function ClientDetailsScreen() {
                              <Text className="font-black text-base" style={{ color: textColor }}>No Daily Tasks</Text>
                              <Text className="text-xs mt-1 text-center px-4" style={{ color: textSecondaryColor }}>No daily habits have been assigned to this client yet.</Text>
                              <TouchableOpacity 
-                                onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
+                                onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}&autoAddNew=true`)}
                                 className="mt-6 px-6 h-12 rounded-2xl flex-row items-center gap-2"
                                 style={{ backgroundColor: colors.primary }}
                              >
@@ -1314,12 +1296,12 @@ export default function ClientDetailsScreen() {
 
                     {habits.length > 0 && (
                         <TouchableOpacity 
-                            onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
+                            onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}&autoAddNew=true`)}
                             className="mt-2 p-5 rounded-[30px] border items-center border-dashed flex-row justify-center gap-2"
                             style={{ backgroundColor: cardBg, borderColor: cardBorder }}
                         >
                             <Plus size={18} color={colors.primary} />
-                            <Text className="font-black text-xs uppercase tracking-wider" style={{ color: colors.primary }}>Add or Edit Tasks</Text>
+                            <Text className="font-bold text-xs uppercase tracking-wider" style={{ color: colors.primary }}>Click to add tasks</Text>
                         </TouchableOpacity>
                     )}
                   </View>
@@ -1675,6 +1657,40 @@ export default function ClientDetailsScreen() {
            </View>
          </View>
        </Modal>
+
+       {/* Floating Circular Edit Button for Daily Tasks */}
+       {activeSubView === 'daily_tasks' && (
+         <MotiView
+           from={{ opacity: reduceMotion ? 1 : 0, scale: reduceMotion ? 1 : 0.8 }}
+           animate={{ opacity: 1, scale: 1 }}
+           style={{
+             position: 'absolute',
+             bottom: Platform.OS === 'ios' ? 36 : 24,
+             right: 20,
+             zIndex: 99,
+           }}
+         >
+           <TouchableOpacity
+             onPress={() => router.push(`/(coach)/clients/create-protocol?clientId=${id}`)}
+             activeOpacity={0.8}
+             style={{
+               width: 56,
+               height: 56,
+               borderRadius: 28,
+               backgroundColor: colors.primary,
+               alignItems: 'center',
+               justifyContent: 'center',
+               shadowColor: colors.primary,
+               shadowOffset: { width: 0, height: 6 },
+               shadowOpacity: 0.35,
+               shadowRadius: 10,
+               elevation: 6,
+             }}
+           >
+             <Edit2 size={22} color={colors.textOnPrimary || 'white'} strokeWidth={2.2} />
+           </TouchableOpacity>
+         </MotiView>
+       )}
     </View>
   );
 }

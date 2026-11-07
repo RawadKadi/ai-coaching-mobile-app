@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   AppState,
+  ScrollView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -33,6 +34,7 @@ import {
   Timer,
   Scale,
   Check,
+  Flame,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -43,6 +45,7 @@ import FeedbackModal from '@/components/FeedbackModal';
 import {
   getLastNightSleep,
   getLatestWeight,
+  getTodayActiveEnergy,
   isHealthSyncEnabled,
   requestHealthPermissions,
   isNativeHealthModuleAvailable,
@@ -78,8 +81,10 @@ export default function CheckInScreen() {
   // Form State
   const [weight, setWeight] = useState('');
   const [sleep, setSleep] = useState('');
+  const [activeCalories, setActiveCalories] = useState('');
   const [isWeightFromHealth, setIsWeightFromHealth] = useState(false);
   const [isSleepFromHealth, setIsSleepFromHealth] = useState(false);
+  const [isActiveEnergyFromHealth, setIsActiveEnergyFromHealth] = useState(false);
   const [isHealthConnected, setIsHealthConnected] = useState(false);
   const [energy, setEnergy] = useState(7);
   const [stress, setStress] = useState(3);
@@ -118,9 +123,10 @@ export default function CheckInScreen() {
       setIsHealthConnected(enabled);
       if (!enabled) return;
 
-      const [healthSleep, healthWeight] = await Promise.all([
+      const [healthSleep, healthWeight, healthActiveEnergy] = await Promise.all([
         getLastNightSleep(),
         getLatestWeight(),
+        getTodayActiveEnergy(),
       ]);
 
       if (healthWeight !== null) {
@@ -130,6 +136,10 @@ export default function CheckInScreen() {
       if (healthSleep !== null) {
         setSleep(healthSleep.toString());
         setIsSleepFromHealth(true);
+      }
+      if (healthActiveEnergy !== null) {
+        setActiveCalories(healthActiveEnergy.toString());
+        setIsActiveEnergyFromHealth(true);
       }
     } catch (e) {
       console.warn('Error fetching health sync data:', e);
@@ -152,7 +162,7 @@ export default function CheckInScreen() {
       if (!granted) {
         Alert.alert(
           'Permission Needed',
-          'Please allow Health access when prompted so we can sync your sleep and weight.',
+          'Please allow Health access when prompted so we can sync your sleep, weight, and active energy.',
         );
         return;
       }
@@ -160,9 +170,10 @@ export default function CheckInScreen() {
       setIsHealthConnected(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      const [healthSleep, healthWeight] = await Promise.all([
+      const [healthSleep, healthWeight, healthActiveEnergy] = await Promise.all([
         getLastNightSleep(),
         getLatestWeight(),
+        getTodayActiveEnergy(),
       ]);
 
       if (healthWeight !== null) {
@@ -172,6 +183,10 @@ export default function CheckInScreen() {
       if (healthSleep !== null) {
         setSleep(healthSleep.toString());
         setIsSleepFromHealth(true);
+      }
+      if (healthActiveEnergy !== null) {
+        setActiveCalories(healthActiveEnergy.toString());
+        setIsActiveEnergyFromHealth(true);
       }
     } catch (e) {
       console.warn('Error connecting health:', e);
@@ -253,6 +268,7 @@ export default function CheckInScreen() {
       processCheckInAI(checkinData.id, {
         weight,
         sleep,
+        activeCalories,
         energy,
         stress,
         hunger,
@@ -331,263 +347,351 @@ export default function CheckInScreen() {
       animate={{ opacity: 1 }}
       className="flex-1 px-8"
     >
-      <View className="mb-10">
-        <Text
-          style={{ color: textColor }}
-          className="text-4xl font-black tracking-tighter"
-        >
-          Physical Status
-        </Text>
-        <Text
-          style={{ color: textSecondaryColor }}
-          className="font-medium text-lg mt-2"
-        >
-          Let's track your core metrics for today.
-        </Text>
-      </View>
-
-      <View className="gap-6">
-        <View
-          style={{ backgroundColor: cardBg, borderColor: cardBorder }}
-          className="rounded-[32px] p-6 border shadow-sm"
-        >
-          <View
-            style={{ zIndex: 1 }}
-            className="flex-row items-center justify-between mb-6"
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
+        <View className="mb-8">
+          <Text
+            style={{ color: textColor }}
+            className="text-4xl font-black tracking-tighter"
           >
-            <View className="flex-row items-center gap-3">
-              <View
-                style={{
-                  backgroundColor: `${theme.colors.primary}15`,
-                  borderColor: `${theme.colors.primary}30`,
-                }}
-                className="w-10 h-10 rounded-xl items-center justify-center border"
-              >
-                <Scale size={20} color={theme.colors.primary} />
+            Physical Status
+          </Text>
+          <Text
+            style={{ color: textSecondaryColor }}
+            className="font-medium text-lg mt-2"
+          >
+            Let's track your core metrics for today.
+          </Text>
+        </View>
+
+        <View className="gap-5">
+          {/* Body Weight */}
+          <View
+            style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+            className="rounded-[32px] p-6 border shadow-sm"
+          >
+            <View
+              style={{ zIndex: 1 }}
+              className="flex-row items-center justify-between mb-6"
+            >
+              <View className="flex-row items-center gap-3">
+                <View
+                  style={{
+                    backgroundColor: `${theme.colors.primary}15`,
+                    borderColor: `${theme.colors.primary}30`,
+                  }}
+                  className="w-10 h-10 rounded-xl items-center justify-center border"
+                >
+                  <Scale size={20} color={theme.colors.primary} />
+                </View>
+                <Text style={{ color: textColor }} className="font-bold text-lg">
+                  Body Weight
+                </Text>
               </View>
-              <Text style={{ color: textColor }} className="font-bold text-lg">
-                Body Weight
+              <View className="flex-row items-center gap-2">
+                {isWeightFromHealth && (
+                  <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="border px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
+                    <Check size={12} color={theme.colors.primary} />
+                    <Text style={{ color: theme.colors.primary }} className="text-[10px] font-black uppercase tracking-wider">
+                      From Health
+                    </Text>
+                  </View>
+                )}
+                {lastWeight && !isWeightFromHealth && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setWeight(lastWeight);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    style={{
+                      backgroundColor: isDark
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : colors.inputBackground || '#F1F5F9',
+                      borderColor: cardBorder,
+                    }}
+                    className="px-3 py-1.5 rounded-full border"
+                  >
+                    <Text
+                      style={{ color: textSecondaryColor }}
+                      className="text-[10px] font-black uppercase tracking-wider"
+                    >
+                      Same as before
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+            <View
+              style={{ zIndex: 10, position: 'relative' }}
+              className="flex-row items-center mt-2"
+            >
+              <View
+                className="flex-1 justify-center"
+                style={{ height: 64, position: 'relative' }}
+              >
+                {!weight && (
+                  <Text
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      color: placeholderColor,
+                      fontSize: 48,
+                      lineHeight: 58,
+                    }}
+                    className="font-black"
+                  >
+                    0.0
+                  </Text>
+                )}
+                <TextInput
+                  value={weight}
+                  onChangeText={(text) => {
+                    setWeight(text);
+                    if (isWeightFromHealth) setIsWeightFromHealth(false);
+                  }}
+                  placeholder=""
+                  keyboardType="numeric"
+                  style={{
+                    color: textColor,
+                    fontSize: 48,
+                    height: 64,
+                    paddingVertical: 0,
+                  }}
+                  className="font-black flex-1"
+                />
+              </View>
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-xl font-bold ml-2"
+              >
+                KG
               </Text>
             </View>
-            <View className="flex-row items-center gap-2">
-              {isWeightFromHealth && (
+          </View>
+
+          {/* Sleep Duration */}
+          <View
+            style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+            className="rounded-[32px] p-6 border shadow-sm"
+          >
+            <View
+              style={{ zIndex: 1 }}
+              className="flex-row items-center justify-between mb-6"
+            >
+              <View className="flex-row items-center gap-3">
+                <View
+                  style={{
+                    backgroundColor: `${theme.colors.secondary || '#10B981'}15`,
+                    borderColor: `${theme.colors.secondary || '#10B981'}30`,
+                  }}
+                  className="w-10 h-10 rounded-xl items-center justify-center border"
+                >
+                  <Timer size={20} color={theme.colors.primary} />
+                </View>
+                <Text style={{ color: textColor }} className="font-bold text-lg">
+                  Sleep Duration
+                </Text>
+              </View>
+              {isSleepFromHealth ? (
                 <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="border px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
                   <Check size={12} color={theme.colors.primary} />
                   <Text style={{ color: theme.colors.primary }} className="text-[10px] font-black uppercase tracking-wider">
                     From Health
                   </Text>
                 </View>
-              )}
-              {lastWeight && !isWeightFromHealth && (
+              ) : (
                 <TouchableOpacity
-                  onPress={() => {
-                    setWeight(lastWeight);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
+                  onPress={handleConnectHealth}
                   style={{
-                    backgroundColor: isDark
-                      ? 'rgba(255, 255, 255, 0.08)'
-                      : colors.inputBackground || '#F1F5F9',
-                    borderColor: cardBorder,
+                    backgroundColor: `${theme.colors.primary}15`,
+                    borderColor: `${theme.colors.primary}35`,
                   }}
-                  className="px-3 py-1.5 rounded-full border"
+                  className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
                 >
+                  <Heart size={12} color={theme.colors.primary} />
                   <Text
-                    style={{ color: textSecondaryColor }}
+                    style={{ color: theme.colors.primary }}
                     className="text-[10px] font-black uppercase tracking-wider"
                   >
-                    Same as before
+                    Connect Health
                   </Text>
                 </TouchableOpacity>
               )}
             </View>
-          </View>
-          <View
-            style={{ zIndex: 10, position: 'relative' }}
-            className="flex-row items-center mt-2"
-          >
             <View
-              className="flex-1 justify-center"
-              style={{ height: 64, position: 'relative' }}
+              style={{ zIndex: 10, position: 'relative' }}
+              className="flex-row items-center mt-2"
             >
-              {!weight && (
-                <Text
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    color: placeholderColor,
-                    fontSize: 48,
-                    lineHeight: 58,
-                  }}
-                  className="font-black"
-                >
-                  0.0
-                </Text>
-              )}
-              <TextInput
-                value={weight}
-                onChangeText={(text) => {
-                  setWeight(text);
-                  if (isWeightFromHealth) setIsWeightFromHealth(false);
-                }}
-                placeholder=""
-                keyboardType="numeric"
-                style={{
-                  color: textColor,
-                  fontSize: 48,
-                  height: 64,
-                  paddingVertical: 0,
-                }}
-                className="font-black flex-1"
-              />
-            </View>
-            <Text
-              style={{ color: textSecondaryColor }}
-              className="text-xl font-bold ml-2"
-            >
-              KG
-            </Text>
-          </View>
-        </View>
-
-        <View
-          style={{ backgroundColor: cardBg, borderColor: cardBorder }}
-          className="rounded-[32px] p-6 border shadow-sm"
-        >
-          <View
-            style={{ zIndex: 1 }}
-            className="flex-row items-center justify-between mb-6"
-          >
-            <View className="flex-row items-center gap-3">
               <View
-                style={{
-                  backgroundColor: `${theme.colors.secondary || '#10B981'}15`,
-                  borderColor: `${theme.colors.secondary || '#10B981'}30`,
-                }}
-                className="w-10 h-10 rounded-xl items-center justify-center border"
+                className="flex-1 justify-center"
+                style={{ height: 64, position: 'relative' }}
               >
-                <Timer size={20} color={theme.colors.primary} />
+                {!sleep && (
+                  <Text
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      color: placeholderColor,
+                      fontSize: 48,
+                      lineHeight: 58,
+                    }}
+                    className="font-black"
+                  >
+                    0.0
+                  </Text>
+                )}
+                <TextInput
+                  value={sleep}
+                  onChangeText={(text) => {
+                    setSleep(text);
+                    if (isSleepFromHealth) setIsSleepFromHealth(false);
+                  }}
+                  placeholder=""
+                  keyboardType="numeric"
+                  style={{
+                    color: textColor,
+                    fontSize: 48,
+                    height: 64,
+                    paddingVertical: 0,
+                  }}
+                  className="font-black flex-1"
+                />
               </View>
-              <Text style={{ color: textColor }} className="font-bold text-lg">
-                Sleep Duration
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-xl font-bold ml-2"
+              >
+                HOURS
               </Text>
             </View>
-            {isSleepFromHealth ? (
-              <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="border px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
-                <Check size={12} color={theme.colors.primary} />
-                <Text style={{ color: theme.colors.primary }} className="text-[10px] font-black uppercase tracking-wider">
-                  From Health
-                </Text>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={handleConnectHealth}
-                style={{
-                  backgroundColor: `${theme.colors.primary}15`,
-                  borderColor: `${theme.colors.primary}35`,
-                }}
-                className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
-              >
-                <Heart size={12} color={theme.colors.primary} />
-                <Text
-                  style={{ color: theme.colors.primary }}
-                  className="text-[10px] font-black uppercase tracking-wider"
-                >
-                  Connect Health
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
+
+          {/* Active Calories / Active Energy */}
           <View
-            style={{ zIndex: 10, position: 'relative' }}
-            className="flex-row items-center mt-2"
+            style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+            className="rounded-[32px] p-6 border shadow-sm"
           >
             <View
-              className="flex-1 justify-center"
-              style={{ height: 64, position: 'relative' }}
+              style={{ zIndex: 1 }}
+              className="flex-row items-center justify-between mb-6"
             >
-              {!sleep && (
-                <Text
-                  pointerEvents="none"
+              <View className="flex-row items-center gap-3">
+                <View
                   style={{
-                    position: 'absolute',
-                    left: 0,
-                    color: placeholderColor,
-                    fontSize: 48,
-                    lineHeight: 58,
+                    backgroundColor: `${theme.colors.accent || '#F97316'}15`,
+                    borderColor: `${theme.colors.accent || '#F97316'}30`,
                   }}
-                  className="font-black"
+                  className="w-10 h-10 rounded-xl items-center justify-center border"
                 >
-                  0.0
+                  <Flame size={20} color={theme.colors.accent || '#F97316'} />
+                </View>
+                <Text style={{ color: textColor }} className="font-bold text-lg">
+                  Active Energy
                 </Text>
-              )}
-              <TextInput
-                value={sleep}
-                onChangeText={(text) => {
-                  setSleep(text);
-                  if (isSleepFromHealth) setIsSleepFromHealth(false);
-                }}
-                placeholder=""
-                keyboardType="numeric"
-                style={{
-                  color: textColor,
-                  fontSize: 48,
-                  height: 64,
-                  paddingVertical: 0,
-                }}
-                className="font-black flex-1"
-              />
+              </View>
+              {isActiveEnergyFromHealth ? (
+                <View style={{ backgroundColor: `${theme.colors.primary}15`, borderColor: `${theme.colors.primary}30` }} className="border px-3 py-1.5 rounded-full flex-row items-center gap-1.5">
+                  <Check size={12} color={theme.colors.primary} />
+                  <Text style={{ color: theme.colors.primary }} className="text-[10px] font-black uppercase tracking-wider">
+                    From Health
+                  </Text>
+                </View>
+              ) : null}
             </View>
-            <Text
-              style={{ color: textSecondaryColor }}
-              className="text-xl font-bold ml-2"
+            <View
+              style={{ zIndex: 10, position: 'relative' }}
+              className="flex-row items-center mt-2"
             >
-              HOURS
-            </Text>
+              <View
+                className="flex-1 justify-center"
+                style={{ height: 64, position: 'relative' }}
+              >
+                {!activeCalories && (
+                  <Text
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      color: placeholderColor,
+                      fontSize: 48,
+                      lineHeight: 58,
+                    }}
+                    className="font-black"
+                  >
+                    0
+                  </Text>
+                )}
+                <TextInput
+                  value={activeCalories}
+                  onChangeText={(text) => {
+                    setActiveCalories(text.replace(/[^0-9]/g, ''));
+                    if (isActiveEnergyFromHealth) setIsActiveEnergyFromHealth(false);
+                  }}
+                  placeholder=""
+                  keyboardType="numeric"
+                  style={{
+                    color: textColor,
+                    fontSize: 48,
+                    height: 64,
+                    paddingVertical: 0,
+                  }}
+                  className="font-black flex-1"
+                />
+              </View>
+              <Text
+                style={{ color: textSecondaryColor }}
+                className="text-xl font-bold ml-2"
+              >
+                KCAL
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <View className="flex-1" />
-      <TouchableOpacity
-        key={`continue-btn-${isMetricsValid}`}
-        onPress={() => isMetricsValid && setCurrentStep('vitals')}
-        disabled={!isMetricsValid}
-        style={{
-          backgroundColor: isMetricsValid
-            ? theme.colors.primary
-            : isDark
-              ? '#1E293B'
-              : '#E2E8F0',
-          opacity: isMetricsValid ? 1 : 0.6,
-        }}
-        className="h-20 rounded-[32px] items-center justify-center flex-row gap-3 mb-10 shadow-2xl"
-      >
-        <Text
+        <TouchableOpacity
+          key={`continue-btn-${isMetricsValid}`}
+          onPress={() => isMetricsValid && setCurrentStep('vitals')}
+          disabled={!isMetricsValid}
           style={{
-            color: isMetricsValid
-              ? theme.colors.textOnPrimary || '#FFFFFF'
+            backgroundColor: isMetricsValid
+              ? theme.colors.primary
               : isDark
-                ? '#64748B'
-                : '#94A3B8',
+                ? '#1E293B'
+                : '#E2E8F0',
+            opacity: isMetricsValid ? 1 : 0.6,
           }}
-          className="font-black text-lg uppercase tracking-widest"
+          className="h-20 rounded-[32px] items-center justify-center flex-row gap-3 mt-8 shadow-2xl"
         >
-          Continue
-        </Text>
-        <ChevronRight
-          size={20}
-          color={
-            isMetricsValid
-              ? theme.colors.textOnPrimary || '#FFFFFF'
-              : isDark
-                ? '#64748B'
-                : '#94A3B8'
-          }
-          strokeWidth={3}
-        />
-      </TouchableOpacity>
+          <Text
+            style={{
+              color: isMetricsValid
+                ? theme.colors.textOnPrimary || '#FFFFFF'
+                : isDark
+                  ? '#64748B'
+                  : '#94A3B8',
+            }}
+            className="font-black text-lg uppercase tracking-widest"
+          >
+            Continue
+          </Text>
+          <ChevronRight
+            size={20}
+            color={
+              isMetricsValid
+                ? theme.colors.textOnPrimary || '#FFFFFF'
+                : isDark
+                  ? '#64748B'
+                  : '#94A3B8'
+            }
+            strokeWidth={3}
+          />
+        </TouchableOpacity>
+      </ScrollView>
     </MotiView>
   );
 

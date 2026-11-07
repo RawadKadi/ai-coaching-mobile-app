@@ -9,6 +9,7 @@ import SessionMonitor from '@/components/SessionMonitor';
 import TeamInvitationMonitor from '@/components/TeamInvitationMonitor';
 import { UnassignedClientsBanner } from '@/components/UnassignedClientsBanner';
 import { NewAssignmentCelebration } from '@/components/NewAssignmentCelebration';
+import { CoachDashboardSkeleton } from '@/components/CoachDashboardSkeleton';
 
 export default function CoachLayout() {
   const colors = useBrandColors();
@@ -98,12 +99,12 @@ export default function CoachLayout() {
       
       {/* Absolute Loading Overlay to prevent UI flash, without unmounting the Stack */}
       {(loading || !session || profile?.role !== 'coach') && (
-        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: colors.background || '#010417', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.background || '#010417', zIndex: 100 }}>
+          <CoachDashboardSkeleton />
         </View>
       )}
 
-      <SessionMonitor router={router} />
+      <SessionMonitor />
       <TeamInvitationMonitor router={router} />
       <UnassignedClientsBanner router={router} />
       

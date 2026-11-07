@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/BrandContext';
-import { isDarkColor } from '@/lib/theme-utils';
+import { isDarkColor, hexToRGB } from '@/lib/theme-utils';
 
 interface SkeletonBoneProps {
   width?: number | string;
@@ -46,7 +46,7 @@ const SkeletonBone: React.FC<SkeletonBoneProps> = ({
 
 export const CalendarSkeleton: React.FC<{
   showBackButton?: boolean;
-}> = ({ showBackButton = true }) => {
+}> = ({ showBackButton = false }) => {
   const theme = useTheme();
   const colors = theme.colors;
   const insets = useSafeAreaInsets();
@@ -55,6 +55,9 @@ export const CalendarSkeleton: React.FC<{
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
   const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
   const boneColor = isDark ? 'rgba(255, 255, 255, 0.09)' : 'rgba(15, 23, 42, 0.07)';
+
+  const primaryRgb = hexToRGB(colors.primary || '#6366F1');
+  const primaryBone = `rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, ${isDark ? 0.22 : 0.16})`;
 
   const opacityAnim = useRef(new Animated.Value(0.45)).current;
 
@@ -96,56 +99,56 @@ export const CalendarSkeleton: React.FC<{
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background || (isDark ? '#020617' : '#F8FAFC') }}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, paddingTop: insets.top }}>
-        {/* Header */}
-        <View style={{ paddingHorizontal: 24, paddingTop: showBackButton ? 40 : 20, paddingBottom: 8 }}>
+        {/* Header - matching px-6 pt-10 pb-4 of calendar.tsx */}
+        <View style={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            {showBackButton ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              {showBackButton && (
+                <SkeletonBone
+                  width={40}
+                  height={40}
+                  borderRadius={14}
+                  style={{ marginBottom: 8 }}
+                  opacityAnim={opacityAnim}
+                  boneColor={boneColor}
+                />
+              )}
+              {/* Month & Year Title */}
               <SkeletonBone
-                width={40}
-                height={40}
-                borderRadius={14}
+                width={190}
+                height={36}
+                borderRadius={10}
                 style={{ marginBottom: 8 }}
                 opacityAnim={opacityAnim}
                 boneColor={boneColor}
               />
-            ) : null}
-
-            {/* Month & Year Title */}
-            <SkeletonBone
-              width={180}
-              height={32}
-              borderRadius={8}
-              style={{ marginBottom: 8 }}
-              opacityAnim={opacityAnim}
-              boneColor={boneColor}
-            />
+            </View>
 
             {/* Date picker button */}
             <SkeletonBone
               width={40}
               height={40}
-              borderRadius={14}
+              borderRadius={16}
               style={{ marginBottom: 8 }}
               opacityAnim={opacityAnim}
-              boneColor={boneColor}
+              boneColor={primaryBone}
             />
           </View>
 
           {/* Subtitle */}
           <SkeletonBone
-            width={160}
-            height={14}
-            borderRadius={4}
-            style={{ marginTop: 4 }}
+            width={210}
+            height={16}
+            borderRadius={6}
             opacityAnim={opacityAnim}
             boneColor={boneColor}
           />
         </View>
 
-        {/* Swipe hint placeholder */}
-        <View style={{ paddingHorizontal: 32, flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, opacity: 0.5 }}>
+        {/* Swipe hint - matching px-4 mb-2 */}
+        <View style={{ paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, opacity: 0.4 }}>
           <SkeletonBone
             width={48}
             height={10}
@@ -155,24 +158,24 @@ export const CalendarSkeleton: React.FC<{
           />
         </View>
 
-        {/* Calendar Box */}
+        {/* Calendar Box - matching rounded-[48px] p-6 mx-3 my-4 */}
         <View
           style={{
-            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : cardBg,
-            borderRadius: 36,
+            backgroundColor: cardBg,
+            borderRadius: 48,
             padding: 24,
-            marginHorizontal: 24,
-            marginBottom: 16,
+            marginHorizontal: 12,
+            marginVertical: 16,
             borderWidth: 1,
             borderColor: cardBorder,
           }}
         >
-          {/* Day-of-week headers */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
-            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((_, i) => (
+          {/* Day-of-week headers - matching px-2 mb-6 */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, paddingHorizontal: 8 }}>
+            {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((_, i) => (
               <View key={i} style={{ flex: 1, alignItems: 'center' }}>
                 <SkeletonBone
-                  width={16}
+                  width={22}
                   height={10}
                   borderRadius={3}
                   opacityAnim={opacityAnim}
@@ -192,89 +195,119 @@ export const CalendarSkeleton: React.FC<{
                 marginBottom: row === 0 ? 16 : 0,
               }}
             >
-              {[0, 1, 2, 3, 4, 5, 6].map((col) => (
-                <View
-                  key={col}
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <SkeletonBone
-                    width={38}
-                    height={38}
-                    borderRadius={19}
-                    opacityAnim={opacityAnim}
-                    boneColor={boneColor}
-                  />
-                </View>
-              ))}
+              {[0, 1, 2, 3, 4, 5, 6].map((col) => {
+                const isSelected = row === 0 && col === 2;
+                return (
+                  <View
+                    key={col}
+                    style={{
+                      flex: 1,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <SkeletonBone
+                      width={38}
+                      height={38}
+                      borderRadius={19}
+                      opacityAnim={opacityAnim}
+                      boneColor={isSelected ? primaryBone : boneColor}
+                    />
+                  </View>
+                );
+              })}
             </View>
           ))}
         </View>
 
-        {/* Session List */}
+        {/* Session List - matching px-3 mt-4 */}
         <ScrollView
-          style={{ flex: 1, paddingHorizontal: 24 }}
+          style={{ flex: 1, paddingHorizontal: 12, marginTop: 16 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={{ paddingBottom: 160 }}
           scrollEnabled={false}
         >
-          <View style={{ marginBottom: 20, marginTop: 8 }}>
+          <View style={{ marginBottom: 24, marginTop: 16, paddingHorizontal: 4 }}>
             <SkeletonBone
               width={160}
-              height={22}
-              borderRadius={6}
+              height={26}
+              borderRadius={8}
               opacityAnim={opacityAnim}
               boneColor={boneColor}
             />
           </View>
 
-          {/* 2 Session cards */}
+          {/* Session Cards - matching rounded-[36px] p-6 mb-4 with time, divider, details */}
           {[1, 2].map((k) => (
             <View
               key={k}
               style={{
                 backgroundColor: cardBg,
-                borderRadius: 28,
-                padding: 20,
-                marginBottom: 14,
+                borderRadius: 36,
+                padding: 24,
+                marginBottom: 16,
                 borderWidth: 1,
                 borderColor: cardBorder,
+                flexDirection: 'row',
+                alignItems: 'center',
               }}
             >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              {/* Left: Time column */}
+              <View style={{ alignItems: 'center', marginRight: 16, width: 64 }}>
                 <SkeletonBone
-                  width={72}
+                  width={52}
                   height={22}
-                  borderRadius={11}
+                  borderRadius={6}
+                  style={{ marginBottom: 4 }}
                   opacityAnim={opacityAnim}
-                  boneColor={boneColor}
+                  boneColor={k === 1 ? primaryBone : boneColor}
                 />
                 <SkeletonBone
-                  width={64}
-                  height={20}
-                  borderRadius={10}
+                  width={28}
+                  height={10}
+                  borderRadius={4}
                   opacityAnim={opacityAnim}
                   boneColor={boneColor}
                 />
               </View>
-              <SkeletonBone
-                width={k === 1 ? '70%' : '55%'}
-                height={18}
-                borderRadius={6}
-                style={{ marginBottom: 8 }}
-                opacityAnim={opacityAnim}
-                boneColor={boneColor}
+
+              {/* Vertical divider line */}
+              <View
+                style={{
+                  height: 40,
+                  width: 1,
+                  backgroundColor: cardBorder,
+                  marginRight: 16,
+                }}
               />
+
+              {/* Right: Client info */}
+              <View style={{ flex: 1 }}>
+                <SkeletonBone
+                  width={k === 1 ? '70%' : '55%'}
+                  height={18}
+                  borderRadius={6}
+                  style={{ marginBottom: 6 }}
+                  opacityAnim={opacityAnim}
+                  boneColor={boneColor}
+                />
+                <SkeletonBone
+                  width={k === 1 ? '45%' : '35%'}
+                  height={12}
+                  borderRadius={4}
+                  opacityAnim={opacityAnim}
+                  boneColor={boneColor}
+                />
+              </View>
+
+              {/* Status / meet indicator */}
               <SkeletonBone
-                width={k === 1 ? '45%' : '35%'}
-                height={12}
-                borderRadius={4}
+                width={36}
+                height={36}
+                borderRadius={18}
                 opacityAnim={opacityAnim}
-                boneColor={boneColor}
+                boneColor={primaryBone}
               />
             </View>
           ))}
@@ -283,3 +316,4 @@ export const CalendarSkeleton: React.FC<{
     </View>
   );
 };
+export default CalendarSkeleton;

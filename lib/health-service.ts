@@ -81,6 +81,7 @@ export async function requestHealthPermissions(): Promise<boolean> {
               'Workout',
               'HeartRate',
               'RestingHeartRate',
+              'ActiveEnergyBurned',
             ],
             write: [
               'Steps',
@@ -229,6 +230,65 @@ export async function getTodaySteps(): Promise<number | null> {
       // Ignore
     }
 
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * 1b. ACTIVE ENERGY (CALORIES BURNED TODAY IN KCAL)
+ * Retrieves active calories burned today from 12:00 AM local time.
+ */
+export async function getTodayActiveEnergy(): Promise<number | null> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date();
+
+  if (Platform.OS === 'ios') {
+    if (AppleHealthKit && typeof AppleHealthKit.getActiveEnergyBurned === 'function') {
+      try {
+        const calories = await new Promise<number | null>((resolve) => {
+          const options = {
+            startDate: startOfDay.toISOString(),
+            endDate: endOfDay.toISOString(),
+            includeManuallyAdded: true,
+          };
+          AppleHealthKit.getActiveEnergyBurned(options, (err: any, results: any[]) => {
+            if (err || !results || !Array.isArray(results)) {
+              resolve(null);
+            } else {
+              const total = results.reduce((acc, curr) => acc + (curr?.value || 0), 0);
+              resolve(Math.round(total));
+            }
+          });
+        });
+        if (calories !== null) return calories;
+      } catch (e) {
+        console.warn('[HealthKit] getActiveEnergyBurned error:', e);
+      }
+    }
+    return null;
+  }
+
+  if (Platform.OS === 'android') {
+    if (HealthConnect && typeof HealthConnect.aggregateRecord === 'function') {
+      try {
+        const result = await HealthConnect.aggregateRecord({
+          recordType: 'TotalCaloriesBurned',
+          timeRangeFilter: {
+            operator: 'between',
+            startTime: startOfDay.toISOString(),
+            endTime: endOfDay.toISOString(),
+          },
+        });
+        if (result && typeof result.energy?.inKilocalories === 'number') {
+          return Math.round(result.energy.inKilocalories);
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
     return null;
   }
 

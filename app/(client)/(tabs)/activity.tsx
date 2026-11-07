@@ -47,6 +47,7 @@ import StreakBadge from '@/components/StreakBadge';
 import { PlanSkeleton } from '@/components/client/PlanSkeleton';
 import { useStreak } from '@/hooks/useStreak';
 import { syncAllHealthData } from '@/lib/health-service';
+import { parseChallengeDescription } from '@/lib/challenge-description';
 import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import streakQuotes from '@/assets/streak_quotes.json';
@@ -2222,18 +2223,154 @@ export default function ActivityScreen() {
                     />
                   </View>
 
-                  <Text
-                    style={{
-                      color: textSecondaryColor,
-                      fontSize: 16,
-                      lineHeight: 28,
-                      fontWeight: '500',
-                      marginBottom: 40,
-                    }}
-                  >
-                    {selectedChallenge.description ||
-                      'No detailed instructions provided for this challenge. Ensure you maintain proper form and stay hydrated.'}
-                  </Text>
+                  {(() => {
+                    const parsed = parseChallengeDescription(selectedChallenge.description);
+                    if (parsed.isStructured) {
+                      return (
+                        <View style={{ marginBottom: 32 }}>
+                          {parsed.globalRule ? (
+                            <View
+                              style={{
+                                backgroundColor: isDark
+                                  ? 'rgba(255, 255, 255, 0.04)'
+                                  : 'rgba(0, 0, 0, 0.03)',
+                                borderColor: `${theme.colors.primary}35`,
+                                borderLeftColor: theme.colors.primary,
+                                borderLeftWidth: 3,
+                                padding: 12,
+                                borderRadius: 12,
+                                marginBottom: 16,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: theme.colors.primary,
+                                  fontSize: 11,
+                                  fontWeight: '800',
+                                  textTransform: 'uppercase',
+                                  marginBottom: 4,
+                                }}
+                              >
+                                Coach Note
+                              </Text>
+                              <Text
+                                style={{
+                                  color: textSecondaryColor,
+                                  fontSize: 14,
+                                  lineHeight: 20,
+                                  fontWeight: '500',
+                                }}
+                              >
+                                {parsed.globalRule}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          {parsed.subTasks && parsed.subTasks.length > 0 ? (
+                            <View style={{ gap: 8 }}>
+                              {parsed.subTasks.map((task, idx) => (
+                                <View
+                                  key={task.id || idx}
+                                  style={{
+                                    backgroundColor: isDark
+                                      ? 'rgba(255, 255, 255, 0.03)'
+                                      : 'rgba(0, 0, 0, 0.02)',
+                                    borderColor: cardBorder,
+                                    borderWidth: 1,
+                                    borderRadius: 16,
+                                    padding: 12,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                  }}
+                                >
+                                  <View
+                                    style={{
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 12,
+                                      flex: 1,
+                                      paddingRight: 8,
+                                    }}
+                                  >
+                                    <View
+                                      style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 10,
+                                        backgroundColor: `${theme.colors.primary}18`,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      <Dumbbell size={16} color={theme.colors.primary} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                      <Text
+                                        style={{
+                                          color: textColor,
+                                          fontSize: 14,
+                                          fontWeight: '700',
+                                        }}
+                                      >
+                                        {task.exercise}
+                                      </Text>
+                                      {task.notes ? (
+                                        <Text
+                                          style={{
+                                            color: textSecondaryColor,
+                                            fontSize: 12,
+                                            fontWeight: '500',
+                                            marginTop: 2,
+                                          }}
+                                        >
+                                          {task.notes}
+                                        </Text>
+                                      ) : null}
+                                    </View>
+                                  </View>
+                                  {task.sets ? (
+                                    <View
+                                      style={{
+                                        backgroundColor: `${theme.colors.primary}15`,
+                                        paddingHorizontal: 10,
+                                        paddingVertical: 4,
+                                        borderRadius: 999,
+                                      }}
+                                    >
+                                      <Text
+                                        style={{
+                                          color: theme.colors.primary,
+                                          fontSize: 11,
+                                          fontWeight: '800',
+                                        }}
+                                      >
+                                        {task.sets} {task.sets === 1 ? 'SET' : 'SETS'}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+                              ))}
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    }
+                    return (
+                      <Text
+                        style={{
+                          color: textSecondaryColor,
+                          fontSize: 16,
+                          lineHeight: 28,
+                          fontWeight: '500',
+                          marginBottom: 40,
+                        }}
+                      >
+                        {parsed.plainText ||
+                          'No detailed instructions provided for this challenge. Ensure you maintain proper form and stay hydrated.'}
+                      </Text>
+                    );
+                  })()}
 
                   <TouchableOpacity
                     style={{

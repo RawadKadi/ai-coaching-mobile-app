@@ -20,6 +20,8 @@ import {
   AccessibilityInfo,
   Platform,
   StyleSheet,
+  Modal,
+  PanResponder,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -48,7 +50,12 @@ import {
   Flame,
   Plus,
   TrendingUp,
+  Dumbbell,
+  Calendar,
+  CheckCircle,
+  X,
 } from 'lucide-react-native';
+import { NestedTaskCard } from '@/components/NestedTaskCard';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -70,6 +77,8 @@ import { useGreeting } from '@/hooks/useGreeting';
 import StreakBadge from '@/components/StreakBadge';
 import { processCheckInAI } from '@/lib/checkin-ai-service';
 import { getUnifiedDailyTasks, UnifiedDailyTask } from '@/lib/daily-tasks';
+import { parseChallengeDescription } from '@/lib/challenge-description';
+import { ClientDashboardSkeleton } from '@/components/ClientDashboardSkeleton';
 
 interface TodaysChallenge {
   id: string;
@@ -162,6 +171,10 @@ export default function ClientDashboard() {
   const [todayChallenge, setTodayChallenge] = useState<TodaysChallenge | null>(
     null,
   );
+  const [todaysChallenges, setTodaysChallenges] = useState<TodaysChallenge[]>([]);
+  const [isDayDrawerOpen, setIsDayDrawerOpen] = useState(false);
+  const daySheetAnim = useRef(new RNAnimated.Value(800)).current;
+  const dayBackdropAnim = useRef(new RNAnimated.Value(0)).current;
 
   // Nutrition & Macros States
   const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
@@ -446,6 +459,7 @@ export default function ClientDashboard() {
 
       // 1. Challenges
       const rawChallenges = challengeResult.data || [];
+      setTodaysChallenges(rawChallenges as TodaysChallenge[]);
       setTodayChallenge(
         rawChallenges.length > 0 ? (rawChallenges[0] as TodaysChallenge) : null,
       );
@@ -539,28 +553,111 @@ export default function ClientDashboard() {
     }
   };
 
-  // Toggle Challenge Completion
-  const toggleTodayChallenge = async () => {
-    if (!todayChallenge || !client) return;
-    const nextCompleted = !todayChallenge.completed;
+  // Day Tasks Drawer Animations & Gestures
+  const openDayDrawer = () => {
+    setIsDayDrawerOpen(true);
+    daySheetAnim.setValue(800);
+    dayBackdropAnim.setValue(0);
+    RNAnimated.parallel([
+      RNAnimated.spring(daySheetAnim, {
+        toValue: 0,
+        damping: 24,
+        mass: 0.9,
+        stiffness: 180,
+        useNativeDriver: true,
+      }),
+      RNAnimated.timing(dayBackdropAnim, {
+        toValue: 0.6,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeDayDrawer = () => {
+    RNAnimated.parallel([
+      RNAnimated.timing(daySheetAnim, {
+        toValue: 800,
+        duration: 250,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      RNAnimated.timing(dayBackdropAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsDayDrawerOpen(false);
+    });
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        gestureState.dy > 5 || gestureState.dy < -5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          daySheetAnim.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 120 || gestureState.vy > 0.6) {
+          closeDayDrawer();
+        } else {
+          RNAnimated.spring(daySheetAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    }),
+  ).current;
+
+  // Toggle Sub-Challenge Completion (Called by Drawer / Sets / Parent toggle)
+  const handleToggleSubChallenge = async (subTask: any) => {
+    if (!client) return;
+    const targetId = subTask.id;
+    const currentCompleted = !!subTask.completed;
+    const nextCompleted = !currentCompleted;
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
     // Optimistic update
     setTodayChallenge((prev) =>
-      prev ? { ...prev, completed: nextCompleted } : null,
+      prev && prev.id === targetId ? { ...prev, completed: nextCompleted } : prev,
+    );
+    setTodaysChallenges((prev) =>
+      prev.map((t) =>
+        t.id === targetId ? { ...t, completed: nextCompleted } : t,
+      ),
     );
 
     try {
       await supabase.rpc('mark_sub_challenge', {
-        p_sub_challenge_id: todayChallenge.id,
+        p_sub_challenge_id: targetId,
         p_client_id: client.id,
         p_completed: nextCompleted,
       });
     } catch (err) {
       console.error('Failed to toggle challenge:', err);
+      // revert
       setTodayChallenge((prev) =>
-        prev ? { ...prev, completed: !nextCompleted } : null,
+        prev && prev.id === targetId ? { ...prev, completed: currentCompleted } : prev,
       );
+      setTodaysChallenges((prev) =>
+        prev.map((t) =>
+          t.id === targetId ? { ...t, completed: currentCompleted } : t,
+        ),
+      );
+    }
+  };
+
+  const toggleTodayChallenge = () => {
+    if (todayChallenge) {
+      handleToggleSubChallenge(todayChallenge);
     }
   };
 
@@ -657,18 +754,7 @@ export default function ClientDashboard() {
   };
 
   if (loading && !refreshing) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.background,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <ClientDashboardSkeleton />;
   }
 
   const isDark = isDarkColor(colors.background || '#010417');
@@ -1091,10 +1177,11 @@ export default function ClientDashboard() {
             onLogMeal={() => router.push('/(client)/log-meal')}
           />
 
-          {/* ─── 4. Today's Challenge Task (BIG) ──────────────────────── */}
+          {/* ─── 4. Today's Challenge Task (CHUNKY ACTIONABLE CARD) ───── */}
           <TodaysChallengeCard
             challenge={todayChallenge}
-            onToggle={toggleTodayChallenge}
+            allChallenges={todaysChallenges}
+            onPressCard={openDayDrawer}
             onViewAll={() => router.push('/(client)/challenges')}
           />
 
@@ -1189,6 +1276,325 @@ export default function ClientDashboard() {
           </View>
         </View>
       </ScrollView>
+
+      {/* ─── Day Tasks Drawer Modal ────────────────────────────────────── */}
+      <Modal
+        visible={isDayDrawerOpen}
+        transparent
+        animationType="none"
+        onRequestClose={closeDayDrawer}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          {/* Backdrop */}
+          <RNAnimated.View
+            style={{
+              ...StyleSheet.absoluteFill,
+              backgroundColor: '#000000',
+              opacity: dayBackdropAnim,
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={{ flex: 1 }}
+              onPress={closeDayDrawer}
+            />
+          </RNAnimated.View>
+
+          {/* Drawer Container */}
+          <RNAnimated.View
+            style={{
+              backgroundColor: isDark ? '#0D1117' : '#FFFFFF',
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              paddingTop: 8,
+              paddingHorizontal: 20,
+              paddingBottom: insets.bottom + 24,
+              maxHeight: '85%',
+              borderTopWidth: 1,
+              borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+              transform: [{ translateY: daySheetAnim }],
+            }}
+          >
+            {/* Top Handle & Close Row with PanResponder attached to handle */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 10,
+              }}
+            >
+              <View style={{ width: 36 }} />
+
+              {/* Draggable center handle with generous touch zone */}
+              <View
+                {...panResponder.panHandlers}
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: 32,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.25)'
+                      : '#CBD5E1',
+                  }}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={closeDayDrawer}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: isDark
+                    ? 'rgba(255, 255, 255, 0.08)'
+                    : '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={18} color={textColor} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Top Day Summary Card - Matches Chunky DayCard */}
+            {todayChallenge && (() => {
+              const tasksList =
+                todaysChallenges.length > 0
+                  ? todaysChallenges
+                  : [todayChallenge];
+              const drawerTotal = tasksList.length;
+              const drawerDone = tasksList.filter((t) => t.completed).length;
+              const drawerAllDone =
+                drawerTotal > 0 && drawerDone === drawerTotal;
+              const drawerPercent =
+                drawerTotal > 0 ? (drawerDone / drawerTotal) * 100 : 0;
+              const innerBg =
+                colors.background || (isDark ? '#020617' : '#F8FAFC');
+              const cardBorderColor =
+                colors.border ||
+                (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+
+              return (
+                <View
+                  style={{
+                    backgroundColor: drawerAllDone ? colors.primary : innerBg,
+                    borderColor: drawerAllDone
+                      ? colors.primary
+                      : cardBorderColor,
+                    borderWidth: 1,
+                    borderRadius: 24,
+                    padding: 18,
+                    marginBottom: 16,
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Decorative ambient circle */}
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      top: -20,
+                      right: -20,
+                      width: 100,
+                      height: 100,
+                      borderRadius: 50,
+                      backgroundColor: drawerAllDone
+                        ? 'rgba(255, 255, 255, 0.14)'
+                        : `${colors.primary}12`,
+                    }}
+                  />
+
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 10,
+                          backgroundColor: drawerAllDone
+                            ? '#FFFFFF'
+                            : `${colors.primary}20`,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {drawerAllDone ? (
+                          <CheckCircle size={16} color={colors.primary} />
+                        ) : (
+                          <Calendar size={16} color={colors.primary} />
+                        )}
+                      </View>
+                      <Text
+                        style={{
+                          color: drawerAllDone
+                            ? 'rgba(255, 255, 255, 0.8)'
+                            : colors.primary,
+                          fontSize: 11,
+                          fontWeight: '900',
+                          textTransform: 'uppercase',
+                          letterSpacing: 1.2,
+                        }}
+                      >
+                        TODAY •{' '}
+                        {todayChallenge.focus_type
+                          ? todayChallenge.focus_type.toUpperCase()
+                          : 'CHALLENGE'}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                        backgroundColor: drawerAllDone
+                          ? '#FFFFFF'
+                          : isDark
+                            ? 'rgba(255, 255, 255, 0.08)'
+                            : '#F1F5F9',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: drawerAllDone
+                            ? colors.primary
+                            : textSecondaryColor,
+                          fontSize: 11,
+                          fontWeight: '800',
+                        }}
+                      >
+                        {drawerAllDone
+                          ? 'All Done 🎉'
+                          : drawerTotal > 1
+                            ? `${drawerDone}/${drawerTotal} Done`
+                            : 'In Progress'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={{
+                      color: drawerAllDone ? '#FFFFFF' : textColor,
+                      fontSize: 20,
+                      fontWeight: '900',
+                      letterSpacing: -0.3,
+                      marginBottom: 3,
+                    }}
+                  >
+                    {todayChallenge.name}
+                  </Text>
+
+                  <Text
+                    style={{
+                      color: drawerAllDone
+                        ? 'rgba(255, 255, 255, 0.75)'
+                        : textSecondaryColor,
+                      fontSize: 13,
+                      fontWeight: '600',
+                      marginBottom: 12,
+                    }}
+                  >
+                    {drawerAllDone
+                      ? 'All tasks completed!'
+                      : todayChallenge.mother_name || "Today's workout"}
+                  </Text>
+
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flex: 1,
+                        height: 7,
+                        backgroundColor: drawerAllDone
+                          ? 'rgba(255, 255, 255, 0.28)'
+                          : isDark
+                            ? 'rgba(255, 255, 255, 0.08)'
+                            : '#E2E8F0',
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View
+                        style={{
+                          height: '100%',
+                          width: `${Math.min(100, Math.max(0, drawerAllDone ? 100 : drawerPercent))}%`,
+                          backgroundColor: drawerAllDone
+                            ? '#FFFFFF'
+                            : colors.primary,
+                          borderRadius: 4,
+                        }}
+                      />
+                    </View>
+                    <Text
+                      style={{
+                        color: drawerAllDone ? '#FFFFFF' : textColor,
+                        fontSize: 12,
+                        fontWeight: '900',
+                        minWidth: 34,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {Math.round(drawerAllDone ? 100 : drawerPercent)}%
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+            {/* Scrollable list of interactive tasks */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 24 }}
+            >
+              {(todaysChallenges.length > 0
+                ? todaysChallenges
+                : todayChallenge
+                  ? [todayChallenge]
+                  : []
+              ).map((task, idx) => (
+                <NestedTaskCard
+                  key={task.id}
+                  task={task}
+                  index={idx}
+                  isFailed={false}
+                  isCompleted={task.completed}
+                  onToggleParent={handleToggleSubChallenge}
+                  layoutType="detail"
+                  showGlobalRule={true}
+                />
+              ))}
+            </ScrollView>
+          </RNAnimated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1385,14 +1791,16 @@ const RecoveryScoreCard = ({
   );
 };
 
-// ─── 2. Today's Challenge Task Component (BIG CARD) ──────────────────────────
+// ─── 2. Today's Challenge Task Component (CHUNKY ACTIONABLE DAY CARD) ─────────
 const TodaysChallengeCard = ({
   challenge,
-  onToggle,
+  allChallenges = [],
+  onPressCard,
   onViewAll,
 }: {
   challenge: TodaysChallenge | null;
-  onToggle: () => void;
+  allChallenges?: TodaysChallenge[];
+  onPressCard: () => void;
   onViewAll: () => void;
 }) => {
   const colors = useBrandColors();
@@ -1407,26 +1815,33 @@ const TodaysChallengeCard = ({
   if (!challenge) {
     return (
       <View
-        style={{ backgroundColor: cardBg, borderColor: cardBorder }}
-        className="p-7 rounded-[40px] border shadow-xl mb-4 flex-row items-center justify-between"
+        style={{
+          backgroundColor: cardBg,
+          borderColor: cardBorder,
+          borderWidth: 1,
+          borderRadius: 24,
+          padding: 20,
+          marginBottom: 16,
+        }}
+        className="flex-row items-center justify-between"
       >
-        <View className="flex-row items-center gap-3.5">
+        <View className="flex-row items-center gap-3">
           <View
             style={{
               backgroundColor: `${colors.primary}20`,
               borderColor: `${colors.primary}40`,
             }}
-            className="w-12 h-12 rounded-2xl items-center justify-center border"
+            className="w-10 h-10 rounded-xl items-center justify-center border"
           >
-            <Award size={22} color={colors.primary} />
+            <Award size={20} color={colors.primary} />
           </View>
           <View>
-            <Text style={{ color: textColor }} className="text-lg font-black">
+            <Text style={{ color: textColor }} className="text-base font-black">
               Today's Challenge
             </Text>
             <Text
               style={{ color: textSecondaryColor }}
-              className="text-sm font-medium"
+              className="text-xs font-medium"
             >
               No challenge active today
             </Text>
@@ -1436,7 +1851,7 @@ const TodaysChallengeCard = ({
         <TouchableOpacity
           onPress={onViewAll}
           style={{ borderColor: cardBorder }}
-          className="px-4 py-2 rounded-full border"
+          className="px-3.5 py-1.5 rounded-full border"
         >
           <Text
             style={{ color: colors.primary }}
@@ -1449,87 +1864,205 @@ const TodaysChallengeCard = ({
     );
   }
 
-  const isCompleted = challenge.completed;
+  const tasksList = allChallenges.length > 0 ? allChallenges : [challenge];
+  const totalCount = tasksList.length;
+  const completedCount = tasksList.filter((t) => t.completed).length;
+  const isAllDone = totalCount > 0 && completedCount === totalCount;
+  const progressPercent =
+    totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+  const primaryIsDark = isDarkColor(colors.primary);
+  const completedText = primaryIsDark ? '#FFFFFF' : '#0F172A';
+  const completedMuted = primaryIsDark
+    ? 'rgba(255, 255, 255, 0.75)'
+    : 'rgba(15, 23, 42, 0.75)';
+  const completedBadgeBg = primaryIsDark ? '#FFFFFF' : '#0F172A';
+  const completedBadgeContent = colors.primary;
 
   return (
-    <MotiView
-      from={{ opacity: 0, translateY: 6 }}
-      animate={{ opacity: 1, translateY: 0 }}
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={onPressCard}
       style={{
-        backgroundColor: cardBg,
-        borderColor: isCompleted ? colors.primary : cardBorder,
+        backgroundColor: isAllDone ? colors.primary : cardBg,
+        borderColor: isAllDone ? colors.primary : cardBorder,
+        borderWidth: 1,
+        borderRadius: 24,
+        padding: 20,
+        marginBottom: 16,
+        shadowColor: isAllDone ? colors.primary : '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: isAllDone ? 0.3 : isDark ? 0.2 : 0.04,
+        shadowRadius: 10,
+        elevation: 3,
+        position: 'relative',
+        overflow: 'hidden',
       }}
-      className="p-7 rounded-[40px] border-2 shadow-xl mb-4"
     >
-      <View className="flex-row items-center justify-between mb-4">
-        <View className="flex-row items-center gap-2">
+      {/* Decorative ambient circle */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: -24,
+          right: -24,
+          width: 120,
+          height: 120,
+          borderRadius: 60,
+          backgroundColor: isAllDone
+            ? 'rgba(255, 255, 255, 0.14)'
+            : `${colors.primary}12`,
+        }}
+      />
+
+      {/* Top Row: Icon Box, Label, Status Pill, Chevron */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 12,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View
-            style={{ backgroundColor: `${colors.primary}20` }}
-            className="px-3 py-1 rounded-full"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 10,
+              backgroundColor: isAllDone
+                ? completedBadgeBg
+                : `${colors.primary}20`,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            <Text
-              style={{ color: colors.primary }}
-              className="text-[10px] font-black uppercase tracking-wider"
-            >
-              {challenge.focus_type || 'Challenge'}
-            </Text>
+            {isAllDone ? (
+              <CheckCircle size={16} color={completedBadgeContent} />
+            ) : (
+              <Calendar size={16} color={colors.primary} />
+            )}
           </View>
           <Text
-            style={{ color: textSecondaryColor }}
-            className="text-xs font-bold"
-            numberOfLines={1}
+            style={{
+              color: isAllDone ? completedMuted : colors.primary,
+              fontSize: 11,
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              letterSpacing: 1.2,
+            }}
           >
-            {challenge.mother_name}
+            TODAY •{' '}
+            {challenge.focus_type
+              ? challenge.focus_type.toUpperCase()
+              : 'CHALLENGE'}
           </Text>
         </View>
 
-        <TouchableOpacity onPress={onViewAll} className="p-1">
-          <ChevronRight size={18} color={textSecondaryColor} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: isAllDone
+                ? completedBadgeBg
+                : isDark
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : '#F1F5F9',
+            }}
+          >
+            <Text
+              style={{
+                color: isAllDone ? completedBadgeContent : textSecondaryColor,
+                fontSize: 12,
+                fontWeight: '800',
+              }}
+            >
+              {isAllDone
+                ? 'All Done 🎉'
+                : totalCount > 1
+                  ? `${completedCount}/${totalCount} Done`
+                  : 'In Progress'}
+            </Text>
+          </View>
+          <ChevronRight
+            size={18}
+            color={isAllDone ? completedMuted : textSecondaryColor}
+          />
+        </View>
       </View>
 
+      {/* Main Headline: Challenge Name */}
       <Text
         style={{
-          color: textColor,
-          textDecorationLine: isCompleted ? 'line-through' : 'none',
-          opacity: isCompleted ? 0.7 : 1,
+          color: isAllDone ? completedText : textColor,
+          fontSize: 22,
+          fontWeight: '900',
+          letterSpacing: -0.4,
+          marginBottom: 4,
         }}
-        className="text-2xl font-black tracking-tight leading-8 mb-2"
       >
         {challenge.name}
       </Text>
 
-      {challenge.description ? (
-        <Text
-          style={{ color: textSecondaryColor }}
-          className="text-sm font-medium leading-5 mb-5"
-        >
-          {challenge.description}
-        </Text>
-      ) : null}
-
-      <TouchableOpacity
-        onPress={onToggle}
-        activeOpacity={0.8}
+      {/* Subtitle */}
+      <Text
         style={{
-          backgroundColor: isCompleted ? colors.primary : 'transparent',
-          borderColor: colors.primary,
+          color: isAllDone ? completedMuted : textSecondaryColor,
+          fontSize: 13,
+          fontWeight: '600',
+          marginBottom: 14,
         }}
-        className="w-full py-4 rounded-2xl border-2 flex-row items-center justify-center gap-2 shadow-md"
       >
-        {isCompleted ? (
-          <Check size={18} color="#FFFFFF" />
-        ) : (
-          <Circle size={18} color={colors.primary} />
-        )}
-        <Text
-          style={{ color: isCompleted ? '#FFFFFF' : colors.primary }}
-          className="text-sm font-black uppercase tracking-wider"
+        {isAllDone
+          ? 'All tasks completed!'
+          : challenge.mother_name || "Tap to view today's workout"}
+      </Text>
+
+      {/* Progress Bar + Percentage */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            height: 7,
+            backgroundColor: isAllDone
+              ? 'rgba(255, 255, 255, 0.28)'
+              : isDark
+                ? 'rgba(255, 255, 255, 0.08)'
+                : '#E2E8F0',
+            borderRadius: 4,
+            overflow: 'hidden',
+          }}
         >
-          {isCompleted ? 'Completed' : 'Mark Done'}
+          <View
+            style={{
+              height: '100%',
+              width: `${Math.min(100, Math.max(0, isAllDone ? 100 : progressPercent))}%`,
+              backgroundColor: isAllDone ? completedBadgeBg : colors.primary,
+              borderRadius: 4,
+            }}
+          />
+        </View>
+        <Text
+          style={{
+            color: isAllDone ? completedText : textColor,
+            fontSize: 12,
+            fontWeight: '900',
+            minWidth: 34,
+            textAlign: 'right',
+          }}
+        >
+          {Math.round(isAllDone ? 100 : progressPercent)}%
         </Text>
-      </TouchableOpacity>
-    </MotiView>
+      </View>
+    </TouchableOpacity>
   );
 };
 
@@ -2301,7 +2834,7 @@ const UpcomingSessionCard = ({
     <MotiView
       from={{ opacity: 0, translateY: 8 }}
       animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 400 }}
+      transition={{ type: 'timing', duration: 400 } as any}
       className="mb-4 overflow-hidden rounded-[40px]"
       style={{
         backgroundColor: canJoin ? '#1D4ED8' : cardBg,

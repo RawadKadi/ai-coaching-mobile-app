@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/BrandContext';
-import { isDarkColor } from '@/lib/theme-utils';
+import { isDarkColor, hexToRGB } from '@/lib/theme-utils';
 
 interface SkeletonBoneProps {
   width?: number | string;
@@ -55,6 +55,9 @@ export const CoachClientDetailsSkeleton: React.FC = () => {
   const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
   const boneColor = isDark ? 'rgba(255, 255, 255, 0.09)' : 'rgba(15, 23, 42, 0.07)';
 
+  const primaryRgb = hexToRGB(colors.primary || '#6366F1');
+  const primaryBone = `rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, ${isDark ? 0.22 : 0.16})`;
+
   const opacityAnim = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
@@ -95,50 +98,51 @@ export const CoachClientDetailsSkeleton: React.FC = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={{ flex: 1, paddingTop: insets.top ? 10 : 20 }}>
-          {/* Header */}
+        <View style={{ flex: 1 }}>
+          {/* Header - matching px-6 pt-10 pb-5 border-b */}
           <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
               paddingHorizontal: 24,
+              paddingTop: 40,
               paddingBottom: 20,
               borderBottomWidth: 1,
               borderBottomColor: cardBorder,
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, marginRight: 12 }}>
               {/* Back button */}
               <SkeletonBone
                 width={40}
                 height={40}
-                borderRadius={12}
+                borderRadius={16}
                 opacityAnim={opacityAnim}
                 boneColor={boneColor}
               />
               {/* Avatar */}
               <SkeletonBone
-                width={40}
-                height={40}
-                borderRadius={20}
+                width={42}
+                height={42}
+                borderRadius={21}
                 opacityAnim={opacityAnim}
-                boneColor={boneColor}
+                boneColor={primaryBone}
               />
               {/* Name & Email */}
-              <View>
+              <View style={{ flex: 1 }}>
                 <SkeletonBone
-                  width={140}
+                  width={130}
                   height={18}
                   borderRadius={6}
-                  style={{ marginBottom: 6 }}
+                  style={{ marginBottom: 4 }}
                   opacityAnim={opacityAnim}
                   boneColor={boneColor}
                 />
                 <SkeletonBone
-                  width={110}
+                  width={100}
                   height={12}
                   borderRadius={4}
                   opacityAnim={opacityAnim}
@@ -151,63 +155,194 @@ export const CoachClientDetailsSkeleton: React.FC = () => {
             <SkeletonBone
               width={40}
               height={40}
-              borderRadius={12}
+              borderRadius={16}
               opacityAnim={opacityAnim}
-              boneColor={boneColor}
+              boneColor={primaryBone}
             />
           </View>
 
-          {/* Horizontal Tab Bar */}
-          <View
-            style={{
-              borderBottomWidth: 1,
-              borderBottomColor: cardBorder,
-              paddingTop: 16,
-              paddingBottom: 16,
-              paddingHorizontal: 24,
-              flexDirection: 'row',
-              gap: 28,
-            }}
-          >
-            <SkeletonBone
-              width={75}
-              height={14}
-              borderRadius={6}
-              opacityAnim={opacityAnim}
-              boneColor={boneColor}
-            />
-            <SkeletonBone
-              width={85}
-              height={14}
-              borderRadius={6}
-              opacityAnim={opacityAnim}
-              boneColor={boneColor}
-            />
-            <SkeletonBone
-              width={80}
-              height={14}
-              borderRadius={6}
-              opacityAnim={opacityAnim}
-              boneColor={boneColor}
-            />
-            <SkeletonBone
-              width={70}
-              height={14}
-              borderRadius={6}
-              opacityAnim={opacityAnim}
-              boneColor={boneColor}
-            />
-          </View>
-
+          {/* Main content - matching ScrollView px-3 pt-3 exactly */}
           <ScrollView
             style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 120 }}
             scrollEnabled={false}
           >
-            {/* Overview Metrics Grid */}
-            <View style={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 }}>
-              {/* Today's Steps Card (Full Width) */}
+            <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
+              {/* 1. Steps Card (Matching Dashboard Design: rounded-[36px] p-6 mb-3) */}
+              <View
+                style={{
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                  borderWidth: 1,
+                  borderRadius: 36,
+                  padding: 24,
+                  marginBottom: 12,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <SkeletonBone
+                      width={40}
+                      height={40}
+                      borderRadius={16}
+                      opacityAnim={opacityAnim}
+                      boneColor={primaryBone}
+                    />
+                    <SkeletonBone
+                      width={90}
+                      height={18}
+                      borderRadius={6}
+                      opacityAnim={opacityAnim}
+                      boneColor={boneColor}
+                    />
+                  </View>
+                  <SkeletonBone
+                    width={80}
+                    height={16}
+                    borderRadius={4}
+                    opacityAnim={opacityAnim}
+                    boneColor={boneColor}
+                  />
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                    <SkeletonBone
+                      width={110}
+                      height={36}
+                      borderRadius={8}
+                      opacityAnim={opacityAnim}
+                      boneColor={boneColor}
+                    />
+                    <SkeletonBone
+                      width={40}
+                      height={14}
+                      borderRadius={4}
+                      opacityAnim={opacityAnim}
+                      boneColor={boneColor}
+                    />
+                  </View>
+                  <SkeletonBone
+                    width={90}
+                    height={28}
+                    borderRadius={6}
+                    opacityAnim={opacityAnim}
+                    boneColor={primaryBone}
+                  />
+                </View>
+              </View>
+
+              {/* 2. Core Health Metrics Grid (2x2 with Huge Numbers: gap-3 mb-3) */}
+              {/* Row 1: Streak and Weight */}
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                {[1, 2].map((idx) => (
+                  <View
+                    key={idx}
+                    style={{
+                      flex: 1,
+                      backgroundColor: cardBg,
+                      borderColor: cardBorder,
+                      borderWidth: 1,
+                      borderRadius: 32,
+                      padding: 24,
+                      justifyContent: 'space-between',
+                      minHeight: 140,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <SkeletonBone
+                        width={40}
+                        height={40}
+                        borderRadius={16}
+                        opacityAnim={opacityAnim}
+                        boneColor={primaryBone}
+                      />
+                      <SkeletonBone
+                        width={18}
+                        height={18}
+                        borderRadius={9}
+                        opacityAnim={opacityAnim}
+                        boneColor={boneColor}
+                      />
+                    </View>
+
+                    <View style={{ marginTop: 14 }}>
+                      <SkeletonBone
+                        width={60}
+                        height={32}
+                        borderRadius={8}
+                        style={{ marginBottom: 6 }}
+                        opacityAnim={opacityAnim}
+                        boneColor={boneColor}
+                      />
+                      <SkeletonBone
+                        width={80}
+                        height={12}
+                        borderRadius={4}
+                        opacityAnim={opacityAnim}
+                        boneColor={boneColor}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {/* Row 2: Sleep and Energy */}
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                {[1, 2].map((idx) => (
+                  <View
+                    key={idx}
+                    style={{
+                      flex: 1,
+                      backgroundColor: cardBg,
+                      borderColor: cardBorder,
+                      borderWidth: 1,
+                      borderRadius: 32,
+                      padding: 24,
+                      justifyContent: 'space-between',
+                      minHeight: 140,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <SkeletonBone
+                        width={40}
+                        height={40}
+                        borderRadius={16}
+                        opacityAnim={opacityAnim}
+                        boneColor={primaryBone}
+                      />
+                      <SkeletonBone
+                        width={18}
+                        height={18}
+                        borderRadius={9}
+                        opacityAnim={opacityAnim}
+                        boneColor={boneColor}
+                      />
+                    </View>
+
+                    <View style={{ marginTop: 14 }}>
+                      <SkeletonBone
+                        width={60}
+                        height={32}
+                        borderRadius={8}
+                        style={{ marginBottom: 6 }}
+                        opacityAnim={opacityAnim}
+                        boneColor={boneColor}
+                      />
+                      <SkeletonBone
+                        width={80}
+                        height={12}
+                        borderRadius={4}
+                        opacityAnim={opacityAnim}
+                        boneColor={boneColor}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {/* 3. Client Goals Card (rounded-[32px] p-6 mb-3) */}
               <View
                 style={{
                   backgroundColor: cardBg,
@@ -215,158 +350,97 @@ export const CoachClientDetailsSkeleton: React.FC = () => {
                   borderWidth: 1,
                   borderRadius: 32,
                   padding: 24,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 16,
+                  marginBottom: 12,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                  <SkeletonBone
-                    width={48}
-                    height={48}
-                    borderRadius={16}
-                    opacityAnim={opacityAnim}
-                    boneColor={boneColor}
-                  />
-                  <View>
-                    <SkeletonBone
-                      width={90}
-                      height={12}
-                      borderRadius={4}
-                      style={{ marginBottom: 6 }}
-                      opacityAnim={opacityAnim}
-                      boneColor={boneColor}
-                    />
-                    <SkeletonBone
-                      width={120}
-                      height={24}
-                      borderRadius={6}
-                      opacityAnim={opacityAnim}
-                      boneColor={boneColor}
-                    />
-                  </View>
-                </View>
-                <SkeletonBone
-                  width={60}
-                  height={16}
-                  borderRadius={6}
-                  opacityAnim={opacityAnim}
-                  boneColor={boneColor}
-                />
-              </View>
-
-              {/* 2x2 Metric Cards Grid */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
-                {[1, 2, 3, 4].map((idx) => (
-                  <View
-                    key={idx}
-                    style={{
-                      width: '47%',
-                      backgroundColor: cardBg,
-                      borderColor: cardBorder,
-                      borderWidth: 1,
-                      borderRadius: 32,
-                      padding: 20,
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                      <SkeletonBone
-                        width={38}
-                        height={38}
-                        borderRadius={14}
-                        opacityAnim={opacityAnim}
-                        boneColor={boneColor}
-                      />
-                      <SkeletonBone
-                        width={30}
-                        height={10}
-                        borderRadius={4}
-                        opacityAnim={opacityAnim}
-                        boneColor={boneColor}
-                      />
-                    </View>
-                    <SkeletonBone
-                      width={60}
-                      height={11}
-                      borderRadius={4}
-                      style={{ marginBottom: 6 }}
-                      opacityAnim={opacityAnim}
-                      boneColor={boneColor}
-                    />
-                    <SkeletonBone
-                      width={90}
-                      height={22}
-                      borderRadius={6}
-                      opacityAnim={opacityAnim}
-                      boneColor={boneColor}
-                    />
-                  </View>
-                ))}
-              </View>
-
-              {/* Tasks / Activity section title */}
-              <View style={{ marginTop: 8, marginBottom: 14 }}>
-                <SkeletonBone
-                  width={120}
-                  height={18}
-                  borderRadius={6}
-                  opacityAnim={opacityAnim}
-                  boneColor={boneColor}
-                />
-              </View>
-
-              {/* 2 Task rows */}
-              {[1, 2].map((k) => (
-                <View
-                  key={k}
-                  style={{
-                    backgroundColor: cardBg,
-                    borderColor: cardBorder,
-                    borderWidth: 1,
-                    borderRadius: 24,
-                    padding: 18,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: 12,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <SkeletonBone
                       width={38}
                       height={38}
-                      borderRadius={12}
+                      borderRadius={14}
+                      opacityAnim={opacityAnim}
+                      boneColor={primaryBone}
+                    />
+                    <SkeletonBone
+                      width={100}
+                      height={18}
+                      borderRadius={6}
                       opacityAnim={opacityAnim}
                       boneColor={boneColor}
                     />
-                    <View>
-                      <SkeletonBone
-                        width={130}
-                        height={16}
-                        borderRadius={6}
-                        style={{ marginBottom: 6 }}
-                        opacityAnim={opacityAnim}
-                        boneColor={boneColor}
-                      />
-                      <SkeletonBone
-                        width={80}
-                        height={10}
-                        borderRadius={4}
-                        opacityAnim={opacityAnim}
-                        boneColor={boneColor}
-                      />
-                    </View>
                   </View>
                   <SkeletonBone
-                    width={28}
-                    height={28}
-                    borderRadius={14}
+                    width={18}
+                    height={18}
+                    borderRadius={9}
                     opacityAnim={opacityAnim}
                     boneColor={boneColor}
                   />
                 </View>
-              ))}
+
+                <SkeletonBone
+                  width="85%"
+                  height={14}
+                  borderRadius={4}
+                  style={{ marginBottom: 6 }}
+                  opacityAnim={opacityAnim}
+                  boneColor={boneColor}
+                />
+                <SkeletonBone
+                  width="60%"
+                  height={14}
+                  borderRadius={4}
+                  opacityAnim={opacityAnim}
+                  boneColor={boneColor}
+                />
+              </View>
+
+              {/* 4. Live Coaching Sessions Card (rounded-[32px] p-6 mb-3) */}
+              <View
+                style={{
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                  borderWidth: 1,
+                  borderRadius: 32,
+                  padding: 24,
+                  marginBottom: 12,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <SkeletonBone
+                      width={38}
+                      height={38}
+                      borderRadius={14}
+                      opacityAnim={opacityAnim}
+                      boneColor={primaryBone}
+                    />
+                    <SkeletonBone
+                      width={120}
+                      height={18}
+                      borderRadius={6}
+                      opacityAnim={opacityAnim}
+                      boneColor={boneColor}
+                    />
+                  </View>
+                  <SkeletonBone
+                    width={60}
+                    height={24}
+                    borderRadius={999}
+                    opacityAnim={opacityAnim}
+                    boneColor={primaryBone}
+                  />
+                </View>
+
+                <SkeletonBone
+                  width="75%"
+                  height={14}
+                  borderRadius={4}
+                  opacityAnim={opacityAnim}
+                  boneColor={boneColor}
+                />
+              </View>
             </View>
           </ScrollView>
         </View>
@@ -374,3 +448,4 @@ export const CoachClientDetailsSkeleton: React.FC = () => {
     </View>
   );
 };
+export default CoachClientDetailsSkeleton;

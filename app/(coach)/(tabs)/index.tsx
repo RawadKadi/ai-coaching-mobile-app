@@ -67,6 +67,8 @@ import { AnalyticsSparkline } from '@/components/AnalyticsSparkline';
 import { useTabBarScroll } from '@/contexts/TabBarScrollContext';
 import { useGreeting } from '@/hooks/useGreeting';
 import { joinSession } from '@/utils/session';
+import { CoachDashboardSkeleton } from '@/components/CoachDashboardSkeleton';
+import StreakFire from '@/components/StreakFire';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MEAL_CARD_WIDTH = Math.min(SCREEN_WIDTH - 24, 420);
@@ -95,6 +97,16 @@ const formatActivityDate = (dateString: string) => {
   } else {
     return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
   }
+};
+
+const getPastLocalDateStr = (daysAgo: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-');
 };
 
 export default function CoachDashboard() {
@@ -400,11 +412,160 @@ export default function CoachDashboard() {
           }
         });
 
-        // Set streak leaders from active clients
-        const activeStreakList = allClients.filter(
+        // Calculate real daily streaks for active clients
+        const activeClients = allClients.filter(
           (c: any) => c.status === 'active',
         );
-        setStreakChampions(activeStreakList);
+        const activeClientIds = activeClients
+          .map((c: any) => c.client_id)
+          .filter(Boolean);
+
+        if (activeClientIds.length > 0) {
+          try {
+            const past60Str = getPastLocalDateStr(60);
+            const [checkInsRes, mealsRes, habitsRes, habitLogsRes] =
+              await Promise.all([
+                supabase
+                  .from('check_ins')
+                  .select('client_id, date')
+                  .in('client_id', activeClientIds)
+                  .gte('date', past60Str),
+                supabase
+                  .from('meals')
+                  .select('client_id, meal_date')
+                  .in('client_id', activeClientIds)
+                  .gte('meal_date', past60Str),
+                supabase
+                  .from('habits')
+                  .select('id, client_id, created_at, is_active')
+                  .in('client_id', activeClientIds)
+                  .eq('is_active', true),
+                supabase
+                  .from('habit_logs')
+                  .select('client_id, habit_id, date, completed')
+                  .in('client_id', activeClientIds)
+                  .gte('date', past60Str)
+                  .eq('completed', true),
+              ]);
+
+            const checkInDatesByClient = new Map<string, Set<string>>();
+            (checkInsRes.data || []).forEach((c: any) => {
+              if (!checkInDatesByClient.has(c.client_id)) {
+                checkInDatesByClient.set(c.client_id, new Set());
+              }
+              checkInDatesByClient.get(c.client_id)!.add(c.date);
+            });
+
+            const mealDatesByClient = new Map<string, Set<string>>();
+            (mealsRes.data || []).forEach((m: any) => {
+              if (!mealDatesByClient.has(m.client_id)) {
+                mealDatesByClient.set(m.client_id, new Set());
+              }
+              mealDatesByClient.get(m.client_id)!.add(m.meal_date);
+            });
+
+            const habitsByClient = new Map<string, any[]>();
+            (habitsRes.data || []).forEach((h: any) => {
+              if (!habitsByClient.has(h.client_id)) {
+                habitsByClient.set(h.client_id, []);
+              }
+              habitsByClient.get(h.client_id)!.push(h);
+            });
+
+            const completedHabitLogsByClient = new Map<string, any[]>();
+            (habitLogsRes.data || []).forEach((hl: any) => {
+              if (!completedHabitLogsByClient.has(hl.client_id)) {
+                completedHabitLogsByClient.set(hl.client_id, []);
+              }
+              completedHabitLogsByClient.get(hl.client_id)!.push(hl);
+            });
+
+            const champions: any[] = [];
+
+            activeClients.forEach((client: any) => {
+              const cId = client.client_id;
+              const checkInDatesSet =
+                checkInDatesByClient.get(cId) || new Set();
+              const mealDatesSet = mealDatesByClient.get(cId) || new Set();
+              const activeHabitsList = habitsByClient.get(cId) || [];
+              const completedLogs = completedHabitLogsByClient.get(cId) || [];
+
+              const isDateCompleted = (dateStr: string) => {
+                if (!checkInDatesSet.has(dateStr)) return false;
+                if (!mealDatesSet.has(dateStr)) return false;
+                const habitsForDate = activeHabitsList.filter((h: any) => {
+                  const createdDate = h.created_at
+                    ? h.created_at.split('T')[0]
+                    : '2000-01-01';
+                  return createdDate <= dateStr;
+                });
+                if (habitsForDate.length > 0) {
+                  return habitsForDate.every((h: any) =>
+                    completedLogs.some(
+                      (l: any) =>
+                        l.habit_id === h.id &&
+                        l.date === dateStr &&
+                        l.completed,
+                    ),
+                  );
+                }
+                return true;
+              };
+
+              const isTodayDone = isDateCompleted(getPastLocalDateStr(0));
+              const isYesterdayDone = isDateCompleted(getPastLocalDateStr(1));
+              const isDayBeforeYesterdayDone = isDateCompleted(
+                getPastLocalDateStr(2),
+              );
+
+              const countStreak = (startDaysAgo: number) => {
+                let count = isTodayDone ? 1 : 0;
+                let daysAgo = startDaysAgo;
+                let consecutiveMiss = 0;
+                while (daysAgo <= 60) {
+                  if (isDateCompleted(getPastLocalDateStr(daysAgo))) {
+                    count += 1;
+                    consecutiveMiss = 0;
+                  } else {
+                    consecutiveMiss += 1;
+                    if (consecutiveMiss >= 2) break;
+                  }
+                  daysAgo += 1;
+                }
+                return count;
+              };
+
+              let computedStreak = 0;
+              let isCold = false;
+
+              if (isYesterdayDone) {
+                computedStreak = countStreak(1);
+              } else if (isDayBeforeYesterdayDone) {
+                computedStreak = countStreak(2);
+                isCold = !isTodayDone && computedStreak > 0;
+              } else {
+                computedStreak = isTodayDone ? 1 : 0;
+              }
+
+              // Only clients with an active streak (> 0) qualify
+              if (computedStreak > 0) {
+                champions.push({
+                  ...client,
+                  streak: computedStreak,
+                  isCold,
+                });
+              }
+            });
+
+            champions.sort((a, b) => b.streak - a.streak);
+            setStreakChampions(champions);
+          } catch (err) {
+            console.error('Error computing streaks:', err);
+            setStreakChampions([]);
+          }
+        } else {
+          setStreakChampions([]);
+        }
       }
 
       setDashboardClients(clientsResult.data || []);
@@ -1057,18 +1218,7 @@ export default function CoachDashboard() {
   );
 
   if (loading && !refreshing) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.background,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return <CoachDashboardSkeleton />;
   }
 
   return (
@@ -1673,7 +1823,7 @@ export default function CoachDashboard() {
                           stats.pendingCheckIns > 0
                             ? `${colors.primary}25`
                             : isDark
-                              ? '#1E293B'
+                              ? 'rgba(255, 255, 255, 0.05)'
                               : '#F1F5F9',
                         borderColor:
                           stats.pendingCheckIns > 0
@@ -1723,11 +1873,11 @@ export default function CoachDashboard() {
                     style={{
                       backgroundColor:
                         stats.unreadMessages > 0
-                          ? 'rgba(59, 130, 246, 0.12)'
+                          ? `${colors.primary}12`
                           : cardBg,
                       borderColor:
                         stats.unreadMessages > 0
-                          ? 'rgba(59, 130, 246, 0.35)'
+                          ? `${colors.primary}35`
                           : cardBorder,
                     }}
                   >
@@ -1736,13 +1886,13 @@ export default function CoachDashboard() {
                       style={{
                         backgroundColor:
                           stats.unreadMessages > 0
-                            ? 'rgba(59, 130, 246, 0.25)'
+                            ? `${colors.primary}25`
                             : isDark
-                              ? '#1E293B'
+                              ? 'rgba(255, 255, 255, 0.05)'
                               : '#F1F5F9',
                         borderColor:
                           stats.unreadMessages > 0
-                            ? 'rgba(59, 130, 246, 0.45)'
+                            ? `${colors.primary}45`
                             : cardBorder,
                       }}
                     >
@@ -1750,7 +1900,7 @@ export default function CoachDashboard() {
                         size={22}
                         color={
                           stats.unreadMessages > 0
-                            ? '#3B82F6'
+                            ? colors.primary
                             : textSecondaryColor
                         }
                       />
@@ -1831,10 +1981,8 @@ export default function CoachDashboard() {
               {/* Clients Performance (Big Visible Averages) */}
               <ClientsPerformanceCard pulse={teamPulse} />
 
-              {/* Streak Champions Mini-Strip (If any active streaks) */}
-              {streakChampions.length > 0 && (
-                <StreakChampionsStrip champions={streakChampions} />
-              )}
+              {/* Streak Champions Card */}
+              <StreakChampionsStrip champions={streakChampions} />
 
               {/* 4 Core Metrics Grid (Total Clients, Active Now, Today's Calls, Challenges) */}
               <View className="mb-4">
@@ -2640,9 +2788,21 @@ const SlippingClientsHeroCard = ({
         snapToInterval={containerWidth}
         decelerationRate="fast"
         scrollEventThrottle={16}
+        onScroll={(e) => {
+          if (containerWidth > 0) {
+            const idx = Math.round(
+              e.nativeEvent.contentOffset.x / containerWidth,
+            );
+            if (idx !== activeIndex && idx >= 0 && idx < count) {
+              setActiveIndex(idx);
+            }
+          }
+        }}
         onMomentumScrollEnd={(e) => {
           if (containerWidth > 0) {
-            const idx = Math.round(e.nativeEvent.contentOffset.x / containerWidth);
+            const idx = Math.round(
+              e.nativeEvent.contentOffset.x / containerWidth,
+            );
             setActiveIndex(idx);
           }
         }}
@@ -2677,47 +2837,43 @@ const SlippingClientsHeroCard = ({
 
                 {count > 1 && (
                   <View className="flex-row items-center gap-1.5">
-                    <TouchableOpacity
-                      disabled={activeIndex === 0}
-                      onPress={() => {
-                        const prev = Math.max(0, activeIndex - 1);
-                        scrollRef.current?.scrollTo({
-                          x: prev * containerWidth,
-                          animated: true,
-                        });
-                        setActiveIndex(prev);
-                      }}
-                      style={{ opacity: activeIndex === 0 ? 0.35 : 1 }}
-                      className="w-7 h-7 rounded-full bg-black/20 items-center justify-center"
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <ChevronLeft size={16} color={primaryTextColor} />
-                    </TouchableOpacity>
-
-                    <View className="bg-black/20 px-2.5 py-1 rounded-full">
-                      <Text
-                        style={{ color: primaryTextColor }}
-                        className="text-xs font-black uppercase tracking-wider"
+                    {index > 0 && (
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          const prev = Math.max(0, index - 1);
+                          scrollRef.current?.scrollTo({
+                            x: prev * containerWidth,
+                            animated: true,
+                          });
+                          setActiveIndex(prev);
+                        }}
+                        className="w-7 h-7 rounded-full bg-black/25 items-center justify-center"
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
-                        {index + 1} of {count}
-                      </Text>
-                    </View>
+                        <ChevronLeft size={16} color={primaryTextColor} />
+                      </TouchableOpacity>
+                    )}
 
                     <TouchableOpacity
-                      disabled={activeIndex === count - 1}
+                      activeOpacity={0.7}
                       onPress={() => {
-                        const next = Math.min(count - 1, activeIndex + 1);
+                        const next = (index + 1) % count;
                         scrollRef.current?.scrollTo({
                           x: next * containerWidth,
                           animated: true,
                         });
                         setActiveIndex(next);
                       }}
-                      style={{ opacity: activeIndex === count - 1 ? 0.35 : 1 }}
-                      className="w-7 h-7 rounded-full bg-black/20 items-center justify-center"
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      className="flex-row items-center gap-1 bg-black/25 px-2.5 py-1 rounded-full"
                     >
-                      <ChevronRight size={16} color={primaryTextColor} />
+                      <Text
+                        style={{ color: primaryTextColor }}
+                        className="text-[11px] font-black uppercase tracking-wider"
+                      >
+                        See others who missed ({index + 1}/{count})
+                      </Text>
+                      <ChevronRight size={13} color={primaryTextColor} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2766,7 +2922,7 @@ const SlippingClientsHeroCard = ({
                         style={{ color: primaryTextMuted }}
                         className="text-xs font-bold"
                       >
-                        Swipe for more
+                        Swipe to see all {count}
                       </Text>
                     )}
                   </View>
@@ -3350,10 +3506,11 @@ const MealSlideshowCard = ({
   );
 };
 
-// ─── Streak Champions Mini-Strip ─────────────────────────────────────────────
+// ─── Streak Champions Card ───────────────────────────────────────────────────
 const StreakChampionsStrip = ({ champions }: { champions: any[] }) => {
   const colors = useBrandColors();
   const { isDarkMode } = useTheme();
+  const router = useRouter();
   const isDark = isDarkMode || isDarkColor(colors.background || '#010417');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
   const textSecondaryColor =
@@ -3363,65 +3520,204 @@ const StreakChampionsStrip = ({ champions }: { champions: any[] }) => {
     ? 'rgba(255, 255, 255, 0.08)'
     : colors.border || '#E2E8F0';
 
-  if (!champions || champions.length === 0) return null;
+  const hasChampions = champions && champions.length > 0;
 
   return (
     <View className="mb-4">
       <View
-        className="p-5 rounded-[30px] border flex-row items-center justify-between"
+        className="p-7 rounded-[40px] border relative overflow-hidden"
         style={{
           backgroundColor: cardBg,
           borderColor: cardBorder,
         }}
       >
-        <View className="flex-row items-center gap-2.5">
-          <View
-            style={{ backgroundColor: `${colors.primary}18` }}
-            className="w-9 h-9 rounded-full items-center justify-center"
-          >
-            <Flame size={18} color={colors.primary} />
+        {/* Glow ambient background circle */}
+        <View
+          style={{ backgroundColor: `${colors.primary}12` }}
+          className="absolute -top-16 -right-16 w-56 h-56 rounded-full pointer-events-none"
+        />
+
+        {/* Top Header Row */}
+        <View className="flex-row items-center justify-between mb-5">
+          <View className="flex-row items-center gap-3">
+            <View
+              className="w-12 h-12 rounded-2xl items-center justify-center border overflow-hidden"
+              style={{
+                backgroundColor: hasChampions
+                  ? `${colors.primary}18`
+                  : isDark
+                    ? 'rgba(255,255,255,0.04)'
+                    : '#F1F5F9',
+                borderColor: hasChampions ? `${colors.primary}35` : cardBorder,
+              }}
+            >
+              <StreakFire
+                variant={hasChampions ? 'active' : 'zero'}
+                size={34}
+              />
+            </View>
+            <View>
+              <Text
+                style={{ color: textColor }}
+                className="text-xl font-black tracking-tight"
+              >
+                Active Streaks
+              </Text>
+              <Text
+                style={{ color: colors.primary }}
+                className="text-xs font-black uppercase tracking-wider mt-0.5"
+              >
+                Consistency Leaders
+              </Text>
+            </View>
           </View>
-          <View>
+
+          <View
+            className="px-3 py-1 rounded-full border"
+            style={{
+              backgroundColor: hasChampions
+                ? `${colors.primary}15`
+                : isDark
+                  ? 'rgba(255,255,255,0.05)'
+                  : '#F1F5F9',
+              borderColor: hasChampions ? `${colors.primary}30` : cardBorder,
+            }}
+          >
             <Text
-              style={{ color: textColor }}
-              className="font-black text-base tracking-tight"
+              style={{
+                color: hasChampions ? colors.primary : textSecondaryColor,
+              }}
+              className="text-xs font-black uppercase tracking-wider"
             >
-              Active Streaks
-            </Text>
-            <Text
-              style={{ color: textSecondaryColor }}
-              className="text-[10px] font-bold uppercase tracking-wider"
-            >
-              Consistency leaders
+              {hasChampions
+                ? `${champions.length} ${champions.length === 1 ? 'Leader' : 'Leaders'}`
+                : '0 Active'}
             </Text>
           </View>
         </View>
 
-        <View className="flex-row items-center gap-2">
-          {champions.slice(0, 3).map((c) => (
+        {/* Card Body */}
+        {hasChampions ? (
+          <View className="space-y-2.5">
+            {champions.slice(0, 5).map((c, index) => (
+              <TouchableOpacity
+                key={c.client_id}
+                activeOpacity={0.75}
+                onPress={() => {
+                  router.push({
+                    pathname: '/(coach)/chat/[id]',
+                    params: { id: c.client_id },
+                  });
+                }}
+                className="p-4 rounded-[24px] border flex-row items-center justify-between"
+                style={{
+                  backgroundColor: isDark
+                    ? 'rgba(255, 255, 255, 0.04)'
+                    : '#F8FAFC',
+                  borderColor: cardBorder,
+                }}
+              >
+                <View className="flex-row items-center gap-3.5 flex-1 pr-2">
+                  <View className="relative">
+                    <BrandedAvatar
+                      name={c.client_name}
+                      imageUrl={c.client_avatar}
+                      size={42}
+                    />
+                    {index === 0 && (
+                      <View
+                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full items-center justify-center border"
+                        style={{
+                          backgroundColor: colors.primary,
+                          borderColor: cardBg,
+                        }}
+                      >
+                        <Text className="text-[10px] font-black text-white">
+                          1
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text
+                      style={{ color: textColor }}
+                      className="text-base font-black tracking-tight"
+                      numberOfLines={1}
+                    >
+                      {c.client_name}
+                    </Text>
+                    <Text
+                      style={{ color: textSecondaryColor }}
+                      className="text-xs font-semibold mt-0.5"
+                      numberOfLines={1}
+                    >
+                      {c.isCold
+                        ? 'At risk — 1 day left to log'
+                        : 'Daily goals on track'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Streak Number Pill */}
+                <View
+                  className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-2xl border"
+                  style={{
+                    backgroundColor: c.isCold
+                      ? 'rgba(234, 179, 8, 0.15)'
+                      : `${colors.primary}18`,
+                    borderColor: c.isCold
+                      ? 'rgba(234, 179, 8, 0.35)'
+                      : `${colors.primary}40`,
+                  }}
+                >
+                  <StreakFire
+                    variant={c.isCold ? 'cold' : 'active'}
+                    size={16}
+                  />
+                  <Text
+                    style={{ color: c.isCold ? '#EAB308' : colors.primary }}
+                    className="text-xs font-black"
+                  >
+                    {c.streak} {c.streak === 1 ? 'Day' : 'Days'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View
+            className="p-6 rounded-[28px] border border-dashed items-center justify-center"
+            style={{
+              backgroundColor: isDark
+                ? 'rgba(255,255,255,0.02)'
+                : 'rgba(0,0,0,0.01)',
+              borderColor: cardBorder,
+            }}
+          >
             <View
-              key={c.client_id}
-              className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border"
+              className="w-14 h-14 rounded-2xl items-center justify-center border mb-3 overflow-hidden"
               style={{
-                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F1F5F9',
                 borderColor: cardBorder,
               }}
             >
-              <BrandedAvatar
-                name={c.client_name}
-                imageUrl={c.client_avatar}
-                size={20}
-              />
-              <Text
-                style={{ color: textColor }}
-                className="text-xs font-bold"
-                numberOfLines={1}
-              >
-                {c.client_name.split(' ')[0]}
-              </Text>
+              <StreakFire variant="zero" size={38} />
             </View>
-          ))}
-        </View>
+            <Text
+              style={{ color: textColor }}
+              className="text-sm font-black text-center"
+            >
+              No Active Streaks Today
+            </Text>
+            <Text
+              style={{ color: textSecondaryColor }}
+              className="text-xs font-medium text-center mt-1 leading-5 px-4"
+            >
+              Keep clients motivated with daily check-ins to build their
+              consistency streaks.
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -3475,12 +3771,8 @@ const CoachUpcomingSessionCard = ({
       animate={{ opacity: 1, translateY: 0 }}
       className="overflow-hidden rounded-[32px] border"
       style={{
-        backgroundColor: canJoin
-          ? isDark
-            ? 'rgba(30, 58, 138, 0.4)'
-            : '#EFF6FF'
-          : cardBg,
-        borderColor: canJoin ? '#3B82F6' : cardBorder,
+        backgroundColor: canJoin ? `${colors.primary}12` : cardBg,
+        borderColor: canJoin ? `${colors.primary}50` : cardBorder,
       }}
     >
       <View className="p-6">
@@ -3489,18 +3781,14 @@ const CoachUpcomingSessionCard = ({
             <View
               className="w-8 h-8 rounded-xl items-center justify-center border"
               style={{
-                backgroundColor: canJoin
-                  ? 'rgba(59, 130, 246, 0.2)'
-                  : `${colors.primary}18`,
-                borderColor: canJoin
-                  ? 'rgba(59, 130, 246, 0.4)'
-                  : `${colors.primary}35`,
+                backgroundColor: `${colors.primary}18`,
+                borderColor: `${colors.primary}35`,
               }}
             >
-              <Video size={16} color={canJoin ? '#60A5FA' : colors.primary} />
+              <Video size={16} color={colors.primary} />
             </View>
             <Text
-              style={{ color: canJoin ? '#60A5FA' : colors.primary }}
+              style={{ color: colors.primary }}
               className="text-xs font-black uppercase tracking-wider"
             >
               Upcoming Call
@@ -3512,7 +3800,7 @@ const CoachUpcomingSessionCard = ({
               backgroundColor: canJoin
                 ? '#22C55E20'
                 : isDark
-                  ? '#1E293B'
+                  ? 'rgba(255, 255, 255, 0.05)'
                   : '#F1F5F9',
               borderColor: canJoin ? '#22C55E50' : cardBorder,
             }}
@@ -3556,7 +3844,7 @@ const CoachUpcomingSessionCard = ({
             activeOpacity={0.8}
             className="px-4 py-2.5 rounded-full flex-row items-center gap-1.5"
             style={{
-              backgroundColor: canJoin ? '#2563EB' : colors.primary,
+              backgroundColor: colors.primary,
             }}
           >
             <Video size={15} color="white" />

@@ -4,6 +4,8 @@ import { supabase } from './supabase';
 export interface CheckInMetrics {
   weight?: string | number | null;
   sleep?: string | number | null;
+  activeCalories?: string | number | null;
+  steps?: string | number | null;
   energy?: number | null;
   stress?: number | null;
   hunger?: number | null;
@@ -53,6 +55,7 @@ export function generateFallbackCheckInInsight(metrics: CheckInMetrics): string 
 export async function generateCheckInAdvice(metrics: CheckInMetrics): Promise<string> {
   const weightStr = metrics.weight ? `${metrics.weight}kg` : 'Not provided';
   const sleepStr = metrics.sleep ? `${metrics.sleep}hrs` : 'Not provided';
+  const activeCaloriesStr = metrics.activeCalories ? `${metrics.activeCalories} kcal` : metrics.steps ? `${metrics.steps} steps` : 'Not provided';
   const energyStr = metrics.energy !== undefined && metrics.energy !== null ? `${metrics.energy}/10` : 'Not provided';
   const stressStr = metrics.stress !== undefined && metrics.stress !== null ? `${metrics.stress}/10` : 'Not provided';
   const hungerStr = metrics.hunger !== undefined && metrics.hunger !== null ? `${metrics.hunger}/10` : 'Not provided';
@@ -62,6 +65,7 @@ export async function generateCheckInAdvice(metrics: CheckInMetrics): Promise<st
   const prompt = `Act as an elite fitness coach. Analyze this client daily check-in:
 - Weight: ${weightStr}
 - Sleep: ${sleepStr}
+- Active Energy Burned: ${activeCaloriesStr}
 - Energy: ${energyStr}
 - Stress: ${stressStr}
 - Hunger: ${hungerStr}

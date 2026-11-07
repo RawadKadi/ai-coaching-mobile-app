@@ -1,49 +1,125 @@
 import { useBrandColors } from '@/contexts/BrandContext';
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { isDarkColor } from '@/lib/theme-utils';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Modal,
+  Animated,
+  Dimensions,
+  TouchableWithoutFeedback,
+  StyleSheet,
+  PanResponder,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { MotiView } from 'moti';
+import { MotiView, AnimatePresence } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, X, Calendar, Clock, Dumbbell, Apple, Moon, Zap, Edit2, ChevronDown, ChevronRight } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Calendar,
+  ChevronRight,
+  CheckCircle,
+  X,
+  Edit2,
+  Trash2,
+  MoreVertical,
+} from 'lucide-react-native';
+import { NestedTaskCard } from '@/components/NestedTaskCard';
+import { ChallengeDetailsSkeleton } from '@/components/ChallengeDetailsSkeleton';
+import { parseChallengeDescription } from '@/lib/challenge-description';
 import { BrandedAvatar } from '@/components/BrandedAvatar';
 
-export default function ChallengeDetailScreen() {
+export default function CoachChallengeDetailScreen() {
+  const insets = useSafeAreaInsets();
   const colors = useBrandColors();
+  const isDark = isDarkColor(colors.background || '#020617');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const innerBg = colors.background || (isDark ? '#020617' : '#F8FAFC');
+
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [challenge, setChallenge] = useState<any>(null);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+
+  // Bottom Sheet Drawer Animation state for Day Breakdown
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+  const daySheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const dayFadeAnim = useRef(new Animated.Value(0)).current;
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [selectedDayMeta, setSelectedDayMeta] = useState<{
+    dayNumber: number;
+    formattedDate: string;
+  } | null>(null);
+  const [showDayDrawer, setShowDayDrawer] = useState(false);
 
   useEffect(() => {
     loadChallengeDetails();
     if (!id) return;
     const subscription = supabase
       .channel(`challenge-${id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sub_challenges', filter: `mother_challenge_id=eq.${id}` }, (payload) => {
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sub_challenges',
+          filter: `mother_challenge_id=eq.${id}`,
+        },
+        (payload) => {
           setChallenge((current: any) => {
             if (!current) return current;
-            const updatedSubChallenges = current.sub_challenges.map((sub: any) => sub.id === payload.new.id ? { ...sub, completed: payload.new.completed, completed_at: payload.new.completed_at } : sub);
+            const updatedSubChallenges = current.sub_challenges.map(
+              (sub: any) =>
+                sub.id === payload.new.id
+                  ? {
+                      ...sub,
+                      completed: payload.new.completed,
+                      completed_at: payload.new.completed_at,
+                    }
+                  : sub,
+            );
             return { ...current, sub_challenges: updatedSubChallenges };
           });
-      })
+        },
+      )
       .subscribe();
-    return () => { supabase.removeChannel(subscription); };
+    return () => {
+      supabase.removeChannel(subscription);
+    };
   }, [id]);
 
   const loadChallengeDetails = async () => {
     if (!id || !user) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_mother_challenge_details', { p_mother_challenge_id: id });
+      const { data, error } = await supabase.rpc(
+        'get_mother_challenge_details',
+        {
+          p_mother_challenge_id: id,
+        },
+      );
       if (error) throw error;
-      if (!data || data.length === 0) { router.back(); return; }
-      
+      if (!data || data.length === 0) {
+        router.back();
+        return;
+      }
+
       const challengeObj = data[0];
 
-      // Fetch client details including avatar and email via existing RPC to bypass RLS
+      // Fetch client details including avatar, id, and email
       const { data: extraData } = await supabase
         .from('mother_challenges')
         .select('client_id')
@@ -51,15 +127,20 @@ export default function ChallengeDetailScreen() {
         .single();
 
       if (extraData?.client_id) {
-        const { data: clientDetails } = await supabase
-          .rpc('get_client_details', { target_client_id: extraData.client_id });
+        challengeObj.client_id = extraData.client_id;
+        const { data: clientDetails } = await supabase.rpc(
+          'get_client_details',
+          {
+            target_client_id: extraData.client_id,
+          },
+        );
 
         if (clientDetails && clientDetails.profiles) {
           challengeObj.client_avatar = clientDetails.profiles.avatar_url;
           challengeObj.client_email = clientDetails.profiles.email;
         }
       }
-      
+
       setChallenge(challengeObj);
     } catch (error) {
       console.error('Error loading challenge:', error);
@@ -69,42 +150,168 @@ export default function ChallengeDetailScreen() {
   };
 
   const handleCancel = async () => {
-    Alert.alert('Cancel Challenge', 'Are you sure you want to cancel this challenge?', [
-      { text: 'No', style: 'cancel' },
-      { text: 'Yes, Cancel', style: 'destructive', onPress: async () => {
-          try {
-            await supabase.rpc('cancel_mother_challenge', { p_mother_challenge_id: id });
-            router.back();
-          } catch (e) {
-            Alert.alert('Error', 'Failed to cancel');
-          }
-      }},
-    ]);
+    Alert.alert(
+      'Cancel Challenge',
+      'Are you sure you want to cancel this challenge?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.rpc('cancel_mother_challenge', {
+                p_mother_challenge_id: id,
+              });
+              router.back();
+            } catch (e) {
+              Alert.alert('Error', 'Failed to cancel challenge');
+            }
+          },
+        },
+      ],
+    );
   };
 
+  const toggleSubChallenge = async (sub: any) => {
+    try {
+      const newCompleted = !sub.completed;
+
+      setChallenge((prev: any) => {
+        if (!prev) return prev;
+        const updatedSubChallenges = prev.sub_challenges.map((s: any) =>
+          s.id === sub.id ? { ...s, completed: newCompleted } : s,
+        );
+        return { ...prev, sub_challenges: updatedSubChallenges };
+      });
+
+      if (challenge?.client_id) {
+        await supabase.rpc('mark_sub_challenge', {
+          p_sub_challenge_id: sub.id,
+          p_client_id: challenge.client_id,
+          p_completed: newCompleted,
+        });
+      }
+    } catch (e) {
+      loadChallengeDetails();
+    }
+  };
+
+  const openDayDrawer = (
+    dateStr: string,
+    dayNumber: number,
+    formattedDate: string,
+  ) => {
+    setSelectedDateKey(dateStr);
+    setSelectedDayMeta({ dayNumber, formattedDate });
+    setShowDayDrawer(true);
+    daySheetAnim.setValue(SCREEN_HEIGHT);
+    dayFadeAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(dayFadeAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.spring(daySheetAnim, {
+        toValue: 0,
+        damping: 24,
+        stiffness: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeDayDrawer = () => {
+    Animated.parallel([
+      Animated.timing(dayFadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(daySheetAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 240,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowDayDrawer(false);
+      setSelectedDateKey(null);
+      setSelectedDayMeta(null);
+    });
+  };
+
+  // Draggable handle pan responder for smooth touch gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 4;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          daySheetAnim.setValue(gestureState.dy);
+          const progress = Math.max(
+            0,
+            1 - gestureState.dy / (SCREEN_HEIGHT * 0.55),
+          );
+          dayFadeAnim.setValue(progress);
+        } else {
+          daySheetAnim.setValue(gestureState.dy * 0.15);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // If dragged down past 120px or flicked down with velocity > 0.6, close!
+        if (gestureState.dy > 120 || gestureState.vy > 0.6) {
+          closeDayDrawer();
+        } else {
+          // Snap back up
+          Animated.parallel([
+            Animated.spring(daySheetAnim, {
+              toValue: 0,
+              damping: 22,
+              stiffness: 220,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dayFadeAnim, {
+              toValue: 1,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      },
+    }),
+  ).current;
+
   if (loading) {
-    return (
-      <View className="flex-1 justify-center items-center" style={{ backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <ChallengeDetailsSkeleton />;
   }
 
   if (!challenge) return null;
 
-  const completedCount = challenge.sub_challenges?.filter((s: any) => s.completed).length || 0;
+  const completedCount =
+    challenge.sub_challenges?.filter((s: any) => s.completed).length || 0;
   const totalCount = challenge.sub_challenges?.length || 0;
-  const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-  
+  const completionRate =
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
   const now = new Date();
-  now.setHours(0,0,0,0);
-  const missedCount = challenge.sub_challenges?.filter((s: any) => !s.completed && new Date(s.assigned_date) < now).length || 0;
+  now.setHours(0, 0, 0, 0);
+  const missedCount =
+    challenge.sub_challenges?.filter(
+      (s: any) => !s.completed && new Date(s.assigned_date) < now,
+    ).length || 0;
   const remainingCount = Math.max(0, totalCount - completedCount - missedCount);
 
-  const isEnded = challenge.status !== 'active' || new Date(challenge.end_date) < new Date(new Date().setHours(0,0,0,0));
+  const isEnded =
+    challenge.status !== 'active' ||
+    new Date(challenge.end_date) < new Date(new Date().setHours(0, 0, 0, 0));
   const isFailed = isEnded && completedCount === 0;
   const isCompleted = isEnded && completedCount > 0;
 
+  // Group tasks by date
   const groupedTasks: Record<string, any[]> = {};
   if (challenge?.sub_challenges) {
     challenge.sub_challenges.forEach((task: any) => {
@@ -114,432 +321,1295 @@ export default function ChallengeDetailScreen() {
     });
   }
 
-  const sortedDates = Object.keys(groupedTasks).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  const sortedDates = Object.keys(groupedTasks).sort(
+    (a, b) => new Date(a).getTime() - new Date(b).getTime(),
+  );
 
   const todayKeyGlobal = new Date().toISOString().split('T')[0];
-  const todayDates = sortedDates.filter(d => d === todayKeyGlobal);
-  const upcomingDates = sortedDates.filter(d => d > todayKeyGlobal);
-  const previousDates = sortedDates.filter(d => d < todayKeyGlobal);
+  const todayDates = sortedDates.filter((d) => d === todayKeyGlobal);
+  const upcomingDates = sortedDates.filter((d) => d > todayKeyGlobal);
+  const previousDates = sortedDates.filter((d) => d < todayKeyGlobal);
+
+  // Active drawer tasks derived live from challenge.sub_challenges
+  const activeDrawerTasks = selectedDateKey
+    ? (challenge?.sub_challenges || []).filter((t: any) => {
+        const dateKey = new Date(t.assigned_date).toISOString().split('T')[0];
+        return dateKey === selectedDateKey;
+      })
+    : [];
+  const drawerCompletedCount = activeDrawerTasks.filter(
+    (t: any) => t.completed,
+  ).length;
+  const drawerTotalCount = activeDrawerTasks.length;
+  const drawerProgressPercent =
+    drawerTotalCount > 0 ? (drawerCompletedCount / drawerTotalCount) * 100 : 0;
+  const drawerIsAllDone =
+    drawerTotalCount > 0 && drawerCompletedCount === drawerTotalCount;
 
   return (
-    <View className="flex-1" style={{ backgroundColor: colors.background }}>
-      {/* Header with Client Profile Picture and Name */}
-      <View 
-        className="px-6 pt-16 pb-6 flex-row items-center justify-between border-b"
-        style={{ backgroundColor: colors.surface, borderBottomColor: colors.border }}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Top Header with Profile Pic and 3-dots dropdown */}
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: insets.top ? insets.top + 8 : 52,
+          paddingBottom: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: colors.background,
+          borderBottomWidth: 1,
+          borderBottomColor: cardBorder,
+          zIndex: 100,
+        }}
       >
-        <View className="flex-row items-center gap-4">
-          <TouchableOpacity 
-            onPress={() => router.back()} 
-            className="w-10 h-10 rounded-xl items-center justify-center border"
-            style={{ backgroundColor: colors.background, borderColor: colors.border }}
-          >
-            <ArrowLeft size={20} color={colors.text} />
-          </TouchableOpacity>
-          <BrandedAvatar name={challenge.client_name || 'Client'} size={40} imageUrl={challenge.client_avatar} />
-          <View>
-            <Text className="text-lg font-black" style={{ color: colors.text }}>{challenge.client_name || 'Client'}</Text>
-            {challenge.client_email ? (
-              <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>{challenge.client_email}</Text>
-            ) : (
-              <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>Tracking progress</Text>
-            )}
-          </View>
-        </View>
-        {isFailed ? (
-          <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border }} className="px-3 py-1.5 rounded-full border">
-            <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">Closed</Text>
-          </View>
-        ) : isCompleted ? (
-          <View style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }} className="px-3 py-1.5 rounded-full border">
-            <Text style={{ color: colors.primary }} className="text-xs font-semibold">Completed</Text>
-          </View>
-        ) : (
-          <TouchableOpacity 
-            onPress={handleCancel} 
-            style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border }}
-            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border"
-          >
-            <X size={12} color={colors.textSecondary} />
-            <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">Cancel Plan</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        {/* Dynamic Challenge Name/Title in Main Content */}
-        <View className="mx-3 mt-8">
-          <Text className="text-2xl font-black tracking-tight" style={{ color: colors.text }}>{challenge.name}</Text>
-          {challenge.description && (
-            <Text className="text-sm font-medium mt-2 leading-5" style={{ color: colors.textSecondary }}>{challenge.description}</Text>
-          )}
-        </View>
-
-        {/* Performance Overview */}
-        <MotiView 
-          from={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="mx-3 mt-6 p-6 rounded-[32px] border"
-          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{
+            width: 40,
+            height: 40,
+            backgroundColor: cardBg,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: cardBorder,
+            marginRight: 14,
+          }}
         >
-          <View className="flex-row justify-between items-center mb-6">
-            <View 
-              className="px-3 py-1 rounded-full border"
+          <ArrowLeft size={20} color={textColor} />
+        </TouchableOpacity>
+
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text
+            style={{
+              color: textSecondaryColor,
+              fontSize: 11,
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              letterSpacing: 1.5,
+            }}
+          >
+            {challenge.category
+              ? challenge.category.toUpperCase()
+              : 'DAILY TASKS'}
+          </Text>
+          <Text
+            style={{ color: textColor, fontSize: 18, fontWeight: '900' }}
+            numberOfLines={1}
+          >
+            {challenge.name}
+          </Text>
+        </View>
+
+        {/* Profile Pic + 3-dots Menu Button */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {challenge.client_name ? (
+            <BrandedAvatar
+              name={challenge.client_name}
+              size={36}
+              imageUrl={challenge.client_avatar}
+            />
+          ) : null}
+
+          {!isFailed && (
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => setShowHeaderMenu(!showHeaderMenu)}
               style={{
-                backgroundColor: isFailed ? 'rgba(239, 68, 68, 0.1)' : `${colors.primary}15`,
-                borderColor: isFailed ? 'rgba(239, 68, 68, 0.3)' : `${colors.primary}30`
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                backgroundColor: showHeaderMenu
+                  ? isDark
+                    ? 'rgba(255, 255, 255, 0.14)'
+                    : '#E2E8F0'
+                  : cardBg,
+                borderWidth: 1,
+                borderColor: showHeaderMenu ? colors.primary : cardBorder,
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <Text 
-                className="text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: isFailed ? '#EF4444' : colors.primary }}
+              <MoreVertical
+                size={18}
+                color={showHeaderMenu ? colors.primary : textColor}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Header 3-Dots Dropdown Menu */}
+      <AnimatePresence>
+        {showHeaderMenu && (
+          <>
+            {/* Dimmed backdrop to close on outside tap */}
+            <TouchableWithoutFeedback onPress={() => setShowHeaderMenu(false)}>
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  { zIndex: 998, backgroundColor: 'transparent' },
+                ]}
+              />
+            </TouchableWithoutFeedback>
+
+            <MotiView
+              from={{ opacity: 0, translateY: -10, scale: 0.94 }}
+              animate={{ opacity: 1, translateY: 0, scale: 1 }}
+              exit={{ opacity: 0, translateY: -10, scale: 0.94 }}
+              transition={{ type: 'timing', duration: 180 } as any}
+              style={{
+                position: 'absolute',
+                top: (insets.top ? insets.top + 8 : 52) + 52,
+                right: 18,
+                width: 180,
+                backgroundColor: cardBg,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: cardBorder,
+                padding: 6,
+                zIndex: 999,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: isDark ? 0.45 : 0.15,
+                shadowRadius: 20,
+                elevation: 16,
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowHeaderMenu(false);
+                  router.push(`/(coach)/challenges/edit/${id}`);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                }}
               >
-                {isFailed ? 'Closed' : 'Active'}
+                <View
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    backgroundColor: `${colors.primary}18`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Edit2 size={15} color={colors.primary} />
+                </View>
+                <Text
+                  style={{
+                    color: textColor,
+                    fontWeight: '700',
+                    fontSize: 13,
+                  }}
+                >
+                  Edit Challenge
+                </Text>
+              </TouchableOpacity>
+
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: cardBorder,
+                  marginHorizontal: 8,
+                  marginVertical: 4,
+                }}
+              />
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowHeaderMenu(false);
+                  handleCancel();
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                }}
+              >
+                <View
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Trash2 size={15} color="#EF4444" />
+                </View>
+                <Text
+                  style={{
+                    color: '#EF4444',
+                    fontWeight: '700',
+                    fontSize: 13,
+                  }}
+                >
+                  Delete Challenge
+                </Text>
+              </TouchableOpacity>
+            </MotiView>
+          </>
+        )}
+      </AnimatePresence>
+
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 140 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Client Subtitle row - clean, delete button removed per instructions */}
+        <View
+          style={{
+            paddingHorizontal: 4,
+            marginTop: 14,
+          }}
+        >
+          <Text
+            style={{
+              color: textSecondaryColor,
+              fontSize: 14,
+              fontWeight: '600',
+            }}
+          >
+            Weekly plan for {challenge.client_name || 'client'}
+          </Text>
+        </View>
+
+        {/* Optional challenge description note (if not duplicate of client subtitle) */}
+        {(() => {
+          const parsed = parseChallengeDescription(challenge.description);
+          const displayDesc = parsed.plainText || parsed.globalRule;
+          if (!displayDesc) return null;
+          const clientPlanText =
+            `weekly plan for ${challenge.client_name || ''}`
+              .trim()
+              .toLowerCase();
+          if (
+            displayDesc.trim().toLowerCase() === clientPlanText ||
+            displayDesc.trim().toLowerCase() === 'weekly plan for client'
+          ) {
+            return null;
+          }
+          return (
+            <View style={{ paddingHorizontal: 4, marginTop: 6 }}>
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 13,
+                  fontWeight: '500',
+                  lineHeight: 18,
+                }}
+              >
+                {displayDesc}
               </Text>
             </View>
-            <View className="flex-row items-center gap-2">
-              <Calendar size={14} color={colors.textSecondary} />
-              <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>Until {new Date(challenge.end_date).toLocaleDateString()}</Text>
+          );
+        })()}
+
+        {/* Performance Overview Card */}
+        <MotiView
+          key={`stats-${challenge.id}`}
+          from={{ opacity: 0, translateY: 30 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'spring', damping: 20, stiffness: 140 } as any}
+          style={{
+            marginTop: 16,
+            backgroundColor: cardBg,
+            padding: 22,
+            borderRadius: 28,
+            borderWidth: 1,
+            borderColor: cardBorder,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 18,
+            }}
+          >
+            <View
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: 999,
+                backgroundColor: isFailed
+                  ? isDark
+                    ? 'rgba(239, 68, 68, 0.16)'
+                    : '#FEE2E2'
+                  : isDark
+                    ? `${colors.primary}20`
+                    : `${colors.primary}12`,
+                borderWidth: 1,
+                borderColor: isFailed
+                  ? isDark
+                    ? 'rgba(239, 68, 68, 0.35)'
+                    : '#FECACA'
+                  : isDark
+                    ? `${colors.primary}40`
+                    : `${colors.primary}30`,
+              }}
+            >
+              <Text
+                style={{
+                  color: isFailed
+                    ? isDark
+                      ? '#FCA5A5'
+                      : '#DC2626'
+                    : colors.primary,
+                  fontSize: 10,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.2,
+                }}
+              >
+                {isFailed
+                  ? 'Closed'
+                  : isCompleted
+                    ? 'Completed'
+                    : 'Active Phase'}
+              </Text>
+            </View>
+
+            <View
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
+              <Calendar size={14} color={textSecondaryColor} />
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 12,
+                  fontWeight: '600',
+                }}
+              >
+                Until {new Date(challenge.end_date).toLocaleDateString()}
+              </Text>
             </View>
           </View>
 
-          <View className="flex-row items-baseline gap-2 mb-2">
-            <Text 
-              className="text-4xl font-bold"
-              style={{ color: isFailed ? '#EF4444' : colors.text }}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'baseline',
+              gap: 8,
+              marginBottom: 6,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 36,
+                fontWeight: '900',
+                color: isFailed ? '#EF4444' : textColor,
+              }}
             >
               {completionRate}%
             </Text>
-            <Text className="font-medium" style={{ color: colors.textSecondary }}>Progress</Text>
+            <Text style={{ color: textSecondaryColor, fontWeight: '600' }}>
+              Compliance
+            </Text>
           </View>
 
-          <View 
-            className="h-2.5 rounded-full overflow-hidden border mb-6"
-            style={{ 
-              backgroundColor: colors.background, 
-              borderColor: colors.border 
+          {/* Progress Bar */}
+          <View
+            style={{
+              height: 10,
+              borderRadius: 999,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: cardBorder,
+              marginBottom: 20,
+              backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
             }}
           >
-             <View 
-               className="h-full rounded-full" 
-               style={{ 
-                 width: isFailed ? '100%' : `${completionRate}%`,
-                 backgroundColor: isFailed ? '#EF4444' : colors.primary
-               }} 
-             />
+            <View
+              style={{
+                height: '100%',
+                borderRadius: 999,
+                backgroundColor: isFailed ? '#EF4444' : colors.primary,
+                width: isFailed ? '100%' : `${completionRate}%`,
+              }}
+            />
           </View>
 
-          <View 
-            className="flex-row items-center justify-between p-4 rounded-3xl border"
-            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+          {/* Stats Summary Row */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: innerBg,
+              padding: 16,
+              borderRadius: 22,
+              borderWidth: 1,
+              borderColor: cardBorder,
+            }}
           >
-              <View className="items-center flex-1 border-r" style={{ borderRightColor: colors.border }}>
-                  <Text className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: colors.textSecondary }}>Done</Text>
-                  <Text className="text-xl font-black text-emerald-500">{completedCount}</Text>
-              </View>
-              <View className="items-center flex-1 border-r" style={{ borderRightColor: colors.border }}>
-                  <Text className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: colors.textSecondary }}>Missed</Text>
-                  <Text className={`text-xl font-black ${missedCount > 0 ? 'text-amber-500' : ''}`} style={missedCount === 0 ? { color: colors.text } : undefined}>{missedCount}</Text>
-              </View>
-              <View className="items-center flex-1">
-                  <Text className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: colors.textSecondary }}>Left</Text>
-                  <Text className="text-xl font-black" style={{ color: colors.text }}>{remainingCount}</Text>
-              </View>
+            <View
+              style={{
+                alignItems: 'center',
+                flex: 1,
+                borderRightWidth: 1,
+                borderRightColor: cardBorder,
+              }}
+            >
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 10,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.5,
+                  marginBottom: 4,
+                }}
+              >
+                Done
+              </Text>
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: '900',
+                  color:
+                    completedCount > 0
+                      ? isFailed
+                        ? '#EF4444'
+                        : colors.primary
+                      : textColor,
+                }}
+              >
+                {completedCount}
+              </Text>
+            </View>
+            <View
+              style={{
+                alignItems: 'center',
+                flex: 1,
+                borderRightWidth: 1,
+                borderRightColor: cardBorder,
+              }}
+            >
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 10,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.5,
+                  marginBottom: 4,
+                }}
+              >
+                Missed
+              </Text>
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: '900',
+                  color: missedCount > 0 ? '#EF4444' : textColor,
+                }}
+              >
+                {missedCount}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'center', flex: 1 }}>
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 10,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.5,
+                  marginBottom: 4,
+                }}
+              >
+                Left
+              </Text>
+              <Text
+                style={{ fontSize: 20, fontWeight: '900', color: textColor }}
+              >
+                {remainingCount}
+              </Text>
+            </View>
           </View>
         </MotiView>
 
-        {/* Task List */}
-        <View className="mt-10 px-3">
-           <Text className="text-lg font-bold mb-6" style={{ color: colors.text }}>Daily Tasks</Text>
-           
-           {todayDates.length > 0 && (
-             <View className="mb-8">
-               <Text className="text-sm font-black uppercase tracking-widest mb-3 ml-2" style={{ color: colors.primary }}>Today</Text>
-               {todayDates.map((dateStr: string, index: number) => (
-                 <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
-               ))}
-             </View>
-           )}
-
-           {upcomingDates.length > 0 && (
-             <View className="mb-8">
-               <Text className="text-sm font-black uppercase tracking-widest mb-3 ml-2" style={{ color: colors.textSecondary }}>Upcoming</Text>
-               {upcomingDates.map((dateStr: string, index: number) => (
-                 <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
-               ))}
-             </View>
-           )}
-
-           {previousDates.length > 0 && (
-             <View className="mb-8">
-               <Text className="text-sm font-black uppercase tracking-widest mb-3 ml-2" style={{ color: colors.textSecondary }}>Previous</Text>
-               {previousDates.map((dateStr: string, index: number) => (
-                 <DateSection key={dateStr} dateStr={dateStr} tasks={groupedTasks[dateStr]} index={index} isFailed={isFailed} isCompleted={isCompleted} />
-               ))}
-             </View>
-           )}
-        </View>
-      </ScrollView>
-
-      {/* Fixed Edit Plan Button at Bottom Right while scrolling */}
-      {!isFailed && !isCompleted && (
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => router.push(`/(coach)/challenges/edit/${id}`)}
-          style={{ position: 'absolute', bottom: 32, right: 24, zIndex: 10, backgroundColor: colors.primary }}
-          className="px-4 py-2.5 rounded-full flex-row items-center gap-1.5 shadow-2xl"
-        >
-          <Text className="text-xs font-semibold" style={{ color: colors.textOnPrimary }}>Edit Challenge</Text>
-          <Edit2 size={12} color={colors.textOnPrimary} />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
-
-const DateSection = ({ dateStr, tasks, isFailed, isCompleted, index }: any) => {
-  const colors = useBrandColors();
-  const [isExpanded, setIsExpanded] = useState(() => {
-    const todayKey = new Date().toISOString().split('T')[0];
-    return dateStr === todayKey;
-  });
-  const completedCount = tasks.filter((t: any) => t.completed).length;
-  const totalCount = tasks.length;
-  
-  // Adding timezone offset to prevent day shifting backwards
-  const dateObj = new Date(dateStr);
-  const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
-  const localDate = new Date(dateObj.getTime() + userTimezoneOffset);
-  const formattedDate = localDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-  const todayKey = new Date().toISOString().split('T')[0];
-  const isToday = dateStr === todayKey;
-  const isPastDate = dateStr < todayKey;
-  const isFutureDate = dateStr > todayKey;
-
-  let tagBgStyle = { backgroundColor: colors.background, borderColor: colors.border };
-  let tagTextColor = colors.textSecondary;
-  
-  if (!isFutureDate) {
-    if (completedCount > 0) {
-      tagBgStyle = { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.2)' };
-      tagTextColor = '#10B981';
-    } else {
-      tagBgStyle = { backgroundColor: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.2)' };
-      tagTextColor = '#F59E0B';
-    }
-  }
-
-  return (
-    <View className="mb-[7px]">
-      <TouchableOpacity 
-        activeOpacity={0.7} 
-        onPress={() => setIsExpanded(!isExpanded)}
-        className={`flex-row items-center p-4 rounded-2xl border ${isExpanded ? 'mb-4' : ''}`}
-        style={{
-          backgroundColor: isToday ? `${colors.primary}12` : colors.surface,
-          borderColor: isToday ? colors.primary : colors.border
-        }}
-      >
-        <View className="flex-row items-center gap-3">
-          <View 
-            className="w-8 h-8 rounded-full items-center justify-center border"
-            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+        {/* Daily Breakdown Section */}
+        <View style={{ marginTop: 28 }}>
+          <Text
+            style={{
+              color: textColor,
+              fontSize: 22,
+              fontWeight: '900',
+              letterSpacing: -0.4,
+              marginBottom: 16,
+              marginLeft: 4,
+            }}
           >
-            {isExpanded ? <ChevronDown size={16} color={colors.textSecondary} /> : <ChevronRight size={16} color={colors.textSecondary} />}
-          </View>
-          <Text 
-            className="font-black text-xl tracking-tight"
-            style={{ color: isToday ? colors.primary : colors.text }}
-          >
-            {isToday ? 'Today, ' : ''}{formattedDate}
+            Daily Breakdown
           </Text>
-          <View 
-            className={`px-3 py-1 rounded-full border ml-1 ${isPastDate ? 'opacity-50' : ''}`}
-            style={tagBgStyle}
-          >
-             <Text className="text-sm font-bold" style={{ color: tagTextColor }}>{completedCount}/{totalCount} Done</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
 
-      {isExpanded && (
-        <View>
-          {tasks.map((task: any, idx: number) => (
-             <TaskCard key={task.id} task={task} index={idx} isFailed={isFailed} isCompleted={isCompleted} />
-          ))}
-        </View>
-      )}
-    </View>
-  );
-};
-
-interface ParsedTaskInfo {
-  isJson: boolean;
-  rule?: string;
-  subTasks?: Array<{
-    id?: string;
-    exercise?: string;
-    name?: string;
-    sets?: number;
-    notes?: string;
-  }>;
-  text?: string;
-}
-
-const parseTaskDescription = (desc: any): ParsedTaskInfo => {
-  if (!desc) return { isJson: false, text: '' };
-  if (typeof desc !== 'string') return { isJson: false, text: String(desc) };
-
-  const trimmed = desc.trim();
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-    return { isJson: false, text: trimmed };
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (parsed && typeof parsed === 'object') {
-      const subTasks = Array.isArray(parsed.sub_tasks)
-        ? parsed.sub_tasks
-        : Array.isArray(parsed.exercises)
-          ? parsed.exercises
-          : Array.isArray(parsed)
-            ? parsed
-            : [];
-      const rule = parsed.global_rule || parsed.rule || parsed.instructions || '';
-      return {
-        isJson: true,
-        rule,
-        subTasks,
-      };
-    }
-  } catch {
-    // Parsing error fallback to plain text
-  }
-
-  return { isJson: false, text: trimmed };
-};
-
-const TaskCard = ({ task, index, isFailed, isCompleted }: { task: any, index: number, isFailed?: boolean, isCompleted?: boolean }) => {
-  const colors = useBrandColors();
-  const getIcon = (type: string) => {
-    switch (type?.toLowerCase()) {
-      case 'training': return <Dumbbell size={22} color={colors.primary} />;
-      case 'nutrition': return <Apple size={22} color={colors.primary} />;
-      case 'recovery': return <Moon size={22} color={colors.primary} />;
-      default: return <Zap size={22} color={colors.primary} />;
-    }
-  };
-
-  const isPast = new Date(task.assigned_date) < new Date(new Date().setHours(0,0,0,0));
-  const parsed = parseTaskDescription(task.description);
-
-  return (
-    <MotiView
-      from={{ opacity: 0, translateX: -20 }}
-      animate={{ opacity: 1, translateX: 0 }}
-      transition={{ delay: index * 100 }}
-      className={`mb-4 p-5 rounded-[24px] border ${isFailed || (isCompleted && !task.completed) || isPast ? 'opacity-60' : ''}`}
-      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-    >
-      {/* Card Header: flex-1 on left and flex-shrink-0 on badge prevents badge from overflowing */}
-      <View className="flex-row justify-between items-start mb-3 gap-3">
-        <View className="flex-row items-start gap-3 flex-1 min-w-0">
-          <View 
-            className="w-10 h-10 rounded-xl items-center justify-center border flex-shrink-0 mt-0.5"
-            style={{ backgroundColor: colors.background, borderColor: colors.border }}
-          >
-             {getIcon(task.focus_type)}
-          </View>
-          <View className="flex-1 min-w-0">
-            <Text className="font-bold text-base leading-snug" style={{ color: colors.text }} numberOfLines={2}>
-              {task.name}
-            </Text>
-            <Text className="text-xs font-medium capitalize mt-1" style={{ color: colors.textSecondary }}>
-              {task.focus_type} • {task.intensity}
-            </Text>
-          </View>
-        </View>
-
-        <View className="flex-shrink-0 pt-0.5">
-          {isFailed ? (
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border }} className="px-2.5 py-1 rounded-full border">
-               <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase">Unfulfilled</Text>
+          {/* Today Group */}
+          {todayDates.length > 0 && (
+            <View style={{ marginBottom: 18 }}>
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: 11,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.5,
+                  marginBottom: 10,
+                  marginLeft: 6,
+                }}
+              >
+                Today
+              </Text>
+              {todayDates.map((dateStr: string) => {
+                const dayNumber = sortedDates.indexOf(dateStr) + 1;
+                const dayTasks = (challenge.sub_challenges || []).filter(
+                  (t: any) =>
+                    new Date(t.assigned_date).toISOString().split('T')[0] ===
+                    dateStr,
+                );
+                return (
+                  <DayCard
+                    key={dateStr}
+                    dayNumber={dayNumber}
+                    dateStr={dateStr}
+                    tasks={dayTasks}
+                    challengeName={challenge.name}
+                    category={challenge.category}
+                    onPress={() => {
+                      const dateObj = new Date(dateStr);
+                      const userTimezoneOffset =
+                        dateObj.getTimezoneOffset() * 60000;
+                      const localDate = new Date(
+                        dateObj.getTime() + userTimezoneOffset,
+                      );
+                      const formattedDate = localDate.toLocaleDateString(
+                        'en-US',
+                        {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        },
+                      );
+                      openDayDrawer(dateStr, dayNumber, formattedDate);
+                    }}
+                  />
+                );
+              })}
             </View>
-          ) : task.completed ? (
-            <View style={{ backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }} className="px-2.5 py-1 rounded-full border">
-               <Text style={{ color: colors.primary }} className="text-[10px] font-bold uppercase">Done</Text>
+          )}
+
+          {/* Upcoming Group */}
+          {upcomingDates.length > 0 && (
+            <View style={{ marginBottom: 18 }}>
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 11,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.5,
+                  marginBottom: 10,
+                  marginLeft: 6,
+                }}
+              >
+                Upcoming
+              </Text>
+              {upcomingDates.map((dateStr: string) => {
+                const dayNumber = sortedDates.indexOf(dateStr) + 1;
+                const dayTasks = (challenge.sub_challenges || []).filter(
+                  (t: any) =>
+                    new Date(t.assigned_date).toISOString().split('T')[0] ===
+                    dateStr,
+                );
+                return (
+                  <DayCard
+                    key={dateStr}
+                    dayNumber={dayNumber}
+                    dateStr={dateStr}
+                    tasks={dayTasks}
+                    challengeName={challenge.name}
+                    category={challenge.category}
+                    onPress={() => {
+                      const dateObj = new Date(dateStr);
+                      const userTimezoneOffset =
+                        dateObj.getTimezoneOffset() * 60000;
+                      const localDate = new Date(
+                        dateObj.getTime() + userTimezoneOffset,
+                      );
+                      const formattedDate = localDate.toLocaleDateString(
+                        'en-US',
+                        {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        },
+                      );
+                      openDayDrawer(dateStr, dayNumber, formattedDate);
+                    }}
+                  />
+                );
+              })}
             </View>
-          ) : isPast ? (
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.border }} className="px-2.5 py-1 rounded-full border">
-                  <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold uppercase">Missed</Text>
-              </View>
-          ) : (
-            <View className="px-2.5 py-1 rounded-full border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
-               <Text className="text-[10px] font-bold uppercase" style={{ color: colors.textSecondary }}>Pending</Text>
+          )}
+
+          {/* Previous Group */}
+          {previousDates.length > 0 && (
+            <View style={{ marginBottom: 18 }}>
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 11,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.5,
+                  marginBottom: 10,
+                  marginLeft: 6,
+                }}
+              >
+                Previous
+              </Text>
+              {previousDates.map((dateStr: string) => {
+                const dayNumber = sortedDates.indexOf(dateStr) + 1;
+                const dayTasks = (challenge.sub_challenges || []).filter(
+                  (t: any) =>
+                    new Date(t.assigned_date).toISOString().split('T')[0] ===
+                    dateStr,
+                );
+                return (
+                  <DayCard
+                    key={dateStr}
+                    dayNumber={dayNumber}
+                    dateStr={dateStr}
+                    tasks={dayTasks}
+                    challengeName={challenge.name}
+                    category={challenge.category}
+                    onPress={() => {
+                      const dateObj = new Date(dateStr);
+                      const userTimezoneOffset =
+                        dateObj.getTimezoneOffset() * 60000;
+                      const localDate = new Date(
+                        dateObj.getTime() + userTimezoneOffset,
+                      );
+                      const formattedDate = localDate.toLocaleDateString(
+                        'en-US',
+                        {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        },
+                      );
+                      openDayDrawer(dateStr, dayNumber, formattedDate);
+                    }}
+                  />
+                );
+              })}
+            </View>
+          )}
+
+          {sortedDates.length === 0 && (
+            <View
+              style={{
+                padding: 28,
+                backgroundColor: cardBg,
+                borderWidth: 1,
+                borderColor: cardBorder,
+                borderRadius: 24,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: textSecondaryColor, fontWeight: '600' }}>
+                No daily breakdown established.
+              </Text>
             </View>
           )}
         </View>
-      </View>
+      </ScrollView>
 
-      {/* Card Content */}
-      <View className="pl-[52px]">
-        {parsed.isJson ? (
-          <View className="mb-4">
-            {parsed.rule ? (
-              <Text className="text-sm leading-5 mb-3 font-medium" style={{ color: colors.textSecondary }}>
-                {parsed.rule}
-              </Text>
-            ) : null}
+      {/* Day Tasks Bottom Sheet Drawer - Draggable with PanResponder */}
+      <Modal
+        visible={showDayDrawer}
+        transparent
+        statusBarTranslucent
+        animationType="none"
+        onRequestClose={closeDayDrawer}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          {/* Dimmed backdrop */}
+          <Animated.View
+            style={{
+              ...(StyleSheet.absoluteFill as any),
+              backgroundColor: isDark
+                ? 'rgba(0,0,0,0.72)'
+                : 'rgba(15, 23, 42, 0.55)',
+              opacity: dayFadeAnim,
+            }}
+          >
+            <TouchableWithoutFeedback onPress={closeDayDrawer}>
+              <View style={{ flex: 1 }} />
+            </TouchableWithoutFeedback>
+          </Animated.View>
 
-            {parsed.subTasks && parsed.subTasks.length > 0 && (
-              <View className="gap-2">
-                {parsed.subTasks.map((st: any, i: number) => (
-                  <View 
-                    key={st.id || i}
-                    style={{ backgroundColor: colors.background, borderColor: colors.border }}
-                    className="p-3 rounded-xl border flex-row items-center justify-between"
+          {/* Drawer container sliding up / dragged down */}
+          <Animated.View
+            style={{
+              backgroundColor: cardBg,
+              borderTopLeftRadius: 36,
+              borderTopRightRadius: 36,
+              paddingTop: 12,
+              paddingHorizontal: 20,
+              paddingBottom: insets.bottom + 24,
+              maxHeight: '85%',
+              borderTopWidth: 1,
+              borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+              transform: [{ translateY: daySheetAnim }],
+            }}
+          >
+            {/* Top Handle & Close Row with PanResponder attached to handle */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 10,
+              }}
+            >
+              <View style={{ width: 36 }} />
+
+              {/* Draggable center handle with generous touch zone */}
+              <View
+                {...panResponder.panHandlers}
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: 32,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.25)'
+                      : '#CBD5E1',
+                  }}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={closeDayDrawer}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: isDark
+                    ? 'rgba(255, 255, 255, 0.08)'
+                    : '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={18} color={textColor} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Top Day Summary Card - Matches Chunky DayCard */}
+            {selectedDayMeta && (
+              <View
+                style={{
+                  backgroundColor: drawerIsAllDone ? colors.primary : innerBg,
+                  borderColor: drawerIsAllDone ? colors.primary : cardBorder,
+                  borderWidth: 1,
+                  borderRadius: 24,
+                  padding: 18,
+                  marginBottom: 16,
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Decorative ambient circle */}
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    top: -20,
+                    right: -20,
+                    width: 100,
+                    height: 100,
+                    borderRadius: 50,
+                    backgroundColor: drawerIsAllDone
+                      ? 'rgba(255, 255, 255, 0.14)'
+                      : `${colors.primary}12`,
+                  }}
+                />
+
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
                   >
-                    <View className="flex-1 mr-2">
-                      <Text className="text-sm font-bold" style={{ color: colors.text }}>
-                        {st.exercise || st.name || `Exercise ${i + 1}`}
-                      </Text>
-                      {st.notes ? (
-                        <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
-                          {st.notes}
-                        </Text>
-                      ) : null}
+                    <View
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 10,
+                        backgroundColor: drawerIsAllDone
+                          ? '#FFFFFF'
+                          : `${colors.primary}20`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {drawerIsAllDone ? (
+                        <CheckCircle size={16} color={colors.primary} />
+                      ) : (
+                        <Calendar size={16} color={colors.primary} />
+                      )}
                     </View>
-                    {st.sets ? (
-                      <View 
-                        style={{ backgroundColor: `${colors.primary}15` }}
-                        className="px-2.5 py-1 rounded-lg"
-                      >
-                        <Text className="text-xs font-black" style={{ color: colors.primary }}>
-                          {st.sets} {st.sets === 1 ? 'Set' : 'Sets'}
-                        </Text>
-                      </View>
-                    ) : null}
+                    <Text
+                      style={{
+                        color: drawerIsAllDone
+                          ? 'rgba(255, 255, 255, 0.8)'
+                          : colors.primary,
+                        fontSize: 11,
+                        fontWeight: '900',
+                        textTransform: 'uppercase',
+                        letterSpacing: 1.2,
+                      }}
+                    >
+                      DAY {selectedDayMeta.dayNumber} •{' '}
+                      {challenge.category
+                        ? challenge.category.toUpperCase()
+                        : 'CHALLENGE'}
+                    </Text>
                   </View>
-                ))}
+
+                  <View
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 999,
+                      backgroundColor: drawerIsAllDone
+                        ? '#FFFFFF'
+                        : isDark
+                          ? 'rgba(255, 255, 255, 0.08)'
+                          : '#F1F5F9',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: drawerIsAllDone
+                          ? colors.primary
+                          : textSecondaryColor,
+                        fontSize: 11,
+                        fontWeight: '800',
+                      }}
+                    >
+                      {drawerTotalCount === 0
+                        ? 'No tasks'
+                        : drawerIsAllDone
+                          ? 'All Done 🎉'
+                          : `${drawerCompletedCount}/${drawerTotalCount} Done`}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text
+                  style={{
+                    color: drawerIsAllDone ? '#FFFFFF' : textColor,
+                    fontSize: 20,
+                    fontWeight: '900',
+                    letterSpacing: -0.3,
+                    marginBottom: 3,
+                  }}
+                >
+                  {selectedDayMeta.formattedDate}
+                </Text>
+
+                <Text
+                  style={{
+                    color: drawerIsAllDone
+                      ? 'rgba(255, 255, 255, 0.75)'
+                      : textSecondaryColor,
+                    fontSize: 13,
+                    fontWeight: '600',
+                    marginBottom: 12,
+                  }}
+                >
+                  {drawerTotalCount === 0
+                    ? 'No tasks assigned'
+                    : drawerIsAllDone
+                      ? 'All tasks completed!'
+                      : `${drawerTotalCount - drawerCompletedCount} tasks left`}
+                </Text>
+
+                {drawerTotalCount > 0 && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flex: 1,
+                        height: 7,
+                        backgroundColor: drawerIsAllDone
+                          ? 'rgba(255, 255, 255, 0.28)'
+                          : isDark
+                            ? 'rgba(255, 255, 255, 0.08)'
+                            : '#E2E8F0',
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View
+                        style={{
+                          height: '100%',
+                          width: `${Math.min(100, Math.max(0, drawerProgressPercent))}%`,
+                          backgroundColor: drawerIsAllDone
+                            ? '#FFFFFF'
+                            : colors.primary,
+                          borderRadius: 4,
+                        }}
+                      />
+                    </View>
+                    <Text
+                      style={{
+                        color: drawerIsAllDone ? '#FFFFFF' : textColor,
+                        fontSize: 12,
+                        fontWeight: '900',
+                        minWidth: 34,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {Math.round(drawerProgressPercent)}%
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
-          </View>
-        ) : parsed.text ? (
-          <Text className="text-sm leading-5 mb-4" style={{ color: colors.textSecondary }}>
-            {parsed.text}
-          </Text>
-        ) : null}
 
-        <View className="flex-row justify-between items-center pt-3 border-t" style={{ borderTopColor: colors.border }}>
-           <View className="flex-row items-center gap-2">
-              <Clock size={12} color={colors.textTertiary} />
-              <Text className="text-[10px] font-bold uppercase" style={{ color: colors.textTertiary }}>
-                {new Date(task.assigned_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-              </Text>
-           </View>
+            {/* Scrollable list of interactive tasks with Animated GIFs (Unboxed, note hidden for coach) */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 24 }}
+            >
+              {activeDrawerTasks.length === 0 ? (
+                <View
+                  style={{
+                    padding: 24,
+                    alignItems: 'center',
+                    backgroundColor: innerBg,
+                    borderRadius: 18,
+                  }}
+                >
+                  <Text
+                    style={{ color: textSecondaryColor, fontWeight: '500' }}
+                  >
+                    No tasks found for this date.
+                  </Text>
+                </View>
+              ) : (
+                activeDrawerTasks.map((task: any, idx: number) => (
+                  <NestedTaskCard
+                    key={task.id}
+                    task={task}
+                    index={idx}
+                    isFailed={isFailed}
+                    isCompleted={isCompleted}
+                    onToggleParent={toggleSubChallenge}
+                    layoutType="detail"
+                    showGlobalRule={false}
+                  />
+                ))
+              )}
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+// ─── Day Card Component (Chunky Apple Style) ─────────────────────────────────
+
+interface DayCardProps {
+  dayNumber: number;
+  dateStr: string;
+  tasks: any[];
+  challengeName: string;
+  category?: string;
+  onPress: () => void;
+}
+
+const DayCard = ({
+  dayNumber,
+  dateStr,
+  tasks,
+  challengeName,
+  category,
+  onPress,
+}: DayCardProps) => {
+  const colors = useBrandColors();
+  const isDark = isDarkColor(colors.background || '#020617');
+  const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+
+  const dateObj = new Date(dateStr);
+  const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
+  const localDate = new Date(dateObj.getTime() + userTimezoneOffset);
+  const formattedDate = localDate.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  const todayKey = new Date().toISOString().split('T')[0];
+  const isToday = dateStr === todayKey;
+
+  const totalCount = tasks.length;
+  const completedCount = tasks.filter((t: any) => t.completed).length;
+  const isAllDone = totalCount > 0 && completedCount === totalCount;
+  const progressPercent =
+    totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+  const primaryIsDark = isDarkColor(colors.primary);
+  const completedText = primaryIsDark ? '#FFFFFF' : '#0F172A';
+  const completedMuted = primaryIsDark
+    ? 'rgba(255, 255, 255, 0.75)'
+    : 'rgba(15, 23, 42, 0.75)';
+  const completedBadgeBg = primaryIsDark ? '#FFFFFF' : '#0F172A';
+  const completedBadgeContent = colors.primary;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={onPress}
+      style={{
+        backgroundColor: isAllDone ? colors.primary : cardBg,
+        borderColor: isAllDone ? colors.primary : cardBorder,
+        borderWidth: 1,
+        borderRadius: 24,
+        padding: 20,
+        marginBottom: 12,
+        shadowColor: isAllDone ? colors.primary : '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: isAllDone ? 0.3 : isDark ? 0.2 : 0.04,
+        shadowRadius: 10,
+        elevation: 3,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Decorative ambient circle */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: -24,
+          right: -24,
+          width: 120,
+          height: 120,
+          borderRadius: 60,
+          backgroundColor: isAllDone
+            ? 'rgba(255, 255, 255, 0.14)'
+            : `${colors.primary}10`,
+        }}
+      />
+
+      {/* Top Row: Icon Box, Label, Status Pill, Chevron */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 12,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 10,
+              backgroundColor: isAllDone
+                ? completedBadgeBg
+                : isToday
+                  ? `${colors.primary}20`
+                  : isDark
+                    ? 'rgba(255, 255, 255, 0.06)'
+                    : '#F1F5F9',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {isAllDone ? (
+              <CheckCircle size={16} color={completedBadgeContent} />
+            ) : (
+              <Calendar
+                size={16}
+                color={isToday ? colors.primary : textSecondaryColor}
+              />
+            )}
+          </View>
+          <Text
+            style={{
+              color: isAllDone
+                ? completedMuted
+                : isToday
+                  ? colors.primary
+                  : textSecondaryColor,
+              fontSize: 11,
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              letterSpacing: 1.3,
+            }}
+          >
+            DAY {dayNumber} • {category ? category.toUpperCase() : 'CHALLENGE'}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: isAllDone
+                ? completedBadgeBg
+                : isDark
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : '#F1F5F9',
+            }}
+          >
+            <Text
+              style={{
+                color: isAllDone ? completedBadgeContent : textSecondaryColor,
+                fontSize: 12,
+                fontWeight: '800',
+              }}
+            >
+              {totalCount === 0
+                ? 'No tasks'
+                : isAllDone
+                  ? 'All Done 🎉'
+                  : `${completedCount}/${totalCount} Done`}
+            </Text>
+          </View>
+          <ChevronRight
+            size={18}
+            color={isAllDone ? completedMuted : textSecondaryColor}
+          />
         </View>
       </View>
-    </MotiView>
+
+      {/* Main Headline: Day & Date */}
+      <Text
+        style={{
+          color: isAllDone ? completedText : textColor,
+          fontSize: 22,
+          fontWeight: '900',
+          letterSpacing: -0.4,
+          marginBottom: 4,
+        }}
+      >
+        {isToday ? 'Today, ' : ''}
+        {formattedDate}
+      </Text>
+
+      {/* Subtitle */}
+      <Text
+        style={{
+          color: isAllDone ? completedMuted : textSecondaryColor,
+          fontSize: 13,
+          fontWeight: '600',
+          marginBottom: 14,
+        }}
+      >
+        {totalCount === 0
+          ? 'No tasks assigned'
+          : isAllDone
+            ? 'All tasks completed!'
+            : `${totalCount - completedCount} tasks left`}
+      </Text>
+
+      {/* Progress Bar + Percentage */}
+      {totalCount > 0 && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              height: 7,
+              backgroundColor: isAllDone
+                ? 'rgba(255, 255, 255, 0.28)'
+                : isDark
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : '#E2E8F0',
+              borderRadius: 4,
+              overflow: 'hidden',
+            }}
+          >
+            <View
+              style={{
+                height: '100%',
+                width: `${Math.min(100, Math.max(0, progressPercent))}%`,
+                backgroundColor: isAllDone ? '#FFFFFF' : colors.primary,
+                borderRadius: 4,
+              }}
+            />
+          </View>
+          <Text
+            style={{
+              color: isAllDone ? completedText : textColor,
+              fontSize: 12,
+              fontWeight: '900',
+              minWidth: 36,
+              textAlign: 'right',
+            }}
+          >
+            {Math.round(progressPercent)}%
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 };

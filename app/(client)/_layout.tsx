@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import SessionMonitor from '@/components/SessionMonitor';
 import ChallengeMonitor from '@/components/ChallengeMonitor';
+import { ClientDashboardSkeleton } from '@/components/ClientDashboardSkeleton';
 
 export default function ClientLayout() {
   const colors = useBrandColors();
@@ -63,8 +64,8 @@ export default function ClientLayout() {
       </Stack>
       
       {(loading || !session || (profile?.role !== 'client' && !isAllowedCoachRoute)) && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.background || '#010417', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.background || '#010417', zIndex: 100 }}>
+          <ClientDashboardSkeleton />
         </View>
       )}
 

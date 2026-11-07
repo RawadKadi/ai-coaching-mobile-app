@@ -5,7 +5,7 @@ import { MotiView, AnimatePresence } from 'moti';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar as CalendarIcon, Clock, Video, ChevronRight, User, Plus, Zap, AlertCircle, Search, ChevronsLeftRight, CalendarDays, Trash2, Pen, MessageSquare, X } from 'lucide-react-native';
-import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
 import SchedulerModal from '@/components/SchedulerModal';
 import { DatePickerOverlay } from '@/components/DatePickerOverlay';
 import ManualSchedulerModal, { prefetchSchedulerData } from '@/components/ManualSchedulerModal';
@@ -162,6 +162,7 @@ export default function CalendarScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewingMonth, setViewingMonth] = useState(new Date());
+  const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
   const [showManualScheduler, setShowManualScheduler] = useState(false);
   const [showAIScheduler, setShowAIScheduler] = useState(false);
   const [showGoogleMeetGate, setShowGoogleMeetGate] = useState(false);
@@ -406,6 +407,31 @@ export default function CalendarScreen() {
     fetchClientData();
   }, [selectedClient, showManualScheduler, showAIScheduler]);
 
+  const navigation = useNavigation();
+
+  const handleGoToToday = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const today = new Date();
+    setSelectedDate(today);
+    setViewingMonth(today);
+    setCurrentPageIndex(0);
+    try {
+      flatListRef.current?.scrollToIndex({
+        index: INITIAL_PAGE_INDEX,
+        animated: true,
+      });
+    } catch (e) {
+      // Safe catch
+    }
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress' as any, () => {
+      handleGoToToday();
+    });
+    return unsubscribe;
+  }, [handleGoToToday, navigation]);
+
   useFocusEffect(useCallback(() => {
     if (coach?.id) {
       googleMeetService.isConnected(coach).then(setIsMeetConnected);
@@ -413,17 +439,27 @@ export default function CalendarScreen() {
   }, [coach?.id]));
 
   useFocusEffect(useCallback(() => {
+    // Reset calendar to today's date and today's 2-week view on every visit
+    const today = new Date();
+    setSelectedDate(today);
+    setViewingMonth(today);
+    setCurrentPageIndex(0);
+    setTimeout(() => {
+      try {
+        flatListRef.current?.scrollToIndex({
+          index: INITIAL_PAGE_INDEX,
+          animated: false,
+        });
+      } catch (e) {
+        // Safe catch
+      }
+    }, 50);
+
     if (coach?.id) {
       loadSessions();
       prefetchSchedulerData(coach.id);
     }
     if (params?.resetToToday === 'true') {
-      const today = new Date();
-      setSelectedDate(today);
-      setViewingMonth(today);
-      setTimeout(() => {
-        scrollToDate(today);
-      }, 100);
       router.setParams({ resetToToday: '' });
     }
   }, [coach?.id, params?.resetToToday]));
@@ -491,8 +527,9 @@ export default function CalendarScreen() {
   }, [selectedDate, viewingMonth, sessionDatesSet, colors, closeAllSwipes]);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
+    if (viewableItems && viewableItems.length > 0 && viewableItems[0]?.item !== undefined) {
       const pageIndex = viewableItems[0].item;
+      setCurrentPageIndex(pageIndex);
       const pageDays = getDaysForPage(pageIndex);
       setViewingMonth(pageDays[0]);
     }
@@ -537,42 +574,102 @@ export default function CalendarScreen() {
                   <Text style={{ color: colors.textSecondary }} className="text-[10px] font-black uppercase">Swipe</Text>
               </View>
           </View>
-          {/* Calendar Box */}
-          <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="rounded-[48px] p-6 mx-3 my-4 border">
-              <View className="flex-row justify-between mb-6 px-2">
-                  <View className="flex-row flex-1 justify-between">
-                    {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, i) => (
-                        <View key={i} className="flex-1 items-center">
-                            <Text style={{ color: colors.textSecondary }} className="text-[9px] font-black">{day}</Text>
-                        </View>
-                    ))}
+          {/* Calendar Parent Box */}
+          <View className="mx-3 my-4 relative" style={{ zIndex: 30 }}>
+              {/* Calendar Card */}
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="rounded-[48px] p-6 border">
+                  <View className="flex-row justify-between mb-6 px-2">
+                      <View className="flex-row flex-1 justify-between">
+                        {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, i) => (
+                            <View key={i} className="flex-1 items-center">
+                                <Text style={{ color: colors.textSecondary }} className="text-[9px] font-black">{day}</Text>
+                            </View>
+                        ))}
+                      </View>
                   </View>
+                  
+                  <FlatList
+                      ref={flatListRef}
+                      horizontal
+                      pagingEnabled
+                      snapToInterval={PAGE_WIDTH}
+                      snapToAlignment="start"
+                      decelerationRate="fast"
+                      showsHorizontalScrollIndicator={false}
+                      data={PAGE_INDICES}
+                      keyExtractor={(item) => item.toString()}
+                      initialScrollIndex={INITIAL_PAGE_INDEX}
+                      initialNumToRender={3}
+                      maxToRenderPerBatch={2}
+                      windowSize={5}
+                      removeClippedSubviews
+                      getItemLayout={(_, index) => ({
+                          length: PAGE_WIDTH,
+                          offset: PAGE_WIDTH * index,
+                          index,
+                      })}
+                      onViewableItemsChanged={onViewableItemsChanged}
+                      viewabilityConfig={viewabilityConfig}
+                      onScrollToIndexFailed={(info) => {
+                        setTimeout(() => {
+                          flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                        }, 100);
+                      }}
+                      renderItem={renderCalendarPage}
+                  />
               </View>
-              
-              <FlatList
-                  ref={flatListRef}
-                  horizontal
-                  pagingEnabled
-                  snapToInterval={PAGE_WIDTH}
-                  snapToAlignment="start"
-                  decelerationRate="fast"
-                  showsHorizontalScrollIndicator={false}
-                  data={PAGE_INDICES}
-                  keyExtractor={(item) => item.toString()}
-                  initialScrollIndex={INITIAL_PAGE_INDEX}
-                  initialNumToRender={3}
-                  maxToRenderPerBatch={2}
-                  windowSize={5}
-                  removeClippedSubviews
-                  getItemLayout={(_, index) => ({
-                      length: PAGE_WIDTH,
-                      offset: PAGE_WIDTH * index,
-                      index,
-                  })}
-                  onViewableItemsChanged={onViewableItemsChanged}
-                  viewabilityConfig={viewabilityConfig}
-                  renderItem={renderCalendarPage}
-              />
+
+              {/* Go to Today Button (overrides the bottom edge in bottom right corner) */}
+              <AnimatePresence>
+                {currentPageIndex !== 0 && (
+                  <MotiView
+                    from={{ opacity: 0, scale: 0.85, translateY: 6 }}
+                    animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                    exit={{ opacity: 0, scale: 0.85, translateY: 6 }}
+                    transition={{ type: 'timing', duration: 180 } as any}
+                    style={{
+                      position: 'absolute',
+                      bottom: -14,
+                      right: 20,
+                      zIndex: 50,
+                    }}
+                  >
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={handleGoToToday}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: colors.primary,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 20,
+                        gap: 5,
+                        shadowColor: colors.primary,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 6,
+                        elevation: 6,
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                      }}
+                    >
+                      <CalendarDays size={12} color={colors.textOnPrimary || '#FFFFFF'} />
+                      <Text
+                        style={{
+                          color: colors.textOnPrimary || '#FFFFFF',
+                          fontSize: 11,
+                          fontWeight: '900',
+                          letterSpacing: 0.3,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Today
+                      </Text>
+                    </TouchableOpacity>
+                  </MotiView>
+                )}
+              </AnimatePresence>
           </View>
 
           <ScrollView 

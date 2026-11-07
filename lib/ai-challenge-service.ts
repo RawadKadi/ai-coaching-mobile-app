@@ -107,9 +107,11 @@ You must generate tasks for EXACTLY the number of days specified or implied by t
 
 Target Duration ceiling for this request: ${daysToGenerate} Days.
 
-CRITICAL TASK GRANULARITY RULE:
+CRITICAL TASK GRANULARITY & NAMING RULES:
 - You are forbidden from consolidating multiple exercises or movements into a single string sentence.
 - Break out every single exercise target, set instruction, or measurable goal into its own discrete string object inside the \`sub_tasks\` array.
+- For each sub_task, "exercise" MUST be a clean, standard exercise movement name (e.g. "Push-up", "Decline push-up", "Incline push-up", "Pull-up", "Run", "Plank", "Bodyweight squat", "Walking lunge", "Dumbbell biceps curl", "Bench press", "Sit-up", "Crunch", "Burpee", "Jumping jack").
+- NEVER put modifiers like "Standard", distance like "3km", or sets/reps inside the "exercise" field. Put all distances, target reps, tempo, and form cues in the "notes" field.
 
 Your coach has given you the following specific instructions for their client ${clientName}: 
 "${customDirectives}"

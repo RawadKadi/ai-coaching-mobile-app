@@ -12,6 +12,7 @@ import {
   Dimensions,
   TouchableWithoutFeedback,
   StyleSheet,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -27,15 +28,18 @@ import {
 } from 'lucide-react-native';
 import { NestedTaskCard } from '@/components/NestedTaskCard';
 import { ChallengeDetailsSkeleton } from '@/components/ChallengeDetailsSkeleton';
+import { parseChallengeDescription } from '@/lib/challenge-description';
 
 export default function ChallengeDetailScreen() {
   const insets = useSafeAreaInsets();
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#020617');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
   const innerBg = colors.background || (isDark ? '#020617' : '#F8FAFC');
 
   const router = useRouter();
@@ -60,7 +64,9 @@ export default function ChallengeDetailScreen() {
 
   useEffect(() => {
     return () => {
-      Object.values(timeoutRefs.current).forEach((timeout) => clearTimeout(timeout));
+      Object.values(timeoutRefs.current).forEach((timeout) =>
+        clearTimeout(timeout),
+      );
     };
   }, []);
 
@@ -80,14 +86,19 @@ export default function ChallengeDetailScreen() {
         (payload) => {
           setChallenge((current: any) => {
             if (!current) return current;
-            const updatedSubChallenges = current.sub_challenges.map((sub: any) =>
-              sub.id === payload.new.id
-                ? { ...sub, completed: payload.new.completed, completed_at: payload.new.completed_at }
-                : sub
+            const updatedSubChallenges = current.sub_challenges.map(
+              (sub: any) =>
+                sub.id === payload.new.id
+                  ? {
+                      ...sub,
+                      completed: payload.new.completed,
+                      completed_at: payload.new.completed_at,
+                    }
+                  : sub,
             );
             return { ...current, sub_challenges: updatedSubChallenges };
           });
-        }
+        },
       )
       .subscribe();
     return () => {
@@ -99,9 +110,12 @@ export default function ChallengeDetailScreen() {
     if (!id || !user) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_mother_challenge_details', {
-        p_mother_challenge_id: id,
-      });
+      const { data, error } = await supabase.rpc(
+        'get_mother_challenge_details',
+        {
+          p_mother_challenge_id: id,
+        },
+      );
       if (error) throw error;
       if (!data || data.length === 0) {
         router.back();
@@ -151,7 +165,10 @@ export default function ChallengeDetailScreen() {
           type: 'challenge_completed',
           title: 'Client finished this task',
           taskName: task.name || 'Task',
-          completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          completedAt: new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
           taskDescription: task.description || '',
           focusType: task.focus_type || '',
           intensity: task.intensity || '',
@@ -178,7 +195,7 @@ export default function ChallengeDetailScreen() {
       setChallenge((prev: any) => {
         if (!prev) return prev;
         const updatedSubChallenges = prev.sub_challenges.map((s: any) =>
-          s.id === sub.id ? { ...s, completed: newCompleted } : s
+          s.id === sub.id ? { ...s, completed: newCompleted } : s,
         );
         return { ...prev, sub_challenges: updatedSubChallenges };
       });
@@ -204,7 +221,11 @@ export default function ChallengeDetailScreen() {
     }
   };
 
-  const openDayDrawer = (dateStr: string, dayNumber: number, formattedDate: string) => {
+  const openDayDrawer = (
+    dateStr: string,
+    dayNumber: number,
+    formattedDate: string,
+  ) => {
     setSelectedDateKey(dateStr);
     setSelectedDayMeta({ dayNumber, formattedDate });
     setShowDayDrawer(true);
@@ -235,7 +256,7 @@ export default function ChallengeDetailScreen() {
       }),
       Animated.timing(daySheetAnim, {
         toValue: SCREEN_HEIGHT,
-        duration: 250,
+        duration: 240,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -244,6 +265,49 @@ export default function ChallengeDetailScreen() {
       setSelectedDayMeta(null);
     });
   };
+
+  // Draggable handle pan responder for smooth touch gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 4;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          daySheetAnim.setValue(gestureState.dy);
+          const progress = Math.max(
+            0,
+            1 - gestureState.dy / (SCREEN_HEIGHT * 0.55),
+          );
+          dayFadeAnim.setValue(progress);
+        } else {
+          daySheetAnim.setValue(gestureState.dy * 0.15);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // If dragged down past 120px or flicked down with velocity > 0.6, close!
+        if (gestureState.dy > 120 || gestureState.vy > 0.6) {
+          closeDayDrawer();
+        } else {
+          // Snap back up
+          Animated.parallel([
+            Animated.spring(daySheetAnim, {
+              toValue: 0,
+              damping: 22,
+              stiffness: 220,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dayFadeAnim, {
+              toValue: 1,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      },
+    }),
+  ).current;
 
   if (loading) {
     return <ChallengeDetailsSkeleton />;
@@ -261,7 +325,7 @@ export default function ChallengeDetailScreen() {
   now.setHours(0, 0, 0, 0);
   const missedCount =
     challenge.sub_challenges?.filter(
-      (s: any) => !s.completed && new Date(s.assigned_date) < now
+      (s: any) => !s.completed && new Date(s.assigned_date) < now,
     ).length || 0;
   const remainingCount = Math.max(0, totalCount - completedCount - missedCount);
 
@@ -282,7 +346,7 @@ export default function ChallengeDetailScreen() {
   }
 
   const sortedDates = Object.keys(groupedTasks).sort(
-    (a, b) => new Date(a).getTime() - new Date(b).getTime()
+    (a, b) => new Date(a).getTime() - new Date(b).getTime(),
   );
 
   const todayKeyGlobal = new Date().toISOString().split('T')[0];
@@ -297,7 +361,9 @@ export default function ChallengeDetailScreen() {
         return dateKey === selectedDateKey;
       })
     : [];
-  const drawerCompletedCount = activeDrawerTasks.filter((t: any) => t.completed).length;
+  const drawerCompletedCount = activeDrawerTasks.filter(
+    (t: any) => t.completed,
+  ).length;
   const drawerTotalCount = activeDrawerTasks.length;
   const drawerProgressPercent =
     drawerTotalCount > 0 ? (drawerCompletedCount / drawerTotalCount) * 100 : 0;
@@ -345,7 +411,9 @@ export default function ChallengeDetailScreen() {
               letterSpacing: 1.5,
             }}
           >
-            {challenge.category ? challenge.category.toUpperCase() : 'DAILY TASKS'}
+            {challenge.category
+              ? challenge.category.toUpperCase()
+              : 'DAILY TASKS'}
           </Text>
           <Text
             style={{ color: textColor, fontSize: 18, fontWeight: '900' }}
@@ -361,20 +429,25 @@ export default function ChallengeDetailScreen() {
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
       >
-        {challenge.description ? (
-          <View style={{ paddingHorizontal: 4, marginTop: 14 }}>
-            <Text
-              style={{
-                color: textSecondaryColor,
-                fontSize: 14,
-                fontWeight: '500',
-                lineHeight: 20,
-              }}
-            >
-              {challenge.description}
-            </Text>
-          </View>
-        ) : null}
+        {(() => {
+          const parsed = parseChallengeDescription(challenge.description);
+          const displayDesc = parsed.plainText || parsed.globalRule;
+          if (!displayDesc) return null;
+          return (
+            <View style={{ paddingHorizontal: 4, marginTop: 14 }}>
+              <Text
+                style={{
+                  color: textSecondaryColor,
+                  fontSize: 14,
+                  fontWeight: '500',
+                  lineHeight: 20,
+                }}
+              >
+                {displayDesc}
+              </Text>
+            </View>
+          );
+        })()}
 
         {/* Performance Overview Card - Consistent 12px padding like Dashboard/Plan cards */}
         <MotiView
@@ -410,16 +483,16 @@ export default function ChallengeDetailScreen() {
                     ? 'rgba(239, 68, 68, 0.16)'
                     : '#FEE2E2'
                   : isDark
-                  ? `${colors.primary}20`
-                  : `${colors.primary}12`,
+                    ? `${colors.primary}20`
+                    : `${colors.primary}12`,
                 borderWidth: 1,
                 borderColor: isFailed
                   ? isDark
                     ? 'rgba(239, 68, 68, 0.35)'
                     : '#FECACA'
                   : isDark
-                  ? `${colors.primary}40`
-                  : `${colors.primary}30`,
+                    ? `${colors.primary}40`
+                    : `${colors.primary}30`,
               }}
             >
               <Text
@@ -439,7 +512,9 @@ export default function ChallengeDetailScreen() {
               </Text>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
               <Calendar size={14} color={textSecondaryColor} />
               <Text
                 style={{
@@ -532,7 +607,12 @@ export default function ChallengeDetailScreen() {
                 style={{
                   fontSize: 20,
                   fontWeight: '900',
-                  color: completedCount > 0 ? (isFailed ? '#EF4444' : colors.primary) : textColor,
+                  color:
+                    completedCount > 0
+                      ? isFailed
+                        ? '#EF4444'
+                        : colors.primary
+                      : textColor,
                 }}
               >
                 {completedCount}
@@ -581,7 +661,9 @@ export default function ChallengeDetailScreen() {
               >
                 Left
               </Text>
-              <Text style={{ fontSize: 20, fontWeight: '900', color: textColor }}>
+              <Text
+                style={{ fontSize: 20, fontWeight: '900', color: textColor }}
+              >
                 {remainingCount}
               </Text>
             </View>
@@ -623,7 +705,8 @@ export default function ChallengeDetailScreen() {
                 const dayNumber = sortedDates.indexOf(dateStr) + 1;
                 const dayTasks = (challenge.sub_challenges || []).filter(
                   (t: any) =>
-                    new Date(t.assigned_date).toISOString().split('T')[0] === dateStr
+                    new Date(t.assigned_date).toISOString().split('T')[0] ===
+                    dateStr,
                 );
                 return (
                   <DayCard
@@ -635,13 +718,19 @@ export default function ChallengeDetailScreen() {
                     category={challenge.category}
                     onPress={() => {
                       const dateObj = new Date(dateStr);
-                      const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
-                      const localDate = new Date(dateObj.getTime() + userTimezoneOffset);
-                      const formattedDate = localDate.toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      });
+                      const userTimezoneOffset =
+                        dateObj.getTimezoneOffset() * 60000;
+                      const localDate = new Date(
+                        dateObj.getTime() + userTimezoneOffset,
+                      );
+                      const formattedDate = localDate.toLocaleDateString(
+                        'en-US',
+                        {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        },
+                      );
                       openDayDrawer(dateStr, dayNumber, formattedDate);
                     }}
                   />
@@ -670,7 +759,8 @@ export default function ChallengeDetailScreen() {
                 const dayNumber = sortedDates.indexOf(dateStr) + 1;
                 const dayTasks = (challenge.sub_challenges || []).filter(
                   (t: any) =>
-                    new Date(t.assigned_date).toISOString().split('T')[0] === dateStr
+                    new Date(t.assigned_date).toISOString().split('T')[0] ===
+                    dateStr,
                 );
                 return (
                   <DayCard
@@ -682,13 +772,19 @@ export default function ChallengeDetailScreen() {
                     category={challenge.category}
                     onPress={() => {
                       const dateObj = new Date(dateStr);
-                      const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
-                      const localDate = new Date(dateObj.getTime() + userTimezoneOffset);
-                      const formattedDate = localDate.toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      });
+                      const userTimezoneOffset =
+                        dateObj.getTimezoneOffset() * 60000;
+                      const localDate = new Date(
+                        dateObj.getTime() + userTimezoneOffset,
+                      );
+                      const formattedDate = localDate.toLocaleDateString(
+                        'en-US',
+                        {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        },
+                      );
                       openDayDrawer(dateStr, dayNumber, formattedDate);
                     }}
                   />
@@ -717,7 +813,8 @@ export default function ChallengeDetailScreen() {
                 const dayNumber = sortedDates.indexOf(dateStr) + 1;
                 const dayTasks = (challenge.sub_challenges || []).filter(
                   (t: any) =>
-                    new Date(t.assigned_date).toISOString().split('T')[0] === dateStr
+                    new Date(t.assigned_date).toISOString().split('T')[0] ===
+                    dateStr,
                 );
                 return (
                   <DayCard
@@ -729,13 +826,19 @@ export default function ChallengeDetailScreen() {
                     category={challenge.category}
                     onPress={() => {
                       const dateObj = new Date(dateStr);
-                      const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
-                      const localDate = new Date(dateObj.getTime() + userTimezoneOffset);
-                      const formattedDate = localDate.toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      });
+                      const userTimezoneOffset =
+                        dateObj.getTimezoneOffset() * 60000;
+                      const localDate = new Date(
+                        dateObj.getTime() + userTimezoneOffset,
+                      );
+                      const formattedDate = localDate.toLocaleDateString(
+                        'en-US',
+                        {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        },
+                      );
                       openDayDrawer(dateStr, dayNumber, formattedDate);
                     }}
                   />
@@ -793,79 +896,46 @@ export default function ChallengeDetailScreen() {
               backgroundColor: cardBg,
               borderTopLeftRadius: 36,
               borderTopRightRadius: 36,
-              paddingTop: 18,
+              paddingTop: 16,
               paddingHorizontal: 20,
               paddingBottom: insets.bottom + 24,
               maxHeight: '85%',
               borderTopWidth: 1,
-              borderTopColor: isDark
-                ? 'rgba(255, 255, 255, 0.08)'
-                : '#E2E8F0',
+              borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
               transform: [{ translateY: daySheetAnim }],
             }}
           >
-            {/* Handle bar */}
-            <View
-              style={{
-                width: 44,
-                height: 5,
-                borderRadius: 3,
-                backgroundColor: isDark
-                  ? 'rgba(255, 255, 255, 0.2)'
-                  : '#CBD5E1',
-                alignSelf: 'center',
-                marginBottom: 16,
-              }}
-            />
-
-            {/* Modal Header */}
+            {/* Top Handle & Close Row with PanResponder attached to handle */}
             <View
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: 14,
+                marginBottom: 10,
               }}
             >
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <Text
+              <View style={{ width: 36 }} />
+
+              {/* Draggable center handle with generous touch zone */}
+              <View
+                {...panResponder.panHandlers}
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: 32,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <View
                   style={{
-                    color: colors.primary,
-                    fontSize: 11,
-                    fontWeight: '900',
-                    textTransform: 'uppercase',
-                    letterSpacing: 1.4,
+                    width: 44,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.25)'
+                      : '#CBD5E1',
                   }}
-                >
-                  {selectedDayMeta
-                    ? `DAY ${selectedDayMeta.dayNumber}`
-                    : 'DAILY TASKS'}{' '}
-                  • {challenge.category ? challenge.category.toUpperCase() : 'CHALLENGE'}
-                </Text>
-                <Text
-                  style={{
-                    color: textColor,
-                    fontSize: 22,
-                    fontWeight: '900',
-                    letterSpacing: -0.4,
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {selectedDayMeta?.formattedDate || 'Tasks'}
-                </Text>
-                <Text
-                  style={{
-                    color: textSecondaryColor,
-                    fontSize: 13,
-                    fontWeight: '600',
-                    marginTop: 2,
-                  }}
-                >
-                  {drawerTotalCount === 0
-                    ? 'No tasks assigned'
-                    : `${drawerCompletedCount} of ${drawerTotalCount} completed`}
-                </Text>
+                />
               </View>
 
               <TouchableOpacity
@@ -885,87 +955,198 @@ export default function ChallengeDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Progress Bar in Drawer */}
-            {drawerTotalCount > 0 && (
-              <View style={{ marginBottom: 16 }}>
+            {/* Top Day Summary Card - Matches Chunky DayCard */}
+            {selectedDayMeta && (
+              <View
+                style={{
+                  backgroundColor: drawerIsAllDone ? colors.primary : innerBg,
+                  borderColor: drawerIsAllDone ? colors.primary : cardBorder,
+                  borderWidth: 1,
+                  borderRadius: 24,
+                  padding: 18,
+                  marginBottom: 16,
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Decorative ambient circle */}
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    top: -20,
+                    right: -20,
+                    width: 100,
+                    height: 100,
+                    borderRadius: 50,
+                    backgroundColor: drawerIsAllDone
+                      ? 'rgba(255, 255, 255, 0.14)'
+                      : `${colors.primary}12`,
+                  }}
+                />
+
                 <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 12,
-                    width: '100%',
+                    justifyContent: 'space-between',
+                    marginBottom: 10,
                   }}
                 >
                   <View
                     style={{
-                      flex: 1,
-                      height: 8,
-                      backgroundColor: isDark
-                        ? 'rgba(255, 255, 255, 0.08)'
-                        : '#F1F5F9',
-                      borderRadius: 4,
-                      overflow: 'hidden',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
                     }}
                   >
                     <View
                       style={{
-                        height: '100%',
-                        width: `${Math.min(100, Math.max(0, drawerProgressPercent))}%`,
-                        backgroundColor: colors.primary,
-                        borderRadius: 4,
+                        width: 30,
+                        height: 30,
+                        borderRadius: 10,
+                        backgroundColor: drawerIsAllDone
+                          ? '#FFFFFF'
+                          : `${colors.primary}20`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
-                    />
+                    >
+                      {drawerIsAllDone ? (
+                        <CheckCircle size={16} color={colors.primary} />
+                      ) : (
+                        <Calendar size={16} color={colors.primary} />
+                      )}
+                    </View>
+                    <Text
+                      style={{
+                        color: drawerIsAllDone
+                          ? 'rgba(255, 255, 255, 0.8)'
+                          : colors.primary,
+                        fontSize: 11,
+                        fontWeight: '900',
+                        textTransform: 'uppercase',
+                        letterSpacing: 1.2,
+                      }}
+                    >
+                      DAY {selectedDayMeta.dayNumber} •{' '}
+                      {challenge.category
+                        ? challenge.category.toUpperCase()
+                        : 'CHALLENGE'}
+                    </Text>
                   </View>
-                  <Text
+
+                  <View
                     style={{
-                      color: textColor,
-                      fontSize: 12,
-                      fontWeight: '900',
-                      minWidth: 36,
-                      textAlign: 'right',
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 999,
+                      backgroundColor: drawerIsAllDone
+                        ? '#FFFFFF'
+                        : isDark
+                          ? 'rgba(255, 255, 255, 0.08)'
+                          : '#F1F5F9',
                     }}
                   >
-                    {Math.round(drawerProgressPercent)}%
-                  </Text>
+                    <Text
+                      style={{
+                        color: drawerIsAllDone
+                          ? colors.primary
+                          : textSecondaryColor,
+                        fontSize: 11,
+                        fontWeight: '800',
+                      }}
+                    >
+                      {drawerTotalCount === 0
+                        ? 'No tasks'
+                        : drawerIsAllDone
+                          ? 'All Done 🎉'
+                          : `${drawerCompletedCount}/${drawerTotalCount} Done`}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            )}
 
-            {/* Celebration Badge if all done */}
-            {drawerIsAllDone && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  backgroundColor: isDark
-                    ? `${colors.primary}25`
-                    : `${colors.primary}12`,
-                  borderWidth: 1,
-                  borderColor: `${colors.primary}40`,
-                  borderRadius: 14,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  marginBottom: 16,
-                }}
-              >
-                <CheckCircle size={18} color={colors.primary} />
                 <Text
                   style={{
-                    color: isDark ? '#FFFFFF' : colors.primary,
-                    fontSize: 13,
-                    fontWeight: '800',
+                    color: drawerIsAllDone ? '#FFFFFF' : textColor,
+                    fontSize: 20,
+                    fontWeight: '900',
+                    letterSpacing: -0.3,
+                    marginBottom: 3,
                   }}
                 >
-                  All tasks completed for this day!
+                  {selectedDayMeta.formattedDate}
                 </Text>
+
+                <Text
+                  style={{
+                    color: drawerIsAllDone
+                      ? 'rgba(255, 255, 255, 0.75)'
+                      : textSecondaryColor,
+                    fontSize: 13,
+                    fontWeight: '600',
+                    marginBottom: 12,
+                  }}
+                >
+                  {drawerTotalCount === 0
+                    ? 'No tasks assigned'
+                    : drawerIsAllDone
+                      ? 'All tasks completed!'
+                      : `${drawerTotalCount - drawerCompletedCount} tasks left`}
+                </Text>
+
+                {drawerTotalCount > 0 && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flex: 1,
+                        height: 7,
+                        backgroundColor: drawerIsAllDone
+                          ? 'rgba(255, 255, 255, 0.28)'
+                          : isDark
+                            ? 'rgba(255, 255, 255, 0.08)'
+                            : '#E2E8F0',
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View
+                        style={{
+                          height: '100%',
+                          width: `${Math.min(100, Math.max(0, drawerProgressPercent))}%`,
+                          backgroundColor: drawerIsAllDone
+                            ? '#FFFFFF'
+                            : colors.primary,
+                          borderRadius: 4,
+                        }}
+                      />
+                    </View>
+                    <Text
+                      style={{
+                        color: drawerIsAllDone ? '#FFFFFF' : textColor,
+                        fontSize: 12,
+                        fontWeight: '900',
+                        minWidth: 34,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {Math.round(drawerProgressPercent)}%
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
-            {/* Scrollable list of interactive tasks */}
+            {/* Scrollable list of interactive tasks (Unboxed, note shown for client) */}
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 24, gap: 10 }}
+              contentContainerStyle={{ paddingBottom: 24 }}
             >
               {activeDrawerTasks.length === 0 ? (
                 <View
@@ -976,7 +1157,9 @@ export default function ChallengeDetailScreen() {
                     borderRadius: 18,
                   }}
                 >
-                  <Text style={{ color: textSecondaryColor, fontWeight: '500' }}>
+                  <Text
+                    style={{ color: textSecondaryColor, fontWeight: '500' }}
+                  >
                     No tasks found for this date.
                   </Text>
                 </View>
@@ -990,6 +1173,7 @@ export default function ChallengeDetailScreen() {
                     isCompleted={isCompleted}
                     onToggleParent={toggleSubChallenge}
                     layoutType="detail"
+                    showGlobalRule={true}
                   />
                 ))
               )}
@@ -1022,9 +1206,11 @@ const DayCard = ({
   const colors = useBrandColors();
   const isDark = isDarkColor(colors.background || '#020617');
   const textColor = colors.text || (isDark ? '#FFFFFF' : '#0F172A');
-  const textSecondaryColor = colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
+  const textSecondaryColor =
+    colors.textSecondary || (isDark ? '#94A3B8' : '#64748B');
   const cardBg = colors.surface || (isDark ? '#0F172A' : '#FFFFFF');
-  const cardBorder = colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
+  const cardBorder =
+    colors.border || (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0');
 
   const dateObj = new Date(dateStr);
   const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
@@ -1041,11 +1227,14 @@ const DayCard = ({
   const totalCount = tasks.length;
   const completedCount = tasks.filter((t: any) => t.completed).length;
   const isAllDone = totalCount > 0 && completedCount === totalCount;
-  const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  const progressPercent =
+    totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   const primaryIsDark = isDarkColor(colors.primary);
   const completedText = primaryIsDark ? '#FFFFFF' : '#0F172A';
-  const completedMuted = primaryIsDark ? 'rgba(255, 255, 255, 0.75)' : 'rgba(15, 23, 42, 0.75)';
+  const completedMuted = primaryIsDark
+    ? 'rgba(255, 255, 255, 0.75)'
+    : 'rgba(15, 23, 42, 0.75)';
   const completedBadgeBg = primaryIsDark ? '#FFFFFF' : '#0F172A';
   const completedBadgeContent = colors.primary;
 
@@ -1103,10 +1292,10 @@ const DayCard = ({
               backgroundColor: isAllDone
                 ? completedBadgeBg
                 : isToday
-                ? `${colors.primary}20`
-                : isDark
-                ? 'rgba(255, 255, 255, 0.06)'
-                : '#F1F5F9',
+                  ? `${colors.primary}20`
+                  : isDark
+                    ? 'rgba(255, 255, 255, 0.06)'
+                    : '#F1F5F9',
               alignItems: 'center',
               justifyContent: 'center',
             }}
@@ -1125,8 +1314,8 @@ const DayCard = ({
               color: isAllDone
                 ? completedMuted
                 : isToday
-                ? colors.primary
-                : textSecondaryColor,
+                  ? colors.primary
+                  : textSecondaryColor,
               fontSize: 11,
               fontWeight: '900',
               textTransform: 'uppercase',
@@ -1146,8 +1335,8 @@ const DayCard = ({
               backgroundColor: isAllDone
                 ? completedBadgeBg
                 : isDark
-                ? 'rgba(255, 255, 255, 0.08)'
-                : '#F1F5F9',
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : '#F1F5F9',
             }}
           >
             <Text
@@ -1160,8 +1349,8 @@ const DayCard = ({
               {totalCount === 0
                 ? 'No tasks'
                 : isAllDone
-                ? 'All Done 🎉'
-                : `${completedCount}/${totalCount} Done`}
+                  ? 'All Done 🎉'
+                  : `${completedCount}/${totalCount} Done`}
             </Text>
           </View>
           <ChevronRight
@@ -1197,8 +1386,8 @@ const DayCard = ({
         {totalCount === 0
           ? 'No tasks assigned'
           : isAllDone
-          ? 'All tasks completed!'
-          : `${totalCount - completedCount} tasks left`}
+            ? 'All tasks completed!'
+            : `${totalCount - completedCount} tasks left`}
       </Text>
 
       {/* Progress Bar + Percentage */}
@@ -1217,8 +1406,8 @@ const DayCard = ({
               backgroundColor: isAllDone
                 ? 'rgba(255, 255, 255, 0.28)'
                 : isDark
-                ? 'rgba(255, 255, 255, 0.08)'
-                : '#E2E8F0',
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : '#E2E8F0',
               borderRadius: 4,
               overflow: 'hidden',
             }}
